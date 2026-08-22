@@ -43,6 +43,12 @@ only when every source entry relevant to that contract was read from stable
 state and accounted for. Duplicate multiplicity reduction and storage savings
 are reported separately from content coverage.
 
+The evidence boundary is the stable, namespace-visible source tree. The command
+does not claim to discover orphaned allocations, stale directory records, or
+content hidden by filesystem corruption. Any traversal failure makes complete
+source coverage unproven, even when every successfully discovered file has a
+destination representative.
+
 ## Consequences
 
 Collections can be verified after root-folder renaming, internal organization,
@@ -53,6 +59,11 @@ must say so plainly.
 Version 0.4 cache interfaces must separate the analyzed media root from the
 writable cache location. Migration verification reuses stable hashes and exact
 media fingerprints without turning cache state into proof by itself.
+
+Path-independent verification does not remove copy-time filesystem hazards. A
+future migration preflight or copy engine must detect names that are distinct
+on a case-sensitive source but collide on a case-insensitive destination, as
+well as capacity and destination-occupancy conflicts, before any write.
 
 This command verifies a copy or rescue performed elsewhere. A future
 `pymo migrate` command requires its own decision because cross-device copying,

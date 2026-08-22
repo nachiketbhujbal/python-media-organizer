@@ -92,7 +92,7 @@ and never writes derived state to `SOURCE`.
 
 | Version | Primary purpose | Intended result |
 | --- | --- | --- |
-| 0.5.0 | Directional byte coverage | Inventory two stable trees and prove whether every readable unique source byte stream has an exact SHA-backed representative in the destination, independent of paths and filenames. Report missing, extra, duplicate-count, unreadable, changing, and storage facts with a machine-readable schema and health-style exit status. |
+| 0.5.0 | Directional byte coverage | Inventory two stable namespace-visible trees and prove whether every readable unique source byte stream has an exact SHA-backed representative in the destination, independent of paths and filenames. Report missing, extra, duplicate-count, traversal-failure, unreadable, changing, and storage facts with a machine-readable schema and health-style exit status. |
 | 0.5.1 | Image-content coverage | Account separately for source pictures represented by the existing exact displayed-pixel definition when a byte-identical representative is absent, without describing metadata or container bytes as preserved. |
 | 0.5.2 | Video-content coverage | Account separately for source videos represented by the existing strict decoded-playback definition when a byte-identical representative is absent, retaining all conservative unsupported-case boundaries. |
 | 0.5.3 | Preservation verdict hardening | Combine byte and declared media-equivalence layers into an explicit evidence report, exercise interrupted and changing-source cases, reuse only validated cache evidence, and reserve a complete-success verdict for runs with no unreadable, unstable, unsupported, or unaccounted source entry. |
@@ -104,6 +104,10 @@ reducing multiplicity. Deleting a metadata-only image variant or a remuxed
 video may preserve displayed or playback content but does not preserve every
 source byte stream. A statement such as “100% preserved” is permitted only
 with the preservation contract named and all source input readable and stable.
+File-level verification cannot discover orphaned allocations or entries hidden
+by filesystem corruption. It must describe its scope as namespace-visible
+content and preserve recovery-tool evidence as a separate prerequisite rather
+than claiming whole-device completeness.
 
 This subsystem verifies an already performed rescue or copy. A future
 `pymo migrate` orchestration command remains separate because copying from
@@ -126,6 +130,10 @@ capacity checks, and a much larger mutation boundary.
   removal. The release tag alone is not approval: the command must complete
   without unreadable, changing, unsupported, or unaccounted source input, and
   the relevant synthetic and local acceptance scenarios must pass.
+- A source and destination with different case-sensitivity rules require an
+  explicit case-folding collision preflight. Path-independent hashes can expose
+  a lost copy after migration, but they do not make a collision-prone copy
+  operation safe in advance.
 
 The preferred acceptance setup is an unchanged baseline copy and a separate
 working copy on healthy storage. pymo mutates only the working copy, then
