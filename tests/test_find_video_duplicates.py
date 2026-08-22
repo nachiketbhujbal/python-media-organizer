@@ -65,10 +65,21 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     cache = CollectionLayout(tmp_path).video_cache
     base = vids / "base.mp4"
     byte_copy = vids / "byte-copy.mp4"
-    remux = vids / "remux.mkv"
+    metadata_copy = vids / "metadata-copy.mp4"
     make_video(base)
     shutil.copyfile(base, byte_copy)
-    ffmpeg("-i", base, "-map", "0", "-c", "copy", remux)
+    ffmpeg(
+        "-i",
+        base,
+        "-map",
+        "0",
+        "-c",
+        "copy",
+        "-metadata",
+        "title=synthetic",
+        metadata_copy,
+    )
+    assert base.read_bytes() != metadata_copy.read_bytes()
 
     dry_run = run_script("find_video_duplicates.py", tmp_path)
 
@@ -89,11 +100,11 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
 
     assert applied.returncode == 0, applied.stdout + applied.stderr
     assert "Fingerprint cache: 2 hit(s), 0 miss(es)" in applied.stdout
-    assert base.exists()
+    assert not base.exists()
     assert not byte_copy.exists()
-    assert not remux.exists()
-    assert (tmp_path / "dups" / "vids" / "base_copy(1).mp4").exists()
-    assert (tmp_path / "dups" / "vids" / "base_copy(2).mkv").exists()
+    assert metadata_copy.exists()
+    assert (tmp_path / "dups" / "vids" / "metadata-copy_copy(1).mp4").exists()
+    assert (tmp_path / "dups" / "vids" / "metadata-copy_copy(2).mp4").exists()
     assert not (tmp_path / "dups" / "pics").exists()
     assert cache.is_file()
     assert not cache.with_name(f"{cache.name}-wal").exists()
@@ -105,7 +116,7 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert undone.returncode == 0, undone.stdout + undone.stderr
     assert base.exists()
     assert byte_copy.exists()
-    assert remux.exists()
+    assert metadata_copy.exists()
     assert not (tmp_path / "dups").exists()
     assert cache.is_file()
     assert action_log_path(tmp_path).is_file()

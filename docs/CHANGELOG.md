@@ -15,6 +15,9 @@ All notable changes to `python-media-organizer` will be recorded here.
 - Run the complete quality gate on Ubuntu, Fedora, and macOS representatives;
   Linux-based WSL follows the Linux execution model, while native Windows
   remains out of scope.
+- Make exact-video integration coverage independent of FFmpeg's
+  container-specific remux timestamp choices while retaining a
+  non-byte-identical exact-playback case.
 - Document the short-lived branch, sole-maintainer protection, and release
   workflow in `docs/CONTRIBUTING.md` and separate ADRs.
 
