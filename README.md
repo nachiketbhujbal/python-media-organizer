@@ -251,6 +251,13 @@ subtitles/data streams, and HDR or high-bit-depth video. Decode commands are
 restricted to local file inputs and streamed output; they do not request a
 camera, screen, microphone, or network source.
 
+Exact image and video results are bound to the regular file's device, inode,
+size, modification time, and change time. A file that changes during analysis
+is skipped. Applied runs revalidate every duplicate group and continue checking
+retained originals through the action-log commit, stopping safely on stale
+state. Pillow decompression-bomb inputs and malformed ffprobe values are also
+conservative skips.
+
 Preview and applied runs use `.pymo.sqlite3`, a disposable collection-local
 cache keyed by content, fingerprint algorithm, and FFmpeg version. Each newly
 decoded fingerprint is saved immediately, so an interrupted preview can resume
@@ -258,6 +265,12 @@ and the later `--apply` usually reuses the reviewed work. The command reports
 cache hits and misses. Add `--no-cache` for a run that neither reads nor writes
 the cache. Cache writes are derived local state only: they never move media or
 write action history.
+
+An existing cache is opened read-only and validated before expensive decoding.
+If it is corrupt or incompatible, pymo leaves it untouched and stops with
+instructions to move it aside or rerun with `--no-cache`. FFmpeg and ffprobe are
+resolved only when at least two eligible videos exist; smaller collections do
+not need a decoder to report that no comparison is possible.
 
 Before uncached video decoding begins, the finder reports the number and total
 size of fingerprints it must calculate. It reports observed progress and data

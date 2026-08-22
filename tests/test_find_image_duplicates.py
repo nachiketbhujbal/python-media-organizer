@@ -3,9 +3,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
 from PIL import Image, PngImagePlugin
 
 from pymo.action_log import action_log_path
+from pymo.duplicates import images as image_duplicates
 
 
 def make_organized_collection(root: Path) -> tuple[Path, Path]:
@@ -187,3 +189,64 @@ def test_full_workflow_must_be_undone_in_reverse_order(
     assert final_undo.returncode == 0, final_undo.stdout + final_undo.stderr
     assert first.exists()
     assert second.exists()
+
+
+def test_image_inspection_rejects_a_file_changed_during_decode(
+    tmp_path: Path, monkeypatch
+) -> None:
+    path = tmp_path / "changing.png"
+    Image.new("RGB", (2, 2), "green").save(path)
+    original_hash = image_duplicates.displayed_pixel_hash
+
+    def mutate_after_hash(target: Path) -> str:
+        result = original_hash(target)
+        Image.new("RGB", (3, 2), "blue").save(target)
+        return result
+
+    monkeypatch.setattr(image_duplicates, "displayed_pixel_hash", mutate_after_hash)
+
+    with pytest.raises(
+        image_duplicates.FileChangedError, match="changed during image analysis"
+    ):
+        image_duplicates.inspect_image(path)
+
+
+def test_image_hash_promotes_decompression_bomb_warnings(
+    tmp_path: Path, monkeypatch
+) -> None:
+    path = tmp_path / "large.png"
+    Image.new("RGB", (4, 4), "green").save(path)
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 4)
+
+    with pytest.raises(Image.DecompressionBombError):
+        image_duplicates.displayed_pixel_hash(path)
+
+
+def test_image_apply_aborts_if_the_keeper_changes_after_planning(
+    tmp_path: Path, monkeypatch
+) -> None:
+    pics, _ = make_organized_collection(tmp_path)
+    keeper = pics / "keeper.png"
+    duplicate = pics / "duplicate.png"
+    metadata = PngImagePlugin.PngInfo()
+    metadata.add_text("note", "make the retained file larger")
+    Image.new("RGB", (2, 2), "green").save(keeper, pnginfo=metadata)
+    Image.new("RGB", (2, 2), "green").save(duplicate)
+    original_for_file = image_duplicates.Action.for_file
+
+    def change_keeper_during_planning(*args, **kwargs):
+        action = original_for_file(*args, **kwargs)
+        Image.new("RGB", (3, 2), "blue").save(keeper)
+        return action
+
+    monkeypatch.setattr(
+        image_duplicates.Action,
+        "for_file",
+        staticmethod(change_keeper_during_planning),
+    )
+
+    assert image_duplicates.main([str(tmp_path), "--apply"]) == 1
+    assert keeper.exists()
+    assert duplicate.exists()
+    assert not (tmp_path / "dups").exists()
+    assert not action_log_path(tmp_path).exists()

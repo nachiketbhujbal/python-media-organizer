@@ -583,6 +583,12 @@ version, and external-tool version. Renames should reuse content-derived
 records. Content changes, fingerprint algorithm changes, and FFmpeg upgrades
 must invalidate the affected values.
 
+Exact-analysis records now carry a device/inode/size/modification/change-time
+snapshot and are discarded when that state changes. Existing video caches are
+queried read-only and validated before decoding; invalid cache data stops early
+and is preserved for explicit recovery rather than silently discarded or
+automatically overwritten.
+
 Applied file moves follow ADR 0021: descriptor-relative atomic no-replace
 renames are preferred over a cross-filesystem copy fallback. This keeps the
 action journal's completed boundary aligned with one atomic filesystem event.

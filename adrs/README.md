@@ -27,3 +27,6 @@ old one rather than rewriting why the earlier choice was made.
 | [0019](0019-report-only-validation.md) | Report-only validation first |
 | [0020](0020-posix-platform-boundary.md) | Current POSIX platform boundary |
 | [0021](0021-atomic-no-replace-moves.md) | Atomic no-replace file moves |
+| [0022](0022-bind-analysis-to-file-state.md) | Stable file state for exact analysis |
+| [0023](0023-fail-closed-on-invalid-derived-cache.md) | Fail closed on invalid derived cache |
+| [0024](0024-resolve-native-tools-only-when-needed.md) | Lazy native-tool resolution |

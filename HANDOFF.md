@@ -13,16 +13,17 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.2.3` journal-safety release. It is a
+`pymo` command, and has a `v0.2.4` stable-analysis release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.2.3 makes schema 1 journal parsing strictly fail closed, calculates
-identities from stable file state, protects action-log opening and every move
-ancestor from symlink substitution, uses atomic OS no-replace renames, and
-verifies the destination identity. Cross-filesystem moves are refused because a
-copy-and-unlink fallback cannot meet the same safety guarantee.
+Version 0.2.4 binds exact image/video conclusions to stable file state,
+revalidates duplicate groups through apply, handles malformed media
+conservatively, rejects invalid derived-cache data before decoding, and only
+requires FFmpeg when at least two videos need comparison. Version 0.2.3 made
+schema 1 journal parsing strictly fail closed and introduced descriptor-relative
+atomic no-replace moves.
 
 Hard requirements:
 
@@ -56,6 +57,10 @@ Hard requirements:
     the complete pytest suite, and a package build are release gates.
 16. File moves are descriptor-relative and atomically refuse occupied targets.
     A media collection must not span filesystems when files need to move.
+17. Exact duplicate conclusions are valid only while the analyzed regular-file
+    state is unchanged; retained originals stay checked through commit.
+18. Invalid derived cache data stops early and is never automatically deleted
+    or replaced.
 
 `{collection-name}-actions-log.jsonl` remains the authoritative portable
 journal because it moves naturally with a media-collection on external storage.
@@ -276,6 +281,12 @@ multiple video/audio tracks, attachments, subtitle/data streams, and HDR or
 high-bit-depth video. Decoding is bounded and streamed; decoded temporary media
 is never created.
 
+Every inspected video carries a stable device/inode/size/time snapshot. The
+finder checks it after hashing and probing, around fingerprint decoding, before
+grouping, and during applied moves. The image finder uses the same contract for
+displayed-pixel hashes and retained originals. A changed file is skipped or
+stops an apply rather than reusing a stale exact-match conclusion.
+
 FFmpeg input protocols are restricted to `file,pipe`, and tests assert that
 decode commands contain no macOS, Windows, or X11 capture input. The tool does
 not need Screen & System Audio Recording, Camera, or Microphone permission.
@@ -287,6 +298,10 @@ interrupted preview retains completed work and a later `--apply` reuses it.
 `--no-cache` disables all cache reads and writes.
 SQLite uses a non-persistent journaling mode and connections close explicitly,
 so `-wal`/`-shm` sidecars are not left behind.
+Existing cache schemas and rows are validated read-only before decoding. An
+invalid cache is preserved and reported; moving it aside or explicitly using
+`--no-cache` is the recovery path. FFmpeg is resolved only when discovery finds
+at least two eligible videos.
 
 The finder mirrors image behavior for deterministic keeper choice, readable
 `copy(n)` destinations, no overwrite/delete, action-log undo, post-operation
@@ -433,15 +448,13 @@ local indexing, keeper scoring, similarity levels, and local-AI rules.
 
 Near-term roadmap:
 
-1. Resolve the action-journal safety findings targeted for 0.2.3.
-2. Resolve exact-analysis and cache robustness findings targeted for 0.2.4.
-3. Resolve scan, interruption, and orchestration findings targeted for 0.2.5.
-4. Add report-only media validation in 0.3.0 and review it adversarially.
-5. Add metadata inspection/export and confidence-based date provenance.
-6. Add read-only collection/backup comparison.
-7. Expand the disposable SQLite index for local statistics and fingerprints.
-8. Add perceptual similarity as report-only functionality.
-9. Revisit optional local AI suggestions after deterministic tooling matures.
+1. Resolve scan, interruption, and orchestration findings targeted for 0.2.5.
+2. Add report-only media validation in 0.3.0 and review it adversarially.
+3. Add metadata inspection/export and confidence-based date provenance.
+4. Add read-only collection/backup comparison.
+5. Expand the disposable SQLite index for local statistics and fingerprints.
+6. Add perceptual similarity as report-only functionality.
+7. Revisit optional local AI suggestions after deterministic tooling matures.
 
 `scan` is implemented; do not rename it to `inspect`.
 

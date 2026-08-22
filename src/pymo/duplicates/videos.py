@@ -44,6 +44,7 @@ from pymo.config import (
     ignored_messages,
     load_config,
 )
+from pymo.file_safety import FileChangedError, FileState
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
 from pymo.progress import ProgressMeter, format_bytes
@@ -88,9 +89,16 @@ class ProbeInfo:
 class VideoRecord:
     path: Path
     byte_sha256: str
-    file_size: int
-    modified_ns: int
+    state: FileState
     probe: ProbeInfo
+
+    @property
+    def file_size(self) -> int:
+        return self.state.size
+
+    @property
+    def modified_ns(self) -> int:
+        return self.state.modified_ns
 
 
 @dataclass(frozen=True)
@@ -108,14 +116,34 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def inspect_video(path: Path, ffprobe: str) -> VideoRecord:
+    state = FileState.capture(path)
+    byte_sha256 = sha256_file(path)
+    probe = probe_video(path, ffprobe)
+    state.require_unchanged(path, "video inspection")
+    return VideoRecord(
+        path=path,
+        byte_sha256=byte_sha256,
+        state=state,
+        probe=probe,
+    )
+
+
+def require_current_video(record: VideoRecord, operation: str) -> None:
+    record.state.require_unchanged(record.path, operation)
+
+
 def decimal_microseconds(value: object, *, default: int | None = None) -> int | None:
     if value in (None, "", "N/A"):
         return default
     try:
-        decimal = Decimal(str(value)) * Decimal(1_000_000)
-    except (InvalidOperation, ValueError):
+        parsed = Decimal(str(value))
+        if not parsed.is_finite():
+            return default
+        decimal = parsed * Decimal(1_000_000)
+        return int(decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    except (InvalidOperation, OverflowError, ValueError):
         return default
-    return int(decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
 def stream_rotation(stream: dict[str, object]) -> int:
@@ -184,9 +212,13 @@ def probe_video(path: Path, ffprobe: str) -> ProbeInfo:
     except json.JSONDecodeError as error:
         raise VideoInspectionError("ffprobe returned invalid JSON") from error
 
+    if not isinstance(payload, dict):
+        raise VideoInspectionError("ffprobe returned a non-object JSON value")
     streams = payload.get("streams")
     if not isinstance(streams, list):
         raise VideoInspectionError("ffprobe returned no stream list")
+    if not all(isinstance(item, dict) for item in streams):
+        raise VideoInspectionError("ffprobe returned an invalid stream entry")
     videos = [item for item in streams if item.get("codec_type") == "video"]
     audios = [item for item in streams if item.get("codec_type") == "audio"]
     others = [
@@ -590,7 +622,7 @@ def load_cached_fingerprints(
 ) -> dict[str, DerivedFingerprint]:
     if database.is_symlink() or not database.is_file():
         return {}
-    uri = f"file:{database.as_posix()}?mode=ro"
+    uri = f"{database.resolve().as_uri()}?mode=ro"
     connection: sqlite3.Connection | None = None
     try:
         connection = sqlite3.connect(uri, uri=True)
@@ -599,19 +631,36 @@ def load_cached_fingerprints(
             "FROM video_fingerprints WHERE algorithm = ? AND ffmpeg_version = ?",
             (FINGERPRINT_ALGORITHM, ffmpeg_release),
         ).fetchall()
-    except sqlite3.Error:
-        return {}
+    except sqlite3.Error as error:
+        raise VideoInspectionError(
+            f"cannot read SQLite fingerprint cache: {error}"
+        ) from error
     finally:
         if connection is not None:
             connection.close()
-    return {
-        str(file_hash): DerivedFingerprint(
-            digest=str(fingerprint),
-            video_frames=int(video_frames),
-            audio_bytes=int(audio_bytes),
+    result: dict[str, DerivedFingerprint] = {}
+    for file_hash, fingerprint, video_frames, audio_bytes in rows:
+        if (
+            not isinstance(file_hash, str)
+            or re.fullmatch(r"[0-9a-f]{64}", file_hash) is None
+            or not isinstance(fingerprint, str)
+            or re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None
+            or isinstance(video_frames, bool)
+            or not isinstance(video_frames, int)
+            or video_frames <= 0
+            or isinstance(audio_bytes, bool)
+            or not isinstance(audio_bytes, int)
+            or audio_bytes < 0
+        ):
+            raise VideoInspectionError(
+                "SQLite fingerprint cache contains an invalid row"
+            )
+        result[file_hash] = DerivedFingerprint(
+            digest=fingerprint,
+            video_frames=video_frames,
+            audio_bytes=audio_bytes,
         )
-        for file_hash, fingerprint, video_frames, audio_bytes in rows
-    }
+    return result
 
 
 def save_cached_fingerprints(
@@ -844,14 +893,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
-    try:
-        ffmpeg = resolve_executable(args.ffmpeg, "ffmpeg")
-        ffprobe = resolve_executable(args.ffprobe, "ffprobe")
-        ffmpeg_release = ffmpeg_version(ffmpeg)
-    except VideoInspectionError as error:
-        print(str(error), file=sys.stderr)
-        return 2
-
     layout = CollectionLayout(root)
     vids = layout.vids
     _, destination = review_directories(root)
@@ -860,6 +901,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Scanning {len(paths)} video(s) in {vids}")
     for message in ignored_messages(ignored, root, args.show_ignored):
         print(message)
+
+    if len(paths) < 2:
+        scanned_bytes = 0
+        for path in paths:
+            try:
+                scanned_bytes += FileState.capture(path).size
+            except FileChangedError:
+                pass
+        verb = "Moved" if args.apply else "Would move"
+        print("Fewer than two videos; exact comparison is not required.")
+        print(f"\n{verb} 0 duplicate(s) from 0 group(s).")
+        print_storage_summary([], scanned_bytes)
+        return 0
+
+    try:
+        ffmpeg = resolve_executable(args.ffmpeg, "ffmpeg")
+        ffprobe = resolve_executable(args.ffprobe, "ffprobe")
+        ffmpeg_release = ffmpeg_version(ffmpeg)
+    except VideoInspectionError as error:
+        print(str(error), file=sys.stderr)
+        return 2
     print(f"FFmpeg runtime: {ffmpeg_release}")
 
     records: list[VideoRecord] = []
@@ -878,17 +940,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     for path in paths:
         try:
-            stat = path.stat()
-            record = VideoRecord(
-                path=path,
-                byte_sha256=sha256_file(path),
-                file_size=stat.st_size,
-                modified_ns=stat.st_mtime_ns,
-                probe=probe_video(path, ffprobe),
-            )
+            record = inspect_video(path, ffprobe)
             records.append(record)
             scanned_bytes += record.file_size
-        except (OSError, VideoInspectionError) as error:
+        except (FileChangedError, OSError, VideoInspectionError) as error:
             skipped.append((path, str(error)))
         progress_message = inspection_progress.advance(
             "inspected", byte_count=path_sizes[path]
@@ -909,7 +964,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     ):
         print(f"Unsafe SQLite cache path: {database}", file=sys.stderr)
         return 1
-    cached = {} if args.no_cache else load_cached_fingerprints(database, ffmpeg_release)
+    try:
+        cached = (
+            {} if args.no_cache else load_cached_fingerprints(database, ffmpeg_release)
+        )
+    except VideoInspectionError as error:
+        print(f"Fingerprint cache cannot be used safely: {error}", file=sys.stderr)
+        print(
+            "The cache is disposable; move it aside or rerun with --no-cache.",
+            file=sys.stderr,
+        )
+        return 1
     cache_hits = sum(file_hash in cached for file_hash in unique_hashes)
     cache_misses = len(unique_hashes) - cache_hits
     print(
@@ -955,6 +1020,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"  {message}")
 
         try:
+            require_current_video(representative, "video fingerprinting")
             fingerprint = derive_fingerprint(
                 representative.path,
                 representative.probe,
@@ -962,7 +1028,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 decode_timeout,
                 report_heartbeat,
             )
-        except VideoInspectionError as error:
+            require_current_video(representative, "video fingerprinting")
+        except (FileChangedError, VideoInspectionError) as error:
             same_bytes = [
                 record
                 for record in candidate_records
@@ -992,8 +1059,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         if progress_message:
             print(f"  {progress_message}")
 
-    fingerprint_groups: dict[str, list[VideoRecord]] = defaultdict(list)
+    stable_candidate_records: list[VideoRecord] = []
     for record in candidate_records:
+        try:
+            require_current_video(record, "duplicate analysis")
+        except FileChangedError as error:
+            skipped.append((record.path, str(error)))
+        else:
+            stable_candidate_records.append(record)
+
+    fingerprint_groups: dict[str, list[VideoRecord]] = defaultdict(list)
+    for record in stable_candidate_records:
         record_fingerprint = derived.get(record.byte_sha256)
         if record_fingerprint is not None:
             fingerprint_groups[record_fingerprint.digest].append(record)
@@ -1026,20 +1102,41 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.apply and move_plan:
         try:
-            actions = [
-                Action.for_file(root, duplicate.path, target, "MOVE")
-                for _, duplicate, target in move_plan
-            ]
+            current_records = {
+                record.path: record
+                for records in duplicate_groups
+                for record in records
+            }
+            keepers = {kept.path: kept for kept, _, _ in move_plan}
+            for record in current_records.values():
+                require_current_video(record, "duplicate apply preflight")
+            actions: list[Action] = []
+            for _, duplicate, target in move_plan:
+                action = Action.for_file(root, duplicate.path, target, "MOVE")
+                require_current_video(duplicate, "duplicate apply preflight")
+                actions.append(action)
+            for record in current_records.values():
+                require_current_video(record, "duplicate apply preflight")
             log = ActionLog(root)
             with log.transaction(ToolId.VIDEO_DUPLICATES) as transaction:
+                for record in current_records.values():
+                    require_current_video(record, "duplicate apply preflight")
                 for directory in review_directories(root):
                     if not directory.exists():
                         transaction.perform(Action.create_directory(root, directory))
-                for action in actions:
+                for action, (kept, _, _) in zip(actions, move_plan, strict=True):
+                    require_current_video(kept, "duplicate apply preflight")
                     transaction.perform(action)
+                for record in keepers.values():
+                    require_current_video(record, "duplicate apply preflight")
                 transaction.commit()
             print(f"\nAction log: {log.path}")
-        except (ActionConflict, ActionLogError, OSError) as error:
+        except (
+            ActionConflict,
+            ActionLogError,
+            FileChangedError,
+            OSError,
+        ) as error:
             print(f"Duplicate moves stopped safely: {error}", file=sys.stderr)
             return 1
         verification_failures = [

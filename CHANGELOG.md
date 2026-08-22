@@ -2,6 +2,22 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.2.4 - 2026-08-22
+
+- Bind exact image and video analysis to stable regular-file identity and state,
+  then revalidate every group before apply and retained originals through the
+  journal commit boundary.
+- Skip changing inputs conservatively and abort a stale applied plan without
+  moving media or creating action history when detected before a transaction.
+- Promote Pillow decompression-bomb warnings to per-file skips and reject
+  malformed ffprobe stream entries and non-finite timing values.
+- Fail early and clearly on corrupt, incompatible, or malformed video cache
+  data without deleting it; retain `--no-cache` as an explicit bypass.
+- Discover videos before resolving FFmpeg so empty and single-video collections
+  can produce a zero-duplicate report without unnecessary native dependencies.
+- Add focused adversarial tests for changing inputs, retained-file mutation,
+  malformed media metadata, cache corruption, and lazy tool resolution.
+
 ## 0.2.3 - 2026-08-22
 
 - Make action-log parsing a strict fail-closed state machine that rejects

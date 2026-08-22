@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import shutil
+import sqlite3
 import subprocess
 from pathlib import Path
 
@@ -322,7 +324,10 @@ def test_video_duplicate_run_blocks_earlier_rename_undo(
 def test_video_finder_reports_missing_explicit_ffmpeg(
     tmp_path: Path, run_script
 ) -> None:
-    (tmp_path / "vids").mkdir()
+    vids = tmp_path / "vids"
+    vids.mkdir()
+    (vids / "first.mp4").write_bytes(b"\x00first")
+    (vids / "second.mp4").write_bytes(b"\x00second")
     missing = tmp_path / "not-ffmpeg"
 
     result = run_script(
@@ -336,6 +341,28 @@ def test_video_finder_reports_missing_explicit_ffmpeg(
 
     assert result.returncode == 2
     assert "not an executable ffmpeg path" in result.stderr
+
+
+def test_video_finder_does_not_require_ffmpeg_without_a_comparison(
+    tmp_path: Path, run_script
+) -> None:
+    vids = tmp_path / "vids"
+    vids.mkdir()
+    (vids / "only.mp4").write_bytes(b"\x00single video placeholder")
+    missing = tmp_path / "not-ffmpeg"
+
+    result = run_script(
+        "find_video_duplicates.py",
+        tmp_path,
+        "--ffmpeg",
+        missing,
+        "--ffprobe",
+        missing,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Fewer than two videos" in result.stdout
+    assert "Would move 0 duplicate(s)" in result.stdout
 
 
 def test_video_cache_keeps_completed_fingerprints_after_interruption(
@@ -374,7 +401,7 @@ def test_video_cache_keeps_completed_fingerprints_after_interruption(
         calls += 1
         if calls == 2:
             raise KeyboardInterrupt
-        return video_duplicates.DerivedFingerprint("first", 1, 0)
+        return video_duplicates.DerivedFingerprint("1" * 64, 1, 0)
 
     monkeypatch.setattr(video_duplicates, "derive_fingerprint", interrupt_after_first)
 
@@ -387,9 +414,116 @@ def test_video_cache_keeps_completed_fingerprints_after_interruption(
     )
     assert cached == {
         video_duplicates.sha256_file(first): video_duplicates.DerivedFingerprint(
-            "first", 1, 0
+            "1" * 64, 1, 0
         )
     }
+
+
+def test_video_finder_rejects_a_corrupt_cache_before_decoding(
+    tmp_path: Path, monkeypatch, caplog
+) -> None:
+    vids = tmp_path / "vids"
+    vids.mkdir()
+    first = vids / "first.mp4"
+    second = vids / "second.mp4"
+    first.write_bytes(b"first content")
+    second.write_bytes(b"second content")
+    CollectionLayout(tmp_path).video_cache.write_bytes(b"not a SQLite database")
+    probe = ProbeInfo(
+        display_width=64,
+        display_height=48,
+        duration_us=1_000_000,
+        video_start_us=0,
+        audio_start_us=None,
+        audio_sample_rate=None,
+        audio_channels=None,
+        audio_layout=None,
+        has_audio=False,
+    )
+
+    monkeypatch.setattr(video_duplicates, "resolve_executable", lambda *_: "tool")
+    monkeypatch.setattr(video_duplicates, "ffmpeg_version", lambda _: "test-ffmpeg")
+    monkeypatch.setattr(
+        video_duplicates, "discover_videos", lambda *_: ([first, second], [])
+    )
+    monkeypatch.setattr(video_duplicates, "probe_video", lambda *_: probe)
+    monkeypatch.setattr(
+        video_duplicates,
+        "derive_fingerprint",
+        lambda *_: pytest.fail("decoding must not start with a corrupt cache"),
+    )
+
+    assert video_duplicates.main([str(tmp_path)]) == 1
+    assert "Fingerprint cache cannot be used safely" in caplog.text
+    assert "rerun with --no-cache" in caplog.text
+
+
+def test_video_cache_rejects_malformed_rows(tmp_path: Path) -> None:
+    database = tmp_path / "cache.sqlite3"
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE video_fingerprints ("
+        "file_sha256 TEXT, algorithm TEXT, ffmpeg_version TEXT, "
+        "fingerprint TEXT, video_frames INTEGER, audio_bytes INTEGER)"
+    )
+    connection.execute(
+        "INSERT INTO video_fingerprints VALUES (?, ?, ?, ?, ?, ?)",
+        ("bad-hash", video_duplicates.FINGERPRINT_ALGORITHM, "test", "bad", 0, -1),
+    )
+    connection.commit()
+    connection.close()
+
+    with pytest.raises(video_duplicates.VideoInspectionError, match="invalid row"):
+        video_duplicates.load_cached_fingerprints(database, "test")
+
+
+def test_video_inspection_rejects_a_file_changed_during_probe(
+    tmp_path: Path, monkeypatch
+) -> None:
+    path = tmp_path / "changing.mp4"
+    path.write_bytes(b"before")
+    probe = ProbeInfo(
+        display_width=64,
+        display_height=48,
+        duration_us=1_000_000,
+        video_start_us=0,
+        audio_start_us=None,
+        audio_sample_rate=None,
+        audio_channels=None,
+        audio_layout=None,
+        has_audio=False,
+    )
+
+    def mutate_during_probe(*_) -> ProbeInfo:
+        path.write_bytes(b"after")
+        return probe
+
+    monkeypatch.setattr(video_duplicates, "probe_video", mutate_during_probe)
+
+    with pytest.raises(
+        video_duplicates.FileChangedError, match="changed during video inspection"
+    ):
+        video_duplicates.inspect_video(path, "ffprobe")
+
+
+def test_decimal_microseconds_rejects_non_finite_values() -> None:
+    assert video_duplicates.decimal_microseconds("NaN") is None
+    assert video_duplicates.decimal_microseconds("Infinity") is None
+    assert video_duplicates.decimal_microseconds("-Infinity") is None
+
+
+def test_probe_rejects_non_object_stream_entries(tmp_path: Path, monkeypatch) -> None:
+    path = tmp_path / "invalid.mp4"
+    path.write_bytes(b"\x00invalid")
+    result = subprocess.CompletedProcess(
+        args=[], returncode=0, stdout=json.dumps({"streams": [None]}), stderr=""
+    )
+    monkeypatch.setattr(video_duplicates.subprocess, "run", lambda *_, **__: result)
+
+    with pytest.raises(
+        video_duplicates.VideoInspectionError, match="invalid stream entry"
+    ):
+        video_duplicates.probe_video(path, "ffprobe")
 
 
 def test_ffmpeg_decode_commands_only_use_local_file_inputs(monkeypatch) -> None:

@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import os
 import sys
+import warnings
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ from pymo.config import (
     ignored_messages,
     load_config,
 )
+from pymo.file_safety import FileChangedError, FileState
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
 from pymo.progress import ProgressMeter
@@ -55,8 +57,15 @@ except ImportError as error:
 class ImageRecord:
     path: Path
     pixel_hash: str
-    file_size: int
-    modified_ns: int
+    state: FileState
+
+    @property
+    def file_size(self) -> int:
+        return self.state.size
+
+    @property
+    def modified_ns(self) -> int:
+        return self.state.modified_ns
 
 
 def displayed_pixel_hash(path: Path) -> str:
@@ -66,18 +75,31 @@ def displayed_pixel_hash(path: Path) -> str:
     comparable. Animated images are skipped because comparing only their first
     frame could incorrectly classify two different animations as duplicates.
     """
-    with Image.open(path) as opened:
-        if getattr(opened, "n_frames", 1) != 1:
-            raise ValueError("animated or multi-page image")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", Image.DecompressionBombWarning)
+        with Image.open(path) as opened:
+            if getattr(opened, "n_frames", 1) != 1:
+                raise ValueError("animated or multi-page image")
 
-        image = ImageOps.exif_transpose(opened)
-        rgba = image.convert("RGBA")
+            image = ImageOps.exif_transpose(opened)
+            rgba = image.convert("RGBA")
 
-        digest = hashlib.sha256()
-        digest.update(rgba.width.to_bytes(8, "big"))
-        digest.update(rgba.height.to_bytes(8, "big"))
-        digest.update(rgba.tobytes())
-        return digest.hexdigest()
+            digest = hashlib.sha256()
+            digest.update(rgba.width.to_bytes(8, "big"))
+            digest.update(rgba.height.to_bytes(8, "big"))
+            digest.update(rgba.tobytes())
+            return digest.hexdigest()
+
+
+def inspect_image(path: Path) -> ImageRecord:
+    before = FileState.capture(path)
+    pixel_hash = displayed_pixel_hash(path)
+    before.require_unchanged(path, "image analysis")
+    return ImageRecord(path=path, pixel_hash=pixel_hash, state=before)
+
+
+def require_current_image(record: ImageRecord) -> None:
+    record.state.require_unchanged(record.path, "duplicate apply preflight")
 
 
 def discover_images(
@@ -348,16 +370,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     for path in paths:
         try:
-            stat = path.stat()
-            record = ImageRecord(
-                path=path,
-                pixel_hash=displayed_pixel_hash(path),
-                file_size=stat.st_size,
-                modified_ns=stat.st_mtime_ns,
-            )
+            record = inspect_image(path)
             groups[record.pixel_hash].append(record)
             scanned_bytes += record.file_size
-        except (OSError, ValueError, UnidentifiedImageError) as error:
+        except (
+            FileChangedError,
+            Image.DecompressionBombError,
+            Image.DecompressionBombWarning,
+            OSError,
+            UnidentifiedImageError,
+            ValueError,
+        ) as error:
             skipped.append((path, str(error)))
         progress_message = progress.advance("processed", byte_count=path_sizes[path])
         if progress_message:
@@ -390,20 +413,36 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.apply and move_plan:
         try:
-            actions = [
-                Action.for_file(root, duplicate.path, target, "MOVE")
-                for _, _, duplicate, target in move_plan
-            ]
+            current_records = {
+                record.path: record
+                for records in duplicate_groups
+                for record in records
+            }
+            keepers = {kept.path: kept for _, kept, _, _ in move_plan}
+            for record in current_records.values():
+                require_current_image(record)
+            actions: list[Action] = []
+            for _, _, duplicate, target in move_plan:
+                action = Action.for_file(root, duplicate.path, target, "MOVE")
+                require_current_image(duplicate)
+                actions.append(action)
+            for record in current_records.values():
+                require_current_image(record)
             log = ActionLog(root)
             with log.transaction(ToolId.IMAGE_DUPLICATES) as transaction:
+                for record in current_records.values():
+                    require_current_image(record)
                 for directory in review_directories(root):
                     if not directory.exists():
                         transaction.perform(Action.create_directory(root, directory))
-                for action in actions:
+                for action, (_, kept, _, _) in zip(actions, move_plan, strict=True):
+                    require_current_image(kept)
                     transaction.perform(action)
+                for record in keepers.values():
+                    require_current_image(record)
                 transaction.commit()
             print(f"\nAction log: {log.path}")
-        except (ActionConflict, ActionLogError, OSError) as error:
+        except (ActionConflict, ActionLogError, FileChangedError, OSError) as error:
             print(f"Duplicate moves stopped safely: {error}", file=sys.stderr)
             return 1
 

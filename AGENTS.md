@@ -42,6 +42,10 @@ never duplicate the version in source or static project metadata.
   recorded actions and remains independent of current configuration.
 - Treat `.pymo.sqlite3` as derived, disposable cache data, never as the
   authoritative action history.
+- Bind exact-media analysis to a stable regular-file state. Revalidate complete
+  duplicate groups before apply and retained originals through journal commit.
+- Treat an invalid derived cache as an explicit early error. Never delete or
+  replace it automatically; `--no-cache` is the deliberate bypass.
 - `scan` must never alter media, collection layout, or action history. Exact
   video dry runs may update the documented disposable fingerprint cache by
   default; `--no-cache` restores a zero-cache-read/write run.
@@ -100,7 +104,8 @@ report-only future work and must never silently enter the exact move path.
   requirements files.
 - Let uv manage the project `.venv`; Python 3.11 or newer is required.
 - Keep FFmpeg/ffprobe as explicit native runtime dependencies rather than
-  hiding them behind a Python wrapper.
+  hiding them behind a Python wrapper. Resolve them only when at least two
+  eligible videos require comparison.
 - Add or update pytest coverage with every behavior change. Use temporary,
   synthetic, collection-neutral fixtures.
 - Follow semantic versioning for compatibility removal. The v0.1 line warns
