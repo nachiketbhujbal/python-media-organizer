@@ -22,12 +22,12 @@ from pathlib import Path
 from PIL import Image, UnidentifiedImageError
 
 from pymo.action_log import (
-    LOG_FILENAME,
     Action,
     ActionConflict,
     ActionLog,
     ActionLogError,
     NoUndoableRun,
+    action_log_path,
 )
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier, discover_files, path_key
@@ -412,7 +412,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ]
     print(f"\nRenamed {len(plan)} media file(s).")
     print(f"Already using this naming scheme: {already_named} file(s).")
-    print(f"Action log: {root / LOG_FILENAME}")
+    print(f"Action log: {action_log_path(root)}")
     if verification_failures:
         print("\nRename verification needs attention:")
         for record in verification_failures:

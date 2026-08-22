@@ -13,3 +13,5 @@ All notable changes to `python-media-organizer` will be recorded here.
   disposable collection-local fingerprint cache.
 - Route output through privacy-conscious standard-library logging.
 - Add synthetic unit, workflow, and real FFmpeg integration tests.
+- Name each portable action journal `{collection-name}-actions-log.jsonl` and
+  migrate the legacy fixed filename on the next applied journal write.

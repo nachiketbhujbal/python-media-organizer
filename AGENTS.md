@@ -17,7 +17,8 @@ organization. The package is `python-media-organizer`, its import package is
 - Never delete media automatically and never overwrite an existing file.
 - Resolve collisions safely for forward operations. Require exact restoration
   paths for undo and abort on conflicts.
-- Preserve the collection-local, append-only `media_actions.jsonl` audit trail.
+- Preserve the collection-local, append-only
+  `{collection-name}-actions-log.jsonl` audit trail.
   Undo appends events and never rewrites or removes history.
 - Preflight complete undo plans before mutating and verify every applied run.
 - Reject unsafe symbolic links and do not follow media outside the collection.

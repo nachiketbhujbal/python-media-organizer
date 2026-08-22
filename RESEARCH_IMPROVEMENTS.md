@@ -532,7 +532,8 @@ source.
 
 Maintain a clear separation:
 
-- `media_actions.jsonl` is authoritative, append-only mutation history.
+- `{collection-name}-actions-log.jsonl` is authoritative, append-only mutation
+  history. Legacy `media_actions.jsonl` journals are migration inputs only.
 - A SQLite index/cache is derived, disposable, and rebuildable.
 
 This is the selected `0.1.0` design. SQLite is excellent for fingerprints,

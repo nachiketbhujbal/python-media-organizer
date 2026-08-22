@@ -44,7 +44,8 @@ media-collection/
   dups/
     pics/               exact picture copies isolated for review
     vids/               exact video copies isolated for review
-  media_actions.jsonl   portable append-only action history, after an apply
+  media-collection-actions-log.jsonl
+                        portable append-only action history, after an apply
   .pymo.sqlite3         disposable video fingerprint cache, after an apply
   other files           non-media files at the collection root
 ```
@@ -160,8 +161,11 @@ when a later active operation touched the same files or paths.
 
 ## Action history and undo
 
-Each media-collection owns one append-only `media_actions.jsonl`. Records use
-paths relative to the media-collection so it and its history can move together.
+Each media-collection owns one append-only
+`{collection-name}-actions-log.jsonl`. Records use paths relative to the
+media-collection so it and its history can move together. A legacy
+`media_actions.jsonl` is read without modification during previews and migrated
+to the collection-named form before the next applied journal write.
 Applied operations record planned and completed actions, file identities, run
 boundaries, and successful undos. Undo appends new history; it never erases the
 audit trail.

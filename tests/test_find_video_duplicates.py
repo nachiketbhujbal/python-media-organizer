@@ -9,7 +9,7 @@ import pytest
 
 from pymo.duplicates import videos as video_duplicates
 from pymo.duplicates.videos import DATABASE_FILENAME, ProbeInfo
-from pymo.action_log import LOG_FILENAME
+from pymo.action_log import action_log_path
 
 
 FFMPEG = shutil.which("ffmpeg")
@@ -76,7 +76,7 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert "No files are deleted by this tool" in dry_run.stdout
     assert not (tmp_path / "dups").exists()
     assert not (tmp_path / DATABASE_FILENAME).exists()
-    assert not (tmp_path / LOG_FILENAME).exists()
+    assert not action_log_path(tmp_path).exists()
 
     applied = run_script("find_video_duplicates.py", tmp_path, "--apply")
 
@@ -90,7 +90,7 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert (tmp_path / DATABASE_FILENAME).is_file()
     assert not (tmp_path / f"{DATABASE_FILENAME}-wal").exists()
     assert not (tmp_path / f"{DATABASE_FILENAME}-shm").exists()
-    assert (tmp_path / LOG_FILENAME).is_file()
+    assert action_log_path(tmp_path).is_file()
 
     undone = run_script("find_video_duplicates.py", tmp_path, "--undo", "--apply")
 
@@ -100,7 +100,7 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert remux.exists()
     assert not (tmp_path / "dups").exists()
     assert (tmp_path / DATABASE_FILENAME).is_file()
-    assert (tmp_path / LOG_FILENAME).is_file()
+    assert action_log_path(tmp_path).is_file()
 
 
 def test_video_finder_requires_only_vids(tmp_path: Path, run_script) -> None:

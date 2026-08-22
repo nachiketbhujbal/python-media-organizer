@@ -22,7 +22,7 @@ Hard requirements:
 2. Never delete media, overwrite existing files, or silently choose a different
    undo destination.
 3. Every applied filesystem operation participates in a collection-local,
-   append-only `media_actions.jsonl`.
+   append-only `{collection-name}-actions-log.jsonl`.
 4. Undo appends history. It does not erase the log or prior run records.
 5. Preflight and identity checks abort safely when later changes make an older
    action impossible to reverse exactly.
@@ -34,9 +34,9 @@ Hard requirements:
    convention.
 10. Repository text and tests use generic synthetic collections only.
 
-`media_actions.jsonl` remains the authoritative portable journal because it
-moves naturally with a media-collection on external storage. SQLite is useful
-only as a derived, disposable collection-local cache or index.
+`{collection-name}-actions-log.jsonl` remains the authoritative portable
+journal because it moves naturally with a media-collection on external storage.
+SQLite is useful only as a derived, disposable collection-local cache or index.
 
 ## Current package layout
 
@@ -76,8 +76,9 @@ a preview unless combined with `--apply`. Global `--verbose`, `--quiet`, and
 
 ## Shared action log
 
-`src/pymo/action_log.py` stores one `media_actions.jsonl` in each
-media-collection.
+`src/pymo/action_log.py` stores one `{collection-name}-actions-log.jsonl` in
+each media-collection. An existing legacy `media_actions.jsonl` remains readable
+during previews and is safely renamed before the next applied journal write.
 
 - Paths are relative to the collection, preserving portability.
 - Runs and actions have UUIDs.

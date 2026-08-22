@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image, PngImagePlugin
 
-from pymo.action_log import LOG_FILENAME
+from pymo.action_log import action_log_path
 
 
 def make_organized_collection(root: Path) -> tuple[Path, Path]:
@@ -37,7 +37,7 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
     assert older.exists()
     assert larger.exists()
     assert not (tmp_path / "dups").exists()
-    assert not (tmp_path / LOG_FILENAME).exists()
+    assert not action_log_path(tmp_path).exists()
 
     applied = run_script("find_image_duplicates.py", tmp_path, "--apply")
 
@@ -47,7 +47,7 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
     moved = tmp_path / "dups" / "pics" / "larger_copy(1).png"
     assert moved.exists()
     assert not (tmp_path / "dups" / "vids").exists()
-    assert (tmp_path / LOG_FILENAME).exists()
+    assert action_log_path(tmp_path).exists()
     assert not (tmp_path / "dups" / "pics" / "move_manifest.csv").exists()
 
     undone = run_script("find_image_duplicates.py", tmp_path, "--undo", "--apply")
@@ -56,7 +56,7 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
     assert older.exists()
     assert larger.exists()
     assert not (tmp_path / "dups").exists()
-    assert (tmp_path / LOG_FILENAME).exists()
+    assert action_log_path(tmp_path).exists()
 
 
 def test_duplicate_finder_requires_organized_collection_root(
@@ -70,7 +70,7 @@ def test_duplicate_finder_requires_organized_collection_root(
     assert "Collection is not ready for duplicate scanning" in result.stderr
     assert "missing required folder" in result.stderr
     assert "Run pymo organize" in result.stderr
-    assert not (tmp_path / LOG_FILENAME).exists()
+    assert not action_log_path(tmp_path).exists()
 
 
 def test_duplicate_finder_ignores_video_folder_state(
@@ -136,7 +136,7 @@ def test_legacy_group_reorganization_is_logged_and_reversible(
     assert flattened.exists()
     assert not (tmp_path / "dups" / "vids").exists()
     assert not group.exists()
-    assert (tmp_path / LOG_FILENAME).exists()
+    assert action_log_path(tmp_path).exists()
     assert not (tmp_path / "duplicates" / "reorganization_manifest.csv").exists()
 
     undone = run_script("find_image_duplicates.py", tmp_path, "--undo", "--apply")

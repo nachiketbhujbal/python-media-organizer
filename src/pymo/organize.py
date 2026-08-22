@@ -22,12 +22,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pymo.action_log import (
-    LOG_FILENAME,
     Action,
     ActionConflict,
     ActionLog,
     ActionLogError,
     NoUndoableRun,
+    action_log_exists,
+    is_action_log_path,
 )
 from pymo.logging_config import emit as print
 
@@ -208,7 +209,7 @@ def discover_files(root: Path) -> tuple[list[Path], list[Path]]:
             continue
         if path.is_symlink():
             skipped_links.append(path)
-        elif path.is_file() and path.name != LOG_FILENAME:
+        elif path.is_file() and not is_action_log_path(root, path):
             files.append(path.absolute())
     files.sort(key=lambda item: str(item).casefold())
     skipped_links.sort(key=lambda item: str(item).casefold())
@@ -629,7 +630,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("--manifest can only be used with --undo", file=sys.stderr)
         return 2
     if args.undo:
-        if not args.manifest and (root / LOG_FILENAME).is_file():
+        if not args.manifest and action_log_exists(root):
             return undo_logged_organization(root, args.apply)
         return undo_organization(root, args.manifest, args.apply)
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from pymo.action_log import LOG_FILENAME
+from pymo.action_log import action_log_path
 from pymo.rename import clean_descriptor, timestamp_from_name
 
 
@@ -87,7 +87,7 @@ def test_renamer_dry_run_uses_universal_schema(tmp_path: Path, run_script) -> No
         in result.stdout
     )
     assert (root / "notes.txt").read_text(encoding="utf-8") == "leave me"
-    assert not (root / LOG_FILENAME).exists()
+    assert not action_log_path(root).exists()
 
 
 def test_renamer_apply_and_undo_are_logged_and_reversible(
@@ -102,7 +102,7 @@ def test_renamer_apply_and_undo_are_logged_and_reversible(
 
     assert applied.returncode == 0, applied.stdout + applied.stderr
     assert (root / "pics" / "media_collection__image_0001__2020-10-27_01-28-34-225.jpg").exists()
-    assert (root / LOG_FILENAME).exists()
+    assert action_log_path(root).exists()
 
     undone = run_script("rename_media.py", root, "--undo", "--apply")
 
@@ -110,10 +110,10 @@ def test_renamer_apply_and_undo_are_logged_and_reversible(
     restored = sorted(
         str(path.relative_to(root))
         for path in root.rglob("*")
-        if path.is_file() and path.name != LOG_FILENAME
+        if path.is_file() and path != action_log_path(root)
     )
     assert restored == originals
-    assert (root / LOG_FILENAME).exists()
+    assert action_log_path(root).exists()
 
 
 def test_organize_undo_is_blocked_until_rename_is_undone(

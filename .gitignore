@@ -10,6 +10,7 @@ dist/
 *.log
 .pymo.sqlite3*
 media_actions.jsonl
+*-actions-log.jsonl
 .DS_Store
 
 # Local media-collection layouts and legacy generated manifests

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from pymo.action_log import LOG_FILENAME
+from pymo.action_log import action_log_path
 
 
 def make_fixture(root: Path) -> None:
@@ -31,7 +31,7 @@ def test_organizer_dry_run_changes_nothing(tmp_path: Path, run_script) -> None:
     assert (tmp_path / "album" / "notes.txt").exists()
     assert not (tmp_path / "pics").exists()
     assert not (tmp_path / "vids").exists()
-    assert not (tmp_path / LOG_FILENAME).exists()
+    assert not action_log_path(tmp_path).exists()
 
 
 def test_organizer_apply_and_undo_restore_exact_structure(
@@ -46,7 +46,7 @@ def test_organizer_apply_and_undo_restore_exact_structure(
     assert (tmp_path / "vids" / "clip.mp4").exists()
     assert (tmp_path / "notes.txt").read_text(encoding="utf-8") == "notes"
     assert not (tmp_path / "album").exists()
-    log_path = tmp_path / LOG_FILENAME
+    log_path = action_log_path(tmp_path)
     before_undo = log_path.read_bytes()
     assert not (tmp_path / "organization_manifest.csv").exists()
 
@@ -72,7 +72,7 @@ def test_organizer_undo_dry_run_preserves_organized_state(
 ) -> None:
     make_fixture(tmp_path)
     assert run_script("organize_media.py", tmp_path, "--apply").returncode == 0
-    before = (tmp_path / LOG_FILENAME).read_bytes()
+    before = action_log_path(tmp_path).read_bytes()
 
     result = run_script("organize_media.py", tmp_path, "--undo")
 
@@ -80,7 +80,7 @@ def test_organizer_undo_dry_run_preserves_organized_state(
     assert "Would reverse" in result.stdout
     assert (tmp_path / "pics" / "photo.png").exists()
     assert not (tmp_path / "album").exists()
-    assert (tmp_path / LOG_FILENAME).read_bytes() == before
+    assert action_log_path(tmp_path).read_bytes() == before
 
 
 def test_legacy_csv_manifest_can_still_be_undone(tmp_path: Path, run_script) -> None:
@@ -111,7 +111,7 @@ def test_legacy_csv_manifest_can_still_be_undone(tmp_path: Path, run_script) -> 
     assert original.read_bytes() == b"legacy photo"
     assert not organized.exists()
     assert not manifest.exists()
-    assert not (tmp_path / LOG_FILENAME).exists()
+    assert not action_log_path(tmp_path).exists()
 
 
 def test_organizer_preserves_reserved_dups_tree(tmp_path: Path, run_script) -> None:
@@ -132,4 +132,4 @@ def test_organizer_preserves_reserved_dups_tree(tmp_path: Path, run_script) -> N
     assert (pics / "kept.png").exists()
     assert (duplicate_pics / "kept_copy(1).png").exists()
     assert duplicate_vids.is_dir()
-    assert not (tmp_path / LOG_FILENAME).exists()
+    assert not action_log_path(tmp_path).exists()

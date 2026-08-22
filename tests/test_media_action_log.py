@@ -6,11 +6,12 @@ from pathlib import Path
 import pytest
 
 from pymo.action_log import (
-    LOG_FILENAME,
     Action,
     ActionConflict,
     ActionLog,
     NoUndoableRun,
+    action_log_path,
+    legacy_action_log_path,
 )
 
 
@@ -27,7 +28,7 @@ def test_append_only_log_records_apply_and_undo(tmp_path: Path) -> None:
 
     assert not source.exists()
     assert destination.read_bytes() == b"photo bytes"
-    before_undo = (tmp_path / LOG_FILENAME).read_bytes()
+    before_undo = action_log_path(tmp_path).read_bytes()
 
     plan = log.plan_undo("organize_media")
     assert plan.target.tool == "organize_media"
@@ -39,7 +40,7 @@ def test_append_only_log_records_apply_and_undo(tmp_path: Path) -> None:
     assert result.action_count == 1
     assert source.read_bytes() == b"photo bytes"
     assert not destination.exists()
-    after_undo = (tmp_path / LOG_FILENAME).read_bytes()
+    after_undo = action_log_path(tmp_path).read_bytes()
     assert after_undo.startswith(before_undo)
     events = [json.loads(line) for line in after_undo.splitlines()]
     assert any(event["event"] == "RUN_COMMITTED" for event in events)
@@ -118,3 +119,55 @@ def test_same_size_content_change_blocks_undo(tmp_path: Path) -> None:
         log.plan_undo("rename_media")
     assert destination.read_bytes() == b"modified"
     assert not source.exists()
+
+
+def test_action_log_name_comes_from_media_collection_root(tmp_path: Path) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+
+    assert action_log_path(root).name == "media-collection-actions-log.jsonl"
+
+
+def test_legacy_log_is_read_without_mutation_then_migrated_on_apply(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "photo.jpg"
+    destination = tmp_path / "pics" / "photo.jpg"
+    source.write_bytes(b"portable history")
+    destination.parent.mkdir()
+    initial_log = ActionLog(tmp_path)
+    with initial_log.transaction("organize_media") as transaction:
+        transaction.perform(Action.for_file(tmp_path, source, destination, "MOVE"))
+        transaction.commit()
+
+    canonical = action_log_path(tmp_path)
+    legacy = legacy_action_log_path(tmp_path)
+    canonical.rename(legacy)
+    existing = ActionLog(tmp_path)
+
+    existing.plan_undo("organize_media")
+    assert legacy.is_file()
+    assert not canonical.exists()
+
+    existing.apply_undo("organize_media")
+    assert canonical.is_file()
+    assert not legacy.exists()
+    assert source.read_bytes() == b"portable history"
+
+
+def test_canonical_and_legacy_logs_together_are_rejected(tmp_path: Path) -> None:
+    action_log_path(tmp_path).write_text("", encoding="utf-8")
+    legacy_action_log_path(tmp_path).write_text("", encoding="utf-8")
+
+    with pytest.raises(ActionConflict, match="both the canonical and legacy"):
+        ActionLog(tmp_path)
+
+
+def test_symbolic_link_action_log_is_rejected(tmp_path: Path) -> None:
+    outside = tmp_path.parent / "outside-action-log.jsonl"
+    outside.write_text("leave unchanged", encoding="utf-8")
+    action_log_path(tmp_path).symlink_to(outside)
+
+    with pytest.raises(ActionConflict, match="cannot be a symbolic link"):
+        ActionLog(tmp_path)
+    assert outside.read_text(encoding="utf-8") == "leave unchanged"
