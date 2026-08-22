@@ -17,6 +17,8 @@ files = [
     ".pymo.sqlite3-wal",
     ".pymo.sqlite3-shm",
     ".pymo.sqlite3-journal",
+    ".pymo.sqlite3.lock",
+    ".pymo.sqlite3.new.*",
 ]
 directories = [
     ".AppleDouble",

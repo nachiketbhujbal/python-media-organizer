@@ -13,12 +13,15 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.11` cache-read-safety release. It is a
+`pymo` command, and has a `v0.3.12` cache-write-durability release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.11 opens an existing video fingerprint cache read-only through a
+Version 0.3.12 serializes cache access with a dedicated collection lock and
+publishes fully synced, validated updates through atomic no-replace or verified
+exchange operations without writing in place. Version 0.3.11 opens an existing
+video fingerprint cache read-only through a
 stable collection-anchored descriptor and fails closed if its pathname changes
 or is unsafe. Version 0.3.10 pins Pillow image decoding to stable collection-anchored
 descriptors. Version 0.3.9 records that GitHub Free cannot enforce branch
@@ -194,9 +197,9 @@ Ignore patterns match case-insensitive basenames or collection-relative paths,
 and an ignored directory protects all descendants.
 
 `src/pymo/collection.py` owns the invariant paths for `pics`, `vids`, `dups`,
-the optional config, disposable video cache, and collection-named action log.
-These names are intentionally not configurable because cross-tool ownership,
-portable undo, and compatibility require one interpretation.
+the optional config, disposable video cache and lock, and collection-named
+action log. These names are intentionally not configurable because cross-tool
+ownership, portable undo, and compatibility require one interpretation.
 
 Ignored paths are excluded from moving, renaming, media classification,
 fingerprinting, deletion, and action history. Symbolic links remain a separate
@@ -364,14 +367,24 @@ cache keyed by content SHA-256, fingerprint algorithm version, and actual
 FFmpeg version. Each successful cache miss is persisted immediately so an
 interrupted preview retains completed work and a later `--apply` reuses it.
 `--no-cache` disables all cache reads and writes.
-SQLite uses a non-persistent journaling mode and connections close explicitly,
-so `-wal`/`-shm` sidecars are not left behind.
 Existing cache schemas and rows are validated read-only before decoding. The
 read-only SQLite connection uses a stable no-follow descriptor anchored beneath
 the collection root, and a pathname swap stops safely rather than redirecting
 the read. An invalid cache is preserved and reported; moving it aside or
 explicitly using `--no-cache` is the recovery path. FFmpeg is resolved only when
 discovery finds at least two eligible videos.
+
+Cache readers share collection-root `.pymo.sqlite3.lock`; writers acquire it
+exclusively and re-read the latest public database before merging a completed
+fingerprint. Updates are built in memory, serialized to a random private
+`.pymo.sqlite3.new.*` descriptor, synced, reopened read-only, and fully
+validated. A missing public cache is published with an atomic no-replace rename;
+an existing cache uses an atomic exchange whose displaced identity is verified
+before the prior derived database is removed. The collection directory is
+synced after publication. SQLite never writes through the public pathname, and
+successful runs leave no journal, WAL, shared-memory, or staging sidecars.
+Interruption before publication leaves the prior cache intact and may leave an
+ignored staging database for inspection; pymo does not silently remove it.
 
 The finder mirrors image behavior for deterministic keeper choice, readable
 `copy(n)` destinations, no overwrite/delete, action-log undo, post-operation
@@ -521,6 +534,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   prove unrelated replacement content is never read;
 - adversarial SQLite cache path swaps that prove cache reads remain pinned to
   the original collection file and then fail closed on the changed pathname;
+- concurrent-writer, interrupted-staging, cache-publication substitution, and
+  lock-substitution tests that prove merged updates, durable atomic publication,
+  preserved prior state, and no writes through an outside path;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

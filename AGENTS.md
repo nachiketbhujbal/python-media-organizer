@@ -52,6 +52,10 @@ never duplicate the version in source or static project metadata.
 - Open an existing SQLite cache through a stable collection-anchored no-follow
   descriptor. A pathname check followed by `sqlite3.connect(path)` is not a
   safe cache-read boundary.
+- Serialize cache readers and writers with the dedicated collection lock.
+  Build writes as fully validated private staging databases, sync them, and
+  publish with an atomic no-replace or verified exchange; never write through
+  the public cache pathname.
 - `scan` must never alter media, collection layout, or action history. Exact
   video dry runs may update the documented disposable fingerprint cache by
   default; `--no-cache` restores a zero-cache-read/write run.

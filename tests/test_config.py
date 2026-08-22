@@ -20,6 +20,10 @@ def test_packaged_defaults_cover_common_local_system_metadata(
     assert config.ignores_file(tmp_path / ".DS_Store", tmp_path)
     assert config.ignores_file(tmp_path / "THUMBS.DB", tmp_path)
     assert config.ignores_file(tmp_path / "._photo.jpg", tmp_path)
+    assert config.ignores_file(tmp_path / ".pymo.sqlite3.lock", tmp_path)
+    assert config.ignores_file(
+        tmp_path / ".pymo.sqlite3.new.0123456789abcdef", tmp_path
+    )
     assert config.ignores_directory(tmp_path / ".Spotlight-V100", tmp_path)
     assert config.ignores_directory(tmp_path / ".git" / "objects", tmp_path)
     assert not config.ignores_file(tmp_path / "photo.jpg", tmp_path)
