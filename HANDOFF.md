@@ -13,14 +13,13 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.2.0` collection-scanning release. It is a
+`pymo` command, and has a `v0.2.1` timing-and-throughput release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-The current unreleased patch adds shared timing, observed throughput, ETA,
-FFmpeg heartbeats, and console timestamp controls. It is a backward-compatible
-candidate for v0.2.1; no release tag or push is implied by this handoff.
+Version 0.2.1 adds shared timing, observed throughput, ETA, FFmpeg heartbeats,
+and console timestamp controls without changing matching or mutation behavior.
 
 Hard requirements:
 

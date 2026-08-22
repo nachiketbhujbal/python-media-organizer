@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## Unreleased
+## 0.2.1 - 2026-08-22
 
 - Add a privacy-safe final elapsed-time summary to every normal CLI command.
 - Add opt-in `--timestamps` console output and ensure every physical line in an
