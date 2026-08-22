@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import shutil
 from pathlib import Path
@@ -49,10 +50,13 @@ def test_fast_scan_reports_inventory_without_revealing_paths_or_writing_state(
     assert "Proposed organizer moves: 3 file(s)" in result.stdout
     assert "Pictures: 1 same-size group(s)" in result.stdout
     assert "Exact-byte checks: not requested" in result.stdout
+    assert "Run pymo validate" in result.stdout
     assert "Run pymo organize" in result.stdout
     assert "Run pymo rename" in result.stdout
-    assert result.stdout.index("Run pymo organize") < result.stdout.index(
-        "Run pymo rename"
+    assert (
+        result.stdout.index("Run pymo validate")
+        < result.stdout.index("Run pymo organize")
+        < result.stdout.index("Run pymo rename")
     )
     assert "first.png" not in result.stdout
     assert ".DS_Store" not in result.stdout
@@ -85,10 +89,40 @@ def test_checksum_scan_emits_stable_json_and_opt_in_ignored_paths(
     assert exact["reclaimable_bytes"] > 0
     assert report["derived_state"]["action_log_present"] is False
     assert report["derived_state"]["video_cache_present"] is False
-    assert report["recommendations"][:2] == [
+    assert report["recommendations"][:3] == [
+        "Run pymo validate before applying changes.",
         "Run pymo organize after reviewing its dry run.",
         "Run pymo rename after reviewing its dry run.",
     ]
+
+
+def test_scan_records_directory_walk_errors_without_writing_state(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    blocked = root / "closed"
+
+    def inaccessible_walk(
+        _root: Path, *, topdown: bool, onerror
+    ) -> list[tuple[str, list[str], list[str]]]:
+        assert topdown
+        onerror(OSError(errno.EACCES, "permission denied", str(blocked)))
+        return []
+
+    monkeypatch.setattr(scan.os, "walk", inaccessible_walk)
+
+    report = scan.build_report(root, load_config(root), 1, False, False, False)
+
+    assert report["inventory"]["files"] == 0
+    assert report["inventory"]["unreadable_entries"] == 1
+    assert report["warnings"] == ["1 entry or entries could not be read safely."]
+    assert report["recommendations"][:2] == [
+        "Run pymo validate before applying changes.",
+        "Review symbolic links and unreadable entries first.",
+    ]
+    assert not action_log_path(root).exists()
+    assert not CollectionLayout(root).video_cache.exists()
 
 
 def test_scan_rejects_unsafe_worker_counts(tmp_path: Path, run_script) -> None:

@@ -74,7 +74,13 @@ def _collect_entries(root: Path, config: PymoConfig) -> WalkResult:
     symlink_count = 0
     unreadable_count = 0
 
-    for current, directory_names, file_names in os.walk(root, topdown=True):
+    def record_walk_error(_error: OSError) -> None:
+        nonlocal unreadable_count
+        unreadable_count += 1
+
+    for current, directory_names, file_names in os.walk(
+        root, topdown=True, onerror=record_walk_error
+    ):
         current_path = Path(current)
         directory_names.sort(key=str.casefold)
         file_names.sort(key=str.casefold)
@@ -458,7 +464,7 @@ def build_report(
         changed_count += len(checksum_changes)
 
     summary = _summarize_entries(root, layout, entries)
-    recommendations: list[str] = []
+    recommendations = ["Run pymo validate before applying changes."]
     if walk.symlink_count or walk.unreadable_count:
         recommendations.append("Review symbolic links and unreadable entries first.")
     if (
@@ -473,11 +479,6 @@ def build_report(
         recommendations.append("Run pymo find-image-duplicates for exact pixels.")
     if summary.source_video_count > 1:
         recommendations.append("Run pymo find-video-duplicates for exact playback.")
-    if not recommendations:
-        recommendations.append(
-            "The collection is ready; no immediate action is required."
-        )
-
     ignored_paths = (
         [path.relative_to(root).as_posix() for path in walk.ignored]
         if show_ignored

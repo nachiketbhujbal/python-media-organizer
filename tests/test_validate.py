@@ -355,6 +355,53 @@ def test_video_probe_selects_metadata_and_discards_tool_diagnostics(
 
 
 @requires_ffmpeg
+def test_video_validation_continues_after_a_corrupt_file(
+    tmp_path: Path, run_script
+) -> None:
+    assert FFMPEG
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    healthy = root / "healthy.mp4"
+    generated = subprocess.run(
+        [
+            FFMPEG,
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=32x24:rate=4:duration=0.5",
+            "-c:v",
+            "mpeg4",
+            "-pix_fmt",
+            "yuv420p",
+            healthy,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert generated.returncode == 0, generated.stderr
+    damaged = root / "damaged.mp4"
+    damaged.write_bytes(b"not a video")
+    before = snapshot(root)
+
+    result = run_script("validate.py", root, "--show-files")
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Healthy files: 1" in result.stdout
+    assert "Files with errors: 1" in result.stdout
+    assert "ERROR invalid_video: 1 file(s)" in result.stdout
+    assert "damaged.mp4: error invalid_video" in result.stdout
+    assert "healthy.mp4" not in result.stdout
+    assert snapshot(root) == before
+    assert not action_log_path(root).exists()
+    assert not CollectionLayout(root).video_cache.exists()
+
+
+@requires_ffmpeg
 def test_full_video_validation_uses_one_decode_worker_and_stays_read_only(
     tmp_path: Path, run_script
 ) -> None:
