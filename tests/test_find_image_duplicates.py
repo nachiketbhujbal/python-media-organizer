@@ -62,6 +62,58 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
     assert action_log_path(tmp_path).exists()
 
 
+def test_image_summary_applies_with_path_private_aggregate_output(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "private-garden-collection"
+    pics, _ = make_organized_collection(root)
+    first = pics / "secret-fern.png"
+    second = pics / "secret-moss.png"
+    broken = pics / "secret-broken.png"
+    Image.new("RGB", (3, 2), "green").save(first)
+    Image.new("RGB", (3, 2), "green").save(second)
+    broken.write_bytes(b"not an image")
+
+    result = run_script("find_image_duplicates.py", root, "--summary", "--apply")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "Scanning 3 image(s)" in result.stdout
+    assert "Moved 1 duplicate(s) from 1 group(s)" in result.stdout
+    assert "Skipped 1 file(s)." in result.stdout
+    assert "Duplicate storage summary:" in result.stdout
+    assert "Action log updated." in result.stdout
+    assert "Group 1:" not in output
+    assert "duplicate:" not in output
+    assert "Action log:" not in output
+    for private_text in (root.name, first.name, second.name, broken.name, str(root)):
+        assert private_text not in output
+    assert action_log_path(root).is_file()
+
+    undo_preview = run_script("find_image_duplicates.py", root, "--summary", "--undo")
+
+    undo_output = undo_preview.stdout + undo_preview.stderr
+    assert undo_preview.returncode == 0, undo_output
+    assert "Would reverse" in undo_preview.stdout
+    assert "Using action log:" not in undo_output
+    assert "Duplicate-finder run:" not in undo_output
+    for private_text in (root.name, first.name, second.name, broken.name, str(root)):
+        assert private_text not in undo_output
+
+
+def test_image_summary_refuses_explicit_ignored_paths(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "private-garden-collection"
+    make_organized_collection(root)
+
+    result = run_script("find_image_duplicates.py", root, "--summary", "--show-ignored")
+
+    assert result.returncode == 2
+    assert "cannot be combined" in result.stderr
+    assert root.name not in result.stdout + result.stderr
+
+
 def test_duplicate_finder_honors_custom_file_rules(tmp_path: Path, run_script) -> None:
     pics, _ = make_organized_collection(tmp_path)
     original = pics / "original.png"

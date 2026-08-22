@@ -275,6 +275,7 @@ a possible future, opt-in feature.
 
 ```bash
 pymo find-image-duplicates "/path/to/media-collection"
+pymo find-image-duplicates "/path/to/media-collection" --summary
 pymo find-image-duplicates "/path/to/media-collection" --apply
 pymo find-image-duplicates "/path/to/media-collection" --undo
 pymo find-image-duplicates "/path/to/media-collection" --undo --apply
@@ -293,6 +294,7 @@ local content. Changed paths are reported and skipped.
 
 ```bash
 pymo find-video-duplicates "/path/to/media-collection"
+pymo find-video-duplicates "/path/to/media-collection" --summary
 pymo find-video-duplicates "/path/to/media-collection" --apply
 pymo find-video-duplicates "/path/to/media-collection" --undo
 pymo find-video-duplicates "/path/to/media-collection" --undo --apply
@@ -374,6 +376,15 @@ expensive part of a run without exposing filenames.
 Both duplicate finders report retained storage, extra-copy storage, and the
 space potentially reclaimable if the isolated copies are later deleted
 manually. `pymo` itself never deletes them.
+
+Add command-specific `--summary` to either duplicate finder for an aggregate,
+path-private report. It keeps progress, counts, storage, cache and timing facts,
+final results, dry-run guidance, and verification status while suppressing
+collection paths, filenames, run IDs, group/action listings, per-video start
+rows, and per-file skip details. It works for forward scans, explicit applies,
+and undo previews, but cannot be combined with `--show-ignored`. Summary mode
+changes reporting only; every analysis, collision, action-log, and verification
+check still runs.
 
 ## Recommended workflow
 

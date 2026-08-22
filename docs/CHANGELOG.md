@@ -2,6 +2,18 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.17 - 2026-08-22
+
+- Add command-specific `--summary` output to both exact-media duplicate finders
+  for aggregate, path-private forward and undo reports.
+- Retain counts, progress, storage, cache activity, stage timing, final results,
+  dry-run status, and verification outcomes while suppressing collection paths,
+  filenames, run IDs, group details, per-item starts, and skipped-file details.
+- Keep dry-run and explicit `--apply` semantics unchanged; summary mode changes
+  reporting only and continues to use action history and full verification.
+- Reject `--summary` with `--show-ignored` because the two options make
+  contradictory path-privacy promises.
+
 ## 0.3.16 - 2026-08-22
 
 - Replace ambiguous video-cache hit/miss wording with counts of reusable

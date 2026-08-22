@@ -83,6 +83,12 @@ The same adversarial method was repeated after the first validation release.
 | PROG-002 | Low | A long-item heartbeat reuses the completed-work formatter, so it repeats stale throughput and a volatile ETA while no additional work has completed; ETA also appears after only one observation. | 0.3.14 | Resolved in ADR 0051 |
 | PROG-003 | Low | The CLI reports only whole-command runtime, so an expensive exact-video run does not reveal whether discovery, probing, fingerprinting, planning, mutation, or verification consumed the time. | 0.3.15 | Resolved in ADR 0052 |
 
+## Output privacy review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| OUT-001 | Low | Duplicate-finder previews always print collection paths, filenames, per-group plans, and skipped-file details, leaving no concise aggregate mode for private logs or quick status checks. | 0.3.17 | Resolved in ADR 0054 |
+
 ## Release groups
 
 - `0.2.2`: establish ADRs and the locked Ruff, Black, mypy, pre-commit, and
@@ -125,6 +131,8 @@ The same adversarial method was repeated after the first validation release.
   pipeline stage independently with path-private monotonic timing.
 - `0.3.16`: distinguish reusable cache records, required fingerprints, durable
   new records, and the complete no-read/no-write cache opt-out.
+- `0.3.17`: add an explicit aggregate, path-private report mode for image and
+  video duplicate scans, applies, and undo previews.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 
@@ -137,7 +145,7 @@ The same adversarial method was repeated after the first validation release.
 - Independent typing found unsafe object narrowing in action-log deserialization
   and an imprecise selector file-object type.
 - A first parent-only coverage run reported a misleading 42 percent. After
-  subprocess instrumentation and direct adversarial tests, the current 161
+  subprocess instrumentation and direct adversarial tests, the current 165
   tests pass and the same suite reports 86 percent across real CLI child
   processes.
 

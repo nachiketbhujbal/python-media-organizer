@@ -36,7 +36,7 @@ behavior is captured in the changelog and handoff.
 | 0.3.14 | Heartbeat and ETA | Distinguish active-item heartbeats from completed-work progress and suppress unstable ETA until enough observations exist. | Released |
 | 0.3.15 | Stage timing | Report discovery, probing, fingerprinting, planning, apply, and verification durations independently. | Released |
 | 0.3.16 | Cache wording | Make hits, misses, newly persisted records, and no-cache behavior unambiguous. | Released |
-| 0.3.17 | Concise summaries | Add `--summary` for aggregate, path-private command results without verbose group listings. | Planned |
+| 0.3.17 | Concise summaries | Add `--summary` for aggregate, path-private command results without verbose group listings. | Released |
 | 0.3.18 | Timestamp default | Timestamp human-readable console lines by default; add an explicit opt-out while preserving clean JSON and compatibility with `--timestamps`. | Planned |
 
 The order may change when a safety dependency is found, but unrelated primary
