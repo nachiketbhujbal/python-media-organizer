@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Iterator, TextIO
 
 from pymo.collection import CollectionLayout
+from pymo.logging_config import warn_deprecated
 
 
 # This constant identifies the existing on-disk journal schema. It must stay
@@ -67,6 +68,16 @@ def action_log_path(root: Path) -> Path:
 def legacy_action_log_path(root: Path) -> Path:
     root = root.expanduser().resolve()
     return CollectionLayout(root).legacy_action_log
+
+
+def warn_if_legacy_action_log(root: Path) -> None:
+    legacy_path = legacy_action_log_path(root)
+    if legacy_path.is_file() or legacy_path.is_symlink():
+        warn_deprecated(
+            "the fixed media_actions.jsonl action-log filename",
+            "Use the collection-named action log; the next applied journal "
+            "operation migrates this file automatically.",
+        )
 
 
 def action_log_exists(root: Path) -> bool:

@@ -108,6 +108,8 @@ def test_legacy_csv_manifest_can_still_be_undone(tmp_path: Path, run_script) -> 
     result = run_script("organize_media.py", tmp_path, "--undo", "--apply")
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "DEPRECATION: CSV organization-manifest undo and --manifest" in result.stderr
+    assert "removed in pymo 0.2.0" in result.stderr
     assert original.read_bytes() == b"legacy photo"
     assert not organized.exists()
     assert not manifest.exists()

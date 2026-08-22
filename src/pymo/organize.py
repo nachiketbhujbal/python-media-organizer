@@ -30,6 +30,7 @@ from pymo.action_log import (
     ToolId,
     action_log_exists,
     is_action_log_path,
+    warn_if_legacy_action_log,
 )
 from pymo.collection import CollectionLayout
 from pymo.config import (
@@ -42,6 +43,7 @@ from pymo.config import (
     load_config,
 )
 from pymo.logging_config import emit as print
+from pymo.logging_config import warn_deprecated
 
 
 @dataclass(frozen=True)
@@ -317,12 +319,6 @@ def remaining_directories(
     )
 
 
-def unique_manifest_path(root: Path) -> Path:
-    desired = root / "organization_manifest.csv"
-    occupied: set[str] = set()
-    return available_target(desired, occupied)
-
-
 def manifest_path_within_root(value: str, root: Path) -> Path:
     """Resolve a path from a manifest and require it to stay within ROOT."""
     path = Path(value).expanduser()
@@ -427,6 +423,11 @@ def undo_organization(
         if manifest_path.is_symlink() or not manifest_path.is_file():
             print(f"Not a regular manifest file: {manifest_path}", file=sys.stderr)
             return 2
+
+    warn_deprecated(
+        "CSV organization-manifest undo and --manifest",
+        "Undo current organization runs through the collection action log.",
+    )
 
     try:
         manifest_stat = manifest_path.stat()
@@ -649,7 +650,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--manifest",
         type=Path,
-        help="specific legacy CSV organization manifest to use with --undo",
+        help=(
+            "deprecated: select a legacy CSV organization manifest for --undo; "
+            "removed in v0.2.0"
+        ),
     )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
@@ -662,6 +666,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not root.is_dir():
         print(f"Not a directory: {root}", file=sys.stderr)
         return 2
+
+    warn_if_legacy_action_log(root)
 
     if args.manifest and not args.undo:
         print("--manifest can only be used with --undo", file=sys.stderr)

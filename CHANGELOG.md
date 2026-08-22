@@ -2,6 +2,18 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.1.5 - 2026-08-22
+
+- Add user-visible deprecation warnings for CSV organization-manifest undo,
+  grouped image-duplicate migration, the no-op `--recursive` option, and the
+  fixed `media_actions.jsonl` action-log name.
+- Announce removal of those compatibility surfaces in v0.2.0 while preserving
+  their complete v0.1 behavior.
+- Keep warnings visible on stderr through the shared logging system and cover
+  legacy behavior plus its current replacements with synthetic tests.
+- Remove an unreachable helper left behind when new organization runs stopped
+  creating CSV manifests.
+
 ## 0.1.4 - 2026-08-22
 
 - Add an explicit `--show-ignored` option to every forward command and the

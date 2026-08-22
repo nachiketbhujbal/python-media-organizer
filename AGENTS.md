@@ -91,6 +91,10 @@ report-only future work and must never silently enter the exact move path.
   hiding them behind a Python wrapper.
 - Add or update pytest coverage with every behavior change. Use temporary,
   synthetic, collection-neutral fixtures.
+- Follow semantic versioning for compatibility removal. The v0.1 line warns
+  when deprecated compatibility is used; remove it only in v0.2.0 or later.
+- Keep v0.1 deprecation warnings user-visible on stderr through standard
+  logging, including under `--quiet`. Do not silently reinterpret legacy data.
 - Real FFmpeg integration tests are required for video behavior; controlled
   unit tests remain useful for safety properties and error paths.
 - Run the complete suite before handoff.
@@ -101,6 +105,11 @@ report-only future work and must never silently enter the exact move path.
   `origin` is the personal GitHub repository recorded in `HANDOFF.md`.
 
 ## Current roadmap
+
+Version 0.2.0 will remove CSV organization-manifest undo, grouped image-output
+migration, the no-op image-finder `--recursive` option, and automatic support
+for the fixed `media_actions.jsonl` filename. Current collection-named action
+logs and their schema/tool identifiers remain supported.
 
 The next major planned command is read-only `pymo scan COLLECTION`, combining
 inventory, storage, layout readiness, validation warnings, and exact duplicate

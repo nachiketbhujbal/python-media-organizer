@@ -184,6 +184,8 @@ def test_legacy_group_reorganization_is_logged_and_reversible(
     )
 
     assert applied.returncode == 0, applied.stdout + applied.stderr
+    assert "DEPRECATION: grouped-image migration" in applied.stderr
+    assert "removed in pymo 0.2.0" in applied.stderr
     flattened = tmp_path / "dups" / "pics" / "original_copy(1).png"
     assert flattened.exists()
     assert not (tmp_path / "dups" / "vids").exists()
@@ -198,6 +200,21 @@ def test_legacy_group_reorganization_is_logged_and_reversible(
     assert not flattened.exists()
     assert not (tmp_path / "dups").exists()
     assert legacy_manifest.exists()
+
+
+def test_recursive_compatibility_option_warns_and_remains_a_no_op(
+    tmp_path: Path, run_script
+) -> None:
+    pics = tmp_path / "pics"
+    pics.mkdir()
+    Image.new("RGB", (2, 2), "green").save(pics / "plant.png")
+
+    result = run_script("find_image_duplicates.py", tmp_path, "--recursive")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "DEPRECATION: --recursive" in result.stderr
+    assert "removed in pymo 0.2.0" in result.stderr
+    assert "Scanning 1 image(s)" in result.stdout
 
 
 def test_full_workflow_must_be_undone_in_reverse_order(

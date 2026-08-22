@@ -161,9 +161,10 @@ fixes media already in the wrong destination, resolves name collisions, removes
 only source directories that became empty, protects the entire `dups` review
 tree, and verifies the resulting layout.
 
-Legacy `organization_manifest*.csv` files remain usable through `--manifest`.
-New operations use the shared action history instead of creating new CSV
-manifests.
+Legacy `organization_manifest*.csv` files remain usable through `--manifest`
+in v0.1, but using this path emits a deprecation warning. It will be removed in
+v0.2.0. New operations use the shared action history instead of creating new
+CSV manifests.
 
 ### Rename media predictably
 
@@ -199,6 +200,8 @@ inputs are skipped conservatively.
 
 Legacy `group_*` duplicate output can be previewed and migrated with
 `--reorganize-existing`; `--duplicates-dir` selects that legacy source only.
+Both options, the old `duplicates/` tree, and its `move_manifest*.csv` inputs
+are deprecated and will be removed in v0.2.0.
 
 ### Find exact video duplicates
 
@@ -251,7 +254,8 @@ Each media-collection owns one append-only
 `{collection-name}-actions-log.jsonl`. Records use paths relative to the
 media-collection so it and its history can move together. A legacy
 `media_actions.jsonl` is read without modification during previews and migrated
-to the collection-named form before the next applied journal write.
+to the collection-named form before the next applied journal write. Its fixed
+filename is deprecated and will no longer be detected in v0.2.0.
 Applied operations record planned and completed actions, file identities, run
 boundaries, and successful undos. Undo appends new history; it never erases the
 audit trail.
@@ -260,6 +264,24 @@ Before changing anything, undo verifies all expected paths and identities. A
 missing, changed, renamed, or occupied path stops the operation safely. This is
 why a rename must be undone before undoing an earlier organizer run that moved
 the same files.
+
+## Deprecated compatibility
+
+Version 0.1.5 warns when any compatibility-only interface is used. Warnings go
+to stderr and remain visible under `--quiet`; the operation still behaves as it
+did before. No compatibility was removed in this patch release.
+
+| Deprecated v0.1 surface | Current architecture | v0.2.0 transition |
+| --- | --- | --- |
+| `organization_manifest*.csv` undo and `--manifest` | Collection-named JSONL action history | Perform any needed CSV-based undo before upgrading. |
+| `duplicates/group_*`, `move_manifest*.csv`, `--reorganize-existing`, and `--duplicates-dir` | Flat `dups/pics` plus JSONL actions | Run the legacy reorganization on v0.1.5 if those results need migration. |
+| Image finder `--recursive` | The finder always scans files directly inside `pics` | Stop passing the option; it is already a no-op. |
+| Fixed `media_actions.jsonl` | `{collection-name}-actions-log.jsonl` | Allow an applied journal operation on v0.1.5 to migrate it before upgrading. |
+
+Current collection-named action logs, their schema, and persisted tool/action
+identifiers are not deprecated. Duplicate reports may still label matching
+sets as “Group”; that display term is unrelated to the removed `group_*`
+directory structure.
 
 ## Logging
 

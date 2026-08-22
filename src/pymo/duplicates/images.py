@@ -27,6 +27,7 @@ from pymo.action_log import (
     ActionLogError,
     NoUndoableRun,
     ToolId,
+    warn_if_legacy_action_log,
 )
 from pymo.collection import CollectionLayout
 from pymo.config import (
@@ -38,6 +39,7 @@ from pymo.config import (
     load_config,
 )
 from pymo.logging_config import emit as print
+from pymo.logging_config import warn_deprecated
 from pymo.organize import Classifier
 
 try:
@@ -401,7 +403,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--recursive",
         action="store_true",
-        help="deprecated compatibility option; organized pics are always scanned",
+        help=(
+            "deprecated no-op; organized pics are always scanned; removed in "
+            "v0.2.0"
+        ),
     )
     parser.add_argument(
         "--apply",
@@ -413,7 +418,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         help=(
             "legacy duplicates source used only with --reorganize-existing "
-            "(default: COLLECTION/duplicates)"
+            "(default: COLLECTION/duplicates); removed in v0.2.0"
         ),
     )
     parser.add_argument(
@@ -421,7 +426,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help=(
             "flatten legacy group_* directories using prior move manifests; "
-            "this is also a dry run unless --apply is supplied"
+            "this is also a dry run unless --apply is supplied; removed in v0.2.0"
         ),
     )
     parser.add_argument(
@@ -443,6 +448,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not root.is_dir():
         print(f"Not a directory: {root}", file=sys.stderr)
         return 2
+    warn_if_legacy_action_log(root)
+
+    if args.recursive:
+        warn_deprecated(
+            "--recursive",
+            "Image duplicate scans always read the flat pics directory.",
+        )
+    if args.reorganize_existing or args.duplicates_dir:
+        warn_deprecated(
+            "grouped-image migration (--reorganize-existing, --duplicates-dir, "
+            "duplicates/group_*, and move_manifest*.csv)",
+            "New duplicate scans use pics, dups/pics, and the collection action log.",
+        )
 
     if args.undo and args.reorganize_existing:
         print("--undo cannot be combined with --reorganize-existing", file=sys.stderr)
@@ -472,9 +490,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.duplicates_dir:
         print("--duplicates-dir can only be used with --reorganize-existing", file=sys.stderr)
         return 2
-    if args.recursive:
-        print("Note: --recursive is no longer needed; scanning organized pics only.")
-
     problems = collection_layout_problems(root, config)
     if problems:
         print("Collection is not ready for duplicate scanning:", file=sys.stderr)

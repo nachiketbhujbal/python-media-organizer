@@ -540,6 +540,9 @@ Maintain a clear separation:
 
 - `{collection-name}-actions-log.jsonl` is authoritative, append-only mutation
   history. Legacy `media_actions.jsonl` journals are migration inputs only.
+  Version 0.1.5 warns whenever the fixed filename is detected; v0.2.0 removes
+  automatic detection after giving v0.1 users an applied-operation migration
+  window.
 - A SQLite index/cache is derived, disposable, and rebuildable.
 
 This is the selected `0.1.0` design. SQLite is excellent for fingerprints,

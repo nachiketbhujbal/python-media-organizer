@@ -114,3 +114,17 @@ def test_verbose_does_not_reveal_ignored_paths_without_opt_in(
     assert "Ignored by configuration: 1 path(s)." in result.stdout
     assert ".DS_Store" not in result.stdout
     assert ".DS_Store" not in result.stderr
+
+
+def test_deprecation_warnings_remain_visible_in_quiet_mode(tmp_path: Path) -> None:
+    collection = tmp_path / "media-collection"
+    (collection / "pics").mkdir(parents=True)
+    (collection / "vids").mkdir()
+    (collection / "media_actions.jsonl").write_text("", encoding="utf-8")
+
+    result = run_pymo("--quiet", "rename", collection)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == ""
+    assert "DEPRECATION: the fixed media_actions.jsonl" in result.stderr
+    assert "removed in pymo 0.2.0" in result.stderr

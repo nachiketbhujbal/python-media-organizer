@@ -29,6 +29,7 @@ from pymo.action_log import (
     NoUndoableRun,
     ToolId,
     action_log_path,
+    warn_if_legacy_action_log,
 )
 from pymo.config import (
     ConfigError,
@@ -326,6 +327,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not root.is_dir():
         print(f"Not a directory: {root}", file=sys.stderr)
         return 2
+    warn_if_legacy_action_log(root)
     if args.undo:
         return undo_renames(root, args.apply)
 

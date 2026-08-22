@@ -13,7 +13,7 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.1.4` ignored-path visibility release. It is a
+`pymo` command, and has a `v0.1.5` legacy-deprecation release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
@@ -41,6 +41,8 @@ Hard requirements:
     not disable packaged lists.
 12. Ignored path names remain private by default and under `--verbose`. Only
     explicit `--show-ignored` may list deterministic collection-relative paths.
+13. Supported behavior is not removed in a patch release. Compatibility-only
+    paths warn throughout v0.1 and are scheduled for removal in v0.2.0.
 
 `{collection-name}-actions-log.jsonl` remains the authoritative portable
 journal because it moves naturally with a media-collection on external storage.
@@ -151,13 +153,27 @@ This ordering is intentional. For example, if organization is followed by
 renaming, organization cannot be undone until renaming is undone. The same rule
 applies when a duplicate finder later moves a renamed file.
 
-Older CSV support remains intentionally narrow:
+Deprecated compatibility remains functional in v0.1.5 and emits user-visible
+stderr warnings even under `--quiet`:
 
 - `organize` can undo an old `organization_manifest*.csv`, including an
-  explicitly selected `--manifest`.
+  explicitly selected `--manifest`; both are removed in v0.2.0.
 - `find-image-duplicates --reorganize-existing` can read old
-  `move_manifest*.csv` files and flatten legacy `group_*` output.
-- New applied work uses JSONL and does not need new CSV manifests.
+  `move_manifest*.csv` files and flatten legacy `duplicates/group_*` output;
+  that option and `--duplicates-dir` are removed in v0.2.0.
+- The image finder accepts the no-op `--recursive`; it is removed in v0.2.0
+  because the current tool always scans the flat `pics` directory.
+- A fixed `media_actions.jsonl` is detected and migrated before the next
+  applied journal operation; fixed-name detection is removed in v0.2.0.
+
+New applied work uses collection-named JSONL and creates none of the legacy
+CSV/grouped artifacts. Before upgrading to v0.2.0, users with old artifacts
+should run any desired CSV undo/group migration and let an applied journal
+operation migrate a fixed-name action log.
+
+Do not treat current action-log schema version 1, persisted tool/action IDs, or
+the human-readable “Group” report label as legacy. Current logs depend on those
+identifiers, and report grouping does not create `group_*` directories.
 
 ## Organizer
 
@@ -313,7 +329,8 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 
 - organizer dry run, apply, verification, collisions, nested layouts, content
   classification, symbolic-link safety, empty-directory restoration, reruns,
-  legacy CSV undo, `dups` protection, default OS-metadata ignores,
+  deprecated CSV undo and its warning, `dups` protection, default OS-metadata
+  ignores,
   custom-directory protection, custom classification extensions, and
   ignored-only source trees;
 - renamer parsing and cleanup across varied filename structures, deterministic
@@ -322,9 +339,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - action journal ordering, locking model, interrupted run recovery, identity
   changes, conflict refusal, cross-tool dependencies, and ordered undo;
 - image exact-pixel equivalence across metadata/format differences, strict
-  folder ownership, storage accounting, collisions, legacy output migration,
-  configurable inspection extensions, dry run/apply/undo, and review-tree
-  restoration;
+  folder ownership, storage accounting, collisions, deprecated output migration
+  and no-op option warnings, configurable inspection extensions, dry
+  run/apply/undo, and review-tree restoration;
 - real FFmpeg byte-copy/remux matches, different-audio and different-timing
   non-matches, corrupt and multi-audio skips, strict ownership, collisions,
   cache/sidecar behavior, cross-tool undo dependencies, missing runtime errors,
@@ -336,6 +353,7 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   extensions, MIME types, noise tokens and timeout, alternate-config
   selection, invalid-schema refusal, and config self-protection;
 - centralized collection-path derivation and duplicate-tree recognition;
+- fixed-name action-log deprecation reporting and automatic applied migration;
 - dynamic package metadata, packaged TOML data, runtime/distribution version
   agreement, and the selected Hatchling plus hatch-vcs configuration.
 

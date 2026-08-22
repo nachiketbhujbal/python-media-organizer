@@ -35,6 +35,7 @@ from pymo.action_log import (
     ActionLogError,
     NoUndoableRun,
     ToolId,
+    warn_if_legacy_action_log,
 )
 from pymo.collection import CollectionLayout
 from pymo.config import (
@@ -792,6 +793,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not root.is_dir():
         print(f"Not a directory: {root}", file=sys.stderr)
         return 2
+    warn_if_legacy_action_log(root)
     if args.decode_timeout is not None and args.decode_timeout <= 0:
         print("--decode-timeout must be a positive number", file=sys.stderr)
         return 2
