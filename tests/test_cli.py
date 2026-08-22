@@ -39,6 +39,23 @@ def test_cli_reports_package_version() -> None:
     assert result.stderr == ""
 
 
+def test_cli_help_and_argument_errors_remain_unprefixed(tmp_path: Path) -> None:
+    help_result = run_pymo("--help")
+    conflict_result = run_pymo(
+        "--timestamps",
+        "--no-timestamps",
+        "organize",
+        tmp_path / "collection",
+    )
+
+    assert help_result.returncode == 0
+    assert "--timestamps" in help_result.stdout
+    assert "--no-timestamps" in help_result.stdout
+    assert help_result.stdout.startswith("usage: pymo")
+    assert conflict_result.returncode == 2
+    assert conflict_result.stderr.startswith("usage: pymo")
+
+
 def test_cli_does_not_create_persistent_logs_by_default(tmp_path: Path) -> None:
     collection = tmp_path / "collection"
     collection.mkdir()
@@ -74,23 +91,41 @@ def test_cli_quiet_mode_suppresses_informational_output(tmp_path: Path) -> None:
     assert result.stderr == ""
 
 
-def test_cli_reports_elapsed_runtime_and_optional_console_timestamps(
+def test_cli_reports_elapsed_runtime_with_default_and_explicit_timestamps(
     tmp_path: Path,
 ) -> None:
     collection = tmp_path / "collection"
     collection.mkdir()
 
-    ordinary = run_pymo("organize", collection)
-    timestamped = run_pymo("--timestamps", "organize", collection)
+    default = run_pymo("organize", collection)
+    explicit = run_pymo("--timestamps", "organize", collection)
 
-    assert "Completed organize in " in ordinary.stdout
-    lines = timestamped.stdout.splitlines()
-    assert lines
-    assert all(
+    for result in (default, explicit):
+        assert result.returncode == 0, result.stdout + result.stderr
+        lines = result.stdout.splitlines()
+        assert lines
+        assert all(
+            re.match(
+                r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} ",
+                line,
+            )
+            for line in lines
+        )
+        assert "Completed organize in " in result.stdout
+
+
+def test_cli_can_omit_default_console_timestamps(tmp_path: Path) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+
+    result = run_pymo("--no-timestamps", "organize", collection)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Completed organize in " in result.stdout
+    assert not any(
         re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} ", line)
-        for line in lines
+        for line in result.stdout.splitlines()
     )
-    assert "Completed organize in " in timestamped.stdout
 
 
 def test_log_file_timestamps_every_physical_line(tmp_path: Path) -> None:
@@ -98,9 +133,10 @@ def test_log_file_timestamps_every_physical_line(tmp_path: Path) -> None:
     collection.mkdir()
     log_file = tmp_path / "pymo.log"
 
-    result = run_pymo("--log-file", log_file, "organize", collection)
+    result = run_pymo("--no-timestamps", "--log-file", log_file, "organize", collection)
 
     assert result.returncode == 0
+    assert result.stdout.startswith("Classifying")
     lines = log_file.read_text(encoding="utf-8").splitlines()
     assert lines
     assert all(
@@ -129,6 +165,7 @@ def test_cli_forwards_global_config_to_subcommand(tmp_path: Path) -> None:
         "--config",
         config,
         "--show-ignored",
+        "--no-timestamps",
         "organize",
         collection,
         "--apply",
@@ -164,8 +201,14 @@ def test_scan_json_stays_machine_readable_with_global_output_flags(
     collection = tmp_path / "media-collection"
     collection.mkdir()
 
-    for output_flag in ("--verbose", "--quiet", "--timestamps"):
-        result = run_pymo(output_flag, "scan", collection, "--json")
+    for output_flags in (
+        (),
+        ("--verbose",),
+        ("--quiet",),
+        ("--timestamps",),
+        ("--no-timestamps",),
+    ):
+        result = run_pymo(*output_flags, "scan", collection, "--json")
 
         assert result.returncode == 0, result.stdout + result.stderr
         assert json.loads(result.stdout)["schema_version"] == 1
@@ -177,8 +220,14 @@ def test_validate_json_stays_machine_readable_with_global_output_flags(
     collection = tmp_path / "media-collection"
     collection.mkdir()
 
-    for output_flag in ("--verbose", "--quiet", "--timestamps"):
-        result = run_pymo(output_flag, "validate", collection, "--json")
+    for output_flags in (
+        (),
+        ("--verbose",),
+        ("--quiet",),
+        ("--timestamps",),
+        ("--no-timestamps",),
+    ):
+        result = run_pymo(*output_flags, "validate", collection, "--json")
 
         assert result.returncode == 0, result.stdout + result.stderr
         assert json.loads(result.stdout)["schema_version"] == 1
@@ -197,6 +246,14 @@ def test_cli_returns_130_and_reports_runtime_after_keyboard_interrupt(
     assert "Interrupted by user" in captured.err
     assert "Interrupted scan in " in captured.out
     assert "exit 130" in captured.out
+    assert re.match(
+        r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} ",
+        captured.err,
+    )
+    assert re.match(
+        r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} ",
+        captured.out,
+    )
 
 
 def test_cli_reports_runtime_before_propagating_unexpected_errors(

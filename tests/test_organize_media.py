@@ -170,7 +170,8 @@ def test_organizer_can_show_ignored_paths_explicitly(
     result = run_script("organize_media.py", tmp_path, "--show-ignored")
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "Ignored paths:\n  pics/.DS_Store" in result.stdout
+    assert "Ignored paths:" in result.stdout
+    assert "  pics/.DS_Store" in result.stdout
     assert str(tmp_path / "pics" / ".DS_Store") not in result.stdout
 
 
