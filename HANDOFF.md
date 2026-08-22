@@ -13,12 +13,14 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.10` image-read-safety release. It is a
+`pymo` command, and has a `v0.3.11` cache-read-safety release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.10 pins Pillow image decoding to stable collection-anchored
+Version 0.3.11 opens an existing video fingerprint cache read-only through a
+stable collection-anchored descriptor and fails closed if its pathname changes
+or is unsafe. Version 0.3.10 pins Pillow image decoding to stable collection-anchored
 descriptors. Version 0.3.9 records that GitHub Free cannot enforce branch
 protection on this private repository and specifies the no-bypass `main`
 ruleset to activate after a Pro upgrade or public transition. Version 0.3.8
@@ -364,10 +366,12 @@ interrupted preview retains completed work and a later `--apply` reuses it.
 `--no-cache` disables all cache reads and writes.
 SQLite uses a non-persistent journaling mode and connections close explicitly,
 so `-wal`/`-shm` sidecars are not left behind.
-Existing cache schemas and rows are validated read-only before decoding. An
-invalid cache is preserved and reported; moving it aside or explicitly using
-`--no-cache` is the recovery path. FFmpeg is resolved only when discovery finds
-at least two eligible videos.
+Existing cache schemas and rows are validated read-only before decoding. The
+read-only SQLite connection uses a stable no-follow descriptor anchored beneath
+the collection root, and a pathname swap stops safely rather than redirecting
+the read. An invalid cache is preserved and reported; moving it aside or
+explicitly using `--no-cache` is the recovery path. FFmpeg is resolved only when
+discovery finds at least two eligible videos.
 
 The finder mirrors image behavior for deterministic keeper choice, readable
 `copy(n)` destinations, no overwrite/delete, action-log undo, post-operation
@@ -515,6 +519,8 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   descriptor-only/no-capture command construction;
 - adversarial video classification, probing, and fingerprint path swaps that
   prove unrelated replacement content is never read;
+- adversarial SQLite cache path swaps that prove cache reads remain pinned to
+  the original collection file and then fail closed on the changed pathname;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

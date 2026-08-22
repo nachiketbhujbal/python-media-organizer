@@ -53,3 +53,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0045](0045-descriptor-pinned-video-duplicate-reads.md) | Descriptor-pinned video duplicate reads |
 | [0046](0046-private-free-main-protection-prerequisite.md) | Private-Free main-protection prerequisite |
 | [0047](0047-descriptor-pinned-image-duplicate-reads.md) | Descriptor-pinned image duplicate reads |
+| [0048](0048-descriptor-pinned-sqlite-cache-reads.md) | Descriptor-pinned SQLite cache reads |

@@ -604,19 +604,30 @@ def derive_fingerprint(
 
 
 def load_cached_fingerprints(
-    database: Path, ffmpeg_release: str
+    root: Path, database: Path, ffmpeg_release: str
 ) -> dict[str, DerivedFingerprint]:
-    if database.is_symlink() or not database.is_file():
+    if not os.path.lexists(database):
         return {}
-    uri = f"{database.resolve().as_uri()}?mode=ro"
     connection: sqlite3.Connection | None = None
     try:
-        connection = sqlite3.connect(uri, uri=True)
-        rows = connection.execute(
-            "SELECT file_sha256, fingerprint, video_frames, audio_bytes "
-            "FROM video_fingerprints WHERE algorithm = ? AND ffmpeg_version = ?",
-            (FINGERPRINT_ALGORITHM, ffmpeg_release),
-        ).fetchall()
+        state = FileState.capture(database)
+        with open_stable_file(
+            root, database, state, "SQLite fingerprint cache read"
+        ) as descriptor:
+            uri = f"file:/dev/fd/{descriptor}?mode=ro"
+            connection = sqlite3.connect(uri, uri=True)
+            rows = connection.execute(
+                "SELECT file_sha256, fingerprint, video_frames, audio_bytes "
+                "FROM video_fingerprints "
+                "WHERE algorithm = ? AND ffmpeg_version = ?",
+                (FINGERPRINT_ALGORITHM, ffmpeg_release),
+            ).fetchall()
+            connection.close()
+            connection = None
+    except FileChangedError as error:
+        raise VideoInspectionError(
+            "SQLite fingerprint cache changed or is not a safe collection file"
+        ) from error
     except sqlite3.Error as error:
         raise VideoInspectionError(
             f"cannot read SQLite fingerprint cache: {error}"
@@ -811,12 +822,10 @@ def derive_candidate_fingerprints(
     no_cache: bool,
 ) -> tuple[dict[str, DerivedFingerprint], list[tuple[Path, str]]]:
     unique_hashes = {record.byte_sha256: record for record in candidate_records}
-    if not no_cache and (
-        database.is_symlink() or (database.exists() and not database.is_file())
-    ):
-        raise VideoCacheError(f"Unsafe SQLite cache path: {database}")
     try:
-        cached = {} if no_cache else load_cached_fingerprints(database, ffmpeg_release)
+        cached = (
+            {} if no_cache else load_cached_fingerprints(root, database, ffmpeg_release)
+        )
     except VideoInspectionError as error:
         raise VideoCacheError(
             "Fingerprint cache cannot be used safely: "

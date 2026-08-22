@@ -49,6 +49,9 @@ never duplicate the version in source or static project metadata.
   check alone does not prevent a transient read outside the collection.
 - Treat an invalid derived cache as an explicit early error. Never delete or
   replace it automatically; `--no-cache` is the deliberate bypass.
+- Open an existing SQLite cache through a stable collection-anchored no-follow
+  descriptor. A pathname check followed by `sqlite3.connect(path)` is not a
+  safe cache-read boundary.
 - `scan` must never alter media, collection layout, or action history. Exact
   video dry runs may update the documented disposable fingerprint cache by
   default; `--no-cache` restores a zero-cache-read/write run.

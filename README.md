@@ -327,11 +327,14 @@ cache hits and misses. Add `--no-cache` for a run that neither reads nor writes
 the cache. Cache writes are derived local state only: they never move media or
 write action history.
 
-An existing cache is opened read-only and validated before expensive decoding.
-If it is corrupt or incompatible, pymo leaves it untouched and stops with
-instructions to move it aside or rerun with `--no-cache`. FFmpeg and ffprobe are
-resolved only when at least two eligible videos exist; smaller collections do
-not need a decoder to report that no comparison is possible.
+An existing cache is opened read-only through a stable no-follow descriptor
+anchored beneath the collection root, then its expected schema and every
+selected row are validated before expensive decoding. A concurrent pathname
+swap cannot redirect SQLite to unrelated local data and instead stops the run.
+If the cache is corrupt or incompatible, pymo leaves it untouched and stops
+with instructions to move it aside or rerun with `--no-cache`. FFmpeg and
+ffprobe are resolved only when at least two eligible videos exist; smaller
+collections do not need a decoder to report that no comparison is possible.
 
 Before uncached video decoding begins, the finder reports the number and total
 size of fingerprints it must calculate. It reports observed progress and data

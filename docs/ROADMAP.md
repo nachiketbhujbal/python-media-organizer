@@ -30,13 +30,14 @@ behavior is captured in the changelog and handoff.
 | 0.3.8 | Video read safety | Descriptor-pin exact-video discovery, probing, hashing, and fingerprint inputs without changing duplicate semantics. | Released |
 | 0.3.9 | Main protection prerequisite | Record the private-Free protection limitation and the exact no-bypass ruleset to activate after Pro or a public transition. | Released |
 | 0.3.10 | Image read safety | Descriptor-pin exact-image candidate opens and displayed-pixel reads without changing duplicate semantics. | Released |
-| 0.3.11 | Cache access safety | Harden the derived SQLite cache path, locking, replacement, corruption, and interruption boundaries. | Planned |
-| 0.3.12 | Progress cadence | Eliminate repeated forced progress rows and make count-based output stable across fast and slow work. | Planned |
-| 0.3.13 | Heartbeat and ETA | Distinguish active-item heartbeats from completed-work progress and suppress unstable ETA until enough observations exist. | Planned |
-| 0.3.14 | Stage timing | Report discovery, probing, fingerprinting, planning, apply, and verification durations independently. | Planned |
-| 0.3.15 | Cache wording | Make hits, misses, newly persisted records, and no-cache behavior unambiguous. | Planned |
-| 0.3.16 | Concise summaries | Add `--summary` for aggregate, path-private command results without verbose group listings. | Planned |
-| 0.3.17 | Timestamp default | Timestamp human-readable console lines by default; add an explicit opt-out while preserving clean JSON and compatibility with `--timestamps`. | Planned |
+| 0.3.11 | Cache read safety | Descriptor-pin read-only SQLite cache access beneath the collection and fail closed on pathname replacement. | Released |
+| 0.3.12 | Cache write durability | Serialize writers and publish validated cache updates atomically without following or modifying a substituted path. | Planned |
+| 0.3.13 | Progress cadence | Eliminate repeated forced progress rows and make count-based output stable across fast and slow work. | Planned |
+| 0.3.14 | Heartbeat and ETA | Distinguish active-item heartbeats from completed-work progress and suppress unstable ETA until enough observations exist. | Planned |
+| 0.3.15 | Stage timing | Report discovery, probing, fingerprinting, planning, apply, and verification durations independently. | Planned |
+| 0.3.16 | Cache wording | Make hits, misses, newly persisted records, and no-cache behavior unambiguous. | Planned |
+| 0.3.17 | Concise summaries | Add `--summary` for aggregate, path-private command results without verbose group listings. | Planned |
+| 0.3.18 | Timestamp default | Timestamp human-readable console lines by default; add an explicit opt-out while preserving clean JSON and compatibility with `--timestamps`. | Planned |
 
 The order may change when a safety dependency is found, but unrelated primary
 purposes are not folded together merely to reduce tag count.

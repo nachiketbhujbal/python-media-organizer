@@ -67,6 +67,13 @@ The same adversarial method was repeated after the first validation release.
 | DUP-001 | High | The exact-video finder checked file state around pathname-based classifier, hash, ffprobe, and FFmpeg opens, but a concurrent link swap could still redirect a transient content read outside the collection. | 0.3.8 | Resolved in ADR 0045 |
 | DUP-002 | High | The exact-image finder checked state around a pathname-based Pillow open, leaving the equivalent transient path-redirection window. | 0.3.10 | Resolved in ADR 0047 |
 
+## Derived-cache review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| CACHE-001 | High | Cache reads checked and resolved the public pathname before giving it to SQLite, so a concurrent link substitution could redirect a transient read outside the collection. | 0.3.11 | Resolved in ADR 0048 |
+| CACHE-002 | High | Cache writes use check-then-open pathname access without a dedicated inter-process lock or atomic publication, allowing path substitution, racing updates, and an interrupted update to affect the public cache directly. | 0.3.12 | Open |
+
 ## Release groups
 
 - `0.2.2`: establish ADRs and the locked Ruff, Black, mypy, pre-commit, and
@@ -98,6 +105,7 @@ The same adversarial method was repeated after the first validation release.
 - `0.3.9`: record the unavailable private-Free protection boundary and the
   exact `main` ruleset to activate when the repository becomes eligible.
 - `0.3.10`: pin exact-image pixel decoding to stable no-follow descriptors.
+- `0.3.11`: pin SQLite cache reads to a stable no-follow collection descriptor.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 
@@ -110,8 +118,9 @@ The same adversarial method was repeated after the first validation release.
 - Independent typing found unsafe object narrowing in action-log deserialization
   and an imprecise selector file-object type.
 - A first parent-only coverage run reported a misleading 42 percent. After
-  subprocess instrumentation and direct adversarial tests, all 127 tests pass
-  and the same suite reports 86 percent across real CLI child processes.
+  subprocess instrumentation and direct adversarial tests, the current 152
+  tests pass and the same suite reports 86 percent across real CLI child
+  processes.
 
 No private collection, path, filename, statistic, or media content was used or
 recorded during this review.
