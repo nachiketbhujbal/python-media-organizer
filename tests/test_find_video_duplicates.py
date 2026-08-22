@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from pymo import cache as cache_service
 from pymo.action_log import action_log_path
 from pymo.collection import CollectionLayout
 from pymo.config import load_config
@@ -655,7 +656,7 @@ def test_video_cache_writers_serialize_and_merge_completed_updates(
         finally:
             finished[number].set()
 
-    with video_duplicates._locked_cache_directory(
+    with cache_service.locked_cache_directory(
         tmp_path, layout.video_cache_lock, exclusive=True
     ):
         threads = [
@@ -737,7 +738,7 @@ def test_video_cache_publication_never_writes_through_substituted_path(
     )
     outside_bytes = outside_layout.video_cache.read_bytes()
     displaced = root / "displaced.sqlite3"
-    real_rename = video_duplicates._atomic_cache_rename
+    real_rename = cache_service.atomic_cache_rename
     swapped = False
 
     def substitute_before_publication(*args, **kwargs) -> None:
@@ -749,7 +750,7 @@ def test_video_cache_publication_never_writes_through_substituted_path(
         real_rename(*args, **kwargs)
 
     monkeypatch.setattr(
-        video_duplicates, "_atomic_cache_rename", substitute_before_publication
+        cache_service, "atomic_cache_rename", substitute_before_publication
     )
 
     with pytest.raises(video_duplicates.VideoInspectionError, match="cache path"):

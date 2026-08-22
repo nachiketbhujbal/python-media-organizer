@@ -11,28 +11,23 @@ not considered an exact duplicate.
 from __future__ import annotations
 
 import argparse
-import ctypes
-import errno
-import fcntl
 import hashlib
 import json
 import os
 import re
-import secrets
 import selectors
 import shutil
 import sqlite3
-import stat
 import subprocess
 import sys
 import time
 from collections import defaultdict, deque
-from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 
+from pymo import cache as cache_service
 from pymo.action_log import (
     Action,
     ActionConflict,
@@ -129,227 +124,7 @@ class DerivedFingerprint:
     audio_bytes: int
 
 
-@dataclass(frozen=True)
-class _CacheEntryState:
-    device: int
-    inode: int
-    size: int
-    modified_ns: int
-    changed_ns: int
-    link_count: int
-
-    @classmethod
-    def from_stat(cls, value: os.stat_result, description: str) -> _CacheEntryState:
-        if not stat.S_ISREG(value.st_mode) or value.st_nlink != 1:
-            raise VideoInspectionError(f"{description} is not a private regular file")
-        return cls(
-            device=value.st_dev,
-            inode=value.st_ino,
-            size=value.st_size,
-            modified_ns=value.st_mtime_ns,
-            changed_ns=value.st_ctime_ns,
-            link_count=value.st_nlink,
-        )
-
-    @classmethod
-    def capture_descriptor(cls, descriptor: int, description: str) -> _CacheEntryState:
-        try:
-            value = os.fstat(descriptor)
-        except OSError as error:
-            raise VideoInspectionError(f"cannot inspect {description}") from error
-        return cls.from_stat(value, description)
-
-    def matches_renamed(self, other: _CacheEntryState | None) -> bool:
-        return other is not None and (
-            self.device,
-            self.inode,
-            self.size,
-            self.modified_ns,
-            self.link_count,
-        ) == (
-            other.device,
-            other.inode,
-            other.size,
-            other.modified_ns,
-            other.link_count,
-        )
-
-
-@dataclass(frozen=True)
-class _LockedCacheDirectory:
-    root: Path
-    descriptor: int
-    root_device: int
-    root_inode: int
-    lock_name: str
-    lock_state: _CacheEntryState
-
-    def require_current(self) -> None:
-        _require_cache_entry(
-            self.descriptor,
-            self.lock_name,
-            self.lock_state,
-            "SQLite cache lock",
-        )
-        try:
-            current_root = os.stat(self.root, follow_symlinks=False)
-        except OSError as error:
-            raise VideoInspectionError(
-                "collection root changed during SQLite cache access"
-            ) from error
-        if (
-            not stat.S_ISDIR(current_root.st_mode)
-            or current_root.st_dev != self.root_device
-            or current_root.st_ino != self.root_inode
-        ):
-            raise VideoInspectionError(
-                "collection root changed during SQLite cache access"
-            )
-
-
 VideoMove = tuple[VideoRecord, VideoRecord, Path]
-
-
-def _cache_entry_at(
-    directory_descriptor: int, name: str, description: str
-) -> _CacheEntryState | None:
-    try:
-        value = os.stat(name, dir_fd=directory_descriptor, follow_symlinks=False)
-    except FileNotFoundError:
-        return None
-    except OSError as error:
-        raise VideoInspectionError(f"cannot inspect {description}") from error
-    return _CacheEntryState.from_stat(value, description)
-
-
-def _require_cache_entry(
-    directory_descriptor: int,
-    name: str,
-    expected: _CacheEntryState,
-    description: str,
-) -> None:
-    if _cache_entry_at(directory_descriptor, name, description) != expected:
-        raise VideoInspectionError(f"{description} changed during cache access")
-
-
-@contextmanager
-def _locked_cache_directory(
-    root: Path, lock_path: Path, *, exclusive: bool
-) -> Iterator[_LockedCacheDirectory]:
-    if lock_path != CollectionLayout(root).video_cache_lock:
-        raise VideoInspectionError("unexpected SQLite cache lock path")
-    directory_flags = (
-        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-    )
-    lock_flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
-    root_descriptor: int | None = None
-    lock_descriptor: int | None = None
-    try:
-        try:
-            root_descriptor = os.open(root, directory_flags)
-            root_state = os.fstat(root_descriptor)
-            if not stat.S_ISDIR(root_state.st_mode):
-                raise OSError(errno.ENOTDIR, "collection root is not a directory")
-            lock_descriptor = os.open(
-                lock_path.name,
-                lock_flags,
-                0o600,
-                dir_fd=root_descriptor,
-            )
-        except OSError as error:
-            raise VideoInspectionError(
-                "cannot open the SQLite cache lock safely"
-            ) from error
-        lock_state = _CacheEntryState.capture_descriptor(
-            lock_descriptor, "SQLite cache lock"
-        )
-        try:
-            fcntl.flock(lock_descriptor, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
-        except OSError as error:
-            raise VideoInspectionError(
-                "cannot acquire the SQLite cache lock"
-            ) from error
-        locked = _LockedCacheDirectory(
-            root=root,
-            descriptor=root_descriptor,
-            root_device=root_state.st_dev,
-            root_inode=root_state.st_ino,
-            lock_name=lock_path.name,
-            lock_state=lock_state,
-        )
-        try:
-            locked.require_current()
-            yield locked
-            locked.require_current()
-        finally:
-            fcntl.flock(lock_descriptor, fcntl.LOCK_UN)
-    finally:
-        if lock_descriptor is not None:
-            os.close(lock_descriptor)
-        if root_descriptor is not None:
-            os.close(root_descriptor)
-
-
-def _atomic_cache_rename(
-    directory_descriptor: int,
-    before_name: str,
-    after_name: str,
-    *,
-    exchange: bool,
-) -> None:
-    library = ctypes.CDLL(None, use_errno=True)
-    if sys.platform == "darwin":
-        rename = library.renameatx_np
-        rename.argtypes = [
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_uint,
-        ]
-        rename.restype = ctypes.c_int
-        # RENAME_SWAP atomically exchanges existing entries; RENAME_EXCL
-        # refuses a newly occupied destination. NOFOLLOW_ANY rejects links.
-        flags = (0x02 if exchange else 0x04) | 0x10
-    elif sys.platform.startswith("linux"):
-        try:
-            rename = library.renameat2
-        except AttributeError as error:
-            raise VideoInspectionError(
-                "this Linux runtime cannot publish the cache atomically"
-            ) from error
-        rename.argtypes = [
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_int,
-            ctypes.c_char_p,
-            ctypes.c_uint,
-        ]
-        rename.restype = ctypes.c_int
-        # RENAME_EXCHANGE swaps two existing directory entries, while
-        # RENAME_NOREPLACE atomically refuses a newly occupied cache path.
-        flags = 0x02 if exchange else 0x01
-    else:
-        raise VideoInspectionError(
-            "atomic cache publication is supported only on macOS and Linux"
-        )
-    result = rename(
-        directory_descriptor,
-        os.fsencode(before_name),
-        directory_descriptor,
-        os.fsencode(after_name),
-        flags,
-    )
-    if result == 0:
-        return
-    error_number = ctypes.get_errno()
-    if error_number == errno.EEXIST:
-        raise VideoInspectionError("SQLite cache path became occupied")
-    if error_number in {errno.ELOOP, errno.ENOTDIR}:
-        raise VideoInspectionError("SQLite cache path became unsafe")
-    raise VideoInspectionError(
-        f"cannot publish SQLite cache atomically: {os.strerror(error_number)}"
-    )
 
 
 def sha256_descriptor(descriptor: int) -> str:
@@ -909,13 +684,6 @@ def _validated_cache_rows(
     return validated
 
 
-def _connect_cache_descriptor(
-    descriptor: int, *, read_only: bool
-) -> sqlite3.Connection:
-    mode = "ro" if read_only else "rw"
-    return sqlite3.connect(f"file:/dev/fd/{descriptor}?mode={mode}", uri=True)
-
-
 def load_cached_fingerprints(
     root: Path, database: Path, ffmpeg_release: str
 ) -> dict[str, DerivedFingerprint]:
@@ -924,11 +692,11 @@ def load_cached_fingerprints(
         raise VideoInspectionError("unexpected SQLite cache path")
     connection: sqlite3.Connection | None = None
     try:
-        with _locked_cache_directory(
+        with cache_service.locked_cache_directory(
             root, layout.video_cache_lock, exclusive=False
         ) as locked:
             root_descriptor = locked.descriptor
-            entry_state = _cache_entry_at(
+            entry_state = cache_service.cache_entry_at(
                 root_descriptor, database.name, "SQLite fingerprint cache"
             )
             if entry_state is None:
@@ -937,14 +705,16 @@ def load_cached_fingerprints(
             with open_stable_file(
                 root, database, state, "SQLite fingerprint cache read"
             ) as descriptor:
-                descriptor_state = _CacheEntryState.capture_descriptor(
+                descriptor_state = cache_service.CacheEntryState.capture_descriptor(
                     descriptor, "SQLite fingerprint cache"
                 )
                 if descriptor_state != entry_state:
                     raise VideoInspectionError(
                         "SQLite fingerprint cache changed during cache access"
                     )
-                connection = _connect_cache_descriptor(descriptor, read_only=True)
+                connection = cache_service.connect_cache_descriptor(
+                    descriptor, read_only=True
+                )
                 connection.execute("PRAGMA query_only=ON")
                 rows = _validated_cache_rows(connection)
                 connection.close()
@@ -953,6 +723,8 @@ def load_cached_fingerprints(
         raise VideoInspectionError(
             "SQLite fingerprint cache changed or is not a safe collection file"
         ) from error
+    except cache_service.CacheError as error:
+        raise VideoInspectionError(str(error)) from error
     except sqlite3.Error as error:
         raise VideoInspectionError(
             f"cannot read SQLite fingerprint cache: {error}"
@@ -971,51 +743,13 @@ def load_cached_fingerprints(
     }
 
 
-def _open_cache_entry(
-    directory_descriptor: int,
-    name: str,
-    expected: _CacheEntryState,
-) -> int:
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
-    try:
-        descriptor = os.open(name, flags, dir_fd=directory_descriptor)
-    except OSError as error:
-        raise VideoInspectionError("cannot open SQLite cache safely") from error
-    try:
-        if (
-            _CacheEntryState.capture_descriptor(descriptor, "SQLite fingerprint cache")
-            != expected
-        ):
-            raise VideoInspectionError("SQLite fingerprint cache changed before open")
-    except BaseException:
-        os.close(descriptor)
-        raise
-    return descriptor
-
-
-def _create_cache_stage(directory_descriptor: int) -> tuple[str, int]:
-    flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    for _ in range(16):
-        name = f".pymo.sqlite3.new.{secrets.token_hex(8)}"
-        try:
-            descriptor = os.open(name, flags, 0o600, dir_fd=directory_descriptor)
-        except FileExistsError:
-            continue
-        except OSError as error:
-            raise VideoInspectionError(
-                "cannot create a private SQLite cache staging file"
-            ) from error
-        return name, descriptor
-    raise VideoInspectionError("cannot allocate a unique SQLite cache staging file")
-
-
 def _build_staged_cache(
     directory_descriptor: int,
     database_name: str,
-    existing_state: _CacheEntryState | None,
+    existing_state: cache_service.CacheEntryState | None,
     ffmpeg_release: str,
     values: dict[str, DerivedFingerprint],
-) -> tuple[str, _CacheEntryState]:
+) -> tuple[str, cache_service.CacheEntryState]:
     source_descriptor: int | None = None
     source: sqlite3.Connection | None = None
     destination_descriptor: int | None = None
@@ -1024,10 +758,12 @@ def _build_staged_cache(
     stage_name: str | None = None
     try:
         if existing_state is not None:
-            source_descriptor = _open_cache_entry(
+            source_descriptor = cache_service.open_cache_entry(
                 directory_descriptor, database_name, existing_state
             )
-            source = _connect_cache_descriptor(source_descriptor, read_only=True)
+            source = cache_service.connect_cache_descriptor(
+                source_descriptor, read_only=True
+            )
             source.execute("PRAGMA query_only=ON")
             _validated_cache_rows(source)
 
@@ -1064,7 +800,9 @@ def _build_staged_cache(
         destination.close()
         destination = None
 
-        stage_name, destination_descriptor = _create_cache_stage(directory_descriptor)
+        stage_name, destination_descriptor = cache_service.create_cache_stage(
+            directory_descriptor
+        )
         os.ftruncate(destination_descriptor, 0)
         os.lseek(destination_descriptor, 0, os.SEEK_SET)
         remaining = memoryview(payload)
@@ -1076,22 +814,24 @@ def _build_staged_cache(
                 )
             remaining = remaining[written:]
         os.fsync(destination_descriptor)
-        verification = _connect_cache_descriptor(destination_descriptor, read_only=True)
+        verification = cache_service.connect_cache_descriptor(
+            destination_descriptor, read_only=True
+        )
         verification.execute("PRAGMA query_only=ON")
         _validated_cache_rows(verification)
         verification.close()
         verification = None
-        stage_state = _CacheEntryState.capture_descriptor(
+        stage_state = cache_service.CacheEntryState.capture_descriptor(
             destination_descriptor, "SQLite cache staging file"
         )
-        _require_cache_entry(
+        cache_service.require_cache_entry(
             directory_descriptor,
             stage_name,
             stage_state,
             "SQLite cache staging file",
         )
         if existing_state is not None:
-            _require_cache_entry(
+            cache_service.require_cache_entry(
                 directory_descriptor,
                 database_name,
                 existing_state,
@@ -1119,10 +859,10 @@ def _publish_staged_cache(
     directory_descriptor: int,
     database_name: str,
     stage_name: str,
-    stage_state: _CacheEntryState,
-    existing_state: _CacheEntryState | None,
+    stage_state: cache_service.CacheEntryState,
+    existing_state: cache_service.CacheEntryState | None,
 ) -> None:
-    _require_cache_entry(
+    cache_service.require_cache_entry(
         directory_descriptor,
         stage_name,
         stage_state,
@@ -1130,16 +870,16 @@ def _publish_staged_cache(
     )
     if existing_state is None:
         if (
-            _cache_entry_at(
+            cache_service.cache_entry_at(
                 directory_descriptor, database_name, "SQLite fingerprint cache"
             )
             is not None
         ):
             raise VideoInspectionError("SQLite cache path became occupied")
-        _atomic_cache_rename(
+        cache_service.atomic_cache_rename(
             directory_descriptor, stage_name, database_name, exchange=False
         )
-        published = _cache_entry_at(
+        published = cache_service.cache_entry_at(
             directory_descriptor, database_name, "SQLite fingerprint cache"
         )
         if not stage_state.matches_renamed(published):
@@ -1149,21 +889,23 @@ def _publish_staged_cache(
         os.fsync(directory_descriptor)
         return
 
-    _require_cache_entry(
+    cache_service.require_cache_entry(
         directory_descriptor,
         database_name,
         existing_state,
         "SQLite fingerprint cache",
     )
-    _atomic_cache_rename(directory_descriptor, stage_name, database_name, exchange=True)
+    cache_service.atomic_cache_rename(
+        directory_descriptor, stage_name, database_name, exchange=True
+    )
     valid_exchange = False
     try:
-        displaced = _cache_entry_at(
+        displaced = cache_service.cache_entry_at(
             directory_descriptor,
             stage_name,
             "displaced SQLite fingerprint cache",
         )
-        published = _cache_entry_at(
+        published = cache_service.cache_entry_at(
             directory_descriptor,
             database_name,
             "published SQLite fingerprint cache",
@@ -1171,15 +913,15 @@ def _publish_staged_cache(
         valid_exchange = existing_state.matches_renamed(
             displaced
         ) and stage_state.matches_renamed(published)
-    except VideoInspectionError:
+    except cache_service.CacheError:
         pass
     if not valid_exchange:
         try:
-            _atomic_cache_rename(
+            cache_service.atomic_cache_rename(
                 directory_descriptor, stage_name, database_name, exchange=True
             )
             os.fsync(directory_descriptor)
-        except VideoInspectionError as rollback_error:
+        except cache_service.CacheError as rollback_error:
             raise VideoInspectionError(
                 "SQLite cache path changed during publication and rollback failed"
             ) from rollback_error
@@ -1207,11 +949,11 @@ def save_cached_fingerprints(
     if database != layout.video_cache:
         raise VideoInspectionError("unexpected SQLite cache path")
     try:
-        with _locked_cache_directory(
+        with cache_service.locked_cache_directory(
             root, layout.video_cache_lock, exclusive=True
         ) as locked:
             directory_descriptor = locked.descriptor
-            existing_state = _cache_entry_at(
+            existing_state = cache_service.cache_entry_at(
                 directory_descriptor, database.name, "SQLite fingerprint cache"
             )
             stage_name, stage_state = _build_staged_cache(
@@ -1231,6 +973,8 @@ def save_cached_fingerprints(
             )
     except VideoInspectionError:
         raise
+    except cache_service.CacheError as error:
+        raise VideoInspectionError(str(error)) from error
     except OSError as error:
         raise VideoInspectionError(
             f"cannot update SQLite fingerprint cache safely: {error}"
