@@ -13,12 +13,15 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.16` cache-reporting release. It is a
+`pymo` command, and has a `v0.3.17` concise-summary release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.16 reports reusable fingerprint-cache records, fingerprints
+Version 0.3.17 adds `--summary` to both duplicate finders for aggregate,
+path-private scans, applies, and undo previews without changing dry-run,
+matching, cache, action-log, or verification semantics. Version 0.3.16 reports
+reusable fingerprint-cache records, fingerprints
 required, and newly persisted records separately; `--no-cache` states its
 complete no-read/no-write boundary without lookup or update claims. Version
 0.3.15 adds independent, path-private monotonic durations for the
@@ -330,6 +333,13 @@ The matching, keeper policy, readable names, conservative skips, action-log
 integration, and undo behavior are approved. Do not change these core choices
 without an explicit user request.
 
+Both duplicate finders accept command-specific `--summary`. It preserves
+aggregate progress, counts, storage, cache/timing facts, final outcomes,
+dry-run guidance, and verification status while suppressing collection paths,
+filenames, run IDs, group/action listings, per-video start rows, and per-file
+skip details. The same boundary applies to undo previews and applies. It cannot
+be combined with `--show-ignored`, which explicitly requests path output.
+
 ## Exact video duplicates
 
 `src/pymo/duplicates/videos.py` is implemented and owns only `vids` and
@@ -411,9 +421,9 @@ especially on external media. Add bounded process-level decoding only after
 representative benchmarks demonstrate a reliable benefit.
 
 The finder reports required candidate-fingerprint count and bytes before
-decoding, an
-observed aggregate rate after completed candidates, and an ETA after at least
-three completed observations. A configurable heartbeat while a single FFmpeg
+decoding, an observed aggregate rate after completed candidates, and an ETA
+after at least three completed observations. A configurable heartbeat while a
+single FFmpeg
 subprocess remains active reports only active item, completed count, and
 elapsed time; it never repeats stale rate or ETA data. Completed-work
 status uses ten evenly spaced count milestones, interval-due rows, and one final
@@ -556,7 +566,8 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   collection descriptor rather than unrelated replacement content;
 - real FFmpeg byte-copy/remux matches, different-audio and different-timing
   non-matches, corrupt and multi-audio skips, strict ownership, collisions,
-  incremental preview cache, interruption recovery, cache opt-out, sidecar
+  incremental preview cache, interruption recovery, cache opt-out, concise
+  path-private summary output, sidecar
   behavior, cross-tool undo dependencies, missing runtime errors, and local-
   descriptor-only/no-capture command construction;
 - adversarial video classification, probing, and fingerprint path swaps that

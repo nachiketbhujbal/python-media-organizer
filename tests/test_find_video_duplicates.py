@@ -180,6 +180,62 @@ def test_video_finder_can_disable_all_cache_reads_and_writes(
     assert not action_log_path(tmp_path).exists()
 
 
+@requires_ffmpeg
+def test_video_summary_applies_with_path_private_aggregate_output(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "private-garden-collection"
+    vids = root / "vids"
+    vids.mkdir(parents=True)
+    first = vids / "secret-cedar.mp4"
+    second = vids / "secret-maple.mp4"
+    broken = vids / "secret-broken.mp4"
+    make_video(first)
+    shutil.copyfile(first, second)
+    broken.write_bytes(first.read_bytes()[:32])
+
+    result = run_script("find_video_duplicates.py", root, "--summary", "--apply")
+
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "Scanning 3 video(s)" in result.stdout
+    assert "Moved 1 duplicate(s) from 1 group(s)" in result.stdout
+    assert "Skipped 1 file(s)." in result.stdout
+    assert "Duplicate storage summary:" in result.stdout
+    assert "Action log updated." in result.stdout
+    assert "Stage timing: verification " in result.stdout
+    assert "Group 1:" not in output
+    assert "duplicate:" not in output
+    assert "starting fingerprint" not in output
+    assert "Action log:" not in output
+    for private_text in (root.name, first.name, second.name, broken.name, str(root)):
+        assert private_text not in output
+    assert action_log_path(root).is_file()
+
+    undo_preview = run_script("find_video_duplicates.py", root, "--summary", "--undo")
+
+    undo_output = undo_preview.stdout + undo_preview.stderr
+    assert undo_preview.returncode == 0, undo_output
+    assert "Would reverse" in undo_preview.stdout
+    assert "Using action log:" not in undo_output
+    assert "Video duplicate-finder run:" not in undo_output
+    for private_text in (root.name, first.name, second.name, broken.name, str(root)):
+        assert private_text not in undo_output
+
+
+def test_video_summary_refuses_explicit_ignored_paths(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "private-garden-collection"
+    (root / "vids").mkdir(parents=True)
+
+    result = run_script("find_video_duplicates.py", root, "--summary", "--show-ignored")
+
+    assert result.returncode == 2
+    assert "cannot be combined" in result.stderr
+    assert root.name not in result.stdout + result.stderr
+
+
 def test_video_finder_requires_only_vids(tmp_path: Path, run_script) -> None:
     result = run_script("find_video_duplicates.py", tmp_path)
 

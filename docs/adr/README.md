@@ -59,3 +59,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0051](0051-distinct-heartbeats-and-eta-confidence.md) | Distinct heartbeats and ETA confidence |
 | [0052](0052-path-private-stage-timing.md) | Path-private stage timing |
 | [0053](0053-explicit-cache-activity-reporting.md) | Explicit cache activity reporting |
+| [0054](0054-path-private-duplicate-summaries.md) | Path-private duplicate summaries |

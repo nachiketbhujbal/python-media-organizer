@@ -173,21 +173,24 @@ def print_storage_summary(
     print("  No files are deleted by this tool.")
 
 
-def undo_duplicate_run(root: Path, apply: bool) -> int:
+def undo_duplicate_run(root: Path, apply: bool, *, summary: bool = False) -> int:
     log = ActionLog(root)
     try:
         plan = log.plan_undo(ToolId.IMAGE_DUPLICATES)
     except NoUndoableRun as error:
-        print(str(error), file=sys.stderr)
+        detail = "No undoable image duplicate run found." if summary else str(error)
+        print(detail, file=sys.stderr)
         return 2
     except (ActionConflict, ActionLogError, OSError) as error:
-        print(f"Cannot safely undo duplicate moves: {error}", file=sys.stderr)
+        detail = "rerun without --summary for details" if summary else str(error)
+        print(f"Cannot safely undo duplicate moves: {detail}", file=sys.stderr)
         return 1
 
-    print(f"Using action log: {log.path}")
-    print(f"Duplicate-finder run: {plan.target.run_id}")
-    for action in plan.actions:
-        describe_undo_action(root, action, apply)
+    if not summary:
+        print(f"Using action log: {log.path}")
+        print(f"Duplicate-finder run: {plan.target.run_id}")
+        for action in plan.actions:
+            describe_undo_action(root, action, apply)
     if not apply:
         print(f"\nWould reverse {len(plan.actions)} recorded action(s).")
         if plan.actions:
@@ -197,7 +200,8 @@ def undo_duplicate_run(root: Path, apply: bool) -> int:
     try:
         result = log.apply_undo(ToolId.IMAGE_DUPLICATES)
     except (ActionConflict, ActionLogError, OSError) as error:
-        print(f"Duplicate undo failed safely: {error}", file=sys.stderr)
+        detail = "rerun without --summary for details" if summary else str(error)
+        print(f"Duplicate undo failed safely: {detail}", file=sys.stderr)
         return 1
     print(f"\nReversed {result.action_count} recorded action(s).")
     print("Verification passed: every recorded duplicate-file action was reversed.")
@@ -249,7 +253,11 @@ def analyze_images(
 
 
 def plan_image_moves(
-    duplicate_groups: list[list[ImageRecord]], destination: Path, apply: bool
+    duplicate_groups: list[list[ImageRecord]],
+    destination: Path,
+    apply: bool,
+    *,
+    summary: bool = False,
 ) -> list[ImageMove]:
     move_plan: list[ImageMove] = []
     reserved_targets: set[str] = set()
@@ -257,7 +265,8 @@ def plan_image_moves(
         ordered = sorted(records, key=keep_sort_key)
         kept = ordered[0]
         group_name = f"set_{group_number:04d}"
-        print(f"\nGroup {group_number}: keep {kept.path}")
+        if not summary:
+            print(f"\nGroup {group_number}: keep {kept.path}")
         next_number = 1
         for duplicate in ordered[1:]:
             target, used_number = copy_target(
@@ -269,8 +278,9 @@ def plan_image_moves(
             )
             next_number = used_number + 1
             move_plan.append((group_name, kept, duplicate, target))
-            print(f"  duplicate: {duplicate.path}")
-            print(f"  {'move to' if apply else 'would move to'}: {target}")
+            if not summary:
+                print(f"  duplicate: {duplicate.path}")
+                print(f"  {'move to' if apply else 'would move to'}: {target}")
     return move_plan
 
 
@@ -343,6 +353,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "this is also a dry run unless --apply is supplied"
         ),
     )
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="show aggregate path-private results without file or group details",
+    )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
     return parser.parse_args(argv)
@@ -352,15 +367,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     root = args.folder.expanduser().resolve()
     if not root.is_dir():
-        print(f"Not a directory: {root}", file=sys.stderr)
+        message = "supplied collection path" if args.summary else str(root)
+        print(f"Not a directory: {message}", file=sys.stderr)
+        return 2
+    if args.summary and args.show_ignored:
+        print(
+            "--summary cannot be combined with --show-ignored because summary "
+            "output is path-private",
+            file=sys.stderr,
+        )
         return 2
     if args.undo:
-        return undo_duplicate_run(root, args.apply)
+        return undo_duplicate_run(root, args.apply, summary=args.summary)
 
     try:
         config = load_config(root, args.config)
     except ConfigError as error:
-        print(f"Cannot use configuration: {error}", file=sys.stderr)
+        detail = "rerun without --summary for details" if args.summary else str(error)
+        print(f"Cannot use configuration: {detail}", file=sys.stderr)
         return 2
 
     layout = duplicate_layout(root, "picture")
@@ -369,17 +393,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     problems = layout_problems(root, config, "picture")
     if problems:
         print("Collection is not ready for duplicate scanning:", file=sys.stderr)
-        for problem in problems:
-            print(f"  {problem}", file=sys.stderr)
-        print(
-            f'Run pymo organize "{root}" first so pictures are directly in pics.',
-            file=sys.stderr,
-        )
+        if args.summary:
+            print(f"  {len(problems)} layout problem(s).", file=sys.stderr)
+            print(
+                "Run pymo organize COLLECTION first so pictures are directly in pics.",
+                file=sys.stderr,
+            )
+        else:
+            for problem in problems:
+                print(f"  {problem}", file=sys.stderr)
+            print(
+                f'Run pymo organize "{root}" first so pictures are directly in pics.',
+                file=sys.stderr,
+            )
         return 2
 
     pics = layout.source
     paths, ignored = discover_images(pics, root, config)
-    print(f"Scanning {len(paths)} image(s) in {pics}")
+    location = "" if args.summary else f" in {pics}"
+    print(f"Scanning {len(paths)} image(s){location}")
     for message in ignored_messages(ignored, root, args.show_ignored):
         print(message)
 
@@ -388,21 +420,34 @@ def main(argv: Sequence[str] | None = None) -> int:
         paths,
         config.performance.progress_interval_seconds,
     )
-    move_plan = plan_image_moves(duplicate_groups, destination, args.apply)
+    move_plan = plan_image_moves(
+        duplicate_groups, destination, args.apply, summary=args.summary
+    )
 
     if args.apply and move_plan:
         try:
             log_path = apply_image_moves(root, duplicate_groups, move_plan)
-            print(f"\nAction log: {log_path}")
+            print(
+                "\nAction log updated." if args.summary else f"\nAction log: {log_path}"
+            )
         except (ActionConflict, ActionLogError, FileChangedError, OSError) as error:
-            print(f"Duplicate moves stopped safely: {error}", file=sys.stderr)
+            detail = (
+                "rerun without --summary for details" if args.summary else str(error)
+            )
+            print(f"Duplicate moves stopped safely: {detail}", file=sys.stderr)
             return 1
 
         verification_failures = verify_image_moves(move_plan)
         if verification_failures:
             print("\nVerification needs attention:", file=sys.stderr)
-            for source, target in verification_failures:
-                print(f"  {source} -> {target}", file=sys.stderr)
+            if args.summary:
+                print(
+                    f"  {len(verification_failures)} move(s) failed verification.",
+                    file=sys.stderr,
+                )
+            else:
+                for source, target in verification_failures:
+                    print(f"  {source} -> {target}", file=sys.stderr)
             return 1
 
     duplicate_count = len(move_plan)
@@ -416,9 +461,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Dry run only. Add --apply after reviewing this list.")
 
     if skipped:
-        print(f"\nSkipped {len(skipped)} file(s):")
-        for path, reason in skipped:
-            print(f"  {path}: {reason}")
+        suffix = "." if args.summary else ":"
+        print(f"\nSkipped {len(skipped)} file(s){suffix}")
+        if not args.summary:
+            for path, reason in skipped:
+                print(f"  {path}: {reason}")
 
     return 0
 

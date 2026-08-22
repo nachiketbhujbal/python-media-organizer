@@ -1269,20 +1269,23 @@ def print_storage_summary(
     print("  No files are deleted by this tool.")
 
 
-def undo_duplicate_run(root: Path, apply: bool) -> int:
+def undo_duplicate_run(root: Path, apply: bool, *, summary: bool = False) -> int:
     log = ActionLog(root)
     try:
         plan = log.plan_undo(ToolId.VIDEO_DUPLICATES)
     except NoUndoableRun as error:
-        print(str(error), file=sys.stderr)
+        detail = "No undoable video duplicate run found." if summary else str(error)
+        print(detail, file=sys.stderr)
         return 2
     except (ActionConflict, ActionLogError, OSError) as error:
-        print(f"Cannot safely undo duplicate moves: {error}", file=sys.stderr)
+        detail = "rerun without --summary for details" if summary else str(error)
+        print(f"Cannot safely undo duplicate moves: {detail}", file=sys.stderr)
         return 1
-    print(f"Using action log: {log.path}")
-    print(f"Video duplicate-finder run: {plan.target.run_id}")
-    for action in plan.actions:
-        describe_undo_action(root, action, apply)
+    if not summary:
+        print(f"Using action log: {log.path}")
+        print(f"Video duplicate-finder run: {plan.target.run_id}")
+        for action in plan.actions:
+            describe_undo_action(root, action, apply)
     if not apply:
         print(f"\nWould reverse {len(plan.actions)} recorded action(s).")
         if plan.actions:
@@ -1291,7 +1294,8 @@ def undo_duplicate_run(root: Path, apply: bool) -> int:
     try:
         result = log.apply_undo(ToolId.VIDEO_DUPLICATES)
     except (ActionConflict, ActionLogError, OSError) as error:
-        print(f"Video duplicate undo failed safely: {error}", file=sys.stderr)
+        detail = "rerun without --summary for details" if summary else str(error)
+        print(f"Video duplicate undo failed safely: {detail}", file=sys.stderr)
         return 1
     print(f"\nReversed {result.action_count} recorded action(s).")
     print("Verification passed: every recorded duplicate-video action was reversed.")
@@ -1344,6 +1348,7 @@ def derive_candidate_fingerprints(
     decode_timeout: int,
     progress_interval_seconds: int,
     no_cache: bool,
+    summary: bool = False,
 ) -> tuple[dict[str, DerivedFingerprint], list[tuple[Path, str]]]:
     unique_hashes = {record.byte_sha256: record for record in candidate_records}
     try:
@@ -1395,10 +1400,11 @@ def derive_candidate_fingerprints(
     skipped: list[tuple[Path, str]] = []
     persisted_records = 0
     for number, (file_hash, representative) in enumerate(decode_items, start=1):
-        print(
-            f"  starting fingerprint {number}/{len(decode_items)} "
-            f"({format_bytes(representative.file_size)})"
-        )
+        if not summary:
+            print(
+                f"  starting fingerprint {number}/{len(decode_items)} "
+                f"({format_bytes(representative.file_size)})"
+            )
 
         def report_heartbeat(active_number: int = number) -> None:
             message = progress.heartbeat("fingerprint progress", active_number)
@@ -1481,14 +1487,19 @@ def group_video_duplicates(
 
 
 def plan_video_moves(
-    duplicate_groups: list[list[VideoRecord]], destination: Path, apply: bool
+    duplicate_groups: list[list[VideoRecord]],
+    destination: Path,
+    apply: bool,
+    *,
+    summary: bool = False,
 ) -> list[VideoMove]:
     move_plan: list[VideoMove] = []
     reserved_targets: set[str] = set()
     for group_number, group in enumerate(duplicate_groups, start=1):
         ordered = sorted(group, key=keep_sort_key)
         kept = ordered[0]
-        print(f"\nGroup {group_number}: keep {kept.path}")
+        if not summary:
+            print(f"\nGroup {group_number}: keep {kept.path}")
         next_number = 1
         for duplicate in ordered[1:]:
             target, used_number = copy_target(
@@ -1500,8 +1511,9 @@ def plan_video_moves(
             )
             next_number = used_number + 1
             move_plan.append((kept, duplicate, target))
-            print(f"  duplicate: {duplicate.path}")
-            print(f"  {'move to' if apply else 'would move to'}: {target}")
+            if not summary:
+                print(f"  duplicate: {duplicate.path}")
+                print(f"  {'move to' if apply else 'would move to'}: {target}")
     return move_plan
 
 
@@ -1579,6 +1591,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "a dry run unless --apply is supplied"
         ),
     )
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="show aggregate path-private results without file or group details",
+    )
     parser.add_argument("--ffmpeg", type=Path, help="explicit ffmpeg executable path")
     parser.add_argument("--ffprobe", type=Path, help="explicit ffprobe executable path")
     parser.add_argument(
@@ -1598,18 +1615,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     root = args.folder.expanduser().resolve()
     if not root.is_dir():
-        print(f"Not a directory: {root}", file=sys.stderr)
+        message = "supplied collection path" if args.summary else str(root)
+        print(f"Not a directory: {message}", file=sys.stderr)
+        return 2
+    if args.summary and args.show_ignored:
+        print(
+            "--summary cannot be combined with --show-ignored because summary "
+            "output is path-private",
+            file=sys.stderr,
+        )
         return 2
     if args.decode_timeout is not None and args.decode_timeout <= 0:
         print("--decode-timeout must be a positive number", file=sys.stderr)
         return 2
     if args.undo:
-        return undo_duplicate_run(root, args.apply)
+        return undo_duplicate_run(root, args.apply, summary=args.summary)
 
     try:
         config = load_config(root, args.config)
     except ConfigError as error:
-        print(f"Cannot use configuration: {error}", file=sys.stderr)
+        detail = "rerun without --summary for details" if args.summary else str(error)
+        print(f"Cannot use configuration: {detail}", file=sys.stderr)
         return 2
     decode_timeout = (
         args.decode_timeout
@@ -1620,12 +1646,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     problems = layout_problems(root, config, "video")
     if problems:
         print("Collection is not ready for video duplicate scanning:", file=sys.stderr)
-        for problem in problems:
-            print(f"  {problem}", file=sys.stderr)
-        print(
-            f'Run pymo organize "{root}" first so videos are directly in vids.',
-            file=sys.stderr,
-        )
+        if args.summary:
+            print(f"  {len(problems)} layout problem(s).", file=sys.stderr)
+            print(
+                "Run pymo organize COLLECTION first so videos are directly in vids.",
+                file=sys.stderr,
+            )
+        else:
+            for problem in problems:
+                print(f"  {problem}", file=sys.stderr)
+            print(
+                f'Run pymo organize "{root}" first so videos are directly in vids.',
+                file=sys.stderr,
+            )
         return 2
 
     layout = CollectionLayout(root)
@@ -1636,7 +1669,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     stage_timer = StageTimer(print)
     with stage_timer.measure("discovery"):
         paths, ignored = discover_videos(vids, root, classifier, config)
-    print(f"Scanning {len(paths)} video(s) in {vids}")
+    location = "" if args.summary else f" in {vids}"
+    print(f"Scanning {len(paths)} video(s){location}")
     for message in ignored_messages(ignored, root, args.show_ignored):
         print(message)
 
@@ -1658,7 +1692,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         ffprobe = resolve_executable(args.ffprobe, "ffprobe")
         ffmpeg_release = ffmpeg_version(ffmpeg)
     except VideoInspectionError as error:
-        print(str(error), file=sys.stderr)
+        detail = (
+            "native video tools are unavailable; rerun without --summary for details"
+            if args.summary
+            else str(error)
+        )
+        print(detail, file=sys.stderr)
         return 2
     print(f"FFmpeg runtime: {ffmpeg_release}")
 
@@ -1681,9 +1720,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 decode_timeout,
                 config.performance.progress_interval_seconds,
                 args.no_cache,
+                args.summary,
             )
     except VideoCacheError as error:
-        print(str(error), file=sys.stderr)
+        detail = (
+            "Fingerprint cache cannot be used safely; rerun without --summary "
+            "for details."
+            if args.summary
+            else str(error)
+        )
+        print(detail, file=sys.stderr)
         return 1
     skipped.extend(fingerprint_skips)
     with stage_timer.measure("planning"):
@@ -1691,27 +1737,40 @@ def main(argv: Sequence[str] | None = None) -> int:
             candidate_records, derived
         )
         skipped.extend(group_skips)
-        move_plan = plan_video_moves(duplicate_groups, destination, args.apply)
+        move_plan = plan_video_moves(
+            duplicate_groups, destination, args.apply, summary=args.summary
+        )
 
     if args.apply and move_plan:
         try:
             with stage_timer.measure("apply"):
                 log_path = apply_video_moves(root, duplicate_groups, move_plan)
-            print(f"\nAction log: {log_path}")
+            print(
+                "\nAction log updated." if args.summary else f"\nAction log: {log_path}"
+            )
         except (
             ActionConflict,
             ActionLogError,
             FileChangedError,
             OSError,
         ) as error:
-            print(f"Duplicate moves stopped safely: {error}", file=sys.stderr)
+            detail = (
+                "rerun without --summary for details" if args.summary else str(error)
+            )
+            print(f"Duplicate moves stopped safely: {detail}", file=sys.stderr)
             return 1
         with stage_timer.measure("verification"):
             verification_failures = verify_video_moves(move_plan)
         if verification_failures:
             print("\nVerification needs attention:", file=sys.stderr)
-            for source, target in verification_failures:
-                print(f"  {source} -> {target}", file=sys.stderr)
+            if args.summary:
+                print(
+                    f"  {len(verification_failures)} move(s) failed verification.",
+                    file=sys.stderr,
+                )
+            else:
+                for source, target in verification_failures:
+                    print(f"  {source} -> {target}", file=sys.stderr)
             return 1
 
     duplicate_count = len(move_plan)
@@ -1724,9 +1783,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.apply and duplicate_count:
         print("Dry run only. Add --apply after reviewing this list.")
     if skipped:
-        print(f"\nSkipped {len(skipped)} file(s):")
-        for path, reason in skipped:
-            print(f"  {path}: {reason}")
+        suffix = "." if args.summary else ":"
+        print(f"\nSkipped {len(skipped)} file(s){suffix}")
+        if not args.summary:
+            for path, reason in skipped:
+                print(f"  {path}: {reason}")
     return 0
 
 
