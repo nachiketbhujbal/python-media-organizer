@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import json
 import os
 import subprocess
@@ -8,6 +9,7 @@ from typing import Any
 
 from PIL import Image
 
+from pymo import discovery, organize
 from pymo.action_log import action_log_path
 from pymo.config import load_config
 from pymo.organize import Classifier
@@ -60,6 +62,26 @@ def test_organizer_dry_run_changes_nothing(tmp_path: Path, run_script) -> None:
     assert (tmp_path / "album" / "nested" / "photo.png").exists()
     assert (tmp_path / "album" / "nested" / "clip.mp4").exists()
     assert (tmp_path / "album" / "notes.txt").exists()
+    assert not (tmp_path / "pics").exists()
+    assert not (tmp_path / "vids").exists()
+    assert not action_log_path(tmp_path).exists()
+
+
+def test_organizer_refuses_incomplete_discovery_before_apply(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source = tmp_path / "photo.png"
+    Image.new("RGB", (2, 2), "blue").save(source)
+
+    def incomplete_walk(_root: Path, *, topdown: bool, onerror):
+        assert topdown
+        yield str(tmp_path), [], [source.name]
+        onerror(OSError(errno.EACCES, "permission denied", str(tmp_path / "closed")))
+
+    monkeypatch.setattr(discovery.os, "walk", incomplete_walk)
+
+    assert organize.main([str(tmp_path), "--apply"]) == 1
+    assert source.is_file()
     assert not (tmp_path / "pics").exists()
     assert not (tmp_path / "vids").exists()
     assert not action_log_path(tmp_path).exists()

@@ -37,6 +37,7 @@ from pymo.config import (
     ignored_messages,
     load_config,
 )
+from pymo.discovery import DiscoveryError
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier, discover_files, path_key
 from pymo.progress import ProgressMeter
@@ -368,9 +369,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     classifier = Classifier(config.classification)
     if classifier.warning:
         print(f"Warning: {classifier.warning}")
-    plan, already_named, skipped_links, ignored = build_rename_plan(
-        root, classifier, config
-    )
+    try:
+        plan, already_named, skipped_links, ignored = build_rename_plan(
+            root, classifier, config
+        )
+    except DiscoveryError as error:
+        print(f"Renaming cannot safely continue: {error}", file=sys.stderr)
+        return 1
     for record in plan:
         print(
             f"\n{record.kind.upper()}\n"

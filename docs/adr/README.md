@@ -64,3 +64,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0056](0056-retain-roadmap-release-ledger.md) | Retained roadmap release-status ledger |
 | [0057](0057-directional-migration-verification.md) | Directional migration preservation proof |
 | [0058](0058-corruption-findings-are-not-ignore-policy.md) | Corruption findings remain visible evidence |
+| [0059](0059-fail-closed-filesystem-discovery.md) | Fail closed on incomplete filesystem discovery |

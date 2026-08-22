@@ -84,16 +84,17 @@ file, or action log on a source being preserved.
 | Version | Primary purpose | Intended result | Status |
 | --- | --- | --- | --- |
 | 0.4.0 | Corruption-tolerant evidence | Make scan report directory traversal failures instead of silently omitting them, keep per-file decode failures as validation findings without aborting the collection, recommend validation before mutation, and prove through synthetic plus local acceptance tests that corrupt, unreadable, changing, unsupported, and mismatched media remain visible rather than becoming automatic ignore rules. | Released |
-| 0.4.1 | Shared cache core | Versioned schema, file identity, algorithm/runtime keys, migrations, and reusable service interfaces. | Planned |
-| 0.4.2 | Cache status | Read-only cache health, coverage, version, and stale-record reporting. | Planned |
-| 0.4.3 | Video cache warm | Explicitly precompute exact-video fingerprints without running duplicate planning. | Planned |
-| 0.4.4 | Stable hashes | Reuse carefully keyed whole-file SHA records while rechecking content before an exact move. | Planned |
-| 0.4.5 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. | Planned |
-| 0.4.6 | Image fingerprint cache | Persist deterministic displayed-pixel image fingerprints for safe rescans. | Planned |
-| 0.4.7 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. | Planned |
-| 0.4.8 | Validation evidence | Record validation profile, result, file identity, runtime/tool versions, and completion time as disposable history without allowing an old healthy result to satisfy a fresh full validation. | Planned |
-| 0.4.9 | Explicit cached validation | Offer an explicitly named cache-assisted validation mode for unchanged files while retaining fresh reads as the default contract of `validate --full`. | Planned |
-| 0.4.10 | Targeted cache refresh | Recompute selected validation or fingerprint records without deleting unrelated cache evidence; reserve `--no-cache` for disabling both cache reads and writes. | Planned |
+| 0.4.1 | Complete filesystem discovery | Require complete recursive enumeration before organization, renaming, or undo planning; require complete flat enumeration before duplicate analysis; and fail safely without creating state when the namespace cannot be read completely. | Released |
+| 0.4.2 | Shared cache core | Versioned schema, file identity, algorithm/runtime keys, migrations, and reusable service interfaces. | Planned |
+| 0.4.3 | Cache status | Read-only cache health, coverage, version, and stale-record reporting. | Planned |
+| 0.4.4 | Video cache warm | Explicitly precompute exact-video fingerprints without running duplicate planning. | Planned |
+| 0.4.5 | Stable hashes | Reuse carefully keyed whole-file SHA records while rechecking content before an exact move. | Planned |
+| 0.4.6 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. | Planned |
+| 0.4.7 | Image fingerprint cache | Persist deterministic displayed-pixel image fingerprints for safe rescans. | Planned |
+| 0.4.8 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. | Planned |
+| 0.4.9 | Validation evidence | Record validation profile, result, file identity, runtime/tool versions, and completion time as disposable history without allowing an old healthy result to satisfy a fresh full validation. | Planned |
+| 0.4.10 | Explicit cached validation | Offer an explicitly named cache-assisted validation mode for unchanged files while retaining fresh reads as the default contract of `validate --full`. | Planned |
+| 0.4.11 | Targeted cache refresh | Recompute selected validation or fingerprint records without deleting unrelated cache evidence; reserve `--no-cache` for disabling both cache reads and writes. | Planned |
 
 Cache reuse is incremental: new or changed files add or replace only their own
 derived records. Unchanged records survive collection growth. No scan command
@@ -176,10 +177,17 @@ state.
 These have an accepted product direction but no release number yet:
 
 - richer local collection statistics and historical comparisons;
+- a task-oriented root README readability and information-architecture sweep,
+  including a table of contents, linkable status and command sections, less
+  repetition, and links to detailed version, roadmap, and research records
+  under `docs/`;
 - metadata inspection/export with date provenance and confidence;
 - report-only perceptual image/video similarity;
 - explainable keeper-quality recommendations;
 - reversible metadata or quarantine actions only after dedicated safety ADRs;
+- hardware-aware worker selection that benchmarks the storage/CPU boundary,
+  remains explicitly overrideable, and warns when a configured override is
+  likely to oversubscribe the detected machine;
 - benchmark-driven bounded native-process concurrency;
 - broader POSIX portability beyond the tested Debian-family Linux, Red
   Hat-family Linux, macOS, and Linux-based WSL execution models, including safe

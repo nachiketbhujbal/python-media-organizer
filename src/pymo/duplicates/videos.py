@@ -50,6 +50,7 @@ from pymo.config import (
     ignored_messages,
     load_config,
 )
+from pymo.discovery import DiscoveryError, list_directory_complete
 from pymo.duplicates.common import (
     copy_target,
     describe_undo_action,
@@ -551,7 +552,7 @@ def discover_videos(
 ) -> tuple[list[Path], list[Path]]:
     videos: list[Path] = []
     ignored: list[Path] = []
-    for path in vids.iterdir():
+    for path in list_directory_complete(vids):
         if path.is_symlink():
             continue
         if path.is_dir():
@@ -1667,8 +1668,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     destination = duplicate_paths.destination
     classifier = Classifier(config.classification)
     stage_timer = StageTimer(print)
-    with stage_timer.measure("discovery"):
-        paths, ignored = discover_videos(vids, root, classifier, config)
+    try:
+        with stage_timer.measure("discovery"):
+            paths, ignored = discover_videos(vids, root, classifier, config)
+    except DiscoveryError as error:
+        detail = "rerun without --summary for details" if args.summary else str(error)
+        print(f"Video discovery stopped safely: {detail}", file=sys.stderr)
+        return 1
     location = "" if args.summary else f" in {vids}"
     print(f"Scanning {len(paths)} video(s){location}")
     for message in ignored_messages(ignored, root, args.show_ignored):

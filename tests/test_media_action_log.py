@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import errno
 import json
 from pathlib import Path
 
 import pytest
 
 from pymo import action_log as action_log_module
+from pymo import discovery
 from pymo.action_log import (
     Action,
     ActionConflict,
@@ -104,6 +106,31 @@ def test_incomplete_run_can_be_reversed_safely(tmp_path: Path) -> None:
         )
         transaction.commit()
     assert another_target.exists()
+
+
+def test_undo_planning_refuses_an_incomplete_collection_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source.bin"
+    destination = tmp_path / "destination.bin"
+    source.write_bytes(b"stable content")
+    log = ActionLog(tmp_path)
+    with log.transaction("rename_media") as transaction:
+        transaction.perform(Action.for_file(tmp_path, source, destination, "RENAME"))
+        transaction.commit()
+    before = action_log_path(tmp_path).read_bytes()
+
+    def incomplete_walk(_root: Path, *, topdown: bool, onerror):
+        assert topdown
+        yield str(tmp_path), [], [destination.name, action_log_path(tmp_path).name]
+        onerror(OSError(errno.EACCES, "permission denied", str(tmp_path / "closed")))
+
+    monkeypatch.setattr(discovery.os, "walk", incomplete_walk)
+
+    with pytest.raises(OSError, match="filesystem discovery was incomplete"):
+        log.plan_undo("rename_media")
+    assert destination.read_bytes() == b"stable content"
+    assert action_log_path(tmp_path).read_bytes() == before
 
 
 def test_same_size_content_change_blocks_undo(tmp_path: Path) -> None:

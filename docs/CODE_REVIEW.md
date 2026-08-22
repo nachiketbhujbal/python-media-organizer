@@ -51,6 +51,12 @@ The same adversarial method was repeated after the first validation release.
 | SCAN-002 | Medium | Scan does not pass an error callback to recursive traversal, so an unreadable or corrupt subtree can be silently omitted while the inventory appears complete even though validation reports the equivalent failure. | 0.4.0 | Resolved in ADR 0058 |
 | SCAN-003 | Low | Scan's ordered recommendations omit report-only validation, allowing organization and renaming advice to precede an explicit health check in a preservation-first workflow. | 0.4.0 | Resolved in ADR 0058 |
 
+## Filesystem discovery findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| DISC-001 | High | Organizer and renamer planning, organizer verification, and action-log undo snapshots can consume an `os.walk` traversal without an error callback, allowing an unreadable subtree to be mistaken for a complete namespace. Flat duplicate discovery also exposes raw enumeration failures instead of a consistent no-state failure boundary. | 0.4.1 | Resolved in ADR 0059 |
+
 ## CI portability findings
 
 | ID | Severity | Finding | Resolution target | Status |
@@ -150,6 +156,8 @@ The same adversarial method was repeated after the first validation release.
 - `0.4.0`: surface scan traversal failures, recommend validation before
   mutation, and prove corrupt or unsupported media remain visible findings
   without becoming automatic ignore policy.
+- `0.4.1`: require complete namespace enumeration for mutation planning, undo
+  simulation, duplicate analysis, and post-operation layout verification.
 
 ## Independent review evidence
 

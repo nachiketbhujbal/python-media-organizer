@@ -36,6 +36,7 @@ from pymo.config import (
     ignored_messages,
     load_config,
 )
+from pymo.discovery import DiscoveryError, list_directory_complete
 from pymo.duplicates.common import (
     copy_target,
     describe_undo_action,
@@ -116,7 +117,7 @@ def discover_images(
 ) -> tuple[list[Path], list[Path]]:
     result: list[Path] = []
     ignored: list[Path] = []
-    for path in pics.glob("*"):
+    for path in list_directory_complete(pics):
         if path.is_symlink():
             continue
         if path.is_dir():
@@ -409,7 +410,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     pics = layout.source
-    paths, ignored = discover_images(pics, root, config)
+    try:
+        paths, ignored = discover_images(pics, root, config)
+    except DiscoveryError as error:
+        detail = "rerun without --summary for details" if args.summary else str(error)
+        print(f"Image discovery stopped safely: {detail}", file=sys.stderr)
+        return 1
     location = "" if args.summary else f" in {pics}"
     print(f"Scanning {len(paths)} image(s){location}")
     for message in ignored_messages(ignored, root, args.show_ignored):
