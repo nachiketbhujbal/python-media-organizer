@@ -422,6 +422,10 @@ build remain release gates so normal commits do not repeatedly run FFmpeg
 integration tests. Development-tool versions are resolved in `uv.lock`.
 Coverage is configured to include the real child-process CLI tests; the normal
 test command stays fast, while the coverage form is a release review gate.
+GitHub Actions runs the same locked quality, coverage, native-FFmpeg, and build
+gate on branches, pull requests, `main`, and release tags. See
+[`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for the branch and release
+workflow.
 
 The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,

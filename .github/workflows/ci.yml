@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install native video tools
+        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+
+      - name: Install the locked Python environment
+        run: |
+          uv python install
+          uv sync --locked --all-groups
+
+      - name: Run committed quality checks
+        run: uv run --locked pre-commit run --all-files
+
+      - name: Run subprocess-aware tests and coverage
+        run: uv run --locked pytest --cov=pymo --cov-report=term-missing
+
+      - name: Build source and wheel distributions
+        run: uv build
+
+      - name: Verify release-tag version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          expected="pymo ${GITHUB_REF_NAME#v}"
+          actual="$(uv run --locked pymo --version)"
+          test "$actual" = "$expected"

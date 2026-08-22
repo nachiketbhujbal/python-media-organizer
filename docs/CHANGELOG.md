@@ -2,6 +2,17 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.6 - 2026-08-22
+
+- Add a least-privilege GitHub Actions `quality` job for branch pushes, pull
+  requests to `main`, mainline pushes, and version tags.
+- Reproduce the locked Python 3.11, uv 0.12.5, pre-commit, real FFmpeg,
+  subprocess-aware coverage, and package-build release gates in CI.
+- Fetch complete history for hatch-vcs and verify that each release tag matches
+  the installed CLI version.
+- Document the short-lived branch, sole-maintainer protection, and release
+  workflow in `docs/CONTRIBUTING.md` and separate ADRs.
+
 ## 0.3.5 - 2026-08-22
 
 - Recommend `pymo rename` whenever scan finds non-canonical source-media names,

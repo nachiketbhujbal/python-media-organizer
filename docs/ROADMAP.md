@@ -25,7 +25,7 @@ behavior is captured in the changelog and handoff.
 | --- | --- | --- | --- |
 | 0.3.4 | Documentation map | Separate research from scheduled work, centralize durable engineering docs, and record the small-release policy. | Released |
 | 0.3.5 | Complete scan advice | Recommend rename whenever non-canonical source media exists, while retaining the safe organize-before-rename order. | Released |
-| 0.3.6 | Continuous integration | Run the locked quality and test gates on branches, pull requests, `main`, and release tags; document the branch and release workflow. | Planned |
+| 0.3.6 | Continuous integration | Run the locked quality and test gates on branches, pull requests, `main`, and release tags; document the branch and release workflow. | Released |
 | 0.3.7 | Video read safety | Descriptor-pin exact-video discovery, probing, hashing, and fingerprint inputs without changing duplicate semantics. | Planned |
 | 0.3.8 | Image read safety | Descriptor-pin exact-image classification and pixel reads without changing duplicate semantics. | Planned |
 | 0.3.9 | Cache access safety | Harden the derived SQLite cache path, locking, replacement, corruption, and interruption boundaries. | Planned |

@@ -13,12 +13,14 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.5` scan-advice release. It is a
+`pymo` command, and has a `v0.3.6` continuous-integration release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.5 makes scan recommendations list every applicable action in safe
+Version 0.3.6 adds a pinned GitHub Actions quality gate and adopts short-lived
+branches with CI-verified merge boundaries. Version 0.3.5 makes scan
+recommendations list every applicable action in safe
 workflow order instead of suppressing rename advice when organization is also
 needed. Version 0.3.4 separates evaluated research, promoted release plans, shipped
 behavior, adversarial findings, and architecture decisions under the indexed
@@ -113,6 +115,7 @@ python-media-organizer/
     README.md
     CHANGELOG.md
     CODE_REVIEW.md
+    CONTRIBUTING.md
     RESEARCH.md
     ROADMAP.md
     adr/
@@ -529,3 +532,10 @@ repository at `git@github.com:nachiketbhujbal/python-media-organizer.git`, using
 a repository-specific deploy key. Push commits or release tags only when the
 user explicitly approves that release. Confirm private collection data and
 generated state are absent before every commit.
+
+Ordinary changes now use one short-lived branch per cohesive release. Push the
+branch, pass the GitHub `quality` check, then merge and tag the verified mainline
+commit. The v0.3.6 workflow merge is the one-time bootstrap because the check
+cannot be required until the workflow exists on `main`. The deploy key supports
+Git transport but does not authenticate pull-request or repository-settings
+APIs; see `docs/CONTRIBUTING.md` for the safe sole-maintainer ruleset.
