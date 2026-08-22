@@ -10,6 +10,7 @@ from typing import Literal
 from pymo.action_log import Action
 from pymo.collection import CollectionLayout
 from pymo.config import PymoConfig
+from pymo.discovery import DiscoveryError, list_directory_complete
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
 
@@ -65,7 +66,12 @@ def layout_problems(
     classifier = Classifier(config.classification)
     wrong_kind = "video" if media_kind == "picture" else "picture"
     owner_name = "image" if media_kind == "picture" else "video"
-    for path in layout.source.iterdir():
+    try:
+        source_entries = list_directory_complete(layout.source)
+    except DiscoveryError:
+        problems.append("required media folder could not be read completely")
+        return problems
+    for path in source_entries:
         if path.is_symlink():
             problems.append(f"symbolic link cannot be verified: {path}")
         elif path.is_dir():

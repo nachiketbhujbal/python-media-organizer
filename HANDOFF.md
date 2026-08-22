@@ -21,7 +21,7 @@ that source content is accounted for.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.4.0` corruption-evidence release. It is a
+`pymo` command, and has a `v0.4.1` complete-discovery release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
@@ -31,6 +31,14 @@ places report-only validation first in every scan recommendation plan. Existing
 validation behavior continues after known per-file decoder failures, and direct
 regression coverage proves a damaged video does not prevent a healthy neighbor
 from being checked. No health finding is converted into ignore configuration.
+
+Version 0.4.1 adds a shared fail-closed filesystem discovery boundary.
+Organization, renaming, and undo planning stop before mutation when recursive
+enumeration is incomplete. The exact duplicate finders stop before creating
+cache, duplicate directories, or action history when their owned flat media
+directory cannot be listed completely. Organizer verification also refuses an
+apparently complete verdict after a traversal failure. Report-only scan and
+validation retain their distinct evidence-collection behavior.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -185,6 +193,7 @@ python-media-organizer/
     default_config.toml
     logging_config.py
     progress.py
+    discovery.py
     file_safety.py
     action_log.py
     organize.py
@@ -584,6 +593,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   removed CSV option refusal, `dups` protection, default OS-metadata ignores,
   custom-directory protection, custom classification extensions, and
   ignored-only source trees;
+- fail-closed recursive and flat discovery, including late traversal errors
+  after visible media and proof that organization, renaming, undo, and both
+  duplicate finders create no new state from an incomplete namespace;
 - renamer parsing and cleanup across varied filename structures, deterministic
   names, configurable additive noise tokens, collisions, apply/undo, and
   `dups` protection;

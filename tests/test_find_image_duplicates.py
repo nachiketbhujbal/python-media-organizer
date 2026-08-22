@@ -7,6 +7,7 @@ import pytest
 from PIL import Image, PngImagePlugin
 
 from pymo.action_log import action_log_path
+from pymo.discovery import DiscoveryError
 from pymo.duplicates import images as image_duplicates
 
 
@@ -344,5 +345,23 @@ def test_image_apply_aborts_if_the_keeper_changes_after_planning(
     assert image_duplicates.main([str(tmp_path), "--apply"]) == 1
     assert keeper.exists()
     assert duplicate.exists()
+    assert not (tmp_path / "dups").exists()
+    assert not action_log_path(tmp_path).exists()
+
+
+def test_image_discovery_failure_creates_no_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pics = tmp_path / "pics"
+    pics.mkdir()
+    Image.new("RGB", (2, 2), "blue").save(pics / "photo.png")
+
+    def fail_discovery(_path: Path) -> tuple[Path, ...]:
+        raise DiscoveryError("incomplete discovery")
+
+    monkeypatch.setattr(image_duplicates, "list_directory_complete", fail_discovery)
+
+    assert image_duplicates.main([str(tmp_path), "--apply"]) == 1
+    assert (pics / "photo.png").is_file()
     assert not (tmp_path / "dups").exists()
     assert not action_log_path(tmp_path).exists()

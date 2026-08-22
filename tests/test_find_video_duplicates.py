@@ -14,6 +14,7 @@ import pytest
 from pymo.action_log import action_log_path
 from pymo.collection import CollectionLayout
 from pymo.config import load_config
+from pymo.discovery import DiscoveryError
 from pymo.duplicates import videos as video_duplicates
 from pymo.duplicates.videos import ProbeInfo
 from pymo.organize import Classifier
@@ -1065,3 +1066,22 @@ def test_video_fingerprint_pins_decode_during_path_swap(
     assert observed == b"original video bytes"
     assert derived == {}
     assert skipped and skipped[0][0] == candidate
+
+
+def test_video_discovery_failure_creates_no_cache_or_action_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vids = tmp_path / "vids"
+    vids.mkdir()
+    (vids / "clip.mp4").write_bytes(b"synthetic video")
+
+    def fail_discovery(_path: Path) -> tuple[Path, ...]:
+        raise DiscoveryError("incomplete discovery")
+
+    monkeypatch.setattr(video_duplicates, "list_directory_complete", fail_discovery)
+
+    assert video_duplicates.main([str(tmp_path), "--apply"]) == 1
+    assert (vids / "clip.mp4").is_file()
+    assert not (tmp_path / "dups").exists()
+    assert not action_log_path(tmp_path).exists()
+    assert not (tmp_path / ".pymo.sqlite3").exists()

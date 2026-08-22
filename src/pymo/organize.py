@@ -39,6 +39,7 @@ from pymo.config import (
     ignored_messages,
     load_config,
 )
+from pymo.discovery import DiscoveryError, walk_complete
 from pymo.logging_config import emit as print
 from pymo.progress import ProgressMeter
 
@@ -162,7 +163,7 @@ def discover_files(
     files: list[Path] = []
     skipped_links: list[Path] = []
     ignored: list[Path] = []
-    for current, directory_names, file_names in os.walk(root, topdown=True):
+    for current, directory_names, file_names in walk_complete(root):
         current_path = Path(current)
         retained_directories: list[str] = []
         for name in directory_names:
@@ -243,7 +244,7 @@ def removable_directories(
 ) -> list[Path]:
     protected = {root, pics, vids}
     directories: list[Path] = []
-    for current, directory_names, _ in os.walk(root, topdown=True):
+    for current, directory_names, _ in walk_complete(root):
         current_path = Path(current)
         retained_directories: list[str] = []
         for name in directory_names:
@@ -269,7 +270,7 @@ def _contains_only_ignored_entries(
     directory: Path, root: Path, config: PymoConfig
 ) -> bool:
     found_ignored = False
-    for current, directory_names, file_names in os.walk(directory, topdown=True):
+    for current, directory_names, file_names in walk_complete(directory):
         current_path = Path(current)
         retained_directories: list[str] = []
         for name in directory_names:
@@ -301,7 +302,7 @@ def remaining_directories(
         layout.duplicate_vids,
     }
     directories: list[Path] = []
-    for current, directory_names, _ in os.walk(root, topdown=True):
+    for current, directory_names, _ in walk_complete(root):
         current_path = Path(current)
         retained_directories: list[str] = []
         for name in directory_names:
@@ -516,9 +517,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if classifier.warning:
         print(f"Warning: {classifier.warning}")
 
-    plan, already_correct, skipped_links, ignored = build_plan(
-        root, pics, vids, classifier, config
-    )
+    try:
+        plan, already_correct, skipped_links, ignored = build_plan(
+            root, pics, vids, classifier, config
+        )
+        source_directories = removable_directories(root, pics, vids, config)
+    except DiscoveryError as error:
+        print(f"Organization cannot safely continue: {error}", file=sys.stderr)
+        return 1
     for move in plan:
         print(
             f"\n{move.kind.upper()} ({move.mime_type})\n"
@@ -531,7 +537,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         counts[move.kind] += 1
 
     missing_destinations = [path for path in (pics, vids) if not path.exists()]
-    source_directories = removable_directories(root, pics, vids, config)
     removed_count = 0
     log_path: Path | None = None
     if args.apply and (missing_destinations or plan or source_directories):
@@ -576,7 +581,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  {path}")
 
     if args.apply:
-        return report_layout_verification(root, pics, vids, classifier, config)
+        try:
+            return report_layout_verification(root, pics, vids, classifier, config)
+        except DiscoveryError as error:
+            print(f"Verification could not inspect the complete layout: {error}")
+            return 1
 
     return 0
 

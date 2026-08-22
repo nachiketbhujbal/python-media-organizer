@@ -2,6 +2,19 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.1 - 2026-08-22
+
+- Require complete recursive filesystem discovery before organization,
+  renaming, or undo planning so an unreadable subtree cannot be mistaken for
+  absent content.
+- Stop both exact duplicate finders safely before cache, duplicate-tree, or
+  action-history creation when their owned media directory cannot be listed
+  completely.
+- Treat incomplete post-organization discovery as a failed verification rather
+  than reporting an apparently complete layout.
+- Add adversarial tests proving late traversal and immediate listing failures
+  leave media and collection state unchanged.
+
 ## 0.4.0 - 2026-08-22
 
 - Report recursive directory traversal failures in `pymo scan` instead of

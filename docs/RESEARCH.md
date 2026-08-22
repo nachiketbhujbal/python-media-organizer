@@ -431,6 +431,13 @@ marketing setting.
 - Do representative internal-drive and external-drive benchmarks justify a
   bounded process pool for full FFmpeg fingerprints, despite FFmpeg's own
   threading and likely disk contention?
+- Which hardware and workload signals can choose conservative worker counts
+  across macOS, Debian-family Linux, Red Hat-family Linux, and WSL, and what
+  oversubscription threshold should trigger a warning for a manual override?
+- Does profiling on representative collections expose a Python CPU hotspot
+  that justifies Cython, Rust, or another native accelerator after accounting
+  for binary portability, build complexity, maintenance cost, and the time
+  already spent inside Pillow, hashing libraries, SQLite, and FFmpeg?
 - What is the safest metadata-undo representation for formats where ExifTool
   may rewrite container structures even when logical tags are restored?
 - Which local visual-language model is appropriately licensed, compact, and

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import errno
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
+from pymo import discovery, rename
 from pymo.action_log import action_log_path
 from pymo.config import load_config
 from pymo.rename import clean_descriptor, timestamp_from_name
@@ -86,6 +88,28 @@ def test_renamer_dry_run_uses_universal_schema(tmp_path: Path, run_script) -> No
     assert "media_collection__video_0001__undated.mp4" in result.stdout
     assert "media_collection__video_0002__undated__garden_fern.mp4" in result.stdout
     assert (root / "notes.txt").read_text(encoding="utf-8") == "leave me"
+    assert not action_log_path(root).exists()
+
+
+def test_renamer_refuses_incomplete_discovery_before_apply(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "media-collection"
+    pics = root / "pics"
+    pics.mkdir(parents=True)
+    source = pics / "photo.png"
+    Image.new("RGB", (2, 2), "blue").save(source)
+
+    def incomplete_walk(_root: Path, *, topdown: bool, onerror):
+        assert topdown
+        yield str(root), ["pics"], []
+        yield str(pics), [], [source.name]
+        onerror(OSError(errno.EACCES, "permission denied", str(root / "closed")))
+
+    monkeypatch.setattr(discovery.os, "walk", incomplete_walk)
+
+    assert rename.main([str(root), "--apply"]) == 1
+    assert source.is_file()
     assert not action_log_path(root).exists()
 
 
