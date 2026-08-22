@@ -2,6 +2,23 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.2.3 - 2026-08-22
+
+- Make action-log parsing a strict fail-closed state machine that rejects
+  unknown, duplicated, out-of-order, malformed, and inconsistent lifecycle
+  records before undo or new mutation.
+- Reject journal symlinks even when substituted after `ActionLog` construction,
+  reject hard-linked or non-regular journals, and validate timestamps, tools,
+  modes, targets, action fields, identities, and commit counts without changing
+  schema 1 records written by prior releases.
+- Calculate file identities only when pre/post stat state remains stable, and
+  verify the identity again after each file move.
+- Open every move parent through no-follow directory descriptors and use atomic
+  macOS/Linux no-replace rename calls, preserving a destination created after
+  preflight and rejecting ancestor-symlink substitution.
+- Refuse non-atomic cross-filesystem moves and add adversarial regression tests
+  for path substitution, target races, changing files, and journal tampering.
+
 ## 0.2.2 - 2026-08-22
 
 - Add a durable adversarial review ledger with evidence, severity, release

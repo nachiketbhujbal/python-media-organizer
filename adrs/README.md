@@ -26,3 +26,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0018](0018-synthetic-test-data.md) | Synthetic, collection-neutral tests |
 | [0019](0019-report-only-validation.md) | Report-only validation first |
 | [0020](0020-posix-platform-boundary.md) | Current POSIX platform boundary |
+| [0021](0021-atomic-no-replace-moves.md) | Atomic no-replace file moves |

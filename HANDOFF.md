@@ -13,14 +13,16 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.2.2` review-and-quality release. It is a
+`pymo` command, and has a `v0.2.3` journal-safety release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.2.2 adds the durable adversarial finding ledger, one-file-per-decision
-ADRs, locked Ruff/Black/mypy tooling, an installed pre-commit gate, and an
-explicit macOS/Linux support boundary. It does not change command behavior.
+Version 0.2.3 makes schema 1 journal parsing strictly fail closed, calculates
+identities from stable file state, protects action-log opening and every move
+ancestor from symlink substitution, uses atomic OS no-replace renames, and
+verifies the destination identity. Cross-filesystem moves are refused because a
+copy-and-unlink fallback cannot meet the same safety guarantee.
 
 Hard requirements:
 
@@ -52,6 +54,8 @@ Hard requirements:
     or apply runs resume; `--no-cache` disables both cache reads and writes.
 15. Every durable decision has one numbered ADR. Ruff, Black, mypy, pre-commit,
     the complete pytest suite, and a package build are release gates.
+16. File moves are descriptor-relative and atomically refuse occupied targets.
+    A media collection must not span filesystems when files need to move.
 
 `{collection-name}-actions-log.jsonl` remains the authoritative portable
 journal because it moves naturally with a media-collection on external storage.
@@ -385,8 +389,10 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - renamer parsing and cleanup across varied filename structures, deterministic
   names, configurable additive noise tokens, collisions, apply/undo, and
   `dups` protection;
-- action journal ordering, locking model, interrupted run recovery, identity
-  changes, conflict refusal, cross-tool dependencies, and ordered undo;
+- action journal ordering, strict lifecycle grammar, no-follow opening,
+  descriptor-relative atomic moves, late target collision refusal, interrupted
+  run recovery, stable identity calculation, conflict refusal, cross-tool
+  dependencies, and ordered undo;
 - image exact-pixel equivalence across metadata/format differences, strict
   folder ownership, storage accounting, collisions, removed compatibility-
   option refusal, configurable inspection extensions, dry run/apply/undo, and

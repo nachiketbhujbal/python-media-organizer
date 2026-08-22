@@ -300,6 +300,13 @@ missing, changed, renamed, or occupied path stops the operation safely. This is
 why a rename must be undone before undoing an earlier organizer run that moved
 the same files.
 
+Journal records are parsed as a strict lifecycle: malformed, unknown,
+duplicated, out-of-order, or inconsistent events stop all mutation and undo.
+File moves use platform-native atomic no-replace operations through no-follow
+directory handles, then verify the recorded content identity. pymo refuses a
+cross-filesystem move because copy-and-unlink cannot provide the same atomic
+collision and crash guarantees; keep one collection on one filesystem.
+
 ## Version 0.2 compatibility boundary
 
 Version 0.2 removes the interfaces deprecated in v0.1.5: CSV organization

@@ -18,10 +18,15 @@ never duplicate the version in source or static project metadata.
 - Never delete media automatically and never overwrite an existing file.
 - Resolve collisions safely for forward operations. Require exact restoration
   paths for undo and abort on conflicts.
+- Perform file moves with descriptor-relative, atomic no-replace operations.
+  Never replace them with check-then-rename or a non-atomic cross-filesystem
+  copy fallback.
 - Preserve the collection-local, append-only
   `{collection-name}-actions-log.jsonl` audit trail.
   Undo appends events and never rewrites or removes history.
 - Preflight complete undo plans before mutating and verify every applied run.
+- Parse action-log schema 1 as a strict lifecycle and fail closed on unknown,
+  duplicate, out-of-order, malformed, or inconsistent records.
 - Reject unsafe symbolic links and do not follow media outside the collection.
 - Keep processing local. No telemetry, analytics, automatic networking, cloud
   AI, hosted model fallback, or automatic downloads.

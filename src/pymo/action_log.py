@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
+import ctypes
+import errno
 import fcntl
 import hashlib
 import json
 import os
-import shutil
+import stat
+import sys
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -46,6 +49,13 @@ class ToolId(StrEnum):
     VIDEO_DUPLICATES = "find_video_duplicates"
 
 
+def _tool_value(tool: str) -> str:
+    try:
+        return ToolId(tool).value
+    except ValueError as error:
+        raise ActionLogError(f"unsupported tool: {tool}") from error
+
+
 class ActionLogError(RuntimeError):
     """Base exception for action-history problems."""
 
@@ -81,15 +91,31 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _stat_signature(value: os.stat_result) -> tuple[int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
 def file_identity(path: Path) -> dict[str, int | str]:
     if path.is_symlink() or not path.is_file():
         raise ActionConflict(f"not a regular file: {path}")
-    stat = path.stat()
+    before = path.stat()
+    digest = _sha256(path)
+    if path.is_symlink() or not path.is_file():
+        raise ActionConflict(f"file changed while identity was calculated: {path}")
+    after = path.stat()
+    if _stat_signature(before) != _stat_signature(after):
+        raise ActionConflict(f"file changed while identity was calculated: {path}")
     return {
-        "size": stat.st_size,
-        "sha256": _sha256(path),
-        "device": stat.st_dev,
-        "inode": stat.st_ino,
+        "size": after.st_size,
+        "sha256": digest,
+        "device": after.st_dev,
+        "inode": after.st_ino,
     }
 
 
@@ -138,6 +164,7 @@ class Action:
                 self.before is not None
                 or not self.after
                 or self.entry_type != "directory"
+                or self.identity is not None
             ):
                 raise ActionLogError("CREATE_DIR requires only an after path")
         elif operation is ActionOperation.REMOVE_DIRECTORY:
@@ -145,6 +172,7 @@ class Action:
                 not self.before
                 or self.after is not None
                 or self.entry_type != "directory"
+                or self.identity is not None
             ):
                 raise ActionLogError("REMOVE_DIR requires only a before path")
 
@@ -223,9 +251,42 @@ class Action:
 
     @classmethod
     def from_dict(cls, value: dict[str, object]) -> Action:
-        identity = value.get("identity")
-        if identity is not None and not isinstance(identity, dict):
-            raise ActionLogError("invalid identity in action log")
+        expected_keys = {"operation", "before", "after", "entry_type", "identity"}
+        if set(value) != expected_keys:
+            raise ActionLogError("invalid action fields in action log")
+        identity_value = value.get("identity")
+        identity: dict[str, int | str] | None = None
+        if identity_value is not None:
+            if not isinstance(identity_value, dict) or set(identity_value) != {
+                "size",
+                "sha256",
+                "device",
+                "inode",
+            }:
+                raise ActionLogError("invalid identity in action log")
+            size = identity_value.get("size")
+            sha256 = identity_value.get("sha256")
+            device = identity_value.get("device")
+            inode = identity_value.get("inode")
+            if (
+                isinstance(size, bool)
+                or not isinstance(size, int)
+                or size < 0
+                or not isinstance(sha256, str)
+                or len(sha256) != 64
+                or any(character not in "0123456789abcdef" for character in sha256)
+                or isinstance(device, bool)
+                or not isinstance(device, int)
+                or isinstance(inode, bool)
+                or not isinstance(inode, int)
+            ):
+                raise ActionLogError("invalid identity in action log")
+            identity = {
+                "size": size,
+                "sha256": sha256,
+                "device": device,
+                "inode": inode,
+            }
         before_value = value.get("before")
         after_value = value.get("after")
         before = before_value if isinstance(before_value, str) else None
@@ -249,6 +310,7 @@ class RunRecord:
     actions: list[tuple[str, Action]] = field(default_factory=list)
     completed_action_ids: set[str] = field(default_factory=set)
     committed: bool = False
+    incomplete: bool = False
 
 
 @dataclass(frozen=True)
@@ -355,8 +417,23 @@ class ActionLog:
     def _locked(self, create: bool) -> Iterator[TextIO]:
         if not create and not self.path.exists():
             raise NoUndoableRun(f"no action log found in {self.root}")
+        flags = os.O_RDWR | os.O_APPEND | os.O_CREAT if create else os.O_RDONLY
+        flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+        try:
+            descriptor = os.open(self.path, flags, 0o600)
+        except FileNotFoundError as error:
+            raise NoUndoableRun(f"no action log found in {self.root}") from error
+        except OSError as error:
+            raise ActionConflict(
+                f"cannot open action log safely: {self.path}"
+            ) from error
         mode = "a+" if create else "r"
-        with self.path.open(mode, encoding="utf-8", newline="") as handle:
+        with os.fdopen(descriptor, mode, encoding="utf-8", newline="") as handle:
+            file_stat = os.fstat(handle.fileno())
+            if not stat.S_ISREG(file_stat.st_mode) or file_stat.st_nlink != 1:
+                raise ActionConflict(
+                    f"action log is not a private regular file: {self.path}"
+                )
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             try:
                 yield cast(TextIO, handle)
@@ -386,15 +463,31 @@ class ActionLog:
                 raise ActionLogError(
                     f"invalid JSON on line {line_number} of {self.path}"
                 ) from error
+            schema_version = (
+                event.get("schema_version") if isinstance(event, dict) else None
+            )
             if (
                 not isinstance(event, dict)
-                or event.get("schema_version") != ACTION_LOG_SCHEMA_VERSION
+                or isinstance(schema_version, bool)
+                or schema_version != ACTION_LOG_SCHEMA_VERSION
             ):
                 raise ActionLogError(
                     f"unsupported action-log record on line {line_number}"
                 )
+            if not isinstance(event.get("timestamp"), str):
+                raise ActionLogError(
+                    f"action-log record on line {line_number} has no timestamp"
+                )
             events.append(event)
         return events
+
+    @staticmethod
+    def _require_event_fields(
+        event: dict[str, object], required: set[str], index: int
+    ) -> None:
+        common = {"schema_version", "timestamp", "event", "run_id"}
+        if set(event) != common | required:
+            raise ActionLogError(f"action-log event {index + 1} has invalid fields")
 
     def _runs(self, events: list[dict[str, object]]) -> list[RunRecord]:
         runs: list[RunRecord] = []
@@ -402,12 +495,29 @@ class ActionLog:
         for index, event in enumerate(events):
             name = event.get("event")
             run_id = event.get("run_id")
-            if not isinstance(run_id, str):
+            if not isinstance(run_id, str) or not run_id:
                 raise ActionLogError(f"action-log event {index + 1} has no run ID")
             if name == "RUN_STARTED":
+                self._require_event_fields(
+                    event, {"tool", "mode", "target_run_id"}, index
+                )
                 if run_id in by_id:
                     raise ActionLogError(f"duplicate run ID in action log: {run_id}")
+                tool = event.get("tool")
+                mode = event.get("mode")
                 target_run_id_value = event.get("target_run_id")
+                if not isinstance(tool, str) or tool not in {
+                    member.value for member in ToolId
+                }:
+                    raise ActionLogError(f"invalid tool in action log: {tool!r}")
+                if mode not in {"APPLY", "UNDO"}:
+                    raise ActionLogError(f"invalid run mode in action log: {mode!r}")
+                if mode == "APPLY" and target_run_id_value is not None:
+                    raise ActionLogError("apply run cannot name an undo target")
+                if mode == "UNDO" and (
+                    not isinstance(target_run_id_value, str) or not target_run_id_value
+                ):
+                    raise ActionLogError("undo run requires a target run ID")
                 target_run_id = (
                     target_run_id_value
                     if isinstance(target_run_id_value, str)
@@ -415,8 +525,8 @@ class ActionLog:
                 )
                 run = RunRecord(
                     run_id=run_id,
-                    tool=str(event.get("tool", "")),
-                    mode=str(event.get("mode", "")),
+                    tool=tool,
+                    mode=mode,
                     target_run_id=target_run_id,
                     started_index=index,
                 )
@@ -426,19 +536,86 @@ class ActionLog:
             current_run = by_id.get(run_id)
             if current_run is None:
                 raise ActionLogError(f"event references unknown run ID: {run_id}")
+            if current_run.committed or current_run.incomplete:
+                raise ActionLogError(
+                    f"event follows terminal state for run ID: {run_id}"
+                )
             if name == "ACTION_PLANNED":
+                self._require_event_fields(event, {"action_id", "action"}, index)
                 action_id = event.get("action_id")
                 value = event.get("action")
-                if not isinstance(action_id, str) or not isinstance(value, dict):
+                if (
+                    not isinstance(action_id, str)
+                    or not action_id
+                    or not isinstance(value, dict)
+                ):
                     raise ActionLogError("invalid planned action in action log")
+                known_action_ids = {known_id for known_id, _ in current_run.actions}
+                if action_id in known_action_ids:
+                    raise ActionLogError(
+                        f"duplicate action ID in run {run_id}: {action_id}"
+                    )
                 current_run.actions.append((action_id, Action.from_dict(value)))
             elif name == "ACTION_COMPLETED":
+                self._require_event_fields(event, {"action_id"}, index)
                 action_id = event.get("action_id")
-                if not isinstance(action_id, str):
+                if not isinstance(action_id, str) or not action_id:
                     raise ActionLogError("completed action has no action ID")
+                known_action_ids = {known_id for known_id, _ in current_run.actions}
+                if action_id not in known_action_ids:
+                    raise ActionLogError(
+                        f"completed action was not planned in run {run_id}: {action_id}"
+                    )
+                if action_id in current_run.completed_action_ids:
+                    raise ActionLogError(
+                        f"action completed more than once in run {run_id}: {action_id}"
+                    )
                 current_run.completed_action_ids.add(action_id)
             elif name == "RUN_COMMITTED":
+                self._require_event_fields(
+                    event, {"action_count", "target_run_id"}, index
+                )
+                action_count = event.get("action_count")
+                if (
+                    isinstance(action_count, bool)
+                    or not isinstance(action_count, int)
+                    or action_count != len(current_run.actions)
+                    or action_count != len(current_run.completed_action_ids)
+                ):
+                    raise ActionLogError(
+                        f"committed action count is inconsistent for run {run_id}"
+                    )
+                if event.get("target_run_id") != current_run.target_run_id:
+                    raise ActionLogError(
+                        f"commit target is inconsistent for run {run_id}"
+                    )
                 current_run.committed = True
+            elif name == "RUN_INCOMPLETE":
+                self._require_event_fields(event, {"reason"}, index)
+                if not isinstance(event.get("reason"), str):
+                    raise ActionLogError(f"invalid incomplete reason for run {run_id}")
+                current_run.incomplete = True
+            else:
+                raise ActionLogError(f"unknown action-log event: {name!r}")
+
+        committed_undo_targets: set[str] = set()
+        for run in runs:
+            if run.mode != "UNDO":
+                continue
+            target = by_id.get(run.target_run_id or "")
+            if (
+                target is None
+                or target.mode != "APPLY"
+                or target.tool != run.tool
+                or target.started_index >= run.started_index
+            ):
+                raise ActionLogError(f"invalid undo target for run {run.run_id}")
+            if run.committed:
+                if target.run_id in committed_undo_targets:
+                    raise ActionLogError(
+                        f"run was undone more than once: {target.run_id}"
+                    )
+                committed_undo_targets.add(target.run_id)
         return runs
 
     def _active_and_unresolved_runs(self, runs: list[RunRecord]) -> list[RunRecord]:
@@ -509,10 +686,129 @@ class ActionLog:
     def _identity_matches(self, path: Path, expected: dict[str, int | str]) -> bool:
         if path.is_symlink() or not path.is_file():
             return False
-        stat = path.stat()
-        if stat.st_size != expected.get("size"):
+        before = path.stat()
+        if before.st_size != expected.get("size"):
             return False
-        return _sha256(path) == expected.get("sha256")
+        digest = _sha256(path)
+        if path.is_symlink() or not path.is_file():
+            return False
+        after = path.stat()
+        return _stat_signature(before) == _stat_signature(
+            after
+        ) and digest == expected.get("sha256")
+
+    def _validate_parent_chain(self, path: Path) -> None:
+        try:
+            relative = path.relative_to(self.root)
+        except ValueError as error:
+            raise ActionConflict(f"path escaped the collection: {path}") from error
+        current = self.root
+        for part in relative.parts[:-1]:
+            current /= part
+            if current.is_symlink() or not current.is_dir():
+                raise ActionConflict(f"path parent is missing or unsafe: {current}")
+
+    @contextmanager
+    def _opened_parent(self, path: Path) -> Iterator[tuple[int, str]]:
+        try:
+            relative = path.relative_to(self.root)
+        except ValueError as error:
+            raise ActionConflict(f"path escaped the collection: {path}") from error
+        flags = (
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        )
+        descriptor = os.open(self.root, flags)
+        try:
+            for part in relative.parts[:-1]:
+                next_descriptor = os.open(part, flags, dir_fd=descriptor)
+                os.close(descriptor)
+                descriptor = next_descriptor
+            yield descriptor, relative.name
+        except OSError as error:
+            raise ActionConflict(f"path parent became unsafe: {path.parent}") from error
+        finally:
+            os.close(descriptor)
+
+    def _atomic_rename_without_overwrite(self, before: Path, after: Path) -> None:
+        library = ctypes.CDLL(None, use_errno=True)
+        with (
+            self._opened_parent(before) as (
+                before_parent,
+                before_name,
+            ),
+            self._opened_parent(after) as (after_parent, after_name),
+        ):
+            if sys.platform == "darwin":
+                rename = library.renameatx_np
+                rename.argtypes = [
+                    ctypes.c_int,
+                    ctypes.c_char_p,
+                    ctypes.c_int,
+                    ctypes.c_char_p,
+                    ctypes.c_uint,
+                ]
+                rename.restype = ctypes.c_int
+                # RENAME_EXCL provides atomic no-replace behavior. NOFOLLOW_ANY
+                # also rejects symbolic links at any component on macOS.
+                result = rename(
+                    before_parent,
+                    os.fsencode(before_name),
+                    after_parent,
+                    os.fsencode(after_name),
+                    0x04 | 0x10,
+                )
+            elif sys.platform.startswith("linux"):
+                try:
+                    rename = library.renameat2
+                except AttributeError as error:
+                    raise ActionConflict(
+                        "this Linux runtime cannot perform an atomic no-replace move"
+                    ) from error
+                rename.argtypes = [
+                    ctypes.c_int,
+                    ctypes.c_char_p,
+                    ctypes.c_int,
+                    ctypes.c_char_p,
+                    ctypes.c_uint,
+                ]
+                rename.restype = ctypes.c_int
+                # Parent descriptors are opened without following links;
+                # RENAME_NOREPLACE supplies atomic collision refusal.
+                result = rename(
+                    before_parent,
+                    os.fsencode(before_name),
+                    after_parent,
+                    os.fsencode(after_name),
+                    0x01,
+                )
+            else:
+                raise ActionConflict(
+                    "atomic no-replace moves are supported only on macOS and Linux"
+                )
+        if result != 0:
+            error_number = ctypes.get_errno()
+            if error_number == errno.EEXIST:
+                raise ActionConflict(f"destination is occupied: {after}")
+            if error_number == errno.EXDEV:
+                raise ActionConflict(
+                    "cross-filesystem moves are refused because they cannot be "
+                    "atomic and collision-safe"
+                )
+            if error_number in {errno.ELOOP, errno.ENOTDIR}:
+                raise ActionConflict("move path became unsafe during execution")
+            raise OSError(error_number, os.strerror(error_number), str(after))
+
+    def _move_file_without_overwrite(
+        self, before: Path, after: Path, identity: dict[str, int | str]
+    ) -> None:
+        self._atomic_rename_without_overwrite(before, after)
+        if not self._identity_matches(after, identity):
+            try:
+                if not os.path.lexists(before):
+                    self._atomic_rename_without_overwrite(after, before)
+            except (ActionConflict, OSError):
+                pass
+            raise ActionConflict("moved file failed identity verification")
 
     def _execute_action(self, action: Action) -> None:
         before = _absolute_path(self.root, action.before) if action.before else None
@@ -521,20 +817,19 @@ class ActionLog:
             assert (
                 before is not None and after is not None and action.identity is not None
             )
+            self._validate_parent_chain(before)
+            self._validate_parent_chain(after)
             if not self._identity_matches(before, action.identity):
                 raise ActionConflict(
                     f"source file is missing or changed: {action.before}"
                 )
             if os.path.lexists(after):
                 raise ActionConflict(f"destination is occupied: {action.after}")
-            if not after.parent.is_dir() or after.parent.is_symlink():
-                raise ActionConflict(
-                    f"destination parent is missing or unsafe: {after.parent}"
-                )
-            shutil.move(str(before), str(after))
+            self._move_file_without_overwrite(before, after, action.identity)
             return
         if action.operation == ActionOperation.CREATE_DIRECTORY:
             assert after is not None
+            self._validate_parent_chain(after)
             if os.path.lexists(after):
                 raise ActionConflict(
                     f"directory destination is occupied: {action.after}"
@@ -546,6 +841,7 @@ class ActionLog:
             after.mkdir()
             return
         assert before is not None
+        self._validate_parent_chain(before)
         if before.is_symlink() or not before.is_dir():
             raise ActionConflict(f"expected directory is missing: {action.before}")
         try:
@@ -674,6 +970,7 @@ class ActionLog:
 
     @contextmanager
     def transaction(self, tool: str) -> Iterator[ActionTransaction]:
+        tool = _tool_value(tool)
         with self._locked(create=True) as handle:
             runs = self._runs(self._read(handle))
             unresolved = [
@@ -702,10 +999,12 @@ class ActionLog:
                     transaction.mark_incomplete("transaction exited without commit")
 
     def plan_undo(self, tool: str) -> UndoPlan:
+        tool = _tool_value(tool)
         with self._locked(create=False) as handle:
             return self._build_plan(self._read(handle), tool)
 
     def apply_undo(self, tool: str) -> UndoResult:
+        tool = _tool_value(tool)
         if not self.path.exists():
             raise NoUndoableRun(f"no action log found in {self.root}")
         with self._locked(create=True) as handle:

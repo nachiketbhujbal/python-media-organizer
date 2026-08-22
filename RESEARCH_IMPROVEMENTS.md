@@ -583,6 +583,10 @@ version, and external-tool version. Renames should reuse content-derived
 records. Content changes, fingerprint algorithm changes, and FFmpeg upgrades
 must invalidate the affected values.
 
+Applied file moves follow ADR 0021: descriptor-relative atomic no-replace
+renames are preferred over a cross-filesystem copy fallback. This keeps the
+action journal's completed boundary aligned with one atomic filesystem event.
+
 Dry-run semantics require care and must be command-specific. `pymo scan` never
 creates or updates a database. Exact-video analysis persists each successfully
 decoded fingerprint during preview as documented derived state, because the
