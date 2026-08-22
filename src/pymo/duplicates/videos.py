@@ -35,6 +35,13 @@ from pymo.action_log import (
     ActionLogError,
     NoUndoableRun,
 )
+from pymo.config import (
+    ConfigError,
+    PymoConfig,
+    add_config_argument,
+    ignored_summary,
+    load_config,
+)
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
 
@@ -268,18 +275,33 @@ def probe_video(path: Path, ffprobe: str) -> ProbeInfo:
     )
 
 
-def discover_videos(vids: Path, classifier: Classifier) -> list[Path]:
+def discover_videos(
+    vids: Path, root: Path, classifier: Classifier, config: PymoConfig
+) -> tuple[list[Path], list[Path]]:
     videos: list[Path] = []
+    ignored: list[Path] = []
     for path in vids.iterdir():
-        if path.is_symlink() or not path.is_file():
+        if path.is_symlink():
+            continue
+        if path.is_dir():
+            if config.ignores_directory(path, root):
+                ignored.append(path)
+            continue
+        if not path.is_file():
+            continue
+        if config.ignores_file(path, root):
+            ignored.append(path)
             continue
         kind, _ = classifier.classify(path)
         if kind == "video":
             videos.append(path.resolve())
-    return sorted(videos, key=lambda item: str(item).casefold())
+    return (
+        sorted(videos, key=lambda item: str(item).casefold()),
+        sorted(ignored, key=lambda item: str(item).casefold()),
+    )
 
 
-def collection_layout_problems(root: Path) -> list[str]:
+def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
     """Validate only the video finder's owned source and review locations."""
     vids = root / VIDS_NAME
     problems: list[str] = []
@@ -309,8 +331,11 @@ def collection_layout_problems(root: Path) -> list[str]:
         if path.is_symlink():
             problems.append(f"symbolic link cannot be verified: {path}")
         elif path.is_dir():
-            problems.append(f"unexpected directory in vids: {path}")
+            if not config.ignores_directory(path, root):
+                problems.append(f"unexpected directory in vids: {path}")
         elif path.is_file():
+            if config.ignores_file(path, root):
+                continue
             kind, _ = classifier.classify(path)
             if kind == "picture":
                 problems.append(
@@ -754,6 +779,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_DECODE_TIMEOUT,
         help="maximum seconds allowed for each FFmpeg decode",
     )
+    add_config_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -769,7 +795,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.undo:
         return undo_duplicate_run(root, args.apply)
 
-    problems = collection_layout_problems(root)
+    try:
+        config = load_config(root, args.config)
+    except ConfigError as error:
+        print(f"Cannot use configuration: {error}", file=sys.stderr)
+        return 2
+
+    problems = collection_layout_problems(root, config)
     if problems:
         print("Collection is not ready for video duplicate scanning:", file=sys.stderr)
         for problem in problems:
@@ -791,8 +823,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     vids = root / VIDS_NAME
     _, destination = review_directories(root)
     classifier = Classifier()
-    paths = discover_videos(vids, classifier)
+    paths, ignored = discover_videos(vids, root, classifier, config)
     print(f"Scanning {len(paths)} video(s) in {vids}")
+    summary = ignored_summary(ignored)
+    if summary:
+        print(summary)
     print(f"FFmpeg runtime: {ffmpeg_release}")
 
     records: list[VideoRecord] = []

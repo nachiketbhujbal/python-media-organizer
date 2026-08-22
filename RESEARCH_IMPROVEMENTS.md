@@ -10,8 +10,8 @@ Research snapshot: **2026-08-21**
 ## Current decision
 
 Continue building the project as a custom, local-first Python package named
-**python-media-organizer**, initially versioned `0.1.0`. Its command-line name
-is **`pymo`**.
+**python-media-organizer**, versioned from signed-off Git tags. Its command-line
+name is **`pymo`**.
 
 Existing behavior has several unusual safety properties that none of the
 researched products combines:
@@ -25,6 +25,12 @@ researched products combines:
 - dependency-aware undo across separate tools;
 - deterministic duplicate definitions instead of opaque similarity decisions;
 - simple, auditable dependencies and no cloud services or telemetry.
+
+The implemented configuration foundation uses immutable packaged TOML defaults
+plus an optional collection-root `.pymo.toml` or explicit `--config` extension.
+It is deliberately constrained data, not executable rules. Shared ignore
+patterns apply to organization, renaming, and both duplicate finders so common
+operating-system metadata and tool state remain untouched.
 
 Local AI remains acceptable in principle, including models downloaded to the
 machine, but it is a future, explicitly optional feature. Its likely first use
@@ -607,6 +613,12 @@ always better; it may merely contain more metadata or inefficient compression.
 
 Borrow the good parts of rule-based organizers without arbitrary code
 execution:
+
+Version 0.1.2 establishes the safe base layer: schema-versioned TOML, immutable
+packaged ignore defaults, collection-local extensions, explicit alternate
+config selection, and one shared interpretation across all forward commands.
+It intentionally supports only ignore patterns so broader profiles cannot
+silently introduce destructive or executable behavior.
 
 - named TOML profiles;
 - validated fields and constrained actions;

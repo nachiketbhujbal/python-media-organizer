@@ -115,7 +115,14 @@ def test_video_finder_requires_only_vids(tmp_path: Path, run_script) -> None:
 def test_video_finder_ignores_picture_folder_state(
     tmp_path: Path, run_script
 ) -> None:
-    (tmp_path / "vids").mkdir()
+    vids = tmp_path / "vids"
+    vids.mkdir()
+    (vids / ".DS_Store").write_bytes(b"view state")
+    (vids / "protected.mp4").write_bytes(b"not inspected")
+    (tmp_path / ".pymo.toml").write_text(
+        'version = 1\n\n[ignore]\nfiles = ["protected.mp4"]\n',
+        encoding="utf-8",
+    )
     (tmp_path / "pictures").mkdir()
     dups = tmp_path / "dups"
     dups.mkdir()
@@ -125,6 +132,8 @@ def test_video_finder_ignores_picture_folder_state(
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Scanning 0 video(s)" in result.stdout
+    assert "Ignored by configuration: 2 path(s)." in result.stdout
+    assert (vids / "protected.mp4").read_bytes() == b"not inspected"
     assert (dups / "pics").read_text(encoding="utf-8") == "owned by the image finder"
 
 

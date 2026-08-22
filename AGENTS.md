@@ -26,6 +26,11 @@ never duplicate the version in source or static project metadata.
 - Keep processing local. No telemetry, analytics, automatic networking, cloud
   AI, hosted model fallback, or automatic downloads.
 - Persistent logs are opt-in because paths and filenames are sensitive.
+- Keep packaged ignore defaults active for every forward command. Ignored paths
+  are never moved, renamed, fingerprinted, deleted, or action-logged.
+- A collection `.pymo.toml` or explicit `--config` may only extend packaged
+  defaults. Reject malformed or unsafe configuration before mutation. Undo is
+  driven by recorded actions and remains independent of current ignore rules.
 - Treat `.pymo.sqlite3` as derived, disposable cache data, never as the
   authoritative action history.
 
@@ -43,6 +48,8 @@ never duplicate the version in source or static project metadata.
   dependency-aware undo.
 - `src/pymo/logging_config.py`: console logging plus explicitly requested local
   log files.
+- `src/pymo/config.py` and `src/pymo/default_config.toml`: validated shared
+  configuration and immutable local safety defaults.
 - `src/pymo/cli.py`: thin unified command dispatcher.
 
 Preserve the four-character collection folder convention: `pics`, `vids`, and

@@ -27,6 +27,13 @@ from pymo.action_log import (
     ActionLogError,
     NoUndoableRun,
 )
+from pymo.config import (
+    ConfigError,
+    PymoConfig,
+    add_config_argument,
+    ignored_summary,
+    load_config,
+)
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
 
@@ -94,20 +101,37 @@ def is_within(path: Path, directory: Path) -> bool:
         return False
 
 
-def discover_images(pics: Path) -> list[Path]:
-    result = []
+def discover_images(
+    pics: Path, root: Path, config: PymoConfig
+) -> tuple[list[Path], list[Path]]:
+    result: list[Path] = []
+    ignored: list[Path] = []
     for path in pics.glob("*"):
+        if path.is_symlink():
+            continue
+        if path.is_dir():
+            if config.ignores_directory(path, root):
+                ignored.append(path)
+            continue
         if (
-            path.is_symlink()
-            or not path.is_file()
+            path.is_file()
+            and config.ignores_file(path, root)
+        ):
+            ignored.append(path)
+            continue
+        if (
+            not path.is_file()
             or path.suffix.lower() not in IMAGE_EXTENSIONS
         ):
             continue
         result.append(path.resolve())
-    return sorted(result, key=lambda item: str(item).casefold())
+    return (
+        sorted(result, key=lambda item: str(item).casefold()),
+        sorted(ignored, key=lambda item: str(item).casefold()),
+    )
 
 
-def collection_layout_problems(root: Path) -> list[str]:
+def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
     """Validate only the image finder's owned source and review locations."""
     pics = root / PICS_NAME
     problems: list[str] = []
@@ -138,8 +162,11 @@ def collection_layout_problems(root: Path) -> list[str]:
         if path.is_symlink():
             problems.append(f"symbolic link cannot be verified: {path}")
         elif path.is_dir():
-            problems.append(f"unexpected directory in pics: {path}")
+            if not config.ignores_directory(path, root):
+                problems.append(f"unexpected directory in pics: {path}")
         elif path.is_file():
+            if config.ignores_file(path, root):
+                continue
             kind, _ = classifier.classify(path)
             if kind == "video":
                 problems.append(
@@ -417,6 +444,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "this is also a dry run unless --apply is supplied"
         ),
     )
+    add_config_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -432,6 +460,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     if args.undo:
         return undo_duplicate_run(root, args.apply)
+
+    try:
+        config = load_config(root, args.config)
+    except ConfigError as error:
+        print(f"Cannot use configuration: {error}", file=sys.stderr)
+        return 2
 
     _, destination = review_directories(root)
 
@@ -452,7 +486,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.recursive:
         print("Note: --recursive is no longer needed; scanning organized pics only.")
 
-    problems = collection_layout_problems(root)
+    problems = collection_layout_problems(root, config)
     if problems:
         print("Collection is not ready for duplicate scanning:", file=sys.stderr)
         for problem in problems:
@@ -464,8 +498,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     pics = root / PICS_NAME
-    paths = discover_images(pics)
+    paths, ignored = discover_images(pics, root, config)
     print(f"Scanning {len(paths)} image(s) in {pics}")
+    summary = ignored_summary(ignored)
+    if summary:
+        print(summary)
 
     groups: dict[str, list[ImageRecord]] = defaultdict(list)
     scanned_bytes = 0

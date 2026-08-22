@@ -29,6 +29,13 @@ from pymo.action_log import (
     NoUndoableRun,
     action_log_path,
 )
+from pymo.config import (
+    ConfigError,
+    PymoConfig,
+    add_config_argument,
+    ignored_summary,
+    load_config,
+)
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier, discover_files, path_key
 
@@ -218,9 +225,9 @@ def canonical_match(name: str, collection: str) -> re.Match[str] | None:
 
 
 def build_rename_plan(
-    root: Path, classifier: Classifier
-) -> tuple[list[RenameRecord], int, list[Path]]:
-    paths, skipped_links = discover_files(root)
+    root: Path, classifier: Classifier, config: PymoConfig
+) -> tuple[list[RenameRecord], int, list[Path], list[Path]]:
+    paths, skipped_links, ignored = discover_files(root, config)
     collection = collection_slug(root.name)
     candidates: dict[str, list[tuple[Path, str | None, str | None]]] = {
         "image": [],
@@ -287,7 +294,7 @@ def build_rename_plan(
             sequence += 1
 
     plan.sort(key=lambda record: str(record.source).casefold())
-    return plan, already_named, skipped_links
+    return plan, already_named, skipped_links, ignored
 
 
 def describe_action(root: Path, action: Action, apply: bool) -> None:
@@ -345,6 +352,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "also a dry run unless --apply is supplied"
         ),
     )
+    add_config_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -357,10 +365,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.undo:
         return undo_renames(root, args.apply)
 
+    try:
+        config = load_config(root, args.config)
+    except ConfigError as error:
+        print(f"Cannot use configuration: {error}", file=sys.stderr)
+        return 2
+
     classifier = Classifier()
     if classifier.warning:
         print(f"Warning: {classifier.warning}")
-    plan, already_named, skipped_links = build_rename_plan(root, classifier)
+    plan, already_named, skipped_links, ignored = build_rename_plan(
+        root, classifier, config
+    )
     for record in plan:
         print(
             f"\n{record.kind.upper()}\n"
@@ -372,6 +388,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"\nSkipped {len(skipped_links)} symbolic link(s):")
         for path in skipped_links:
             print(f"  {path}")
+
+    summary = ignored_summary(ignored)
+    if summary:
+        print(f"\n{summary}")
 
     if not args.apply:
         print(f"\nWould rename {len(plan)} media file(s).")

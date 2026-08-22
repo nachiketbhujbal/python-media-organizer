@@ -13,7 +13,7 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.1.1` packaging release. It is a deliberately
+`pymo` command, and has a `v0.1.2` configuration release. It is a deliberately
 local-first tool for personal media collections. Git tags are the authoritative
 version source; package code and `[project]` do not contain a static version.
 
@@ -35,6 +35,9 @@ Hard requirements:
 9. Collection folders follow the four-character `pics`, `vids`, and `dups`
    convention.
 10. Repository text and tests use generic synthetic collections only.
+11. Shared packaged ignore defaults protect operating-system metadata and pymo
+    state during every forward command; custom rules may extend but not disable
+    them.
 
 `{collection-name}-actions-log.jsonl` remains the authoritative portable
 journal because it moves naturally with a media-collection on external storage.
@@ -53,6 +56,8 @@ python-media-organizer/
     __init__.py
     __main__.py
     cli.py
+    config.py
+    default_config.toml
     logging_config.py
     action_log.py
     organize.py
@@ -73,8 +78,32 @@ pymo find-video-duplicates COLLECTION
 ```
 
 Each supports dry-run/apply behavior; all four support `--undo`, which is also
-a preview unless combined with `--apply`. Global `--verbose`, `--quiet`, and
-`--log-file PATH` options go before the subcommand.
+a preview unless combined with `--apply`. Global `--verbose`, `--quiet`,
+`--log-file PATH`, and `--config PATH` options go before the subcommand.
+
+## Shared configuration and ignore rules
+
+`src/pymo/default_config.toml` is packaged read-only data, loaded for every
+forward command. It protects common macOS, Windows, Linux/KDE, Synology,
+archive, version-control, and pymo-generated metadata. In particular,
+`.DS_Store`, AppleDouble `._*`, `Thumbs.db`, `desktop.ini`, `.git`, the optional
+config, and `.pymo.sqlite3` artifacts are ignored by default.
+
+`src/pymo/config.py` validates schema version 1. A collection-root
+`.pymo.toml` extends the packaged file and directory patterns automatically.
+`--config PATH` selects a different custom extension file for that command;
+it does not disable or replace packaged defaults. Patterns match
+case-insensitive basenames or collection-relative paths, and an ignored
+directory protects all descendants.
+
+Ignored paths are excluded from moving, renaming, media classification,
+fingerprinting, deletion, and action history. Symbolic links remain a separate
+safety condition and are never made acceptable by an ignore rule. The
+organizer may leave a source directory that still contains ignored metadata;
+verification treats such a metadata-only tree as intentionally preserved.
+Malformed, unknown, absolute, or parent-traversing configuration stops before
+mutation. Undo and legacy manifest reorganization remain action-driven and do
+not reinterpret historical operations through current ignore settings.
 
 ## Shared action log
 
@@ -258,7 +287,8 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 
 - organizer dry run, apply, verification, collisions, nested layouts, content
   classification, symbolic-link safety, empty-directory restoration, reruns,
-  legacy CSV undo, and `dups` protection;
+  legacy CSV undo, `dups` protection, default OS-metadata ignores,
+  custom-directory protection, and ignored-only source trees;
 - renamer parsing and cleanup across varied filename structures, deterministic
   names, collisions, apply/undo, and `dups` protection;
 - action journal ordering, locking model, interrupted run recovery, identity
@@ -271,9 +301,12 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   cache/sidecar behavior, cross-tool undo dependencies, missing runtime errors,
   and local-file-only/no-capture command construction;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
-  and quiet mode;
-- dynamic package metadata, runtime/distribution version agreement, and the
-  selected Hatchling plus hatch-vcs configuration.
+  quiet mode, and global config forwarding;
+- configuration parsing, immutable defaults, case-insensitive matching,
+  alternate-config selection, invalid-schema refusal, and config self-
+  protection;
+- dynamic package metadata, packaged TOML data, runtime/distribution version
+  agreement, and the selected Hatchling plus hatch-vcs configuration.
 
 Run the complete suite after every change. Do not replace real FFmpeg
 integration coverage with mocks alone.

@@ -2,6 +2,20 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.1.2 - 2026-08-21
+
+- Add validated, packaged TOML defaults shared by organization, renaming, and
+  both exact duplicate finders.
+- Ignore common operating-system metadata, version-control directories, pymo
+  configuration, and disposable cache artifacts without moving, renaming,
+  fingerprinting, deleting, or action-logging them.
+- Support collection-root `.pymo.toml` extensions and alternate `--config`
+  files while keeping built-in safety rules active.
+- Allow organizer verification to preserve source trees that contain only
+  ignored metadata, and reject invalid configuration before mutation.
+- Expand synthetic regression coverage for shared ignore behavior, config
+  parsing, CLI forwarding, package data, and undo compatibility.
+
 ## 0.1.1 - 2026-08-21
 
 - Adopt uv for reproducible environments, dependency locking, tests, and

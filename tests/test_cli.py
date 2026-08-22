@@ -69,3 +69,22 @@ def test_cli_quiet_mode_suppresses_informational_output(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert result.stdout == ""
     assert result.stderr == ""
+
+
+def test_cli_forwards_global_config_to_subcommand(tmp_path: Path) -> None:
+    collection = tmp_path / "collection"
+    nested = collection / "incoming"
+    nested.mkdir(parents=True)
+    protected = nested / "notes.txt"
+    protected.write_text("keep in place", encoding="utf-8")
+    config = tmp_path / "settings.toml"
+    config.write_text(
+        'version = 1\n\n[ignore]\nfiles = ["notes.txt"]\n',
+        encoding="utf-8",
+    )
+
+    result = run_pymo("--config", config, "organize", collection, "--apply")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Ignored by configuration: 1 path(s)." in result.stdout
+    assert protected.read_text(encoding="utf-8") == "keep in place"

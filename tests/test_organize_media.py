@@ -133,3 +133,89 @@ def test_organizer_preserves_reserved_dups_tree(tmp_path: Path, run_script) -> N
     assert (duplicate_pics / "kept_copy(1).png").exists()
     assert duplicate_vids.is_dir()
     assert not action_log_path(tmp_path).exists()
+
+
+def test_organizer_ignores_finder_metadata_without_logging_it(
+    tmp_path: Path, run_script
+) -> None:
+    pics = tmp_path / "pics"
+    vids = tmp_path / "vids"
+    pics.mkdir()
+    vids.mkdir()
+    picture_metadata = pics / ".DS_Store"
+    video_metadata = vids / ".DS_Store"
+    picture_metadata.write_bytes(b"picture view state")
+    video_metadata.write_bytes(b"video view state")
+
+    result = run_script("organize_media.py", tmp_path, "--apply")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Moved 0 file(s)" in result.stdout
+    assert "Ignored by configuration: 2 path(s)." in result.stdout
+    assert picture_metadata.read_bytes() == b"picture view state"
+    assert video_metadata.read_bytes() == b"video view state"
+    assert not action_log_path(tmp_path).exists()
+
+
+def test_organizer_verifies_source_tree_containing_only_ignored_metadata(
+    tmp_path: Path, run_script
+) -> None:
+    nested = tmp_path / "album" / "nested"
+    nested.mkdir(parents=True)
+    metadata = nested / ".DS_Store"
+    metadata.write_bytes(b"view state")
+    Image.new("RGB", (2, 2), "green").save(nested / "photo.png")
+
+    applied = run_script("organize_media.py", tmp_path, "--apply")
+
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    assert "Verification passed" in applied.stdout
+    assert (tmp_path / "pics" / "photo.png").exists()
+    assert metadata.read_bytes() == b"view state"
+    assert action_log_path(tmp_path).exists()
+
+    undone = run_script("organize_media.py", tmp_path, "--undo", "--apply")
+
+    assert undone.returncode == 0, undone.stdout + undone.stderr
+    assert (nested / "photo.png").exists()
+    assert metadata.read_bytes() == b"view state"
+
+
+def test_organizer_honors_collection_directory_rules(
+    tmp_path: Path, run_script
+) -> None:
+    (tmp_path / "pics").mkdir()
+    (tmp_path / "vids").mkdir()
+    archive = tmp_path / "archive"
+    archive.mkdir()
+    protected = archive / "photo.png"
+    Image.new("RGB", (2, 2), "yellow").save(protected)
+    (tmp_path / ".pymo.toml").write_text(
+        'version = 1\n\n[ignore]\ndirectories = ["archive"]\n',
+        encoding="utf-8",
+    )
+
+    result = run_script("organize_media.py", tmp_path, "--apply")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Ignored by configuration: 2 path(s)." in result.stdout
+    assert protected.exists()
+    assert (tmp_path / ".pymo.toml").exists()
+    assert not action_log_path(tmp_path).exists()
+
+
+def test_organizer_rejects_invalid_config_before_mutating(
+    tmp_path: Path, run_script
+) -> None:
+    source = tmp_path / "photo.png"
+    Image.new("RGB", (2, 2), "red").save(source)
+    (tmp_path / ".pymo.toml").write_text("version = 99\n", encoding="utf-8")
+
+    result = run_script("organize_media.py", tmp_path, "--apply")
+
+    assert result.returncode == 2
+    assert "Cannot use configuration" in result.stderr
+    assert source.exists()
+    assert not (tmp_path / "pics").exists()
+    assert not (tmp_path / "vids").exists()
+    assert not action_log_path(tmp_path).exists()

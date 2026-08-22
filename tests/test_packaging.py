@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.metadata
+import importlib.resources
 import tomllib
 from pathlib import Path
 
@@ -22,3 +23,11 @@ def test_project_uses_standard_vcs_versioning() -> None:
     assert configuration["project"]["dynamic"] == ["version"]
     assert "version" not in configuration["project"]
     assert configuration["tool"]["hatch"]["version"]["source"] == "vcs"
+
+
+def test_packaged_default_configuration_is_available() -> None:
+    default_config = importlib.resources.files("pymo").joinpath(
+        "default_config.toml"
+    )
+
+    assert default_config.is_file()

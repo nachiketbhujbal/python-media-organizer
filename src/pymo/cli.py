@@ -39,6 +39,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="also write detailed logs to this explicit local path",
     )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="use an alternate TOML configuration for this command",
+    )
     parser.add_argument("command", choices=tuple(COMMANDS))
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     return parser
@@ -52,4 +57,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         log_file=args.log_file,
     )
     logging.getLogger("pymo").debug("Dispatching pymo command: %s", args.command)
-    return COMMANDS[args.command](args.arguments)
+    command_arguments = list(args.arguments)
+    if args.config is not None:
+        command_arguments[0:0] = ["--config", str(args.config)]
+    return COMMANDS[args.command](command_arguments)

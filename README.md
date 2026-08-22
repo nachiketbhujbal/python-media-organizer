@@ -54,6 +54,7 @@ media-collection/
     vids/               exact video copies isolated for review
   media-collection-actions-log.jsonl
                         portable append-only action history, after an apply
+  .pymo.toml            optional collection-specific configuration
   .pymo.sqlite3         disposable video fingerprint cache, after an apply
   other files           non-media files at the collection root
 ```
@@ -62,6 +63,44 @@ The two duplicate finders have strict ownership. The image finder reads only
 `pics` and writes only `dups/pics`; it does not require or touch the video
 folders. The video finder reads only `vids` and writes only `dups/vids`; it does
 not require or touch the picture folders.
+
+## Configuration and ignored metadata
+
+Every forward command uses the same local-only TOML configuration system.
+Packaged defaults automatically ignore common operating-system and tool state,
+including macOS `.DS_Store` and AppleDouble files, Windows thumbnail and
+desktop metadata, recycle/index directories, Synology and archive metadata,
+version-control directories, the optional pymo config, and pymo's disposable
+SQLite cache. These paths are left exactly where they are: they are not moved,
+renamed, fingerprinted, deleted, or written to the action log.
+
+The built-in rules are always active and require no file in a collection. To
+extend them for one collection, add `.pymo.toml` at its root:
+
+```toml
+version = 1
+
+[ignore]
+files = ["*.tmp", "incoming/*.sidecar"]
+directories = ["archive", "exports"]
+```
+
+Patterns are case-insensitive and match either a basename or a path relative
+to the collection. An ignored directory protects its whole subtree. pymo
+reports how many file or directory entry points it ignored without listing
+private names by default.
+
+An alternate extension file can be selected for one command:
+
+```bash
+pymo --config "/path/to/settings.toml" organize "/path/to/media-collection"
+```
+
+`--config` replaces the collection's optional `.pymo.toml` for that command;
+both choices extend the packaged safety defaults rather than disabling them.
+Invalid or unsafe configuration stops the command before mutation. Undo uses
+the recorded action history and does not reinterpret older actions through the
+current ignore rules.
 
 ## Commands
 
@@ -208,14 +247,14 @@ The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,
 content changes, strict folder ownership, exact image and video matching,
 different audio and timing, corrupt/ambiguous media, derived cache behavior,
-logging privacy, and the guarantee that video decoding never invokes capture
-devices. Private collections and their names are not fixtures or repository
-content.
+shared built-in and custom ignore rules, malformed-config refusal, logging
+privacy, and the guarantee that video decoding never invokes capture devices.
+Private collections and their names are not fixtures or repository content.
 
 ## Versions and releases
 
 Git tags are the authoritative release version. Hatchling builds the package,
-and hatch-vcs derives the Python package version from tags such as `v0.1.1`;
+and hatch-vcs derives the Python package version from tags such as `v0.1.2`;
 there is no second version string to update by hand. Untagged development
 commits receive a PEP 440 development version containing their Git revision.
 uv manages the environment and `uv.lock`, while ordinary standards-compatible

@@ -31,6 +31,7 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
     dry_run = run_script("find_image_duplicates.py", tmp_path)
 
     assert dry_run.returncode == 0
+    assert "Ignored by configuration: 1 path(s)." in dry_run.stdout
     assert "Would move 1 duplicate" in dry_run.stdout
     assert "Potentially reclaimable if extra copies were deleted" in dry_run.stdout
     assert "No files are deleted by this tool" in dry_run.stdout
@@ -57,6 +58,30 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
     assert larger.exists()
     assert not (tmp_path / "dups").exists()
     assert action_log_path(tmp_path).exists()
+
+
+def test_duplicate_finder_honors_custom_file_rules(
+    tmp_path: Path, run_script
+) -> None:
+    pics, _ = make_organized_collection(tmp_path)
+    original = pics / "original.png"
+    protected_copy = pics / "protected-copy.png"
+    Image.new("RGB", (2, 2), "teal").save(original)
+    Image.new("RGB", (2, 2), "teal").save(protected_copy)
+    (tmp_path / ".pymo.toml").write_text(
+        'version = 1\n\n[ignore]\nfiles = ["protected-copy.png"]\n',
+        encoding="utf-8",
+    )
+
+    result = run_script("find_image_duplicates.py", tmp_path, "--apply")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Scanning 1 image(s)" in result.stdout
+    assert "Ignored by configuration: 1 path(s)." in result.stdout
+    assert "Moved 0 duplicate(s)" in result.stdout
+    assert original.exists()
+    assert protected_copy.exists()
+    assert not action_log_path(tmp_path).exists()
 
 
 def test_duplicate_finder_requires_organized_collection_root(

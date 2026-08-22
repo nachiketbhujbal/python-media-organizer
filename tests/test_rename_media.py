@@ -156,3 +156,30 @@ def test_renamer_preserves_reserved_dups_tree(tmp_path: Path, run_script) -> Non
     assert result.returncode == 0, result.stdout + result.stderr
     assert quarantined.exists()
     assert len(list(pics.glob("collection__image_*.jpg"))) == 1
+
+
+def test_renamer_honors_custom_file_rules(tmp_path: Path, run_script) -> None:
+    root = tmp_path / "collection"
+    pics = root / "pics"
+    vids = root / "vids"
+    pics.mkdir(parents=True)
+    vids.mkdir()
+    protected = pics / "keep-original.png"
+    candidate = pics / "rename-this.png"
+    Image.new("RGB", (2, 2), "blue").save(protected)
+    Image.new("RGB", (2, 2), "green").save(candidate)
+    (root / ".pymo.toml").write_text(
+        'version = 1\n\n[ignore]\nfiles = ["keep-original.png"]\n',
+        encoding="utf-8",
+    )
+
+    result = run_script("rename_media.py", root, "--apply")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Ignored by configuration: 2 path(s)." in result.stdout
+    assert protected.exists()
+    assert not candidate.exists()
+    assert len(list(pics.glob("collection__image_0001__*.png"))) == 1
+    assert "keep-original.png" not in action_log_path(root).read_text(
+        encoding="utf-8"
+    )

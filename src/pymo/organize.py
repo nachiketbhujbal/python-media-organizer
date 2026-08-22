@@ -30,6 +30,13 @@ from pymo.action_log import (
     action_log_exists,
     is_action_log_path,
 )
+from pymo.config import (
+    ConfigError,
+    PymoConfig,
+    add_config_argument,
+    ignored_summary,
+    load_config,
+)
 from pymo.logging_config import emit as print
 
 
@@ -201,19 +208,39 @@ def available_target(
         number += 1
 
 
-def discover_files(root: Path) -> tuple[list[Path], list[Path]]:
+def discover_files(
+    root: Path, config: PymoConfig
+) -> tuple[list[Path], list[Path], list[Path]]:
     files: list[Path] = []
     skipped_links: list[Path] = []
-    for path in root.rglob("*"):
-        if is_in_dups(path, root):
-            continue
-        if path.is_symlink():
-            skipped_links.append(path)
-        elif path.is_file() and not is_action_log_path(root, path):
-            files.append(path.absolute())
+    ignored: list[Path] = []
+    for current, directory_names, file_names in os.walk(root, topdown=True):
+        current_path = Path(current)
+        retained_directories: list[str] = []
+        for name in directory_names:
+            path = current_path / name
+            if path.is_symlink():
+                skipped_links.append(path)
+            elif is_in_dups(path, root):
+                continue
+            elif config.ignores_directory(path, root):
+                ignored.append(path)
+            else:
+                retained_directories.append(name)
+        directory_names[:] = retained_directories
+
+        for name in file_names:
+            path = current_path / name
+            if path.is_symlink():
+                skipped_links.append(path)
+            elif config.ignores_file(path, root):
+                ignored.append(path)
+            elif path.is_file() and not is_action_log_path(root, path):
+                files.append(path.absolute())
     files.sort(key=lambda item: str(item).casefold())
     skipped_links.sort(key=lambda item: str(item).casefold())
-    return files, skipped_links
+    ignored.sort(key=lambda item: str(item).casefold())
+    return files, skipped_links, ignored
 
 
 def desired_directory(kind: str, root: Path, pics: Path, vids: Path) -> Path:
@@ -229,8 +256,9 @@ def build_plan(
     pics: Path,
     vids: Path,
     classifier: Classifier,
-) -> tuple[list[MoveRecord], list[FileRecord], list[Path]]:
-    paths, skipped_links = discover_files(root)
+    config: PymoConfig,
+) -> tuple[list[MoveRecord], list[FileRecord], list[Path], list[Path]]:
+    paths, skipped_links, ignored = discover_files(root, config)
     occupied = {path_key(path) for path in paths}
     plan: list[MoveRecord] = []
     already_correct: list[FileRecord] = []
@@ -255,30 +283,87 @@ def build_plan(
         if number % 200 == 0:
             print(f"  classified {number}/{len(paths)}")
 
-    return plan, already_correct, skipped_links
+    return plan, already_correct, skipped_links, ignored
 
 
-def removable_directories(root: Path, pics: Path, vids: Path) -> list[Path]:
+def removable_directories(
+    root: Path, pics: Path, vids: Path, config: PymoConfig
+) -> list[Path]:
     protected = {root, pics, vids}
-    directories = [path for path in root.rglob("*") if path.is_dir()]
+    directories: list[Path] = []
+    for current, directory_names, _ in os.walk(root, topdown=True):
+        current_path = Path(current)
+        retained_directories: list[str] = []
+        for name in directory_names:
+            path = current_path / name
+            if (
+                path.is_symlink()
+                or is_in_dups(path, root)
+                or config.ignores_directory(path, root)
+            ):
+                continue
+            directories.append(path)
+            retained_directories.append(name)
+        directory_names[:] = retained_directories
     directories.sort(key=lambda item: len(item.parts), reverse=True)
     return [
         directory
         for directory in directories
         if directory not in protected
-        and not is_in_dups(directory, root)
         and not directory.is_symlink()
     ]
 
 
-def remaining_directories(root: Path, pics: Path, vids: Path) -> list[Path]:
+def _contains_only_ignored_entries(
+    directory: Path, root: Path, config: PymoConfig
+) -> bool:
+    found_ignored = False
+    for current, directory_names, file_names in os.walk(directory, topdown=True):
+        current_path = Path(current)
+        retained_directories: list[str] = []
+        for name in directory_names:
+            path = current_path / name
+            if path.is_symlink():
+                return False
+            if config.ignores_directory(path, root):
+                found_ignored = True
+            else:
+                retained_directories.append(name)
+        directory_names[:] = retained_directories
+        for name in file_names:
+            path = current_path / name
+            if path.is_symlink() or not config.ignores_file(path, root):
+                return False
+            found_ignored = True
+    return found_ignored
+
+
+def remaining_directories(
+    root: Path, pics: Path, vids: Path, config: PymoConfig
+) -> list[Path]:
     dups = root / "dups"
     allowed = {pics, vids, dups, dups / "pics", dups / "vids"}
+    directories: list[Path] = []
+    for current, directory_names, _ in os.walk(root, topdown=True):
+        current_path = Path(current)
+        retained_directories: list[str] = []
+        for name in directory_names:
+            path = current_path / name
+            if (
+                path.is_symlink()
+                or is_in_dups(path, root)
+                or config.ignores_directory(path, root)
+            ):
+                continue
+            directories.append(path)
+            retained_directories.append(name)
+        directory_names[:] = retained_directories
     return sorted(
         [
             path
-            for path in root.rglob("*")
-            if path.is_dir() and path not in allowed
+            for path in directories
+            if path not in allowed
+            and not _contains_only_ignored_entries(path, root, config)
         ],
         key=lambda item: str(item).casefold(),
     )
@@ -579,15 +664,16 @@ def verify_layout(
     pics: Path,
     vids: Path,
     classifier: Classifier,
+    config: PymoConfig,
 ) -> tuple[list[tuple[Path, Path, str]], list[Path], list[Path]]:
-    files, links = discover_files(root)
+    files, links, _ = discover_files(root, config)
     misplaced: list[tuple[Path, Path, str]] = []
     for path in files:
         kind, _ = classifier.classify(path)
         expected = desired_directory(kind, root, pics, vids)
         if path.parent != expected:
             misplaced.append((path, expected, kind))
-    return misplaced, remaining_directories(root, pics, vids), links
+    return misplaced, remaining_directories(root, pics, vids, config), links
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -616,6 +702,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="specific legacy CSV organization manifest to use with --undo",
     )
+    add_config_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -633,6 +720,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not args.manifest and action_log_exists(root):
             return undo_logged_organization(root, args.apply)
         return undo_organization(root, args.manifest, args.apply)
+
+    try:
+        config = load_config(root, args.config)
+    except ConfigError as error:
+        print(f"Cannot use configuration: {error}", file=sys.stderr)
+        return 2
 
     pics = root / "pics"
     vids = root / "vids"
@@ -656,7 +749,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if classifier.warning:
         print(f"Warning: {classifier.warning}")
 
-    plan, already_correct, skipped_links = build_plan(root, pics, vids, classifier)
+    plan, already_correct, skipped_links, ignored = build_plan(
+        root, pics, vids, classifier, config
+    )
     for move in plan:
         print(
             f"\n{move.kind.upper()} ({move.mime_type})\n"
@@ -669,7 +764,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         counts[move.kind] += 1
 
     missing_destinations = [path for path in (pics, vids) if not path.exists()]
-    source_directories = removable_directories(root, pics, vids)
+    source_directories = removable_directories(root, pics, vids, config)
     removed_count = 0
     log_path: Path | None = None
     if args.apply and (missing_destinations or plan or source_directories):
@@ -716,6 +811,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"and {counts['other']} other file(s)."
     )
     print(f"Already correctly placed: {len(already_correct)} file(s).")
+    summary = ignored_summary(ignored)
+    if summary:
+        print(summary)
     if not args.apply and (plan or missing_destinations or source_directories):
         print("Dry run only. Add --apply after reviewing this list.")
     if log_path:
@@ -728,7 +826,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.apply:
         misplaced, extra_directories, remaining_links = verify_layout(
-            root, pics, vids, classifier
+            root, pics, vids, classifier, config
         )
         if not misplaced and not extra_directories and not remaining_links:
             print(
