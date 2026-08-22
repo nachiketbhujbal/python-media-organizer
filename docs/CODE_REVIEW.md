@@ -49,6 +49,12 @@ The same adversarial method was repeated after the first validation release.
 | --- | --- | --- | --- | --- |
 | SCAN-001 | Low | Scan counted non-canonical media names but suppressed rename advice whenever organization was also needed, even though it continued to show later duplicate-finder recommendations. | 0.3.5 | Resolved in ADR 0040 |
 
+## CI portability findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| CI-001 | Medium | Descriptor-backed classification supplied `/dev/fd/N` as a filename. BSD `file` followed it to content, while GNU `file` classified the descriptor link/device itself, causing Linux media misclassification. | 0.3.6 | Resolved in ADR 0043 |
+
 ## Release groups
 
 - `0.2.2`: establish ADRs and the locked Ruff, Black, mypy, pre-commit, and
@@ -72,6 +78,8 @@ The same adversarial method was repeated after the first validation release.
   decision records under an indexed documentation tree.
 - `0.3.5`: report the complete ordered scan action plan when both organization
   and deterministic renaming are applicable.
+- `0.3.6`: reproduce the locked release gate in CI, use short-lived branches,
+  and make descriptor-backed content classification portable to GNU `file`.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 

@@ -48,3 +48,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0040](0040-complete-ordered-scan-recommendations.md) | Complete ordered scan recommendations |
 | [0041](0041-continuous-integration-quality-gate.md) | Continuous-integration quality gate |
 | [0042](0042-feature-branch-merge-policy.md) | Feature-branch merge policy |
+| [0043](0043-portable-descriptor-classification.md) | Portable descriptor-backed classification |

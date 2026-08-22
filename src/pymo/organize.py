@@ -78,19 +78,21 @@ class Classifier:
     def detect_mime(self, path: Path, descriptor: int | None = None) -> str:
         if self.file_command:
             try:
-                source = str(path)
-                pass_fds: tuple[int, ...] = ()
+                command = [self.file_command, "--brief", "--mime-type"]
+                stdin: int | None = None
                 if descriptor is not None:
                     os.lseek(descriptor, 0, os.SEEK_SET)
-                    source = f"/dev/fd/{descriptor}"
-                    pass_fds = (descriptor,)
+                    command.append("-")
+                    stdin = descriptor
+                else:
+                    command.extend(("--", str(path)))
                 result = subprocess.run(
-                    [self.file_command, "--brief", "--mime-type", "--", source],
+                    command,
                     check=False,
                     capture_output=True,
                     text=True,
                     timeout=30,
-                    pass_fds=pass_fds,
+                    stdin=stdin,
                 )
                 detected = result.stdout.strip().split(";", 1)[0].lower()
                 if result.returncode == 0 and detected:

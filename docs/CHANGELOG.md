@@ -10,6 +10,10 @@ All notable changes to `python-media-organizer` will be recorded here.
   subprocess-aware coverage, and package-build release gates in CI.
 - Fetch complete history for hatch-vcs and verify that each release tag matches
   the installed CLI version.
+- Stream descriptor-pinned classification bytes to the `file` utility through
+  standard input, avoiding platform-specific `/dev/fd` type detection on Linux.
+- Run the complete quality gate on both Ubuntu and macOS; Linux-based WSL
+  follows the Linux execution model, while native Windows remains out of scope.
 - Document the short-lived branch, sole-maintainer protection, and release
   workflow in `docs/CONTRIBUTING.md` and separate ADRs.
 
