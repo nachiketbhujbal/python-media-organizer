@@ -13,12 +13,14 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.4` documentation-map release. It is a
+`pymo` command, and has a `v0.3.5` scan-advice release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.4 separates evaluated research, promoted release plans, shipped
+Version 0.3.5 makes scan recommendations list every applicable action in safe
+workflow order instead of suppressing rename advice when organization is also
+needed. Version 0.3.4 separates evaluated research, promoted release plans, shipped
 behavior, adversarial findings, and architecture decisions under the indexed
 `docs/` tree, and establishes one primary purpose per patch release. Version
 0.3.3 pins validation classification and decoder reads to stable,

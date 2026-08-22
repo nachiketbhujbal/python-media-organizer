@@ -2,6 +2,15 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.5 - 2026-08-22
+
+- Recommend `pymo rename` whenever scan finds non-canonical source-media names,
+  even when collection organization is also needed.
+- Keep recommendations ordered as organize, rename, image duplicates, then
+  video duplicates so the full plan remains safe and immediately actionable.
+- Add text and JSON regression coverage for the recommendation content and
+  order.
+
 ## 0.3.4 - 2026-08-22
 
 - Separate evaluated research from promoted release plans in `docs/RESEARCH.md`

@@ -178,6 +178,10 @@ detected content type; layout and naming readiness; review-copy storage;
 same-size duplicate candidates; estimated expensive work; existing local pymo
 state; and recommended next steps.
 
+Recommendations form an ordered plan rather than only naming the next command.
+When layout and filenames both need work, `scan` recommends `organize` first
+and `rename` second, followed by the applicable exact-duplicate finders.
+
 Same-size candidates are only an upper bound, not duplicate proof.
 `--checksums` additionally hashes those candidates to report exact-byte copies
 without performing displayed-pixel or decoded-playback comparison. Use the two

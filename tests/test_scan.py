@@ -50,6 +50,10 @@ def test_fast_scan_reports_inventory_without_revealing_paths_or_writing_state(
     assert "Pictures: 1 same-size group(s)" in result.stdout
     assert "Exact-byte checks: not requested" in result.stdout
     assert "Run pymo organize" in result.stdout
+    assert "Run pymo rename" in result.stdout
+    assert result.stdout.index("Run pymo organize") < result.stdout.index(
+        "Run pymo rename"
+    )
     assert "first.png" not in result.stdout
     assert ".DS_Store" not in result.stdout
     assert sorted(path.relative_to(root) for path in root.rglob("*")) == before
@@ -81,6 +85,10 @@ def test_checksum_scan_emits_stable_json_and_opt_in_ignored_paths(
     assert exact["reclaimable_bytes"] > 0
     assert report["derived_state"]["action_log_present"] is False
     assert report["derived_state"]["video_cache_present"] is False
+    assert report["recommendations"][:2] == [
+        "Run pymo organize after reviewing its dry run.",
+        "Run pymo rename after reviewing its dry run.",
+    ]
 
 
 def test_scan_rejects_unsafe_worker_counts(tmp_path: Path, run_script) -> None:
