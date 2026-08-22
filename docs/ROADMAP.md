@@ -27,7 +27,7 @@ behavior is captured in the changelog and handoff.
 | 0.3.5 | Complete scan advice | Recommend rename whenever non-canonical source media exists, while retaining the safe organize-before-rename order. | Released |
 | 0.3.6 | Continuous integration | Run the locked quality and test gates on branches, pull requests, `main`, and release tags; document the branch and release workflow. | Released |
 | 0.3.7 | Actions cost control | Run the complete platform matrix automatically for pull requests and `main`, retain manual dispatch, remove redundant branch/tag runs, and cap job duration. | Released |
-| 0.3.8 | Video read safety | Descriptor-pin exact-video discovery, probing, hashing, and fingerprint inputs without changing duplicate semantics. | Planned |
+| 0.3.8 | Video read safety | Descriptor-pin exact-video discovery, probing, hashing, and fingerprint inputs without changing duplicate semantics. | Released |
 | 0.3.9 | Image read safety | Descriptor-pin exact-image classification and pixel reads without changing duplicate semantics. | Planned |
 | 0.3.10 | Cache access safety | Harden the derived SQLite cache path, locking, replacement, corruption, and interruption boundaries. | Planned |
 | 0.3.11 | Progress cadence | Eliminate repeated forced progress rows and make count-based output stable across fast and slow work. | Planned |

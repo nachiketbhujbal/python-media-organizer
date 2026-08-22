@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -10,8 +12,10 @@ import pytest
 
 from pymo.action_log import action_log_path
 from pymo.collection import CollectionLayout
+from pymo.config import load_config
 from pymo.duplicates import videos as video_duplicates
 from pymo.duplicates.videos import ProbeInfo
+from pymo.organize import Classifier
 
 FFMPEG = shutil.which("ffmpeg")
 FFPROBE = shutil.which("ffprobe")
@@ -424,9 +428,9 @@ def test_video_cache_keeps_completed_fingerprints_after_interruption(
         "test-ffmpeg",
     )
     assert cached == {
-        video_duplicates.sha256_file(first): video_duplicates.DerivedFingerprint(
-            "1" * 64, 1, 0
-        )
+        hashlib.sha256(
+            first.read_bytes()
+        ).hexdigest(): video_duplicates.DerivedFingerprint("1" * 64, 1, 0)
     }
 
 
@@ -514,7 +518,7 @@ def test_video_inspection_rejects_a_file_changed_during_probe(
     with pytest.raises(
         video_duplicates.FileChangedError, match="changed during video inspection"
     ):
-        video_duplicates.inspect_video(path, "ffprobe")
+        video_duplicates.inspect_video(tmp_path, path, "ffprobe")
 
 
 def test_decimal_microseconds_rejects_non_finite_values() -> None:
@@ -531,22 +535,31 @@ def test_probe_rejects_non_object_stream_entries(tmp_path: Path, monkeypatch) ->
     )
     monkeypatch.setattr(video_duplicates.subprocess, "run", lambda *_, **__: result)
 
-    with pytest.raises(
-        video_duplicates.VideoInspectionError, match="invalid stream entry"
-    ):
-        video_duplicates.probe_video(path, "ffprobe")
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        with pytest.raises(
+            video_duplicates.VideoInspectionError, match="invalid stream entry"
+        ):
+            video_duplicates.probe_video(descriptor, "ffprobe")
+    finally:
+        os.close(descriptor)
 
 
-def test_ffmpeg_decode_commands_only_use_local_file_inputs(monkeypatch) -> None:
+def test_ffmpeg_decode_commands_only_use_pinned_local_file_inputs(
+    tmp_path: Path, monkeypatch
+) -> None:
     commands: list[list[str]] = []
+    inherited_descriptors: list[tuple[int, ...]] = []
 
     def fake_stream(
         command: list[str],
         consume_stdout,
         timeout: int,
         progress_callback=None,
+        pass_fds: tuple[int, ...] = (),
     ) -> None:
         commands.append(command)
+        inherited_descriptors.append(pass_fds)
         if progress_callback is not None:
             progress_callback()
         if "framehash" in command:
@@ -558,7 +571,8 @@ def test_ffmpeg_decode_commands_only_use_local_file_inputs(monkeypatch) -> None:
             consume_stdout(b"\x00\x01\x02\x03")
 
     monkeypatch.setattr(video_duplicates, "_stream_command", fake_stream)
-    local_path = Path("/media-collection/vids/local-video.mp4")
+    local_path = tmp_path / "local-video.mp4"
+    local_path.write_bytes(b"local video")
     probe = ProbeInfo(
         display_width=64,
         display_height=48,
@@ -571,10 +585,150 @@ def test_ffmpeg_decode_commands_only_use_local_file_inputs(monkeypatch) -> None:
         has_audio=True,
     )
 
-    video_duplicates.derive_fingerprint(local_path, probe, "/usr/bin/ffmpeg", 60)
+    descriptor = os.open(local_path, os.O_RDONLY)
+    try:
+        video_duplicates.derive_fingerprint(descriptor, probe, "/usr/bin/ffmpeg", 60)
+    finally:
+        os.close(descriptor)
 
     assert len(commands) == 2
-    for command in commands:
-        assert command[command.index("-i") + 1] == str(local_path)
+    for command, pass_fds in zip(commands, inherited_descriptors, strict=True):
+        assert command[command.index("-i") + 1] == f"/dev/fd/{descriptor}"
+        assert pass_fds == (descriptor,)
         assert command[command.index("-protocol_whitelist") + 1] == "file,pipe"
         assert not {"avfoundation", "x11grab", "gdigrab"}.intersection(command)
+
+
+def test_video_discovery_pins_classification_during_path_swap(tmp_path: Path) -> None:
+    root = tmp_path / "collection"
+    vids = root / "vids"
+    vids.mkdir(parents=True)
+    candidate = vids / "candidate.mp4"
+    candidate.write_bytes(b"original video bytes")
+    replacement = tmp_path / "replacement.mp4"
+    replacement.write_bytes(b"unrelated replacement")
+    displaced = vids / "displaced.mp4"
+    observed = b""
+
+    class SwappingClassifier(Classifier):
+        def classify(
+            self, _path: Path, descriptor: int | None = None
+        ) -> tuple[str, str]:
+            nonlocal observed
+            assert descriptor is not None
+            candidate.rename(displaced)
+            candidate.symlink_to(replacement)
+            observed = os.pread(descriptor, 1024, 0)
+            return "video", "video/mp4"
+
+    config = load_config(root)
+    videos, _ = video_duplicates.discover_videos(
+        vids, root, SwappingClassifier(config.classification), config
+    )
+
+    assert observed == b"original video bytes"
+    assert videos == []
+
+
+def test_video_inspection_pins_probe_during_path_swap(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "collection"
+    vids = root / "vids"
+    vids.mkdir(parents=True)
+    candidate = vids / "candidate.mp4"
+    candidate.write_bytes(b"original video bytes")
+    replacement = tmp_path / "replacement.mp4"
+    replacement.write_bytes(b"unrelated replacement")
+    displaced = vids / "displaced.mp4"
+    observed = b""
+
+    payload = {
+        "streams": [
+            {
+                "codec_type": "video",
+                "width": 64,
+                "height": 48,
+                "pix_fmt": "yuv420p",
+                "duration": "1.0",
+            }
+        ],
+        "format": {"duration": "1.0"},
+    }
+
+    def swap_during_probe(command, **kwargs):
+        nonlocal observed
+        descriptor = kwargs["pass_fds"][0]
+        candidate.rename(displaced)
+        candidate.symlink_to(replacement)
+        observed = os.pread(descriptor, 1024, 0)
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout=json.dumps(payload),
+            stderr="",
+        )
+
+    monkeypatch.setattr(video_duplicates.subprocess, "run", swap_during_probe)
+
+    with pytest.raises(
+        video_duplicates.FileChangedError, match="changed during video inspection"
+    ):
+        video_duplicates.inspect_video(root, candidate, "ffprobe")
+
+    assert observed == b"original video bytes"
+
+
+def test_video_fingerprint_pins_decode_during_path_swap(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "collection"
+    vids = root / "vids"
+    vids.mkdir(parents=True)
+    candidate = vids / "candidate.mp4"
+    candidate.write_bytes(b"original video bytes")
+    state = video_duplicates.FileState.capture(candidate)
+    record = video_duplicates.VideoRecord(
+        path=candidate,
+        byte_sha256=hashlib.sha256(candidate.read_bytes()).hexdigest(),
+        state=state,
+        probe=ProbeInfo(
+            display_width=64,
+            display_height=48,
+            duration_us=1_000_000,
+            video_start_us=0,
+            audio_start_us=None,
+            audio_sample_rate=None,
+            audio_channels=None,
+            audio_layout=None,
+            has_audio=False,
+        ),
+    )
+    replacement = tmp_path / "replacement.mp4"
+    replacement.write_bytes(b"unrelated replacement")
+    displaced = vids / "displaced.mp4"
+    observed = b""
+
+    def swap_during_decode(descriptor: int, *_):
+        nonlocal observed
+        candidate.rename(displaced)
+        candidate.symlink_to(replacement)
+        observed = os.pread(descriptor, 1024, 0)
+        return video_duplicates.DerivedFingerprint("1" * 64, 1, 0)
+
+    monkeypatch.setattr(video_duplicates, "derive_fingerprint", swap_during_decode)
+
+    derived, skipped = video_duplicates.derive_candidate_fingerprints(
+        root,
+        [record],
+        CollectionLayout(root).video_cache,
+        "ffmpeg",
+        "test-ffmpeg",
+        60,
+        15,
+        True,
+    )
+
+    assert observed == b"original video bytes"
+    assert derived == {}
+    assert skipped and skipped[0][0] == candidate

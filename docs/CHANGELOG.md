@@ -2,6 +2,17 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.8 - 2026-08-22
+
+- Pin exact-video classification, whole-file hashing, ffprobe inspection, and
+  FFmpeg fingerprint reads to stable no-follow descriptors anchored beneath the
+  collection root.
+- Pass inherited `/dev/fd` inputs to ffprobe and both frame/audio FFmpeg passes,
+  eliminating transient pathname-redirection reads without changing exact
+  duplicate semantics.
+- Add adversarial discovery, probe, and fingerprint pathname-swap tests plus
+  real FFmpeg regression coverage.
+
 ## 0.3.7 - 2026-08-22
 
 - Limit automatic GitHub Actions runs to pull requests targeting `main` and

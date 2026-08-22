@@ -44,6 +44,9 @@ never duplicate the version in source or static project metadata.
   authoritative action history.
 - Bind exact-media analysis to a stable regular-file state. Revalidate complete
   duplicate groups before apply and retained originals through journal commit.
+- Keep exact-media classification, hashing, probing, and decoding pinned to
+  stable, collection-anchored no-follow descriptors. A before/after pathname
+  check alone does not prevent a transient read outside the collection.
 - Treat an invalid derived cache as an explicit early error. Never delete or
   replace it automatically; `--no-cache` is the deliberate bypass.
 - `scan` must never alter media, collection layout, or action history. Exact
@@ -55,9 +58,8 @@ never duplicate the version in source or static project metadata.
   caches, or action-logs media. Collection roots and filenames are private by
   default; filenames require explicit `--show-files`. An unreadable subtree is
   a health error, and changing input supersedes any decoder conclusion.
-- Keep validation content reads pinned to stable, collection-anchored,
-  descriptor-relative no-follow handles. Do not reintroduce pathname-based
-  decoder opens after a separate state check.
+- Keep validation content reads pinned to the same stable descriptor boundary.
+  Do not reintroduce pathname-based decoder opens after a separate state check.
 
 ## Package layout and tools
 
