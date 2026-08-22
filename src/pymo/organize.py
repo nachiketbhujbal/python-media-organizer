@@ -246,8 +246,7 @@ def removable_directories(
     return [
         directory
         for directory in directories
-        if directory not in protected
-        and not directory.is_symlink()
+        if directory not in protected and not directory.is_symlink()
     ]
 
 
@@ -462,8 +461,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.apply and (missing_destinations or plan or source_directories):
         try:
             file_actions = [
-                Action.for_file(root, move.source, move.target, "MOVE")
-                for move in plan
+                Action.for_file(root, move.source, move.target, "MOVE") for move in plan
             ]
             log = ActionLog(root)
             with log.transaction(ToolId.ORGANIZE) as transaction:

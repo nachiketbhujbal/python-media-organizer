@@ -42,13 +42,13 @@ from pymo.progress import ProgressMeter
 
 try:
     from PIL import Image, ImageOps, UnidentifiedImageError
-except ImportError:
+except ImportError as error:
     print(
         "This script needs Pillow. Install it with:\n"
         "  python3 -m pip install Pillow",
         file=sys.stderr,
     )
-    raise SystemExit(2)
+    raise SystemExit(2) from error
 
 
 @dataclass(frozen=True)
@@ -92,10 +92,7 @@ def discover_images(
             if config.ignores_directory(path, root):
                 ignored.append(path)
             continue
-        if (
-            path.is_file()
-            and config.ignores_file(path, root)
-        ):
+        if path.is_file() and config.ignores_file(path, root):
             ignored.append(path)
             continue
         if (
@@ -362,9 +359,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             scanned_bytes += record.file_size
         except (OSError, ValueError, UnidentifiedImageError) as error:
             skipped.append((path, str(error)))
-        progress_message = progress.advance(
-            "processed", byte_count=path_sizes[path]
-        )
+        progress_message = progress.advance("processed", byte_count=path_sizes[path])
         if progress_message:
             print(f"  {progress_message}")
 

@@ -214,9 +214,7 @@ def test_organizer_uses_custom_classification_extensions(
     source = nested / "specimen.garden"
     source.write_bytes(b"")
     (tmp_path / ".pymo.toml").write_text(
-        "version = 1\n"
-        "[classification]\n"
-        'image_extensions = [".garden"]\n',
+        "version = 1\n" "[classification]\n" 'image_extensions = [".garden"]\n',
         encoding="utf-8",
     )
 

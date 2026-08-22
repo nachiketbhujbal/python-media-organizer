@@ -7,13 +7,13 @@ import fnmatch
 import os
 import re
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from pymo.collection import CollectionLayout
-
 
 # This bootstraps validation before any configuration can be trusted. It is an
 # on-disk compatibility identifier, not a user-configurable preference.
@@ -162,9 +162,7 @@ def _strings(
         try:
             normalized = normalize(original)
         except ConfigError as error:
-            raise ConfigError(
-                f"{source}: {qualified_key}: {error}"
-            ) from error
+            raise ConfigError(f"{source}: {qualified_key}: {error}") from error
         if not normalized:
             raise ConfigError(f"{source}: {qualified_key} contains an empty value")
         result.append(normalized)
@@ -173,13 +171,9 @@ def _strings(
 
 def _ignore_pattern(value: str) -> str:
     pattern = value.strip().replace("\\", "/")
-    has_drive = (
-        len(pattern) >= 2 and pattern[0].isalpha() and pattern[1] == ":"
-    )
+    has_drive = len(pattern) >= 2 and pattern[0].isalpha() and pattern[1] == ":"
     if pattern.startswith("/") or has_drive or ".." in pattern.split("/"):
-        raise ConfigError(
-            f"ignore patterns must stay collection-relative: {value!r}"
-        )
+        raise ConfigError(f"ignore patterns must stay collection-relative: {value!r}")
     return pattern
 
 
@@ -192,9 +186,7 @@ def _extension(value: str) -> str:
 
 def _mime_type(value: str) -> str:
     mime_type = value.strip().casefold()
-    if not re.fullmatch(
-        r"[a-z0-9][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*", mime_type
-    ):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*", mime_type):
         raise ConfigError(f"invalid MIME type: {value!r}")
     return mime_type
 
@@ -272,9 +264,7 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
     scan_workers = performance.get("scan_workers")
     if scan_workers is not None:
         if isinstance(scan_workers, bool) or not isinstance(scan_workers, int):
-            raise ConfigError(
-                f"{source}: performance.scan_workers must be an integer"
-            )
+            raise ConfigError(f"{source}: performance.scan_workers must be an integer")
         if not 1 <= scan_workers <= 32:
             raise ConfigError(
                 f"{source}: performance.scan_workers must be between 1 and 32"
@@ -391,17 +381,14 @@ def _packaged_defaults() -> _ConfigLayer:
     missing = [name for name, values in required_arrays.items() if not values]
     if missing:
         raise ConfigError(
-            "packaged defaults: required array(s) are empty: "
-            + ", ".join(missing)
+            "packaged defaults: required array(s) are empty: " + ", ".join(missing)
         )
     if defaults.decode_timeout_seconds is None:
         raise ConfigError(
             "packaged defaults: video_duplicates.decode_timeout_seconds is required"
         )
     if defaults.scan_workers is None:
-        raise ConfigError(
-            "packaged defaults: performance.scan_workers is required"
-        )
+        raise ConfigError("packaged defaults: performance.scan_workers is required")
     if defaults.progress_interval_seconds is None:
         raise ConfigError(
             "packaged defaults: performance.progress_interval_seconds is required"
@@ -412,6 +399,7 @@ def _packaged_defaults() -> _ConfigLayer:
 def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
     defaults = _packaged_defaults()
     layout = CollectionLayout(root)
+    custom_path: Path | None
     if explicit_path is not None:
         custom_path = Path(os.path.abspath(explicit_path.expanduser()))
     else:
@@ -468,16 +456,12 @@ def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
                 )
             ),
             generic_mime_types=frozenset(
-                _deduplicate(
-                    defaults.generic_mime_types, custom.generic_mime_types
-                )
+                _deduplicate(defaults.generic_mime_types, custom.generic_mime_types)
             ),
         ),
         rename=RenameConfig(
             noise_tokens=frozenset(
-                _deduplicate(
-                    defaults.rename_noise_tokens, custom.rename_noise_tokens
-                )
+                _deduplicate(defaults.rename_noise_tokens, custom.rename_noise_tokens)
             )
         ),
         image_duplicates=ImageDuplicateConfig(

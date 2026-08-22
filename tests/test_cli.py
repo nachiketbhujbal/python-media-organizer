@@ -8,7 +8,6 @@ import sys
 from importlib.metadata import version
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
 
@@ -52,9 +51,7 @@ def test_cli_explicit_log_file_and_verbose_mode(tmp_path: Path) -> None:
     collection.mkdir()
     log_file = tmp_path / "private" / "pymo.log"
 
-    result = run_pymo(
-        "--verbose", "--log-file", log_file, "organize", collection
-    )
+    result = run_pymo("--verbose", "--log-file", log_file, "organize", collection)
 
     assert result.returncode == 0, result.stdout + result.stderr
     contents = log_file.read_text(encoding="utf-8")

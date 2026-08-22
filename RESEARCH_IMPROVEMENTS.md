@@ -463,6 +463,9 @@ so they should also be treated as private collection data.
 
 Add `pymo validate COLLECTION` as a report-only command first.
 
+This boundary is accepted in ADR 0019. Implementation begins only after the
+pre-validation findings in `CODE_REVIEW.md` are resolved or explicitly accepted.
+
 Image validation should distinguish header recognition from full pixel decode
 and detect truncated, multi-page, and animated inputs. Video validation should
 combine ffprobe structure inspection with a bounded full decode when requested.

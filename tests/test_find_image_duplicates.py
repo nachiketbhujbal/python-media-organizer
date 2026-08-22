@@ -60,9 +60,7 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
     assert action_log_path(tmp_path).exists()
 
 
-def test_duplicate_finder_honors_custom_file_rules(
-    tmp_path: Path, run_script
-) -> None:
+def test_duplicate_finder_honors_custom_file_rules(tmp_path: Path, run_script) -> None:
     pics, _ = make_organized_collection(tmp_path)
     original = pics / "original.png"
     protected_copy = pics / "protected-copy.png"
@@ -96,9 +94,7 @@ def test_duplicate_finder_uses_custom_inspection_extensions(
     Image.new("RGB", (2, 2), "green").save(first, format="PNG")
     Image.new("RGB", (2, 2), "green").save(second, format="PNG")
     (tmp_path / ".pymo.toml").write_text(
-        "version = 1\n"
-        "[image_duplicates]\n"
-        'extensions = [".flower"]\n',
+        "version = 1\n" "[image_duplicates]\n" 'extensions = [".flower"]\n',
         encoding="utf-8",
     )
 
@@ -182,9 +178,10 @@ def test_full_workflow_must_be_undone_in_reverse_order(
     assert blocked.returncode == 1
     assert "find_image_duplicates" in blocked.stderr
 
-    assert run_script(
-        "find_image_duplicates.py", tmp_path, "--undo", "--apply"
-    ).returncode == 0
+    assert (
+        run_script("find_image_duplicates.py", tmp_path, "--undo", "--apply").returncode
+        == 0
+    )
     assert run_script("rename_media.py", tmp_path, "--undo", "--apply").returncode == 0
     final_undo = run_script("organize_media.py", tmp_path, "--undo", "--apply")
     assert final_undo.returncode == 0, final_undo.stdout + final_undo.stderr

@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from pymo.duplicates import videos as video_duplicates
-from pymo.duplicates.videos import ProbeInfo
 from pymo.action_log import action_log_path
 from pymo.collection import CollectionLayout
-
+from pymo.duplicates import videos as video_duplicates
+from pymo.duplicates.videos import ProbeInfo
 
 FFMPEG = shutil.which("ffmpeg")
 FFPROBE = shutil.which("ffprobe")
@@ -139,9 +137,7 @@ def test_video_finder_requires_only_vids(tmp_path: Path, run_script) -> None:
 
 
 @requires_ffmpeg
-def test_video_finder_ignores_picture_folder_state(
-    tmp_path: Path, run_script
-) -> None:
+def test_video_finder_ignores_picture_folder_state(tmp_path: Path, run_script) -> None:
     vids = tmp_path / "vids"
     vids.mkdir()
     (vids / ".DS_Store").write_bytes(b"view state")
@@ -155,9 +151,7 @@ def test_video_finder_ignores_picture_folder_state(
     dups.mkdir()
     (dups / "pics").write_text("owned by the image finder", encoding="utf-8")
 
-    result = run_script(
-        "find_video_duplicates.py", tmp_path, "--show-ignored"
-    )
+    result = run_script("find_video_duplicates.py", tmp_path, "--show-ignored")
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Scanning 0 video(s)" in result.stdout
@@ -316,9 +310,10 @@ def test_video_duplicate_run_blocks_earlier_rename_undo(
     assert blocked.returncode == 1
     assert "find_video_duplicates" in blocked.stderr
 
-    assert run_script(
-        "find_video_duplicates.py", root, "--undo", "--apply"
-    ).returncode == 0
+    assert (
+        run_script("find_video_duplicates.py", root, "--undo", "--apply").returncode
+        == 0
+    )
     assert run_script("rename_media.py", root, "--undo", "--apply").returncode == 0
     assert first.exists()
     assert second.exists()
@@ -381,9 +376,7 @@ def test_video_cache_keeps_completed_fingerprints_after_interruption(
             raise KeyboardInterrupt
         return video_duplicates.DerivedFingerprint("first", 1, 0)
 
-    monkeypatch.setattr(
-        video_duplicates, "derive_fingerprint", interrupt_after_first
-    )
+    monkeypatch.setattr(video_duplicates, "derive_fingerprint", interrupt_after_first)
 
     with pytest.raises(KeyboardInterrupt):
         video_duplicates.main([str(tmp_path)])

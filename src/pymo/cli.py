@@ -5,18 +5,17 @@ from __future__ import annotations
 import argparse
 import logging
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from pymo import __version__
-from pymo import organize, rename, scan
+from pymo import __version__, organize, rename, scan
 from pymo.config import add_show_ignored_argument
 from pymo.duplicates import images, videos
 from pymo.logging_config import configure_logging
 from pymo.progress import format_duration
 
 
-def _commands():
+def _commands() -> dict[str, Callable[[Sequence[str] | None], int]]:
     """Build the small dispatch table without mutable module-level state."""
     return {
         "scan": scan.main,
@@ -72,9 +71,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         timestamps=args.timestamps and not structured_json,
     )
     if not structured_json:
-        logging.getLogger("pymo").debug(
-            "Dispatching pymo command: %s", args.command
-        )
+        logging.getLogger("pymo").debug("Dispatching pymo command: %s", args.command)
     commands = _commands()
     command_arguments = list(args.arguments)
     if args.config is not None:

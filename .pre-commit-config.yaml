@@ -1,0 +1,29 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-toml
+      - id: check-yaml
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: ruff
+        name: Ruff lint
+        entry: uv run --locked ruff check --force-exclude
+        language: system
+        types: [python]
+      - id: black
+        name: Black format
+        entry: uv run --locked black --check
+        language: system
+        types: [python]
+      - id: mypy
+        name: mypy typing
+        entry: uv run --locked mypy
+        language: system
+        pass_filenames: false
+        types: [python]

@@ -103,11 +103,17 @@ report-only future work and must never silently enter the exact move path.
 - Real FFmpeg integration tests are required for video behavior; controlled
   unit tests remain useful for safety properties and error paths.
 - Run the complete suite before handoff.
+- Run Ruff, Black, and mypy before the complete suite. Keep the installed
+  pre-commit gate and its locked configuration passing.
 - Base performance rates and ETAs on observed work only. Keep aggregate timing
   path-private, preserve stable ordering, and never publish guessed universal
   decode speeds as if they were measurements.
 - Keep `README.md`, `HANDOFF.md`, and `RESEARCH_IMPROVEMENTS.md` current when a
   decision changes their claims.
+- Record each durable architecture or product decision in one numbered file
+  under `adrs/`. Add a superseding ADR instead of rewriting accepted history.
+- Keep `CODE_REVIEW.md` finding statuses synchronized with the release that
+  resolves or explicitly accepts them.
 - Maintain local Git history with concise one-line commits. Do not configure a
   new remote or push a release without explicit user approval. The approved
   `origin` is the personal GitHub repository recorded in `HANDOFF.md`.

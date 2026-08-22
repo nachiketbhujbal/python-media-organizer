@@ -33,12 +33,12 @@ class _IsoLineFormatter(logging.Formatter):
         self.include_context = include_context
 
     def format(self, record: logging.LogRecord) -> str:
-        timestamp = datetime.fromtimestamp(record.created).astimezone().isoformat(
-            timespec="seconds"
+        timestamp = (
+            datetime.fromtimestamp(record.created)
+            .astimezone()
+            .isoformat(timespec="seconds")
         )
-        context = (
-            f"{record.levelname} {record.name} " if self.include_context else ""
-        )
+        context = f"{record.levelname} {record.name} " if self.include_context else ""
         message = record.getMessage()
         lines = message.splitlines() or [""]
         return "\n".join(f"{timestamp} {context}{line}" for line in lines)

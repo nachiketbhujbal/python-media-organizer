@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pymo
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -26,8 +25,6 @@ def test_project_uses_standard_vcs_versioning() -> None:
 
 
 def test_packaged_default_configuration_is_available() -> None:
-    default_config = importlib.resources.files("pymo").joinpath(
-        "default_config.toml"
-    )
+    default_config = importlib.resources.files("pymo").joinpath("default_config.toml")
 
     assert default_config.is_file()

@@ -3,9 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 
-def test_organizer_rejects_removed_manifest_option(
-    tmp_path: Path, run_script
-) -> None:
+def test_organizer_rejects_removed_manifest_option(tmp_path: Path, run_script) -> None:
     result = run_script(
         "organize_media.py", tmp_path, "--undo", "--manifest", "old.csv"
     )

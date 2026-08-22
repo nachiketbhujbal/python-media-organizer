@@ -12,7 +12,7 @@ def format_duration(seconds: float) -> str:
     seconds = max(0.0, seconds)
     if seconds < 10:
         return f"{seconds:.1f}s"
-    total_seconds = int(round(seconds))
+    total_seconds = round(seconds)
     days, remainder = divmod(total_seconds, 86_400)
     hours, remainder = divmod(remainder, 3_600)
     minutes, remaining_seconds = divmod(remainder, 60)

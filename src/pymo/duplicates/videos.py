@@ -22,11 +22,10 @@ import subprocess
 import sys
 import time
 from collections import defaultdict, deque
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
-from typing import Callable
 
 from pymo.action_log import (
     Action,
@@ -48,7 +47,6 @@ from pymo.config import (
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
 from pymo.progress import ProgressMeter, format_bytes
-
 
 # This value is persisted with derived fingerprints. Changing the algorithm
 # without changing this identifier could reuse incompatible cached results.
@@ -134,9 +132,11 @@ def stream_rotation(stream: dict[str, object]) -> int:
         if value in (None, ""):
             continue
         try:
-            rotation = int(round(float(str(value)))) % 360
-        except ValueError:
-            raise VideoInspectionError(f"invalid rotation metadata: {value!r}")
+            rotation = round(float(str(value))) % 360
+        except (OverflowError, ValueError) as error:
+            raise VideoInspectionError(
+                f"invalid rotation metadata: {value!r}"
+            ) from error
         if rotation not in {0, 90, 180, 270}:
             raise VideoInspectionError(f"unsupported rotation: {rotation} degrees")
         return rotation
@@ -190,9 +190,7 @@ def probe_video(path: Path, ffprobe: str) -> ProbeInfo:
     videos = [item for item in streams if item.get("codec_type") == "video"]
     audios = [item for item in streams if item.get("codec_type") == "audio"]
     others = [
-        item
-        for item in streams
-        if item.get("codec_type") not in {"video", "audio"}
+        item for item in streams if item.get("codec_type") not in {"video", "audio"}
     ]
     if len(videos) != 1:
         raise VideoInspectionError(
@@ -410,7 +408,7 @@ def _stream_command(
                     f"FFmpeg decoding exceeded the {timeout}-second safety limit"
                 )
             for key, _ in selector.select(timeout=min(1.0, remaining)):
-                chunk = os.read(key.fileobj.fileno(), 1024 * 1024)
+                chunk = os.read(key.fd, 1024 * 1024)
                 if not chunk:
                     selector.unregister(key.fileobj)
                 elif key.data == "stdout":
@@ -458,7 +456,9 @@ def video_frame_signature(
                 continue
             fields = [field.strip() for field in line.split(",", 5)]
             if len(fields) != 6:
-                raise VideoInspectionError(f"unexpected FFmpeg framehash output: {line}")
+                raise VideoInspectionError(
+                    f"unexpected FFmpeg framehash output: {line}"
+                )
             _, _dts, pts, duration, size, frame_hash = fields
             digest.update(f"{pts},{duration},{size},{frame_hash}\n".encode("ascii"))
             frame_count += 1
@@ -653,7 +653,9 @@ def save_cached_fingerprints(
         )
         connection.commit()
     except sqlite3.Error as error:
-        raise VideoInspectionError(f"cannot update SQLite fingerprint cache: {error}") from error
+        raise VideoInspectionError(
+            f"cannot update SQLite fingerprint cache: {error}"
+        ) from error
     finally:
         if connection is not None:
             connection.close()
@@ -793,12 +795,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "a dry run unless --apply is supplied"
         ),
     )
-    parser.add_argument(
-        "--ffmpeg", type=Path, help="explicit ffmpeg executable path"
-    )
-    parser.add_argument(
-        "--ffprobe", type=Path, help="explicit ffprobe executable path"
-    )
+    parser.add_argument("--ffmpeg", type=Path, help="explicit ffmpeg executable path")
+    parser.add_argument("--ffprobe", type=Path, help="explicit ffprobe executable path")
     parser.add_argument(
         "--decode-timeout",
         type=int,
@@ -878,7 +876,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         sum(path_sizes.values()),
         config.performance.progress_interval_seconds,
     )
-    for number, path in enumerate(paths, start=1):
+    for path in paths:
         try:
             stat = path.stat()
             record = VideoRecord(
@@ -902,24 +900,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     for record in records:
         candidates[record.probe.candidate_key].append(record)
     candidate_records = [
-        record
-        for bucket in candidates.values()
-        if len(bucket) > 1
-        for record in bucket
+        record for bucket in candidates.values() if len(bucket) > 1 for record in bucket
     ]
-    unique_hashes = {
-        record.byte_sha256: record
-        for record in candidate_records
-    }
+    unique_hashes = {record.byte_sha256: record for record in candidate_records}
     database = layout.video_cache
     if not args.no_cache and (
         database.is_symlink() or (database.exists() and not database.is_file())
     ):
         print(f"Unsafe SQLite cache path: {database}", file=sys.stderr)
         return 1
-    cached = (
-        {} if args.no_cache else load_cached_fingerprints(database, ffmpeg_release)
-    )
+    cached = {} if args.no_cache else load_cached_fingerprints(database, ffmpeg_release)
     cache_hits = sum(file_hash in cached for file_hash in unique_hashes)
     cache_misses = len(unique_hashes) - cache_hits
     print(
@@ -959,8 +949,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"({format_bytes(representative.file_size)})"
         )
 
-        def report_heartbeat() -> None:
-            message = decode_progress.heartbeat("fingerprint progress", number)
+        def report_heartbeat(active_number: int = number) -> None:
+            message = decode_progress.heartbeat("fingerprint progress", active_number)
             if message:
                 print(f"  {message}")
 
@@ -1004,9 +994,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     fingerprint_groups: dict[str, list[VideoRecord]] = defaultdict(list)
     for record in candidate_records:
-        fingerprint = derived.get(record.byte_sha256)
-        if fingerprint is not None:
-            fingerprint_groups[fingerprint.digest].append(record)
+        record_fingerprint = derived.get(record.byte_sha256)
+        if record_fingerprint is not None:
+            fingerprint_groups[record_fingerprint.digest].append(record)
     duplicate_groups = [
         group for group in fingerprint_groups.values() if len(group) > 1
     ]

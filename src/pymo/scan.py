@@ -28,7 +28,6 @@ from pymo.organize import Classifier, desired_directory
 from pymo.progress import ProgressMeter
 from pymo.rename import canonical_match, collection_slug
 
-
 # This identifies the public machine-readable report contract.
 SCAN_REPORT_SCHEMA_VERSION = 1
 
@@ -205,9 +204,7 @@ def _duplicate_statistics(
         by_kind[kind] = {
             "same_size_groups": len(groups),
             "candidate_files": sum(len(group) for group in groups),
-            "candidate_bytes": sum(
-                entry.size for group in groups for entry in group
-            ),
+            "candidate_bytes": sum(entry.size for group in groups for entry in group),
             "potential_reclaimable_bytes_upper_bound": sum(
                 group[0].size * (len(group) - 1) for group in groups
             ),
@@ -251,9 +248,7 @@ def _duplicate_statistics(
     result["exact_bytes"] = {
         "groups": len(matches),
         "extra_copies": sum(len(group) - 1 for group in matches),
-        "reclaimable_bytes": sum(
-            group[0].size * (len(group) - 1) for group in matches
-        ),
+        "reclaimable_bytes": sum(group[0].size * (len(group) - 1) for group in matches),
         "hashed_files": hashed_files,
         "hashed_bytes": hashed_bytes,
         "unreadable_files": unreadable,
@@ -325,17 +320,17 @@ def build_report(
             review_kind = (
                 "pictures"
                 if entry.path.is_relative_to(layout.duplicate_pics)
-                else "videos"
-                if entry.path.is_relative_to(layout.duplicate_vids)
-                else "other"
+                else (
+                    "videos"
+                    if entry.path.is_relative_to(layout.duplicate_vids)
+                    else "other"
+                )
             )
             review_counts[review_kind] += 1
             review_sizes[review_kind] += entry.size
             continue
 
-        destination = desired_directory(
-            entry.kind, root, layout.pics, layout.vids
-        )
+        destination = desired_directory(entry.kind, root, layout.pics, layout.vids)
         if entry.path.parent == destination:
             organized += 1
         else:
@@ -399,7 +394,9 @@ def build_report(
     if kind_counts["video"] - review_counts["videos"] > 1:
         recommendations.append("Run pymo find-video-duplicates for exact playback.")
     if not recommendations:
-        recommendations.append("The collection is ready; no immediate action is required.")
+        recommendations.append(
+            "The collection is ready; no immediate action is required."
+        )
 
     ignored_paths = (
         [path.relative_to(root).as_posix() for path in walk.ignored]
@@ -480,7 +477,9 @@ def _print_breakdown(
 def print_report(report: dict[str, Any], show_ignored: bool) -> None:
     inventory = report["inventory"]
     print("Collection scan")
-    print(f"Profile: {report['profile']} ({report['workers']} classification worker(s))")
+    print(
+        f"Profile: {report['profile']} ({report['workers']} classification worker(s))"
+    )
     print("\nInventory:")
     print(f"  Files: {inventory['files']}")
     print(f"  Directories: {inventory['directories']}")
@@ -497,8 +496,7 @@ def print_report(report: dict[str, Any], show_ignored: bool) -> None:
     print(f"  Symbolic links skipped: {inventory['symbolic_links']}")
     print(f"  Unreadable entries: {inventory['unreadable_entries']}")
     print(
-        "  Ignored by configuration: "
-        f"{inventory['ignored_entry_points']} path(s)."
+        "  Ignored by configuration: " f"{inventory['ignored_entry_points']} path(s)."
     )
     if show_ignored and report["ignored_paths"]:
         print("  Ignored paths:")
@@ -559,7 +557,9 @@ def print_report(report: dict[str, Any], show_ignored: bool) -> None:
 
     state = report["derived_state"]
     print("\nLocal pymo state:")
-    print(f"  Action log: {'present' if state['action_log_present'] else 'not created'}")
+    print(
+        f"  Action log: {'present' if state['action_log_present'] else 'not created'}"
+    )
     print(
         "  Video fingerprint cache: "
         + (
@@ -614,9 +614,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Cannot use configuration: {error}", file=sys.stderr)
         return 2
     workers = (
-        args.workers
-        if args.workers is not None
-        else config.performance.scan_workers
+        args.workers if args.workers is not None else config.performance.scan_workers
     )
     if not 1 <= workers <= 32:
         print("--workers must be between 1 and 32", file=sys.stderr)

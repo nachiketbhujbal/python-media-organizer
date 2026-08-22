@@ -9,15 +9,15 @@ import json
 import os
 import shutil
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
-from typing import Iterator, TextIO
+from typing import TextIO, cast
 
 from pymo.collection import CollectionLayout
-
 
 # This constant identifies the current on-disk journal schema and must remain
 # stable while collection-named action histories use it.
@@ -70,7 +70,7 @@ def is_action_log_path(root: Path, path: Path) -> bool:
 
 
 def _timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="microseconds")
+    return datetime.now(UTC).isoformat(timespec="microseconds")
 
 
 def _sha256(path: Path) -> str:
@@ -127,7 +127,7 @@ class Action:
         try:
             operation = ActionOperation(self.operation)
         except ValueError as error:
-            raise ActionLogError(f"unsupported operation: {self.operation}")
+            raise ActionLogError(f"unsupported operation: {self.operation}") from error
         if operation.is_file:
             if not self.before or not self.after or self.entry_type != "file":
                 raise ActionLogError("file actions require before and after paths")
@@ -226,10 +226,14 @@ class Action:
         identity = value.get("identity")
         if identity is not None and not isinstance(identity, dict):
             raise ActionLogError("invalid identity in action log")
+        before_value = value.get("before")
+        after_value = value.get("after")
+        before = before_value if isinstance(before_value, str) else None
+        after = after_value if isinstance(after_value, str) else None
         return cls(
             operation=str(value.get("operation", "")),
-            before=value.get("before") if isinstance(value.get("before"), str) else None,
-            after=value.get("after") if isinstance(value.get("after"), str) else None,
+            before=before,
+            after=after,
             entry_type=str(value.get("entry_type", "")),
             identity=identity,
         )
@@ -355,7 +359,7 @@ class ActionLog:
         with self.path.open(mode, encoding="utf-8", newline="") as handle:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             try:
-                yield handle
+                yield cast(TextIO, handle)
             finally:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
@@ -403,36 +407,38 @@ class ActionLog:
             if name == "RUN_STARTED":
                 if run_id in by_id:
                     raise ActionLogError(f"duplicate run ID in action log: {run_id}")
+                target_run_id_value = event.get("target_run_id")
+                target_run_id = (
+                    target_run_id_value
+                    if isinstance(target_run_id_value, str)
+                    else None
+                )
                 run = RunRecord(
                     run_id=run_id,
                     tool=str(event.get("tool", "")),
                     mode=str(event.get("mode", "")),
-                    target_run_id=(
-                        event.get("target_run_id")
-                        if isinstance(event.get("target_run_id"), str)
-                        else None
-                    ),
+                    target_run_id=target_run_id,
                     started_index=index,
                 )
                 runs.append(run)
                 by_id[run_id] = run
                 continue
-            run = by_id.get(run_id)
-            if run is None:
+            current_run = by_id.get(run_id)
+            if current_run is None:
                 raise ActionLogError(f"event references unknown run ID: {run_id}")
             if name == "ACTION_PLANNED":
                 action_id = event.get("action_id")
                 value = event.get("action")
                 if not isinstance(action_id, str) or not isinstance(value, dict):
                     raise ActionLogError("invalid planned action in action log")
-                run.actions.append((action_id, Action.from_dict(value)))
+                current_run.actions.append((action_id, Action.from_dict(value)))
             elif name == "ACTION_COMPLETED":
                 action_id = event.get("action_id")
                 if not isinstance(action_id, str):
                     raise ActionLogError("completed action has no action ID")
-                run.completed_action_ids.add(action_id)
+                current_run.completed_action_ids.add(action_id)
             elif name == "RUN_COMMITTED":
-                run.committed = True
+                current_run.committed = True
         return runs
 
     def _active_and_unresolved_runs(self, runs: list[RunRecord]) -> list[RunRecord]:
@@ -441,11 +447,7 @@ class ActionLog:
             for run in runs
             if run.mode == "UNDO" and run.committed and run.target_run_id
         }
-        return [
-            run
-            for run in runs
-            if run.mode == "APPLY" and run.run_id not in undone
-        ]
+        return [run for run in runs if run.mode == "APPLY" and run.run_id not in undone]
 
     def _identity_key(self, action: Action) -> tuple[int, int] | None:
         if not action.identity:
@@ -465,22 +467,24 @@ class ActionLog:
         }
 
     def _find_target(self, runs: list[RunRecord], tool: str) -> RunRecord:
-        incomplete_undo = [run for run in runs if run.mode == "UNDO" and not run.committed]
+        incomplete_undo = [
+            run for run in runs if run.mode == "UNDO" and not run.committed
+        ]
         if incomplete_undo:
             raise ActionConflict(
                 "the action log contains an interrupted undo run; no new undo "
                 "can start until it is recovered"
             )
         candidates = [
-            run
-            for run in self._active_and_unresolved_runs(runs)
-            if run.tool == tool
+            run for run in self._active_and_unresolved_runs(runs) if run.tool == tool
         ]
         if not candidates:
             raise NoUndoableRun(f"no active {tool} run to undo")
         return max(candidates, key=lambda run: run.started_index)
 
-    def _later_blockers(self, runs: list[RunRecord], target: RunRecord) -> list[RunRecord]:
+    def _later_blockers(
+        self, runs: list[RunRecord], target: RunRecord
+    ) -> list[RunRecord]:
         target_paths = self._paths(target)
         target_identities = {
             key
@@ -496,9 +500,9 @@ class ActionLog:
                 for _, action in run.actions
                 if (key := self._identity_key(action)) is not None
             }
-            if target_paths.intersection(self._paths(run)) or target_identities.intersection(
-                identities
-            ):
+            if target_paths.intersection(
+                self._paths(run)
+            ) or target_identities.intersection(identities):
                 blockers.append(run)
         return blockers
 
@@ -514,9 +518,13 @@ class ActionLog:
         before = _absolute_path(self.root, action.before) if action.before else None
         after = _absolute_path(self.root, action.after) if action.after else None
         if ActionOperation(action.operation).is_file:
-            assert before is not None and after is not None and action.identity is not None
+            assert (
+                before is not None and after is not None and action.identity is not None
+            )
             if not self._identity_matches(before, action.identity):
-                raise ActionConflict(f"source file is missing or changed: {action.before}")
+                raise ActionConflict(
+                    f"source file is missing or changed: {action.before}"
+                )
             if os.path.lexists(after):
                 raise ActionConflict(f"destination is occupied: {action.after}")
             if not after.parent.is_dir() or after.parent.is_symlink():
@@ -528,7 +536,9 @@ class ActionLog:
         if action.operation == ActionOperation.CREATE_DIRECTORY:
             assert after is not None
             if os.path.lexists(after):
-                raise ActionConflict(f"directory destination is occupied: {action.after}")
+                raise ActionConflict(
+                    f"directory destination is occupied: {action.after}"
+                )
             if not after.parent.is_dir() or after.parent.is_symlink():
                 raise ActionConflict(
                     f"directory parent is missing or unsafe: {after.parent}"
@@ -547,7 +557,9 @@ class ActionLog:
         before = _absolute_path(self.root, action.before) if action.before else None
         after = _absolute_path(self.root, action.after) if action.after else None
         if ActionOperation(action.operation).is_file:
-            assert before is not None and after is not None and action.identity is not None
+            assert (
+                before is not None and after is not None and action.identity is not None
+            )
             before_matches = self._identity_matches(before, action.identity)
             after_matches = self._identity_matches(after, action.identity)
             before_exists = os.path.lexists(before)
@@ -616,7 +628,9 @@ class ActionLog:
                 if not self._identity_matches(source, action.identity):
                     raise ActionConflict(f"file identity changed: {action.before}")
                 if action.after in entries:
-                    raise ActionConflict(f"undo destination is occupied: {action.after}")
+                    raise ActionConflict(
+                        f"undo destination is occupied: {action.after}"
+                    )
                 parent = PurePosixPath(action.after).parent.as_posix()
                 if parent != "." and entries.get(parent) != "directory":
                     raise ActionConflict(f"destination parent is missing: {parent}")
@@ -625,7 +639,9 @@ class ActionLog:
             elif action.operation == ActionOperation.CREATE_DIRECTORY:
                 assert action.after
                 if action.after in entries:
-                    raise ActionConflict(f"directory destination is occupied: {action.after}")
+                    raise ActionConflict(
+                        f"directory destination is occupied: {action.after}"
+                    )
                 parent = PurePosixPath(action.after).parent.as_posix()
                 if parent != "." and entries.get(parent) != "directory":
                     raise ActionConflict(f"directory parent is missing: {parent}")
@@ -633,7 +649,9 @@ class ActionLog:
             else:
                 assert action.before
                 if entries.get(action.before) != "directory":
-                    raise ActionConflict(f"expected directory is missing: {action.before}")
+                    raise ActionConflict(
+                        f"expected directory is missing: {action.before}"
+                    )
                 prefix = action.before + "/"
                 if any(path.startswith(prefix) for path in entries):
                     raise ActionConflict(f"directory is not empty: {action.before}")

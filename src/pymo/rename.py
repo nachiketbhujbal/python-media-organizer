@@ -152,10 +152,15 @@ def clean_descriptor(
     compact_collection = "".join(collection_slug(collection).split("_"))
     result: list[str] = []
     for token in tokens:
-        if token.startswith(compact_collection) and len(token) > len(compact_collection):
+        if token.startswith(compact_collection) and len(token) > len(
+            compact_collection
+        ):
             token = token[len(compact_collection) :]
         for collection_token in sorted(collection_tokens, key=len, reverse=True):
-            if token.startswith(collection_token) and len(token) > len(collection_token) + 2:
+            if (
+                token.startswith(collection_token)
+                and len(token) > len(collection_token) + 2
+            ):
                 token = token[len(collection_token) :]
                 break
         if not token or token in collection_tokens or token in noise_tokens:
@@ -214,9 +219,7 @@ def build_rename_plan(
                 already_named += 1
             else:
                 timestamp = (
-                    embedded_image_timestamp(path)
-                    if output_kind == "image"
-                    else None
+                    embedded_image_timestamp(path) if output_kind == "image" else None
                 ) or timestamp_from_name(path.name)
                 descriptor = clean_descriptor(
                     path.stem, collection, config.rename.noise_tokens

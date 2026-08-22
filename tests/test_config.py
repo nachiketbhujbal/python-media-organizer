@@ -89,9 +89,7 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
 
     config = load_config(tmp_path)
 
-    assert {".jpg", ".garden"}.issubset(
-        config.classification.image_extensions
-    )
+    assert {".jpg", ".garden"}.issubset(config.classification.image_extensions)
     assert {".mp4", ".city"}.issubset(config.classification.video_extensions)
     assert "application/x-city" in config.classification.video_application_mime_types
     assert "application/x-generic" in config.classification.generic_mime_types
@@ -124,9 +122,7 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
         "version = 1\n[ignore]\nfiles = [\n",
     ],
 )
-def test_invalid_configuration_is_rejected(
-    tmp_path: Path, document: str
-) -> None:
+def test_invalid_configuration_is_rejected(tmp_path: Path, document: str) -> None:
     path = CollectionLayout(tmp_path).config
     path.write_text(document, encoding="utf-8")
 

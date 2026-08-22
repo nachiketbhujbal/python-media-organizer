@@ -2,6 +2,19 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.2.2 - 2026-08-22
+
+- Add a durable adversarial review ledger with evidence, severity, release
+  targets, and resolution states before validation work begins.
+- Add one architecture decision record per established product, safety,
+  packaging, privacy, cache, performance, testing, and validation decision.
+- Add locked Ruff linting, Black formatting, mypy typing, pytest coverage tools,
+  and an installed pre-commit gate with basic file-safety checks.
+- Correct the type-narrowing, closure binding, import, and formatting findings
+  exposed by the new gates without changing command behavior.
+- Document that the current `fcntl`-locked action journal supports macOS and
+  Linux; Windows runtime support requires a later locking decision and tests.
+
 ## 0.2.1 - 2026-08-22
 
 - Add a privacy-safe final elapsed-time summary to every normal CLI command.

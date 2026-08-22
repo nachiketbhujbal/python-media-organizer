@@ -13,13 +13,14 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.2.1` timing-and-throughput release. It is a
+`pymo` command, and has a `v0.2.2` review-and-quality release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.2.1 adds shared timing, observed throughput, ETA, FFmpeg heartbeats,
-and console timestamp controls without changing matching or mutation behavior.
+Version 0.2.2 adds the durable adversarial finding ledger, one-file-per-decision
+ADRs, locked Ruff/Black/mypy tooling, an installed pre-commit gate, and an
+explicit macOS/Linux support boundary. It does not change command behavior.
 
 Hard requirements:
 
@@ -49,6 +50,8 @@ Hard requirements:
 14. `scan` never writes media, action history, or cache state. Exact-video
     previews may persist disposable fingerprints by default so later preview
     or apply runs resume; `--no-cache` disables both cache reads and writes.
+15. Every durable decision has one numbered ADR. Ruff, Black, mypy, pre-commit,
+    the complete pytest suite, and a package build are release gates.
 
 `{collection-name}-actions-log.jsonl` remains the authoritative portable
 journal because it moves naturally with a media-collection on external storage.
@@ -59,10 +62,13 @@ SQLite is useful only as a derived, disposable collection-local cache or index.
 ```text
 python-media-organizer/
   pyproject.toml
+  .pre-commit-config.yaml
+  CODE_REVIEW.md
   README.md
   RESEARCH_IMPROVEMENTS.md
   AGENTS.md
   HANDOFF.md
+  adrs/
   src/pymo/
     __init__.py
     __main__.py
@@ -359,6 +365,10 @@ Setup and verification:
 ```bash
 uv sync --locked
 uv run pymo --version
+uv run --locked ruff check src tests
+uv run --locked black --check src tests
+uv run --locked mypy
+uv run --locked pre-commit run --all-files
 uv run --locked pytest
 uv build
 ```
@@ -402,8 +412,10 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - dynamic package metadata, packaged TOML data, runtime/distribution version
   agreement, and the selected Hatchling plus hatch-vcs configuration.
 
-Run the complete suite after every change. Do not replace real FFmpeg
-integration coverage with mocks alone.
+Run the committed quality gates and complete suite after every change. Do not
+replace real FFmpeg integration coverage with mocks alone. `CODE_REVIEW.md`
+records the pre-validation findings, their severity, target release, and durable
+resolution state; keep it synchronized as each release closes a group.
 
 ## Research and roadmap
 
@@ -415,12 +427,15 @@ local indexing, keeper scoring, similarity levels, and local-AI rules.
 
 Near-term roadmap:
 
-1. Add report-only media validation.
-2. Add metadata inspection/export and confidence-based date provenance.
-3. Add read-only collection/backup comparison.
-4. Expand the disposable SQLite index for local statistics and fingerprints.
-5. Add perceptual similarity as report-only functionality.
-6. Revisit optional local AI suggestions after deterministic tooling matures.
+1. Resolve the action-journal safety findings targeted for 0.2.3.
+2. Resolve exact-analysis and cache robustness findings targeted for 0.2.4.
+3. Resolve scan, interruption, and orchestration findings targeted for 0.2.5.
+4. Add report-only media validation in 0.3.0 and review it adversarially.
+5. Add metadata inspection/export and confidence-based date provenance.
+6. Add read-only collection/backup comparison.
+7. Expand the disposable SQLite index for local statistics and fingerprints.
+8. Add perceptual similarity as report-only functionality.
+9. Revisit optional local AI suggestions after deterministic tooling matures.
 
 `scan` is implemented; do not rename it to `inspect`.
 

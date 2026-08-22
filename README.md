@@ -11,6 +11,7 @@ it belongs to.
 ## Requirements and installation
 
 - Python 3.11 or newer
+- macOS or Linux; the current append-only journal uses POSIX file locking
 - uv 0.12 or newer for the reproducible development workflow
 - Pillow, installed from `pyproject.toml`
 - FFmpeg and ffprobe for exact video duplicate detection
@@ -335,8 +336,18 @@ the subcommand's collection argument.
 
 ```bash
 uv run --locked pytest
+uv run --locked ruff check src tests
+uv run --locked black --check src tests
+uv run --locked mypy
+uv run --locked pre-commit run --all-files
 uv build
 ```
+
+Install the local commit gate once per clone with
+`uv run --locked pre-commit install`. It blocks commits on basic file hygiene,
+Ruff linting, Black formatting, and mypy typing. The complete pytest suite and
+build remain release gates so normal commits do not repeatedly run FFmpeg
+integration tests. Development-tool versions are resolved in `uv.lock`.
 
 The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,
@@ -372,4 +383,6 @@ workloads without increasing contention or reducing safety.
 See `RESEARCH_IMPROVEMENTS.md` for the product research, privacy analysis,
 feature ideas, local-AI guardrails, metadata and validation plans, comparison
 tools, and longer-term roadmap. See `HANDOFF.md` for current engineering state
-and compatibility details.
+and compatibility details. Architectural decisions are recorded one per file in
+`adrs/`; the adversarial pre-validation findings and their release status live
+in `CODE_REVIEW.md`.

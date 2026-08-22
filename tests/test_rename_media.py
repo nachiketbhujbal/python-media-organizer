@@ -84,10 +84,7 @@ def test_renamer_dry_run_uses_universal_schema(tmp_path: Path, run_script) -> No
     assert "media_collection__image_0001__2020-10-27_01-28-34-225.jpg" in result.stdout
     assert "media_collection__image_0002__undated.jpg" in result.stdout
     assert "media_collection__video_0001__undated.mp4" in result.stdout
-    assert (
-        "media_collection__video_0002__undated__garden_fern.mp4"
-        in result.stdout
-    )
+    assert "media_collection__video_0002__undated__garden_fern.mp4" in result.stdout
     assert (root / "notes.txt").read_text(encoding="utf-8") == "leave me"
     assert not action_log_path(root).exists()
 
@@ -98,12 +95,16 @@ def test_renamer_apply_and_undo_are_logged_and_reversible(
     root = tmp_path / "media-collection"
     root.mkdir()
     make_rename_fixture(root)
-    originals = sorted(str(path.relative_to(root)) for path in root.rglob("*") if path.is_file())
+    originals = sorted(
+        str(path.relative_to(root)) for path in root.rglob("*") if path.is_file()
+    )
 
     applied = run_script("rename_media.py", root, "--apply")
 
     assert applied.returncode == 0, applied.stdout + applied.stderr
-    assert (root / "pics" / "media_collection__image_0001__2020-10-27_01-28-34-225.jpg").exists()
+    assert (
+        root / "pics" / "media_collection__image_0001__2020-10-27_01-28-34-225.jpg"
+    ).exists()
     assert action_log_path(root).exists()
 
     undone = run_script("rename_media.py", root, "--undo", "--apply")
@@ -175,9 +176,7 @@ def test_renamer_honors_custom_file_rules(tmp_path: Path, run_script) -> None:
         encoding="utf-8",
     )
 
-    result = run_script(
-        "rename_media.py", root, "--show-ignored", "--apply"
-    )
+    result = run_script("rename_media.py", root, "--show-ignored", "--apply")
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Ignored by configuration: 2 path(s)." in result.stdout
@@ -186,9 +185,7 @@ def test_renamer_honors_custom_file_rules(tmp_path: Path, run_script) -> None:
     assert protected.exists()
     assert not candidate.exists()
     assert len(list(pics.glob("collection__image_0001__*.png"))) == 1
-    assert "keep-original.png" not in action_log_path(root).read_text(
-        encoding="utf-8"
-    )
+    assert "keep-original.png" not in action_log_path(root).read_text(encoding="utf-8")
 
 
 def test_renamer_uses_custom_noise_tokens(tmp_path: Path, run_script) -> None:
@@ -199,9 +196,7 @@ def test_renamer_uses_custom_noise_tokens(tmp_path: Path, run_script) -> None:
     source = pics / "Garden Fern.png"
     Image.new("RGB", (2, 2), "green").save(source)
     (root / ".pymo.toml").write_text(
-        "version = 1\n"
-        "[rename]\n"
-        'noise_tokens = ["garden"]\n',
+        "version = 1\n" "[rename]\n" 'noise_tokens = ["garden"]\n',
         encoding="utf-8",
     )
 
