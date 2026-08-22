@@ -25,6 +25,7 @@ from pymo.config import (
 )
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier, desired_directory
+from pymo.progress import ProgressMeter
 from pymo.rename import canonical_match, collection_slug
 
 
@@ -145,17 +146,20 @@ def _classify_entries(
     entries: tuple[RawEntry, ...],
     classifier: Classifier,
     workers: int,
+    progress_interval_seconds: int,
     show_progress: bool,
 ) -> tuple[ScanEntry, ...]:
     results: list[ScanEntry] = []
+    progress = ProgressMeter(len(entries), None, progress_interval_seconds)
     with ThreadPoolExecutor(max_workers=workers) as executor:
         classified = executor.map(
             lambda entry: _classify_entry(entry, classifier), entries
         )
-        for number, entry in enumerate(classified, start=1):
+        for entry in classified:
             results.append(entry)
-            if show_progress and number % 200 == 0:
-                print(f"  classified {number}/{len(entries)}")
+            progress_message = progress.advance("classified")
+            if show_progress and progress_message:
+                print(f"  {progress_message}")
     return tuple(results)
 
 
@@ -178,7 +182,10 @@ def _sha256(path: Path) -> str:
 
 
 def _duplicate_statistics(
-    entries: tuple[ScanEntry, ...], checksums: bool, show_progress: bool
+    entries: tuple[ScanEntry, ...],
+    checksums: bool,
+    progress_interval_seconds: int,
+    show_progress: bool,
 ) -> dict[str, Any]:
     by_kind_size: dict[tuple[str, int], list[ScanEntry]] = defaultdict(list)
     for entry in entries:
@@ -219,18 +226,27 @@ def _duplicate_statistics(
     hashed_files = 0
     hashed_bytes = 0
     unreadable = 0
+    candidate_entries = [entry for values in candidates.values() for entry in values]
+    progress = ProgressMeter(
+        len(candidate_entries),
+        sum(entry.size for entry in candidate_entries),
+        progress_interval_seconds,
+    )
     for values in candidates.values():
         for entry in values:
             try:
                 digest = _sha256(entry.path)
             except OSError:
                 unreadable += 1
-                continue
-            exact_groups[f"{entry.kind}:{digest}"].append(entry)
-            hashed_files += 1
-            hashed_bytes += entry.size
-            if show_progress and hashed_files % 100 == 0:
-                print(f"  checksummed {hashed_files} candidate file(s)")
+            else:
+                exact_groups[f"{entry.kind}:{digest}"].append(entry)
+                hashed_files += 1
+                hashed_bytes += entry.size
+            progress_message = progress.advance(
+                "checksum progress", byte_count=entry.size
+            )
+            if show_progress and progress_message:
+                print(f"  {progress_message}")
     matches = [group for group in exact_groups.values() if len(group) > 1]
     result["exact_bytes"] = {
         "groups": len(matches),
@@ -278,7 +294,13 @@ def build_report(
     layout = CollectionLayout(root)
     walk = _collect_entries(root, config)
     classifier = Classifier(config.classification)
-    entries = _classify_entries(walk.entries, classifier, workers, show_progress)
+    entries = _classify_entries(
+        walk.entries,
+        classifier,
+        workers,
+        config.performance.progress_interval_seconds,
+        show_progress,
+    )
 
     kind_counts: Counter[str] = Counter()
     kind_sizes: Counter[str] = Counter()
@@ -352,7 +374,12 @@ def build_report(
         "canonical_media_names": canonical_names,
         "proposed_renames": rename_candidates,
     }
-    duplicate_report = _duplicate_statistics(entries, checksums, show_progress)
+    duplicate_report = _duplicate_statistics(
+        entries,
+        checksums,
+        config.performance.progress_interval_seconds,
+        show_progress,
+    )
     source_videos = [
         entry for entry in entries if entry.kind == "video" and not entry.in_review
     ]

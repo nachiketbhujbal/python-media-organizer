@@ -18,6 +18,10 @@ deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
+The current unreleased patch adds shared timing, observed throughput, ETA,
+FFmpeg heartbeats, and console timestamp controls. It is a backward-compatible
+candidate for v0.2.1; no release tag or push is implied by this handoff.
+
 Hard requirements:
 
 1. Mutating commands default to dry run and require `--apply`.
@@ -68,6 +72,7 @@ python-media-organizer/
     config.py
     default_config.toml
     logging_config.py
+    progress.py
     action_log.py
     organize.py
     rename.py
@@ -91,8 +96,8 @@ pymo find-video-duplicates COLLECTION
 The four mutating tools support dry-run/apply behavior and `--undo`, which is
 also a preview unless combined with `--apply`. `scan` is read-only. Global
 `--verbose`, `--quiet`,
-`--log-file PATH`, `--config PATH`, and `--show-ignored` options go before the
-subcommand. `--show-ignored` and command-specific options are also accepted by
+`--log-file PATH`, `--timestamps`, `--config PATH`, and `--show-ignored`
+options go before the subcommand. `--show-ignored` and command-specific options are also accepted by
 the selected command after its collection argument.
 
 ## Shared configuration and collection layout
@@ -100,7 +105,8 @@ the selected command after its collection argument.
 `src/pymo/default_config.toml` is packaged read-only data, loaded for every
 forward command. It contains the default ignore patterns, classification
 extensions and MIME policies, rename noise tokens, image-inspection
-extensions, video decode timeout, and the default scan worker count. Collection
+extensions, video decode timeout, scan worker count, and progress interval.
+Collection
 or explicit custom arrays
 extend packaged arrays; they cannot remove safety defaults. A custom video
 timeout overrides the packaged value, while `--decode-timeout` has final
@@ -282,6 +288,12 @@ internal threading, and parallel decode processes can contend for disk and CPU,
 especially on external media. Add bounded process-level decoding only after
 representative benchmarks demonstrate a reliable benefit.
 
+The finder reports uncached candidate count and bytes before decoding, an
+observed aggregate rate and ETA after completed candidates, and a configurable
+heartbeat while a single FFmpeg subprocess remains active. These reports do
+not include filenames. The default interval is 15 seconds through
+`performance.progress_interval_seconds`; accepted values are 1..3600.
+
 ## Collection scan
 
 `src/pymo/scan.py` provides the read-only first-run `pymo scan COLLECTION`
@@ -313,13 +325,18 @@ behavioral tests.
 - `--verbose` enables diagnostic `DEBUG` output.
 - `--quiet` keeps only warnings and errors.
 - `--log-file PATH` creates a timestamped local log only at the requested path.
+- `--timestamps` prefixes every physical console line with an ISO timestamp.
+- Explicit log files timestamp every physical line, including lines contained
+  inside one multi-line message.
 - `--show-ignored` explicitly adds relative ignored paths; `--verbose` alone
   never reveals them.
 - No persistent log is created by default.
 
 Do not put media bytes or unrelated metadata into exceptions or diagnostics.
 Scan JSON is the first machine-readable result contract; human command output
-continues to use logging.
+continues to use logging. Every normal non-JSON CLI run ends with total elapsed
+time. Long stages use `src/pymo/progress.py` for aggregate file/data rates and
+observed ETA; no filenames or fabricated reference speeds enter those metrics.
 
 ## Dependencies and environment
 
@@ -373,6 +390,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;
+- command runtime summaries, optional ISO console timestamps, timestamped
+  multi-line file logs, deterministic duration/rate/ETA formatting, and
+  long-FFmpeg heartbeat behavior;
 - typed configuration parsing, immutable/additive defaults, validated media
   extensions, MIME types, noise tokens and timeout, alternate-config
   selection, invalid-schema refusal, and config self-protection;

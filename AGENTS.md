@@ -58,6 +58,8 @@ never duplicate the version in source or static project metadata.
 - `src/pymo/collection.py`: immutable canonical paths for one collection.
 - `src/pymo/logging_config.py`: console logging plus explicitly requested local
   log files.
+- `src/pymo/progress.py`: shared elapsed-time, observed-rate, ETA, and heartbeat
+  formatting without filenames or persistent state.
 - `src/pymo/config.py` and `src/pymo/default_config.toml`: validated shared
   configuration and immutable local safety defaults.
 - `src/pymo/cli.py`: thin unified command dispatcher.
@@ -101,6 +103,9 @@ report-only future work and must never silently enter the exact move path.
 - Real FFmpeg integration tests are required for video behavior; controlled
   unit tests remain useful for safety properties and error paths.
 - Run the complete suite before handoff.
+- Base performance rates and ETAs on observed work only. Keep aggregate timing
+  path-private, preserve stable ordering, and never publish guessed universal
+  decode speeds as if they were measurements.
 - Keep `README.md`, `HANDOFF.md`, and `RESEARCH_IMPROVEMENTS.md` current when a
   decision changes their claims.
 - Maintain local Git history with concise one-line commits. Do not configure a

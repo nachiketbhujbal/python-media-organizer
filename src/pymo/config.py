@@ -56,6 +56,7 @@ class VideoDuplicateConfig:
 @dataclass(frozen=True)
 class PerformanceConfig:
     scan_workers: int
+    progress_interval_seconds: int
 
 
 @dataclass(frozen=True)
@@ -111,6 +112,7 @@ class _ConfigLayer:
     image_duplicate_extensions: tuple[str, ...] = ()
     decode_timeout_seconds: int | None = None
     scan_workers: int | None = None
+    progress_interval_seconds: int | None = None
 
 
 def add_config_argument(parser: argparse.ArgumentParser) -> None:
@@ -251,7 +253,7 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
     performance = _table(
         document,
         "performance",
-        frozenset({"scan_workers"}),
+        frozenset({"scan_workers", "progress_interval_seconds"}),
         source,
     )
 
@@ -276,6 +278,20 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
         if not 1 <= scan_workers <= 32:
             raise ConfigError(
                 f"{source}: performance.scan_workers must be between 1 and 32"
+            )
+
+    progress_interval = performance.get("progress_interval_seconds")
+    if progress_interval is not None:
+        if isinstance(progress_interval, bool) or not isinstance(
+            progress_interval, int
+        ):
+            raise ConfigError(
+                f"{source}: performance.progress_interval_seconds must be an integer"
+            )
+        if not 1 <= progress_interval <= 3_600:
+            raise ConfigError(
+                f"{source}: performance.progress_interval_seconds must be "
+                "between 1 and 3600"
             )
 
     return _ConfigLayer(
@@ -326,6 +342,7 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
         ),
         decode_timeout_seconds=timeout,
         scan_workers=scan_workers,
+        progress_interval_seconds=progress_interval,
     )
 
 
@@ -385,6 +402,10 @@ def _packaged_defaults() -> _ConfigLayer:
         raise ConfigError(
             "packaged defaults: performance.scan_workers is required"
         )
+    if defaults.progress_interval_seconds is None:
+        raise ConfigError(
+            "packaged defaults: performance.progress_interval_seconds is required"
+        )
     return defaults
 
 
@@ -416,6 +437,15 @@ def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
     )
     if scan_workers is None:
         raise ConfigError("packaged defaults: performance.scan_workers is required")
+    progress_interval = (
+        custom.progress_interval_seconds
+        if custom.progress_interval_seconds is not None
+        else defaults.progress_interval_seconds
+    )
+    if progress_interval is None:
+        raise ConfigError(
+            "packaged defaults: performance.progress_interval_seconds is required"
+        )
 
     return PymoConfig(
         ignore=IgnoreConfig(
@@ -459,7 +489,10 @@ def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
             )
         ),
         video_duplicates=VideoDuplicateConfig(decode_timeout_seconds=timeout),
-        performance=PerformanceConfig(scan_workers=scan_workers),
+        performance=PerformanceConfig(
+            scan_workers=scan_workers,
+            progress_interval_seconds=progress_interval,
+        ),
         custom_path=custom_path,
     )
 

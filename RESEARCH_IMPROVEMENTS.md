@@ -631,6 +631,20 @@ Every performance option needs synthetic correctness tests, deterministic
 results across worker counts, interruption tests where state is persisted, and
 representative benchmarks before its default changes.
 
+The current unreleased timing patch implements the first measurement layer:
+all normal commands report total elapsed time; long stages report aggregate
+observed file/data rates and ETA; exact-video decoding emits a heartbeat during
+one long candidate; and `performance.progress_interval_seconds` controls the
+cadence. `--timestamps` is an opt-in console presentation choice, while
+explicit log files timestamp every physical line. Scan JSON remains clean.
+
+No universal throughput default is stored because classification, hashing,
+image decoding, and FFmpeg decoding have different cost models, and storage,
+codec, resolution, and hardware dominate performance. A future derived local
+index may retain privacy-safe per-stage historical aggregates to improve
+collection-specific estimates, but it must document expiry/invalidation and
+must never turn a read-only `scan` into an implicit write.
+
 ### 6. Duplicate-detection levels
 
 Keep definitions separate and visible to users:

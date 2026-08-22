@@ -77,6 +77,10 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert "Potentially reclaimable if extra copies were deleted" in dry_run.stdout
     assert "No files are deleted by this tool" in dry_run.stdout
     assert "Fingerprint cache: 0 hit(s), 2 miss(es)" in dry_run.stdout
+    assert "inspected 3/3 (100.0%)" in dry_run.stdout
+    assert "Fingerprinting 2 uncached candidate content file(s)" in dry_run.stdout
+    assert "fingerprint progress 2/2 (100.0%)" in dry_run.stdout
+    assert "/s" in dry_run.stdout
     assert not (tmp_path / "dups").exists()
     assert cache.is_file()
     assert not action_log_path(tmp_path).exists()
@@ -399,9 +403,14 @@ def test_ffmpeg_decode_commands_only_use_local_file_inputs(monkeypatch) -> None:
     commands: list[list[str]] = []
 
     def fake_stream(
-        command: list[str], consume_stdout, timeout: int
+        command: list[str],
+        consume_stdout,
+        timeout: int,
+        progress_callback=None,
     ) -> None:
         commands.append(command)
+        if progress_callback is not None:
+            progress_callback()
         if "framehash" in command:
             consume_stdout(
                 b"0, 0, 0, 200000, 4, "

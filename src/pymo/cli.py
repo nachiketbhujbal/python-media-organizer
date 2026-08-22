@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from pymo import organize, rename, scan
 from pymo.config import add_show_ignored_argument
 from pymo.duplicates import images, videos
 from pymo.logging_config import configure_logging
+from pymo.progress import format_duration
 
 
 def _commands():
@@ -44,6 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="also write detailed logs to this explicit local path",
     )
     parser.add_argument(
+        "--timestamps",
+        action="store_true",
+        help="prefix each console line with an ISO timestamp",
+    )
+    parser.add_argument(
         "--config",
         type=Path,
         help="use an alternate TOML configuration for this command",
@@ -56,11 +63,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    started_at = time.monotonic()
     structured_json = args.command == "scan" and "--json" in args.arguments
     configure_logging(
         verbose=args.verbose and not structured_json,
         quiet=args.quiet and not structured_json,
         log_file=args.log_file,
+        timestamps=args.timestamps and not structured_json,
     )
     if not structured_json:
         logging.getLogger("pymo").debug(
@@ -72,4 +81,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         command_arguments[0:0] = ["--config", str(args.config)]
     if args.show_ignored:
         command_arguments[0:0] = ["--show-ignored"]
-    return commands[args.command](command_arguments)
+    return_code = commands[args.command](command_arguments)
+    if not structured_json:
+        logging.getLogger("pymo").info(
+            "Completed %s in %s (exit %s).",
+            args.command,
+            format_duration(time.monotonic() - started_at),
+            return_code,
+        )
+    return return_code

@@ -30,6 +30,7 @@ def test_packaged_defaults_cover_common_local_system_metadata(
     assert ".png" in config.image_duplicates.extensions
     assert config.video_duplicates.decode_timeout_seconds == 3600
     assert config.performance.scan_workers == 4
+    assert config.performance.progress_interval_seconds == 15
 
 
 def test_collection_config_extends_defaults_and_protects_itself(
@@ -81,7 +82,8 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
         "[video_duplicates]\n"
         "decode_timeout_seconds = 45\n"
         "[performance]\n"
-        "scan_workers = 2\n",
+        "scan_workers = 2\n"
+        "progress_interval_seconds = 5\n",
         encoding="utf-8",
     )
 
@@ -97,6 +99,7 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
     assert {".png", ".flower"}.issubset(config.image_duplicates.extensions)
     assert config.video_duplicates.decode_timeout_seconds == 45
     assert config.performance.scan_workers == 2
+    assert config.performance.progress_interval_seconds == 5
 
 
 @pytest.mark.parametrize(
@@ -115,6 +118,8 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
         "version = 1\n[video_duplicates]\ndecode_timeout_seconds = true\n",
         "version = 1\n[performance]\nscan_workers = 0\n",
         "version = 1\n[performance]\nscan_workers = true\n",
+        "version = 1\n[performance]\nprogress_interval_seconds = 0\n",
+        "version = 1\n[performance]\nprogress_interval_seconds = true\n",
         "version = 1\n[image_duplicates]\nunknown = []\n",
         "version = 1\n[ignore]\nfiles = [\n",
     ],

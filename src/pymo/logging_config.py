@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import TextIO
 
@@ -24,8 +25,31 @@ class _MaximumLevel(logging.Filter):
         return record.levelno <= self.maximum
 
 
+class _IsoLineFormatter(logging.Formatter):
+    """Prefix every physical line, including lines inside one log message."""
+
+    def __init__(self, *, include_context: bool) -> None:
+        super().__init__()
+        self.include_context = include_context
+
+    def format(self, record: logging.LogRecord) -> str:
+        timestamp = datetime.fromtimestamp(record.created).astimezone().isoformat(
+            timespec="seconds"
+        )
+        context = (
+            f"{record.levelname} {record.name} " if self.include_context else ""
+        )
+        message = record.getMessage()
+        lines = message.splitlines() or [""]
+        return "\n".join(f"{timestamp} {context}{line}" for line in lines)
+
+
 def configure_logging(
-    *, verbose: bool = False, quiet: bool = False, log_file: Path | None = None
+    *,
+    verbose: bool = False,
+    quiet: bool = False,
+    log_file: Path | None = None,
+    timestamps: bool = False,
 ) -> None:
     """Configure console logging and an optional explicitly requested file."""
     logger = _logger()
@@ -36,12 +60,17 @@ def configure_logging(
     stdout = logging.StreamHandler(sys.stdout)
     stdout.setLevel(level)
     stdout.addFilter(_MaximumLevel(logging.INFO))
-    stdout.setFormatter(logging.Formatter("%(message)s"))
+    console_formatter: logging.Formatter = (
+        _IsoLineFormatter(include_context=False)
+        if timestamps
+        else logging.Formatter("%(message)s")
+    )
+    stdout.setFormatter(console_formatter)
     logger.addHandler(stdout)
 
     stderr = logging.StreamHandler(sys.stderr)
     stderr.setLevel(logging.WARNING)
-    stderr.setFormatter(logging.Formatter("%(message)s"))
+    stderr.setFormatter(console_formatter)
     logger.addHandler(stderr)
 
     if log_file is not None:
@@ -49,12 +78,7 @@ def configure_logging(
         destination.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(destination, encoding="utf-8")
         file_handler.setLevel(logging.DEBUG if verbose else logging.INFO)
-        file_handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s %(levelname)s %(name)s %(message)s",
-                datefmt="%Y-%m-%dT%H:%M:%S%z",
-            )
-        )
+        file_handler.setFormatter(_IsoLineFormatter(include_context=True))
         logger.addHandler(file_handler)
 
 

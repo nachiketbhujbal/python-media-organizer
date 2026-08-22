@@ -40,6 +40,7 @@ from pymo.config import (
     load_config,
 )
 from pymo.logging_config import emit as print
+from pymo.progress import ProgressMeter
 
 
 @dataclass(frozen=True)
@@ -194,9 +195,12 @@ def build_plan(
     occupied = {path_key(path) for path in paths}
     plan: list[MoveRecord] = []
     already_correct: list[FileRecord] = []
+    progress = ProgressMeter(
+        len(paths), None, config.performance.progress_interval_seconds
+    )
 
     print(f"Classifying {len(paths)} file(s) in {root}")
-    for number, path in enumerate(paths, start=1):
+    for path in paths:
         kind, mime_type = classifier.classify(path)
         record = FileRecord(path=path, kind=kind, mime_type=mime_type)
         destination = desired_directory(kind, root, pics, vids)
@@ -212,8 +216,9 @@ def build_plan(
                     mime_type=mime_type,
                 )
             )
-        if number % 200 == 0:
-            print(f"  classified {number}/{len(paths)}")
+        progress_message = progress.advance("classified")
+        if progress_message:
+            print(f"  {progress_message}")
 
     return plan, already_correct, skipped_links, ignored
 

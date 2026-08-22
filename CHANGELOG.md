@@ -2,6 +2,19 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## Unreleased
+
+- Add a privacy-safe final elapsed-time summary to every normal CLI command.
+- Add opt-in `--timestamps` console output and ensure every physical line in an
+  explicitly requested log file carries an ISO timestamp, level, and logger.
+- Add shared observed progress, file/data rates, and ETA calculations for
+  collection classification, checksums, image decoding, video inspection, and
+  exact-video fingerprinting.
+- Add periodic heartbeats during a single long FFmpeg decode and report
+  uncached fingerprint counts and bytes before decoding begins.
+- Add validated `performance.progress_interval_seconds` configuration with a
+  15-second default; retain deterministic output and clean scan JSON.
+
 ## 0.2.0 - 2026-08-22
 
 - Add read-only `pymo scan` reports for inventory, storage, content types,

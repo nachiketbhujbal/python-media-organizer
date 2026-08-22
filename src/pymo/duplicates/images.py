@@ -38,6 +38,7 @@ from pymo.config import (
 )
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
+from pymo.progress import ProgressMeter
 
 try:
     from PIL import Image, ImageOps, UnidentifiedImageError
@@ -337,7 +338,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     groups: dict[str, list[ImageRecord]] = defaultdict(list)
     scanned_bytes = 0
     skipped: list[tuple[Path, str]] = []
-    for number, path in enumerate(paths, start=1):
+    path_sizes: dict[Path, int] = {}
+    for path in paths:
+        try:
+            path_sizes[path] = path.stat().st_size
+        except OSError:
+            path_sizes[path] = 0
+    progress = ProgressMeter(
+        len(paths),
+        sum(path_sizes.values()),
+        config.performance.progress_interval_seconds,
+    )
+    for path in paths:
         try:
             stat = path.stat()
             record = ImageRecord(
@@ -350,8 +362,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             scanned_bytes += record.file_size
         except (OSError, ValueError, UnidentifiedImageError) as error:
             skipped.append((path, str(error)))
-        if number % 100 == 0:
-            print(f"  processed {number}/{len(paths)}")
+        progress_message = progress.advance(
+            "processed", byte_count=path_sizes[path]
+        )
+        if progress_message:
+            print(f"  {progress_message}")
 
     duplicate_groups = [items for items in groups.values() if len(items) > 1]
     duplicate_groups.sort(key=lambda items: str(min(r.path for r in items)).casefold())

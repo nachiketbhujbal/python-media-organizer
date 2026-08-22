@@ -40,6 +40,7 @@ from pymo.config import (
 )
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier, discover_files, path_key
+from pymo.progress import ProgressMeter
 
 
 @dataclass(frozen=True)
@@ -196,29 +197,34 @@ def build_rename_plan(
     }
     next_numbers = {"image": 1, "video": 1}
     already_named = 0
+    progress = ProgressMeter(
+        len(paths), None, config.performance.progress_interval_seconds
+    )
 
     print(f"Classifying {len(paths)} file(s) in {root}")
-    for number, path in enumerate(paths, start=1):
+    for path in paths:
         kind, _ = classifier.classify(path)
-        if kind not in {"picture", "video"}:
-            continue
-        output_kind = "image" if kind == "picture" else "video"
-        existing = canonical_match(path.stem, collection)
-        if existing and existing.group(1).lower() == output_kind:
-            next_numbers[output_kind] = max(
-                next_numbers[output_kind], int(existing.group(2)) + 1
-            )
-            already_named += 1
-            continue
-        timestamp = (
-            embedded_image_timestamp(path) if output_kind == "image" else None
-        ) or timestamp_from_name(path.name)
-        descriptor = clean_descriptor(
-            path.stem, collection, config.rename.noise_tokens
-        )
-        candidates[output_kind].append((path, timestamp, descriptor))
-        if number % 200 == 0:
-            print(f"  classified {number}/{len(paths)}")
+        if kind in {"picture", "video"}:
+            output_kind = "image" if kind == "picture" else "video"
+            existing = canonical_match(path.stem, collection)
+            if existing and existing.group(1).lower() == output_kind:
+                next_numbers[output_kind] = max(
+                    next_numbers[output_kind], int(existing.group(2)) + 1
+                )
+                already_named += 1
+            else:
+                timestamp = (
+                    embedded_image_timestamp(path)
+                    if output_kind == "image"
+                    else None
+                ) or timestamp_from_name(path.name)
+                descriptor = clean_descriptor(
+                    path.stem, collection, config.rename.noise_tokens
+                )
+                candidates[output_kind].append((path, timestamp, descriptor))
+        progress_message = progress.advance("classified")
+        if progress_message:
+            print(f"  {progress_message}")
 
     occupied = {path_key(path) for path in paths}
     plan: list[RenameRecord] = []

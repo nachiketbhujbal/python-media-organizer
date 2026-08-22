@@ -47,6 +47,7 @@ from pymo.config import (
 )
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
+from pymo.progress import ProgressMeter, format_bytes
 
 
 # This value is persisted with derived fingerprints. Changing the algorithm
@@ -383,6 +384,7 @@ def _stream_command(
     command: list[str],
     consume_stdout: Callable[[bytes], None],
     timeout: int,
+    progress_callback: Callable[[], None] | None = None,
 ) -> None:
     try:
         process = subprocess.Popen(
@@ -415,6 +417,8 @@ def _stream_command(
                     consume_stdout(chunk)
                 else:
                     errors.append(chunk)
+            if progress_callback is not None:
+                progress_callback()
         return_code = process.wait(timeout=10)
     except BaseException:
         if process.poll() is None:
@@ -433,7 +437,12 @@ def _stream_command(
         )
 
 
-def video_frame_signature(path: Path, ffmpeg: str, timeout: int) -> tuple[str, int]:
+def video_frame_signature(
+    path: Path,
+    ffmpeg: str,
+    timeout: int,
+    progress_callback: Callable[[], None] | None = None,
+) -> tuple[str, int]:
     digest = hashlib.sha256()
     line_buffer = bytearray()
     frame_count = 0
@@ -480,7 +489,7 @@ def video_frame_signature(path: Path, ffmpeg: str, timeout: int) -> tuple[str, i
         "sha256",
         "pipe:1",
     ]
-    _stream_command(command, consume, timeout)
+    _stream_command(command, consume, timeout, progress_callback)
     if line_buffer.strip():
         consume(b"\n")
     if frame_count == 0:
@@ -489,7 +498,11 @@ def video_frame_signature(path: Path, ffmpeg: str, timeout: int) -> tuple[str, i
 
 
 def audio_pcm_signature(
-    path: Path, ffmpeg: str, probe: ProbeInfo, timeout: int
+    path: Path,
+    ffmpeg: str,
+    probe: ProbeInfo,
+    timeout: int,
+    progress_callback: Callable[[], None] | None = None,
 ) -> tuple[str, int]:
     if not probe.has_audio:
         return "none", 0
@@ -523,17 +536,25 @@ def audio_pcm_signature(
         "s32le",
         "pipe:1",
     ]
-    _stream_command(command, consume, timeout)
+    _stream_command(command, consume, timeout, progress_callback)
     if byte_count == 0:
         raise VideoInspectionError("FFmpeg decoded no audio samples")
     return digest.hexdigest(), byte_count
 
 
 def derive_fingerprint(
-    path: Path, probe: ProbeInfo, ffmpeg: str, timeout: int
+    path: Path,
+    probe: ProbeInfo,
+    ffmpeg: str,
+    timeout: int,
+    progress_callback: Callable[[], None] | None = None,
 ) -> DerivedFingerprint:
-    video_hash, frame_count = video_frame_signature(path, ffmpeg, timeout)
-    audio_hash, audio_bytes = audio_pcm_signature(path, ffmpeg, probe, timeout)
+    video_hash, frame_count = video_frame_signature(
+        path, ffmpeg, timeout, progress_callback
+    )
+    audio_hash, audio_bytes = audio_pcm_signature(
+        path, ffmpeg, probe, timeout, progress_callback
+    )
     starts = [probe.video_start_us]
     if probe.audio_start_us is not None:
         starts.append(probe.audio_start_us)
@@ -846,6 +867,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     records: list[VideoRecord] = []
     scanned_bytes = 0
     skipped: list[tuple[Path, str]] = []
+    path_sizes: dict[Path, int] = {}
+    for path in paths:
+        try:
+            path_sizes[path] = path.stat().st_size
+        except OSError:
+            path_sizes[path] = 0
+    inspection_progress = ProgressMeter(
+        len(paths),
+        sum(path_sizes.values()),
+        config.performance.progress_interval_seconds,
+    )
     for number, path in enumerate(paths, start=1):
         try:
             stat = path.stat()
@@ -860,8 +892,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             scanned_bytes += record.file_size
         except (OSError, VideoInspectionError) as error:
             skipped.append((path, str(error)))
-        if number % 25 == 0:
-            print(f"  inspected {number}/{len(paths)}")
+        progress_message = inspection_progress.advance(
+            "inspected", byte_count=path_sizes[path]
+        )
+        if progress_message:
+            print(f"  {progress_message}")
 
     candidates: dict[tuple[object, ...], list[VideoRecord]] = defaultdict(list)
     for record in records:
@@ -895,46 +930,77 @@ def main(argv: Sequence[str] | None = None) -> int:
             else "incremental updates enabled."
         )
     )
-    derived: dict[str, DerivedFingerprint] = {}
-    for number, (file_hash, representative) in enumerate(
-        sorted(unique_hashes.items(), key=lambda item: str(item[1].path).casefold()),
-        start=1,
-    ):
-        if file_hash in cached:
-            derived[file_hash] = cached[file_hash]
-        else:
-            try:
-                fingerprint = derive_fingerprint(
-                    representative.path,
-                    representative.probe,
-                    ffmpeg,
-                    decode_timeout,
-                )
-            except VideoInspectionError as error:
-                same_bytes = [
-                    record
-                    for record in candidate_records
-                    if record.byte_sha256 == file_hash
-                ]
-                skipped.extend((record.path, str(error)) for record in same_bytes)
-            else:
-                derived[file_hash] = fingerprint
-                try:
-                    if not args.no_cache:
-                        save_cached_fingerprints(
-                            database,
-                            ffmpeg_release,
-                            {file_hash: fingerprint},
-                        )
-                except VideoInspectionError as error:
-                    print(
-                        f"Fingerprint cache update failed safely: {error}",
-                        file=sys.stderr,
-                    )
-                    return 1
+    ordered_hashes = sorted(
+        unique_hashes.items(), key=lambda item: str(item[1].path).casefold()
+    )
+    derived: dict[str, DerivedFingerprint] = {
+        file_hash: cached[file_hash]
+        for file_hash, _ in ordered_hashes
+        if file_hash in cached
+    }
+    decode_items = [
+        (file_hash, representative)
+        for file_hash, representative in ordered_hashes
+        if file_hash not in cached
+    ]
+    decode_progress = ProgressMeter(
+        len(decode_items),
+        sum(representative.file_size for _, representative in decode_items),
+        config.performance.progress_interval_seconds,
+    )
+    if decode_items:
         print(
-            f"  fingerprinted {number}/{len(unique_hashes)} candidate content file(s)"
+            f"Fingerprinting {len(decode_items)} uncached candidate content "
+            f"file(s), {format_bytes(decode_progress.total_bytes or 0)} total."
         )
+    for number, (file_hash, representative) in enumerate(decode_items, start=1):
+        print(
+            f"  starting fingerprint {number}/{len(decode_items)} "
+            f"({format_bytes(representative.file_size)})"
+        )
+
+        def report_heartbeat() -> None:
+            message = decode_progress.heartbeat("fingerprint progress", number)
+            if message:
+                print(f"  {message}")
+
+        try:
+            fingerprint = derive_fingerprint(
+                representative.path,
+                representative.probe,
+                ffmpeg,
+                decode_timeout,
+                report_heartbeat,
+            )
+        except VideoInspectionError as error:
+            same_bytes = [
+                record
+                for record in candidate_records
+                if record.byte_sha256 == file_hash
+            ]
+            skipped.extend((record.path, str(error)) for record in same_bytes)
+        else:
+            derived[file_hash] = fingerprint
+            try:
+                if not args.no_cache:
+                    save_cached_fingerprints(
+                        database,
+                        ffmpeg_release,
+                        {file_hash: fingerprint},
+                    )
+            except VideoInspectionError as error:
+                print(
+                    f"Fingerprint cache update failed safely: {error}",
+                    file=sys.stderr,
+                )
+                return 1
+        progress_message = decode_progress.advance(
+            "fingerprint progress",
+            byte_count=representative.file_size,
+            force=True,
+        )
+        if progress_message:
+            print(f"  {progress_message}")
 
     fingerprint_groups: dict[str, list[VideoRecord]] = defaultdict(list)
     for record in candidate_records:

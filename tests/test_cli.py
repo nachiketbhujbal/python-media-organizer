@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from importlib.metadata import version
@@ -72,6 +73,45 @@ def test_cli_quiet_mode_suppresses_informational_output(tmp_path: Path) -> None:
     assert result.stderr == ""
 
 
+def test_cli_reports_elapsed_runtime_and_optional_console_timestamps(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+
+    ordinary = run_pymo("organize", collection)
+    timestamped = run_pymo("--timestamps", "organize", collection)
+
+    assert "Completed organize in " in ordinary.stdout
+    lines = timestamped.stdout.splitlines()
+    assert lines
+    assert all(
+        re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} ", line)
+        for line in lines
+    )
+    assert "Completed organize in " in timestamped.stdout
+
+
+def test_log_file_timestamps_every_physical_line(tmp_path: Path) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+    log_file = tmp_path / "pymo.log"
+
+    result = run_pymo("--log-file", log_file, "organize", collection)
+
+    assert result.returncode == 0
+    lines = log_file.read_text(encoding="utf-8").splitlines()
+    assert lines
+    assert all(
+        re.match(
+            r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} "
+            r"(?:INFO|WARNING|ERROR|DEBUG) pymo ",
+            line,
+        )
+        for line in lines
+    )
+
+
 def test_cli_forwards_global_config_to_subcommand(tmp_path: Path) -> None:
     collection = tmp_path / "collection"
     nested = collection / "incoming"
@@ -123,7 +163,7 @@ def test_scan_json_stays_machine_readable_with_global_output_flags(
     collection = tmp_path / "media-collection"
     collection.mkdir()
 
-    for output_flag in ("--verbose", "--quiet"):
+    for output_flag in ("--verbose", "--quiet", "--timestamps"):
         result = run_pymo(output_flag, "scan", collection, "--json")
 
         assert result.returncode == 0, result.stdout + result.stderr

@@ -101,6 +101,7 @@ decode_timeout_seconds = 3600
 
 [performance]
 scan_workers = 4
+progress_interval_seconds = 15
 ```
 
 Patterns are case-insensitive and match either a basename or a path relative
@@ -127,7 +128,8 @@ inspect; unreadable formats are still skipped. Rename noise tokens remove
 additional unhelpful filename words. A command-line `--decode-timeout` takes
 precedence over the configured video timeout. `scan_workers` controls bounded
 parallel content classification for `pymo scan`; it must be between 1 and 32,
-and `--workers` overrides it for one scan.
+and `--workers` overrides it for one scan. `progress_interval_seconds` controls
+periodic status and long-operation heartbeat cadence from 1 to 3600 seconds.
 
 An alternate extension file can be selected for one command:
 
@@ -149,7 +151,10 @@ agrees on the same collection layout.
 ## Commands
 
 Every mutating command is a dry run unless `--apply` is present. Review the
-preview before applying the same command.
+preview before applying the same command. Every normal command ends with its
+total elapsed time. Long processing stages also report completed files, bytes
+where meaningful, observed rates, and an ETA once enough work has completed to
+calculate one honestly.
 
 ### Scan a collection
 
@@ -253,6 +258,13 @@ cache hits and misses. Add `--no-cache` for a run that neither reads nor writes
 the cache. Cache writes are derived local state only: they never move media or
 write action history.
 
+Before uncached video decoding begins, the finder reports the number and total
+size of fingerprints it must calculate. It reports observed progress and data
+rate after each candidate, estimates remaining time from completed work, and
+emits a periodic heartbeat while one FFmpeg decode is still running. These
+figures describe the current machine and storage device; pymo does not invent a
+universal decode speed.
+
 Both duplicate finders report retained storage, extra-copy storage, and the
 space potentially reclaimable if the isolated copies are later deleted
 manually. `pymo` itself never deletes them.
@@ -306,12 +318,16 @@ terminal:
 ```bash
 pymo --verbose organize "/path/to/media-collection"
 pymo --quiet organize "/path/to/media-collection"
+pymo --timestamps find-video-duplicates "/path/to/media-collection"
 pymo --log-file "/path/to/pymo.log" organize "/path/to/media-collection"
 pymo --show-ignored organize "/path/to/media-collection"
 ```
 
 Persistent logs are opt-in because paths and filenames can be private. No log
 file is created by default. Global logging options go before the subcommand.
+`--timestamps` prefixes every physical console line with an ISO timestamp;
+explicit log files always include ISO timestamps, levels, and logger names on
+every line. Normal console output remains uncluttered unless the flag is used.
 `--show-ignored` is a separate privacy opt-in and may appear globally or after
 the subcommand's collection argument.
 
@@ -328,6 +344,8 @@ content changes, strict folder ownership, exact image and video matching,
 different audio and timing, corrupt/ambiguous media, derived cache behavior,
 incremental cache recovery, cache opt-out, scan reports and JSON stability,
 bounded scan workers, removed v0.1 interfaces,
+elapsed-time summaries, timestamped multi-line logs, observed throughput and
+ETA reporting, FFmpeg heartbeats,
 shared built-in and custom policy, malformed-config refusal, centralized
 collection paths, default ignored-name privacy, explicit relative ignored-path
 output, logging privacy, and the guarantee that video decoding never invokes
