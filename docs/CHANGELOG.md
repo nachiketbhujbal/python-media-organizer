@@ -2,6 +2,15 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.19 - 2026-08-22
+
+- Correct the roadmap introduction to describe its deliberately retained
+  release-status ledger instead of claiming shipped rows are removed.
+- Replace stale README guidance that called the completed validation review
+  future work with the promoted version 0.4 cache foundation.
+- Synchronize the handoff, documentation index, review ledger, and ADR index
+  with the completion audit; runtime behavior is unchanged.
+
 ## 0.3.18 - 2026-08-22
 
 - Prefix every physical line of normal human-readable command logging with a

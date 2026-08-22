@@ -519,9 +519,10 @@ installers can still build and install the package.
 ## Roadmap and research
 
 `pymo scan COLLECTION` provides the fast local overview and
-`pymo validate COLLECTION` provides report-only health checks. Next are the
-adversarial validation review, richer metadata, and comparison tooling. Full
-video decoding remains sequential until representative
+`pymo validate COLLECTION` provides report-only health checks. The next
+promoted subsystem is the version 0.4 shared cache foundation; richer metadata
+and comparison tooling remain later roadmap or research work. Full video
+decoding remains sequential until representative
 benchmarks show that bounded process concurrency improves real external-drive
 workloads without increasing contention or reducing safety.
 

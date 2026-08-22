@@ -3,8 +3,8 @@
 This is the delivery plan for `python-media-organizer`. It records work that
 has been promoted from [research](RESEARCH.md) into an intended release.
 [CHANGELOG.md](CHANGELOG.md) records what actually shipped. Plans can move as
-evidence changes; released entries are removed from this file once their final
-behavior is captured in the changelog and handoff.
+evidence changes. Released entries remain as a compact status and sequencing
+ledger, while the changelog and handoff hold the detailed shipped behavior.
 
 ## Release policy
 
@@ -38,6 +38,7 @@ behavior is captured in the changelog and handoff.
 | 0.3.16 | Cache wording | Make hits, misses, newly persisted records, and no-cache behavior unambiguous. | Released |
 | 0.3.17 | Concise summaries | Add `--summary` for aggregate, path-private command results without verbose group listings. | Released |
 | 0.3.18 | Timestamp default | Timestamp human-readable console lines by default; add an explicit opt-out while preserving clean JSON and compatibility with `--timestamps`. | Released |
+| 0.3.19 | Completion documentation audit | Align the retained release ledger, current-version references, and next-work guidance after the 0.3 stabilization. | Released |
 
 The order may change when a safety dependency is found, but unrelated primary
 purposes are not folded together merely to reduce tag count.

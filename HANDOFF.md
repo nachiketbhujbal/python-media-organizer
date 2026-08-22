@@ -13,17 +13,19 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.18` timestamp-default release. It is a
+`pymo` command, and has a `v0.3.19` documentation-alignment release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.18 prefixes every physical line of normal human-readable command
-logging with an ISO timestamp by default, retains `--timestamps` as an
-explicit compatible spelling, and adds `--no-timestamps` as the console
-opt-out. Structured JSON, help, version, and argument-parser output remain
-unprefixed, while explicitly requested log files remain timestamped regardless
-of the console choice. Version 0.3.17 adds `--summary` to both duplicate finders
+Version 0.3.19 aligns the roadmap's retained release ledger, the README's
+next-work guidance, and the completed review record without changing runtime
+behavior. Version 0.3.18 prefixes every physical line of normal human-readable
+command logging with an ISO timestamp by default, retains `--timestamps` as an
+explicit compatible spelling, and adds `--no-timestamps` as the console opt-out.
+Structured JSON, help, version, and argument-parser output remain unprefixed,
+while explicitly requested log files remain timestamped regardless of the
+console choice. Version 0.3.17 adds `--summary` to both duplicate finders
 for aggregate, path-private scans, applies, and undo previews without changing
 dry-run, matching, cache, action-log, or verification semantics. Version 0.3.16
 reports reusable fingerprint-cache records, fingerprints
