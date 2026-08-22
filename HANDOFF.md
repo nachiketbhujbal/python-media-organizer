@@ -13,12 +13,15 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.15` stage-timing release. It is a
+`pymo` command, and has a `v0.3.16` cache-reporting release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.15 adds independent, path-private monotonic durations for the
+Version 0.3.16 reports reusable fingerprint-cache records, fingerprints
+required, and newly persisted records separately; `--no-cache` states its
+complete no-read/no-write boundary without lookup or update claims. Version
+0.3.15 adds independent, path-private monotonic durations for the
 exact-video discovery, probing, fingerprinting, planning, apply, and
 verification stages. Only stages that actually execute are reported, while the
 CLI retains its whole-command runtime. Version 0.3.14 separates active-item
@@ -376,7 +379,9 @@ Preview and applied runs use collection-root `.pymo.sqlite3`. It is a derived
 cache keyed by content SHA-256, fingerprint algorithm version, and actual
 FFmpeg version. Each successful cache miss is persisted immediately so an
 interrupted preview retains completed work and a later `--apply` reuses it.
-`--no-cache` disables all cache reads and writes.
+The command reports candidate-relevant reusable records, fingerprints still
+required, and how many new records were durably persisted. `--no-cache`
+disables all cache reads and writes and emits no lookup or update claim.
 Existing cache schemas and rows are validated read-only before decoding. The
 read-only SQLite connection uses a stable no-follow descriptor anchored beneath
 the collection root, and a pathname swap stops safely rather than redirecting
@@ -405,7 +410,8 @@ internal threading, and parallel decode processes can contend for disk and CPU,
 especially on external media. Add bounded process-level decoding only after
 representative benchmarks demonstrate a reliable benefit.
 
-The finder reports uncached candidate count and bytes before decoding, an
+The finder reports required candidate-fingerprint count and bytes before
+decoding, an
 observed aggregate rate after completed candidates, and an ETA after at least
 three completed observations. A configurable heartbeat while a single FFmpeg
 subprocess remains active reports only active item, completed count, and
@@ -611,8 +617,11 @@ is available when pre-PR platform evidence is worth the private-repository
 Actions usage. The v0.3.6 workflow merge was the one-time bootstrap because the
 check could not be required until the workflow existed on `main`. GitHub CLI is
 authenticated for pull-request and Actions management; the repository deploy
-key remains the scoped Git transport credential. See `docs/CONTRIBUTING.md` for
-the safe sole-maintainer ruleset.
+key remains the scoped Git transport credential. GitHub's
+`delete_branch_on_merge` repository setting is enabled, so merged remote head
+branches are removed automatically; local branch deletion and remote-tracking
+pruning remain local maintenance. See `docs/CONTRIBUTING.md` for the safe
+sole-maintainer ruleset.
 
 GitHub's ruleset and classic branch-protection APIs currently return HTTP 403
 because the repository is private under GitHub Free. The repository must remain

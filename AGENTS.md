@@ -59,6 +59,9 @@ never duplicate the version in source or static project metadata.
 - `scan` must never alter media, collection layout, or action history. Exact
   video dry runs may update the documented disposable fingerprint cache by
   default; `--no-cache` restores a zero-cache-read/write run.
+- Describe video-cache activity as reusable records, fingerprints required,
+  and new records actually persisted. When `--no-cache` is selected, state the
+  no-read/no-write boundary without implying that a lookup or update occurred.
 - Scan inventory, classification, and checksum facts must come from stable file
   state. Omit detected changes and report only their aggregate count by default.
 - `validate` is report-only: it never repairs, quarantines, moves, deletes,

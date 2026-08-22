@@ -34,7 +34,10 @@ tests. They are intentionally not bundled through a Python wrapper.
 6. Require all pull-request `quality` platform checks to pass before a
    no-fast-forward or GitHub pull-request merge into `main`.
 7. Confirm the automatic `main` checks pass on the resulting merge commit.
-8. Do not place an ordinary feature or fix commit directly on `main`.
+8. GitHub automatically deletes the merged remote head branch. Delete the
+   corresponding local branch and prune stale remote-tracking refs as local
+   maintenance.
+9. Do not place an ordinary feature or fix commit directly on `main`.
 
 Use manual workflow dispatch when platform evidence is needed before opening a
 pull request or for an exceptional tag investigation. Each platform job has a

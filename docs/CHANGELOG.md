@@ -2,6 +2,17 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.16 - 2026-08-22
+
+- Replace ambiguous video-cache hit/miss wording with counts of reusable
+  records and fingerprints actually required.
+- Report newly persisted records after fingerprinting and distinguish required
+  fingerprints that could not be persisted.
+- State explicitly that `--no-cache` reads and writes no cache records, without
+  emitting lookup or update claims for that run.
+- Describe candidate fingerprint work independently from whether caching is
+  enabled, without changing cache or duplicate-matching behavior.
+
 ## 0.3.15 - 2026-08-22
 
 - Add path-private monotonic timing for exact-video discovery, probing,
