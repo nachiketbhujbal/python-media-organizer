@@ -13,12 +13,14 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.12` cache-write-durability release. It is a
+`pymo` command, and has a `v0.3.13` progress-cadence release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.12 serializes cache access with a dedicated collection lock and
+Version 0.3.13 replaces per-item forced progress rows with at most ten stable
+count milestones, genuinely due interval rows, and one final completed-work
+row. Version 0.3.12 serializes cache access with a dedicated collection lock and
 publishes fully synced, validated updates through atomic no-replace or verified
 exchange operations without writing in place. Version 0.3.11 opens an existing
 video fingerprint cache read-only through a
@@ -397,8 +399,10 @@ representative benchmarks demonstrate a reliable benefit.
 
 The finder reports uncached candidate count and bytes before decoding, an
 observed aggregate rate and ETA after completed candidates, and a configurable
-heartbeat while a single FFmpeg subprocess remains active. These reports do
-not include filenames. The default interval is 15 seconds through
+heartbeat while a single FFmpeg subprocess remains active. Completed-work
+status uses ten evenly spaced count milestones, interval-due rows, and one final
+row rather than forcing output for every candidate. These reports do not include
+filenames. The default interval is 15 seconds through
 `performance.progress_interval_seconds`; accepted values are 1..3600.
 
 ## Collection scan
@@ -471,7 +475,9 @@ Do not put media bytes or unrelated metadata into exceptions or diagnostics.
 Scan JSON is the first machine-readable result contract; human command output
 continues to use logging. Every normal non-JSON CLI run ends with total elapsed
 time. Long stages use `src/pymo/progress.py` for aggregate file/data rates and
-observed ETA; no filenames or fabricated reference speeds enter those metrics.
+observed ETA. Completed-work reports use stable count milestones plus due time
+intervals and never force a line for every item; no filenames or fabricated
+reference speeds enter those metrics.
 
 ## Dependencies and environment
 
@@ -541,8 +547,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;
 - command runtime summaries, optional ISO console timestamps, timestamped
-  multi-line file logs, deterministic duration/rate/ETA formatting, and
-  long-FFmpeg heartbeat behavior;
+  multi-line file logs, deterministic duration/rate/ETA formatting, stable
+  ten-milestone completed-work cadence, no forced per-item rows, and long-FFmpeg
+  heartbeat behavior;
 - typed configuration parsing, immutable/additive defaults, validated media
   extensions, MIME types, noise tokens and timeout, alternate-config
   selection, invalid-schema refusal, and config self-protection;

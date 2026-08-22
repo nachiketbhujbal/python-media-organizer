@@ -158,7 +158,9 @@ Every mutating command is a dry run unless `--apply` is present. Review the
 preview before applying the same command. Every normal command ends with its
 total elapsed time. Long processing stages also report completed files, bytes
 where meaningful, observed rates, and an ETA once enough work has completed to
-calculate one honestly.
+calculate one honestly. Completed-work rows use ten evenly spaced count
+milestones, genuinely due time reports, and one final row instead of printing
+after every item.
 
 Ctrl-C reports the interruption, observed runtime, and conventional exit status
 130 without claiming success. An unexpected error emits a stopped-runtime line
@@ -352,10 +354,10 @@ possible.
 
 Before uncached video decoding begins, the finder reports the number and total
 size of fingerprints it must calculate. It reports observed progress and data
-rate after each candidate, estimates remaining time from completed work, and
-emits a periodic heartbeat while one FFmpeg decode is still running. These
-figures describe the current machine and storage device; pymo does not invent a
-universal decode speed.
+rate at stable count milestones or when the configured interval is due,
+estimates remaining time from completed work, and emits a periodic heartbeat
+while one FFmpeg decode is still running. These figures describe the current
+machine and storage device; pymo does not invent a universal decode speed.
 
 Both duplicate finders report retained storage, extra-copy storage, and the
 space potentially reclaimable if the isolated copies are later deleted

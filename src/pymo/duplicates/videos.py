@@ -1432,7 +1432,6 @@ def derive_candidate_fingerprints(
         progress_message = progress.advance(
             "fingerprint progress",
             byte_count=representative.file_size,
-            force=True,
         )
         if progress_message:
             print(f"  {progress_message}")

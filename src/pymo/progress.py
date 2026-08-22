@@ -50,18 +50,38 @@ class ProgressMeter:
     completed_bytes: int = 0
     _started_at: float = field(init=False, repr=False)
     _last_reported_at: float = field(init=False, repr=False)
+    _item_milestones: tuple[int, ...] = field(init=False, repr=False)
+    _next_milestone_index: int = field(init=False, repr=False, default=0)
 
     def __post_init__(self) -> None:
         now = self.clock()
         self._started_at = now
         self._last_reported_at = now
+        self._item_milestones = (
+            tuple(
+                sorted({(self.total_items * step + 9) // 10 for step in range(1, 11)})
+            )
+            if self.total_items > 0
+            else ()
+        )
 
     @property
     def elapsed(self) -> float:
         return max(0.0, self.clock() - self._started_at)
 
-    def _is_due(self, now: float, force: bool) -> bool:
-        return force or now - self._last_reported_at >= self.interval_seconds
+    def _time_is_due(self, now: float) -> bool:
+        return now - self._last_reported_at >= self.interval_seconds
+
+    def _milestone_is_due(self) -> bool:
+        return (
+            self._next_milestone_index < len(self._item_milestones)
+            and self.completed_items
+            >= self._item_milestones[self._next_milestone_index]
+        )
+
+    def _consume_milestones(self) -> None:
+        while self._milestone_is_due():
+            self._next_milestone_index += 1
 
     def _eta_seconds(self, elapsed: float) -> float | None:
         if self.total_bytes and self.completed_bytes:
@@ -91,21 +111,24 @@ class ProgressMeter:
             details.append(f"ETA {format_duration(eta)}")
         return "; ".join(details)
 
-    def advance(
-        self, label: str, *, byte_count: int = 0, force: bool = False
-    ) -> str | None:
+    def advance(self, label: str, *, byte_count: int = 0) -> str | None:
         self.completed_items += 1
         self.completed_bytes += max(0, byte_count)
         now = self.clock()
-        if not self._is_due(now, force or self.completed_items == self.total_items):
+        if not (
+            self._time_is_due(now)
+            or self._milestone_is_due()
+            or self.completed_items == self.total_items
+        ):
             return None
+        self._consume_milestones()
         self._last_reported_at = now
         return self._status(label, now)
 
     def heartbeat(self, label: str, active_item: int) -> str | None:
         """Report that one long item is active without claiming completion."""
         now = self.clock()
-        if not self._is_due(now, False):
+        if not self._time_is_due(now):
             return None
         self._last_reported_at = now
         status = self._status(label, now)
