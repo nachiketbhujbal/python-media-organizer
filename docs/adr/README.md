@@ -66,3 +66,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0058](0058-corruption-findings-are-not-ignore-policy.md) | Corruption findings remain visible evidence |
 | [0059](0059-fail-closed-filesystem-discovery.md) | Fail closed on incomplete filesystem discovery |
 | [0060](0060-require-enumerated-entry-integrity.md) | Require integrity for every enumerated entry |
+| [0061](0061-versioned-shared-cache-schema.md) | Versioned shared derived-cache schema |

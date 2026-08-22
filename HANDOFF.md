@@ -26,7 +26,8 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.4.2` entry-integrity release. It is a
+`pymo` command, and has a `v0.4.2` entry-integrity release. Version 0.4.3 is in
+progress on `cache/v0.4.3-shared-core`; it is not released or tagged. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
@@ -52,6 +53,14 @@ explicit no-follow metadata result; a name that returns `ENOENT`, another
 metadata error, or a changed walk category stops the command before state is
 created. Report-only scan and validation continue to count such names as
 unreadable evidence and process readable neighbors.
+
+The in-progress version 0.4.3 extracts cache filesystem coordination into
+`src/pymo/cache.py` and introduces schema version 1. Generic derived evidence
+is keyed by content SHA-256, evidence type, algorithm, and runtime. Stable file
+observations retain an explicit analysis scope, relative path, device/inode,
+size, modification/change times, and optional verified byte hash. Valid legacy
+video caches remain read-only during lookup and migrate inside the private
+staged database only when a subsequent fingerprint is successfully saved.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -278,8 +287,9 @@ them. `--verbose` does not relax that privacy default. Explicit
 absolute collection root. If the user also requests `--log-file`, those listed
 paths are deliberately included in that log.
 
-The source contains only four assigned module constants: the config schema,
-action-log schema, video fingerprint algorithm, and scan-report schema
+The source contains only five assigned module constants: the config schema,
+action-log schema, shared cache schema, video fingerprint algorithm, and
+scan-report schema
 versions. Each is an
 on-disk compatibility boundary and has an adjacent justification. Dispatch,
 logging, collection paths, tool identifiers, operation identifiers, timestamp
@@ -444,6 +454,15 @@ the collection root, and a pathname swap stops safely rather than redirecting
 the read. An invalid cache is preserved and reported; moving it aside or
 explicitly using `--no-cache` is the recovery path. FFmpeg is resolved only when
 discovery finds at least two eligible videos.
+
+Schema version 1 is shared rather than video-specific. It contains exact
+schema metadata, generic derived evidence, and file-identity observations.
+Existing valid legacy `video_fingerprints` databases are still read without a
+write; the next successful cache update migrates their rows in memory and
+publishes the complete versioned database atomically. The low-level service
+anchors safety to the cache directory rather than the analyzed media root so a
+future read-only source can use an explicitly separate writable cache. No
+public external-cache option exists yet.
 
 Cache readers share collection-root `.pymo.sqlite3.lock`; writers acquire it
 exclusively and re-read the latest public database before merging a completed
