@@ -56,7 +56,7 @@ exclude = [
     "/.python-version",
     "/AGENTS.md",
     "/HANDOFF.md",
-    "/RESEARCH_IMPROVEMENTS.md",
+    "/docs/RESEARCH.md",
     "/uv.lock",
 ]
 

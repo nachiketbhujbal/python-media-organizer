@@ -452,9 +452,8 @@ video decoding remains sequential until representative
 benchmarks show that bounded process concurrency improves real external-drive
 workloads without increasing contention or reducing safety.
 
-See `RESEARCH_IMPROVEMENTS.md` for the product research, privacy analysis,
-feature ideas, local-AI guardrails, metadata and validation plans, comparison
-tools, and longer-term roadmap. See `HANDOFF.md` for current engineering state
-and compatibility details. Architectural decisions are recorded one per file in
-`adrs/`; the adversarial pre-validation findings and their release status live
-in `CODE_REVIEW.md`.
+See the [documentation index](docs/README.md) for the release
+[roadmap](docs/ROADMAP.md), [research notebook](docs/RESEARCH.md),
+[changelog](docs/CHANGELOG.md), [architecture decisions](docs/adr/README.md),
+and [adversarial review ledger](docs/CODE_REVIEW.md). `HANDOFF.md` records the
+current engineering state and compatibility details.

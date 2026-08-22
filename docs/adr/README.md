@@ -43,3 +43,5 @@ old one rather than rewriting why the earlier choice was made.
 | [0035](0035-report-discovery-failures.md) | Validation discovery failures are health findings |
 | [0036](0036-staged-validation-orchestration.md) | Staged validation orchestration |
 | [0037](0037-descriptor-pinned-validation-reads.md) | Descriptor-pinned validation reads |
+| [0038](0038-repository-documentation-map.md) | Repository documentation map |
+| [0039](0039-small-cohesive-releases.md) | Small cohesive release tags |

@@ -13,12 +13,15 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.3` report-only validation release. It is a
+`pymo` command, and has a `v0.3.4` documentation-map release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.3 pins validation classification and decoder reads to stable,
+Version 0.3.4 separates evaluated research, promoted release plans, shipped
+behavior, adversarial findings, and architecture decisions under the indexed
+`docs/` tree, and establishes one primary purpose per patch release. Version
+0.3.3 pins validation classification and decoder reads to stable,
 no-follow file descriptors beneath the collection root, preventing concurrent
 pathname swaps from redirecting reads. Version 0.3.2 separates validation
 discovery, video stream policy, execution,
@@ -101,12 +104,16 @@ SQLite is useful only as a derived, disposable collection-local cache or index.
 python-media-organizer/
   pyproject.toml
   .pre-commit-config.yaml
-  CODE_REVIEW.md
   README.md
-  RESEARCH_IMPROVEMENTS.md
   AGENTS.md
   HANDOFF.md
-  adrs/
+  docs/
+    README.md
+    CHANGELOG.md
+    CODE_REVIEW.md
+    RESEARCH.md
+    ROADMAP.md
+    adr/
   src/pymo/
     __init__.py
     __main__.py
@@ -497,26 +504,18 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 
 Run the committed quality gates and complete suite after every change. Release
 review also runs subprocess-aware coverage. Do not
-replace real FFmpeg integration coverage with mocks alone. `CODE_REVIEW.md`
-records the pre-validation findings, their severity, target release, and durable
+replace real FFmpeg integration coverage with mocks alone.
+`docs/CODE_REVIEW.md` records findings, severity, target release, and durable
 resolution state; keep it synchronized as each release closes a group.
 
 ## Research and roadmap
 
-`RESEARCH_IMPROVEMENTS.md` is the durable research notebook. It records the
-assessment of Home Media Organizer, PyPipeline, Czkawka, Video Duplicate Finder,
-digiKam, organize, Phockup, dupeGuru, and related design ideas. It also defines
-privacy constraints, licensing cautions, validation, metadata, comparison,
-local indexing, keeper scoring, similarity levels, and local-AI rules.
-
-Near-term roadmap:
-
-1. Adversarially review validation and resolve findings in approved 0.3.x tags.
-2. Add metadata inspection/export and confidence-based date provenance.
-3. Add read-only collection/backup comparison.
-4. Expand the disposable SQLite index for local statistics and fingerprints.
-5. Add perceptual similarity as report-only functionality.
-6. Revisit optional local AI suggestions after deterministic tooling matures.
+`docs/RESEARCH.md` records evaluated products, privacy evidence, licensing
+cautions, and open design questions that are not committed to a release.
+`docs/ROADMAP.md` is the promoted delivery plan, with one primary purpose per
+patch through the version 0.3 stabilization and version 0.4 cache foundation.
+`docs/CHANGELOG.md` is the shipped-behavior record. Keep these roles separate
+instead of maintaining duplicate feature inventories.
 
 `scan` is implemented; do not rename it to `inspect`.
 
