@@ -303,6 +303,12 @@ subtitles/data streams, and HDR or high-bit-depth video. Decode commands are
 restricted to local file inputs and streamed output; they do not request a
 camera, screen, microphone, or network source.
 
+Classification, whole-file hashing, ffprobe, and both FFmpeg decode passes read
+one stable no-follow file descriptor anchored beneath the collection root.
+Native tools receive only an inherited `/dev/fd` input, so a concurrent
+pathname or parent-directory swap cannot redirect analysis to unrelated local
+content. A changed pathname is still reported and skipped.
+
 Exact image and video results are bound to the regular file's device, inode,
 size, modification time, and change time. A file that changes during analysis
 is skipped. Applied runs revalidate every duplicate group and continue checking

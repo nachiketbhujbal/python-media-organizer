@@ -50,7 +50,7 @@ from pymo.duplicates.common import (
     duplicate_layout,
     layout_problems,
 )
-from pymo.file_safety import FileChangedError, FileState
+from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
 from pymo.progress import ProgressMeter, format_bytes
@@ -121,19 +121,19 @@ class DerivedFingerprint:
 VideoMove = tuple[VideoRecord, VideoRecord, Path]
 
 
-def sha256_file(path: Path) -> str:
+def sha256_descriptor(descriptor: int) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    while chunk := os.read(descriptor, 1024 * 1024):
+        digest.update(chunk)
     return digest.hexdigest()
 
 
-def inspect_video(path: Path, ffprobe: str) -> VideoRecord:
+def inspect_video(root: Path, path: Path, ffprobe: str) -> VideoRecord:
     state = FileState.capture(path)
-    byte_sha256 = sha256_file(path)
-    probe = probe_video(path, ffprobe)
-    state.require_unchanged(path, "video inspection")
+    with open_stable_file(root, path, state, "video inspection") as descriptor:
+        byte_sha256 = sha256_descriptor(descriptor)
+        probe = probe_video(descriptor, ffprobe)
     return VideoRecord(
         path=path,
         byte_sha256=byte_sha256,
@@ -194,7 +194,8 @@ def _positive_int(value: object, description: str) -> int:
     return result
 
 
-def probe_video(path: Path, ffprobe: str) -> ProbeInfo:
+def probe_video(descriptor: int, ffprobe: str) -> ProbeInfo:
+    os.lseek(descriptor, 0, os.SEEK_SET)
     command = [
         ffprobe,
         "-v",
@@ -205,7 +206,7 @@ def probe_video(path: Path, ffprobe: str) -> ProbeInfo:
         "-show_format",
         "-of",
         "json",
-        str(path),
+        f"/dev/fd/{descriptor}",
     ]
     try:
         result = subprocess.run(
@@ -214,6 +215,7 @@ def probe_video(path: Path, ffprobe: str) -> ProbeInfo:
             capture_output=True,
             text=True,
             timeout=60,
+            pass_fds=(descriptor,),
         )
     except (OSError, subprocess.SubprocessError) as error:
         raise VideoInspectionError(f"ffprobe failed: {error}") from error
@@ -335,9 +337,14 @@ def discover_videos(
         if config.ignores_file(path, root):
             ignored.append(path)
             continue
-        kind, _ = classifier.classify(path)
+        try:
+            state = FileState.capture(path)
+            with open_stable_file(root, path, state, "video discovery") as descriptor:
+                kind, _ = classifier.classify(path, descriptor)
+        except FileChangedError:
+            continue
         if kind == "video":
-            videos.append(path.resolve())
+            videos.append(path.absolute())
     return (
         sorted(videos, key=lambda item: str(item).casefold()),
         sorted(ignored, key=lambda item: str(item).casefold()),
@@ -378,12 +385,14 @@ def _stream_command(
     consume_stdout: Callable[[bytes], None],
     timeout: int,
     progress_callback: Callable[[], None] | None = None,
+    pass_fds: tuple[int, ...] = (),
 ) -> None:
     try:
         process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            pass_fds=pass_fds,
         )
     except OSError as error:
         raise VideoInspectionError(f"cannot start FFmpeg: {error}") from error
@@ -431,11 +440,12 @@ def _stream_command(
 
 
 def video_frame_signature(
-    path: Path,
+    descriptor: int,
     ffmpeg: str,
     timeout: int,
     progress_callback: Callable[[], None] | None = None,
 ) -> tuple[str, int]:
+    os.lseek(descriptor, 0, os.SEEK_SET)
     digest = hashlib.sha256()
     line_buffer = bytearray()
     frame_count = 0
@@ -466,7 +476,7 @@ def video_frame_signature(
         "-protocol_whitelist",
         "file,pipe",
         "-i",
-        str(path),
+        f"/dev/fd/{descriptor}",
         "-map",
         "0:v:0",
         "-an",
@@ -484,7 +494,13 @@ def video_frame_signature(
         "sha256",
         "pipe:1",
     ]
-    _stream_command(command, consume, timeout, progress_callback)
+    _stream_command(
+        command,
+        consume,
+        timeout,
+        progress_callback,
+        pass_fds=(descriptor,),
+    )
     if line_buffer.strip():
         consume(b"\n")
     if frame_count == 0:
@@ -493,7 +509,7 @@ def video_frame_signature(
 
 
 def audio_pcm_signature(
-    path: Path,
+    descriptor: int,
     ffmpeg: str,
     probe: ProbeInfo,
     timeout: int,
@@ -501,6 +517,7 @@ def audio_pcm_signature(
 ) -> tuple[str, int]:
     if not probe.has_audio:
         return "none", 0
+    os.lseek(descriptor, 0, os.SEEK_SET)
     digest = hashlib.sha256()
     byte_count = 0
 
@@ -517,7 +534,7 @@ def audio_pcm_signature(
         "-protocol_whitelist",
         "file,pipe",
         "-i",
-        str(path),
+        f"/dev/fd/{descriptor}",
         "-map",
         "0:a:0",
         "-vn",
@@ -531,24 +548,30 @@ def audio_pcm_signature(
         "s32le",
         "pipe:1",
     ]
-    _stream_command(command, consume, timeout, progress_callback)
+    _stream_command(
+        command,
+        consume,
+        timeout,
+        progress_callback,
+        pass_fds=(descriptor,),
+    )
     if byte_count == 0:
         raise VideoInspectionError("FFmpeg decoded no audio samples")
     return digest.hexdigest(), byte_count
 
 
 def derive_fingerprint(
-    path: Path,
+    descriptor: int,
     probe: ProbeInfo,
     ffmpeg: str,
     timeout: int,
     progress_callback: Callable[[], None] | None = None,
 ) -> DerivedFingerprint:
     video_hash, frame_count = video_frame_signature(
-        path, ffmpeg, timeout, progress_callback
+        descriptor, ffmpeg, timeout, progress_callback
     )
     audio_hash, audio_bytes = audio_pcm_signature(
-        path, ffmpeg, probe, timeout, progress_callback
+        descriptor, ffmpeg, probe, timeout, progress_callback
     )
     starts = [probe.video_start_us]
     if probe.audio_start_us is not None:
@@ -741,7 +764,7 @@ def undo_duplicate_run(root: Path, apply: bool) -> int:
 
 
 def inspect_video_paths(
-    paths: list[Path], ffprobe: str, progress_interval_seconds: int
+    root: Path, paths: list[Path], ffprobe: str, progress_interval_seconds: int
 ) -> tuple[list[VideoRecord], int, list[tuple[Path, str]]]:
     records: list[VideoRecord] = []
     scanned_bytes = 0
@@ -757,7 +780,7 @@ def inspect_video_paths(
     )
     for path in paths:
         try:
-            record = inspect_video(path, ffprobe)
+            record = inspect_video(root, path, ffprobe)
             records.append(record)
             scanned_bytes += record.file_size
         except (FileChangedError, OSError, VideoInspectionError) as error:
@@ -778,6 +801,7 @@ def candidate_video_records(records: list[VideoRecord]) -> list[VideoRecord]:
 
 
 def derive_candidate_fingerprints(
+    root: Path,
     candidate_records: list[VideoRecord],
     database: Path,
     ffmpeg: str,
@@ -842,15 +866,19 @@ def derive_candidate_fingerprints(
                 print(f"  {message}")
 
         try:
-            require_current_video(representative, "video fingerprinting")
-            fingerprint = derive_fingerprint(
+            with open_stable_file(
+                root,
                 representative.path,
-                representative.probe,
-                ffmpeg,
-                decode_timeout,
-                report_heartbeat,
-            )
-            require_current_video(representative, "video fingerprinting")
+                representative.state,
+                "video fingerprinting",
+            ) as descriptor:
+                fingerprint = derive_fingerprint(
+                    descriptor,
+                    representative.probe,
+                    ffmpeg,
+                    decode_timeout,
+                    report_heartbeat,
+                )
         except (FileChangedError, VideoInspectionError) as error:
             skipped.extend(
                 (record.path, str(error))
@@ -1087,6 +1115,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"FFmpeg runtime: {ffmpeg_release}")
 
     records, scanned_bytes, skipped = inspect_video_paths(
+        root,
         paths,
         ffprobe,
         config.performance.progress_interval_seconds,
@@ -1094,6 +1123,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     candidate_records = candidate_video_records(records)
     try:
         derived, fingerprint_skips = derive_candidate_fingerprints(
+            root,
             candidate_records,
             layout.video_cache,
             ffmpeg,

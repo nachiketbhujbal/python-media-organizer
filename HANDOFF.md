@@ -13,19 +13,21 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.7` Actions cost-control release. It is a
+`pymo` command, and has a `v0.3.8` video-read-safety release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.7 limits automatic GitHub Actions runs to pull requests targeting
-`main` and pushes to `main`, retains deliberate manual dispatch, and caps each
-platform job at ten minutes while the repository is private. Version 0.3.6
-adds a pinned GitHub Actions quality gate, adopts short-lived
-branches with CI-verified merge boundaries, and streams descriptor-backed
-classification through portable `file` standard input rather than asking the
-utility to classify `/dev/fd`. The gate verifies Ubuntu, Fedora, and macOS
-representatives; WSL uses the supported Linux execution model, while native
+Version 0.3.8 pins video classification, hashing, ffprobe, and frame/audio
+fingerprinting to stable collection-anchored descriptors. Version 0.3.7 limits
+automatic GitHub Actions runs to pull requests targeting `main` and pushes to
+`main`, retains deliberate manual dispatch, and caps each platform job at ten
+minutes while the repository is private. Version 0.3.6 adds a pinned GitHub
+Actions quality gate, adopts short-lived branches with CI-verified merge
+boundaries, and streams descriptor-backed classification through portable
+`file` standard input rather than asking the utility to classify `/dev/fd`.
+The gate verifies Ubuntu, Fedora, and macOS representatives with the locked
+release commands; WSL uses the supported Linux execution model, while native
 Windows remains outside the current platform boundary. Version 0.3.5 makes scan
 recommendations list every applicable action in safe
 workflow order instead of suppressing rename advice when organization is also
@@ -334,11 +336,14 @@ multiple video/audio tracks, attachments, subtitle/data streams, and HDR or
 high-bit-depth video. Decoding is bounded and streamed; decoded temporary media
 is never created.
 
-Every inspected video carries a stable device/inode/size/time snapshot. The
-finder checks it after hashing and probing, around fingerprint decoding, before
-grouping, and during applied moves. The image finder uses the same contract for
-displayed-pixel hashes and retained originals. A changed file is skipped or
-stops an apply rather than reusing a stale exact-match conclusion.
+Every inspected video carries a stable device/inode/size/time snapshot.
+Classification, whole-file hashing, ffprobe, and both FFmpeg decode passes use
+one no-follow descriptor opened relative to the collection root; native tools
+receive an inherited `/dev/fd` input. The finder rechecks the descriptor and
+pathname before grouping and during applied moves. The image finder currently
+uses stable before/after state checks; descriptor pinning is the next isolated
+safety release. A changed file is skipped or stops an apply rather than reusing
+a stale exact-match conclusion.
 
 FFmpeg input protocols are restricted to `file,pipe`, and tests assert that
 decode commands contain no macOS, Windows, or X11 capture input. The tool does
@@ -497,7 +502,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   non-matches, corrupt and multi-audio skips, strict ownership, collisions,
   incremental preview cache, interruption recovery, cache opt-out, sidecar
   behavior, cross-tool undo dependencies, missing runtime errors, and local-
-  file-only/no-capture command construction;
+  descriptor-only/no-capture command construction;
+- adversarial video classification, probing, and fingerprint path swaps that
+  prove unrelated replacement content is never read;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

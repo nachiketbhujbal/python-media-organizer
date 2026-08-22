@@ -50,3 +50,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0042](0042-feature-branch-merge-policy.md) | Feature-branch merge policy |
 | [0043](0043-portable-descriptor-classification.md) | Portable descriptor-backed classification |
 | [0044](0044-private-repository-actions-budget.md) | Private-repository Actions budget |
+| [0045](0045-descriptor-pinned-video-duplicate-reads.md) | Descriptor-pinned video duplicate reads |
