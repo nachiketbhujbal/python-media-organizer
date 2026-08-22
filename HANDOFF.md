@@ -20,12 +20,11 @@ that source content is accounted for.
 
 ## Product decisions
 
-The package is named `python-media-organizer`, imports as `pymo`, and exposes
-the `pymo` command. The latest tagged release is `v0.3.19`; the local v0.4.0
-release candidate adds corruption-tolerant scan evidence and validation-first
-guidance. It is a deliberately local-first tool for personal media
-collections. Git tags are the authoritative version source; package code and
-`[project]` do not contain a static version.
+The package is named `python-media-organizer`, imports as `pymo`, exposes the
+`pymo` command, and has a `v0.4.0` corruption-evidence release. It is a
+deliberately local-first tool for personal media collections. Git tags are the
+authoritative version source; package code and `[project]` do not contain a
+static version.
 
 Version 0.4.0 makes directory traversal failures visible in scan reports and
 places report-only validation first in every scan recommendation plan. Existing

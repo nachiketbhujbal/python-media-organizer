@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## Unreleased - target 0.4.0
+## 0.4.0 - 2026-08-22
 
 - Report recursive directory traversal failures in `pymo scan` instead of
   silently omitting an inaccessible subtree from an apparently complete
