@@ -47,7 +47,11 @@ purposes are not folded together merely to reduce tag count.
 
 Version 0.4 introduces a shared, derived cache service. The append-only
 collection action log remains the authoritative mutation history; SQLite stays
-disposable and rebuildable.
+disposable and rebuildable. The service must support analyzing a read-only
+source while persisting derived evidence only at an explicitly writable cache
+location. This separation is a prerequisite for migration verification: pymo
+must never create a cache, lock, configuration file, or action log on a source
+being preserved.
 
 | Version | Primary purpose | Intended result |
 | --- | --- | --- |
@@ -71,13 +75,71 @@ default, because cached success cannot prove that the bytes remain readable
 now. Validation may write new evidence after that fresh read, while any future
 reuse of prior validation results must be explicit and identity/version keyed.
 
+## Version 0.5 migration verification
+
+Version 0.5 promotes preservation proof ahead of optional enrichment work. The
+planned command is directional rather than a symmetric directory diff:
+
+```text
+pymo verify-migration SOURCE DESTINATION
+```
+
+Collection-root names, relative paths, and organization are not identity. The
+command must be able to account for a source file after safe moves or renames,
+and it must report duplicate multiplicity separately from preservation. It is
+report-only: it never changes either media tree, never appends action history,
+and never writes derived state to `SOURCE`.
+
+| Version | Primary purpose | Intended result |
+| --- | --- | --- |
+| 0.5.0 | Directional byte coverage | Inventory two stable trees and prove whether every readable unique source byte stream has an exact SHA-backed representative in the destination, independent of paths and filenames. Report missing, extra, duplicate-count, unreadable, changing, and storage facts with a machine-readable schema and health-style exit status. |
+| 0.5.1 | Image-content coverage | Account separately for source pictures represented by the existing exact displayed-pixel definition when a byte-identical representative is absent, without describing metadata or container bytes as preserved. |
+| 0.5.2 | Video-content coverage | Account separately for source videos represented by the existing strict decoded-playback definition when a byte-identical representative is absent, retaining all conservative unsupported-case boundaries. |
+| 0.5.3 | Preservation verdict hardening | Combine byte and declared media-equivalence layers into an explicit evidence report, exercise interrupted and changing-source cases, reuse only validated cache evidence, and reserve a complete-success verdict for runs with no unreadable, unstable, unsupported, or unaccounted source entry. |
+
+The report must distinguish at least three conclusions: strict byte
+preservation, exact media-content preservation, and unproven or missing data.
+Deleting byte-identical copies can preserve both bytes and content while
+reducing multiplicity. Deleting a metadata-only image variant or a remuxed
+video may preserve displayed or playback content but does not preserve every
+source byte stream. A statement such as “100% preserved” is permitted only
+with the preservation contract named and all source input readable and stable.
+
+This subsystem verifies an already performed rescue or copy. A future
+`pymo migrate` orchestration command remains separate because copying from
+damaged storage requires recovery-specific policy, resumability, destination
+capacity checks, and a much larger mutation boundary.
+
+### Operational readiness gates
+
+- Do not delay rescuing readable data from degraded storage while waiting for
+  pymo. Recovery or imaging is an earlier, separate operation, and its logs or
+  mapfiles are preservation evidence that pymo must not replace.
+- Releases through 0.4 may analyze and safely transform a healthy working copy,
+  but they do not justify deleting the unchanged baseline or reformatting the
+  source on the strength of pymo alone.
+- Version 0.5.0 is the earliest planned release for pymo-backed strict
+  byte-coverage verification before content-equivalent duplicate variants are
+  removed.
+- Version 0.5.3 is the earliest planned release candidate for a complete
+  pymo-assisted sign-off after organization, renaming, and reviewed duplicate
+  removal. The release tag alone is not approval: the command must complete
+  without unreadable, changing, unsupported, or unaccounted source input, and
+  the relevant synthetic and local acceptance scenarios must pass.
+
+The preferred acceptance setup is an unchanged baseline copy and a separate
+working copy on healthy storage. pymo mutates only the working copy, then
+verifies it directionally against the baseline. Keeping both on one physical
+device avoids additional reads from degraded media but is not an independent
+backup and requires enough free capacity for both trees and derived cache
+state.
+
 ## Later promoted work
 
 These have an accepted product direction but no release number yet:
 
 - richer local collection statistics and historical comparisons;
 - metadata inspection/export with date provenance and confidence;
-- read-only collection and backup comparison;
 - report-only perceptual image/video similarity;
 - explainable keeper-quality recommendations;
 - reversible metadata or quarantine actions only after dedicated safety ADRs;

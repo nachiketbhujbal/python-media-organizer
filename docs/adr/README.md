@@ -62,3 +62,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0054](0054-path-private-duplicate-summaries.md) | Path-private duplicate summaries |
 | [0055](0055-default-console-timestamps.md) | Default console timestamps with an explicit opt-out |
 | [0056](0056-retain-roadmap-release-ledger.md) | Retained roadmap release-status ledger |
+| [0057](0057-directional-migration-verification.md) | Directional migration preservation proof |
