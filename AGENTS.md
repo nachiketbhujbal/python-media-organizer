@@ -159,6 +159,9 @@ report-only future work and must never silently enter the exact move path.
 - Keep active-item heartbeats separate from completed-work rate and ETA output.
   Heartbeats report only the active item, completed count, and elapsed time;
   require at least three completed observations before projecting an ETA.
+- Report exact-video discovery, probing, fingerprinting, planning, apply, and
+  verification durations independently with monotonic, path-private timing.
+  Report only stages that execute; dry runs must not imply mutation occurred.
 - Preserve exit status 130 for Ctrl-C and final observed runtime reporting for
   interrupted or unexpectedly stopped human-readable commands.
 - Keep `README.md`, `HANDOFF.md`, `docs/ROADMAP.md`, `docs/RESEARCH.md`, and

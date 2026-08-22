@@ -363,6 +363,12 @@ ETA. ETA begins only after three candidates complete. These figures describe
 the current machine and storage device; pymo does not invent a universal
 decode speed.
 
+The command also reports independent path-private durations for discovery,
+probing, fingerprinting, and planning. An applied run reports apply and
+verification timing only when duplicate moves execute. These stage records
+complement the final whole-command runtime and make it easier to identify the
+expensive part of a run without exposing filenames.
+
 Both duplicate finders report retained storage, extra-copy storage, and the
 space potentially reclaimable if the isolated copies are later deleted
 manually. `pymo` itself never deletes them.

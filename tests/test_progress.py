@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pymo.progress import ProgressMeter, format_bytes, format_duration
+from pymo.progress import ProgressMeter, StageTimer, format_bytes, format_duration
 
 
 class Clock:
@@ -17,6 +17,17 @@ def test_duration_and_byte_formatting() -> None:
     assert format_duration(3_661) == "1h 1m 1s"
     assert format_bytes(512) == "512 B"
     assert format_bytes(1_572_864) == "1.5 MiB"
+
+
+def test_stage_timer_reports_named_monotonic_duration() -> None:
+    clock = Clock()
+    messages: list[str] = []
+    timer = StageTimer(messages.append, clock=clock)
+
+    with timer.measure("discovery"):
+        clock.now = 2.25
+
+    assert messages == ["Stage timing: discovery 2.2s"]
 
 
 def test_progress_suppresses_eta_until_three_items_complete() -> None:

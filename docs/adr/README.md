@@ -57,3 +57,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0049](0049-locked-atomic-sqlite-cache-writes.md) | Locked atomic SQLite cache writes |
 | [0050](0050-stable-progress-cadence.md) | Stable progress cadence |
 | [0051](0051-distinct-heartbeats-and-eta-confidence.md) | Distinct heartbeats and ETA confidence |
+| [0052](0052-path-private-stage-timing.md) | Path-private stage timing |

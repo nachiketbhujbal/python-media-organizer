@@ -2,6 +2,17 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.15 - 2026-08-22
+
+- Add path-private monotonic timing for exact-video discovery, probing,
+  fingerprinting, and planning stages.
+- Report apply and verification durations only when an applied duplicate move
+  actually executes those stages; dry runs do not imply mutation work occurred.
+- Retain the existing whole-command completion runtime while making expensive
+  stage costs independently visible.
+- Add shared timer and real FFmpeg workflow coverage for dry-run and applied
+  stage boundaries.
+
 ## 0.3.14 - 2026-08-22
 
 - Separate active-item heartbeat wording from completed-work status so a long

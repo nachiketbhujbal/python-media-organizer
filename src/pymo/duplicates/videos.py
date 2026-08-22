@@ -59,7 +59,7 @@ from pymo.duplicates.common import (
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
-from pymo.progress import ProgressMeter, format_bytes
+from pymo.progress import ProgressMeter, StageTimer, format_bytes
 
 # This value is persisted with derived fingerprints. Changing the algorithm
 # without changing this identifier could reuse incompatible cached results.
@@ -1619,7 +1619,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     vids = duplicate_paths.source
     destination = duplicate_paths.destination
     classifier = Classifier(config.classification)
-    paths, ignored = discover_videos(vids, root, classifier, config)
+    stage_timer = StageTimer(print)
+    with stage_timer.measure("discovery"):
+        paths, ignored = discover_videos(vids, root, classifier, config)
     print(f"Scanning {len(paths)} video(s) in {vids}")
     for message in ignored_messages(ignored, root, args.show_ignored):
         print(message)
@@ -1646,35 +1648,41 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     print(f"FFmpeg runtime: {ffmpeg_release}")
 
-    records, scanned_bytes, skipped = inspect_video_paths(
-        root,
-        paths,
-        ffprobe,
-        config.performance.progress_interval_seconds,
-    )
+    with stage_timer.measure("probing"):
+        records, scanned_bytes, skipped = inspect_video_paths(
+            root,
+            paths,
+            ffprobe,
+            config.performance.progress_interval_seconds,
+        )
     candidate_records = candidate_video_records(records)
     try:
-        derived, fingerprint_skips = derive_candidate_fingerprints(
-            root,
-            candidate_records,
-            layout.video_cache,
-            ffmpeg,
-            ffmpeg_release,
-            decode_timeout,
-            config.performance.progress_interval_seconds,
-            args.no_cache,
-        )
+        with stage_timer.measure("fingerprinting"):
+            derived, fingerprint_skips = derive_candidate_fingerprints(
+                root,
+                candidate_records,
+                layout.video_cache,
+                ffmpeg,
+                ffmpeg_release,
+                decode_timeout,
+                config.performance.progress_interval_seconds,
+                args.no_cache,
+            )
     except VideoCacheError as error:
         print(str(error), file=sys.stderr)
         return 1
     skipped.extend(fingerprint_skips)
-    duplicate_groups, group_skips = group_video_duplicates(candidate_records, derived)
-    skipped.extend(group_skips)
-    move_plan = plan_video_moves(duplicate_groups, destination, args.apply)
+    with stage_timer.measure("planning"):
+        duplicate_groups, group_skips = group_video_duplicates(
+            candidate_records, derived
+        )
+        skipped.extend(group_skips)
+        move_plan = plan_video_moves(duplicate_groups, destination, args.apply)
 
     if args.apply and move_plan:
         try:
-            log_path = apply_video_moves(root, duplicate_groups, move_plan)
+            with stage_timer.measure("apply"):
+                log_path = apply_video_moves(root, duplicate_groups, move_plan)
             print(f"\nAction log: {log_path}")
         except (
             ActionConflict,
@@ -1684,7 +1692,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         ) as error:
             print(f"Duplicate moves stopped safely: {error}", file=sys.stderr)
             return 1
-        verification_failures = verify_video_moves(move_plan)
+        with stage_timer.measure("verification"):
+            verification_failures = verify_video_moves(move_plan)
         if verification_failures:
             print("\nVerification needs attention:", file=sys.stderr)
             for source, target in verification_failures:
