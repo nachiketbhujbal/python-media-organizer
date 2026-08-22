@@ -63,3 +63,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0055](0055-default-console-timestamps.md) | Default console timestamps with an explicit opt-out |
 | [0056](0056-retain-roadmap-release-ledger.md) | Retained roadmap release-status ledger |
 | [0057](0057-directional-migration-verification.md) | Directional migration preservation proof |
+| [0058](0058-corruption-findings-are-not-ignore-policy.md) | Corruption findings remain visible evidence |

@@ -14,8 +14,9 @@ The primary product outcome is safe, local preservation when a media
 collection is copied or rescued between storage locations and then reorganized,
 renamed, validated, or deduplicated. The roadmap now treats directional
 migration verification as the next product subsystem after the version 0.4
-shared cache foundation. Optional metadata enrichment, perceptual similarity,
-and local AI remain secondary to proving that source content is accounted for.
+corruption-tolerant evidence and shared-cache foundation. Optional metadata
+enrichment, perceptual similarity, and local AI remain secondary to proving
+that source content is accounted for.
 
 ## Product decisions
 
@@ -625,7 +626,8 @@ resolution state; keep it synchronized as each release closes a group.
 `docs/RESEARCH.md` records evaluated products, privacy evidence, licensing
 cautions, and open design questions that are not committed to a release.
 `docs/ROADMAP.md` is the promoted delivery plan, with one primary purpose per
-patch through the version 0.3 stabilization, version 0.4 cache foundation, and
+patch through the version 0.1 foundation, version 0.2 inspection and hardening,
+version 0.3 stabilization, version 0.4 preservation and cache foundation, and
 version 0.5 migration-verification sequence.
 `docs/CHANGELOG.md` is the shipped-behavior record. Keep these roles separate
 instead of maintaining duplicate feature inventories.

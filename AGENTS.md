@@ -203,8 +203,11 @@ Report-only validation is implemented and hardened through version 0.3.3. Full
 FFmpeg decoding remains sequential until representative benchmarks justify
 bounded native-process concurrency. Any future repair or quarantine behavior
 requires a separate ADR and reversible dry-run/action-log design. Local AI
-naming remains optional future work only. Version 0.4 builds the shared derived
-cache foundation, including separation between the analyzed media root and the
-writable cache location. Version 0.5 then adds directional, report-only
-migration verification. It must never write to the source and must distinguish
-byte preservation from exact displayed-image or decoded-video preservation.
+naming remains optional future work only. Version 0.4.0 hardens corruption-
+tolerant discovery and validation guidance; corrupt or unsupported media remain
+visible findings and never become automatic ignore configuration. Versions
+0.4.1 through 0.4.10 build the shared derived-cache foundation, including
+separation between the analyzed media root and the writable cache location.
+Version 0.5 then adds directional, report-only migration verification. It must
+never write to the source and must distinguish byte preservation from exact
+displayed-image or decoded-video preservation.

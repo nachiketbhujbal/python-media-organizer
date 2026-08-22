@@ -534,8 +534,10 @@ installers can still build and install the package.
 
 `pymo scan COLLECTION` provides the fast local overview and
 `pymo validate COLLECTION` provides report-only health checks. The next
-promoted subsystem is the version 0.4 shared cache foundation, followed by
-directional migration verification. Richer metadata and similarity tooling
+promoted subsystem is the version 0.4 corruption-tolerant evidence and shared
+cache foundation, followed by directional migration verification. Corrupt,
+unreadable, changing, unsupported, and mismatched media remain visible findings
+rather than automatic ignore rules. Richer metadata and similarity tooling
 remain later roadmap or research work. Full video decoding remains sequential
 until representative
 benchmarks show that bounded process concurrency improves real external-drive

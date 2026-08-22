@@ -19,10 +19,37 @@ ledger, while the changelog and handoff hold the detailed shipped behavior.
 - Release tags are cut only after the locked quality, test, coverage, build,
   installation, privacy, and repository-cleanliness checks pass.
 
+## Version 0.1 foundation
+
+| Version | Primary purpose | Acceptance boundary | Status |
+| --- | --- | --- | --- |
+| 0.1.0 | Installable safety-first toolkit | Package organization, deterministic renaming, exact image/video duplicate isolation, privacy-conscious logging, synthetic and real-FFmpeg tests, and collection-named append-only action history behind the `pymo` CLI without changing dry-run, no-overwrite, or reversible-operation guarantees. | Released |
+| 0.1.1 | Reproducible packaging | Use uv and a committed lockfile for development, Hatchling for standards-compatible builds, hatch-vcs for Git-tag-derived versions, and installed distribution metadata for runtime version reporting. | Released |
+| 0.1.2 | Shared ignore configuration | Apply validated packaged TOML ignore defaults across every forward command, allow additive collection or explicit configuration, protect ignored state from analysis and mutation, and reject invalid policy before mutation. | Released |
+| 0.1.3 | Policy and collection architecture | Move adjustable classification, rename, inspection, and timeout policy into frozen typed configuration; centralize fixed collection paths; remove mutable command/logger globals; and preserve all existing behavior with expanded tests. | Released |
+| 0.1.4 | Explicit ignored-path review | Keep ignored names private by default and under `--verbose`, while adding deterministic collection-relative disclosure only through explicit `--show-ignored` across forward commands. | Released |
+| 0.1.5 | Compatibility deprecation boundary | Warn for CSV organizer undo and manifests, grouped image-output migration, no-op image recursion, and the fixed action-log filename while retaining their complete v0.1 behavior and announcing removal in v0.2.0. | Released |
+
+## Version 0.2 inspection and hardening
+
+| Version | Primary purpose | Acceptance boundary | Status |
+| --- | --- | --- | --- |
+| 0.2.0 | Collection scan and v0.2 compatibility boundary | Add path-private text/JSON collection inventory, optional same-size checksum analysis, bounded scan classification, and resumable exact-video fingerprints; remove every interface deprecated in v0.1.5 while preserving current JSONL history, exact matching, dry-run, collision, and undo guarantees. | Released |
+| 0.2.1 | Runtime and progress observability | Report privacy-safe command elapsed time, opt-in console timestamps, timestamped explicit log files, observed file/data rates and ETA, long-decode heartbeats, and configurable progress intervals without disturbing structured JSON. | Released |
+| 0.2.2 | Engineering review and quality gates | Establish the adversarial review and ADR ledgers, lock Ruff, Black, mypy, coverage, and pre-commit checks, resolve findings exposed by those gates without behavior changes, and document the POSIX action-locking boundary. | Released |
+| 0.2.3 | Action-journal and move safety | Parse schema-1 history as a strict fail-closed lifecycle, reject unsafe or substituted journals, require stable file identities, use descriptor-relative atomic no-replace moves, and refuse cross-filesystem or raced destinations. | Released |
+| 0.2.4 | Exact-media analysis hardening | Bind image/video conclusions to stable regular-file state, revalidate duplicate groups and retained originals through commit, conservatively skip changed or malformed media, fail early on invalid cache data, and resolve FFmpeg only when comparison work exists. | Released |
+| 0.2.5 | Stable scan and interruption reporting | Exclude changing files from scan facts, distinguish changed from unreadable entries without path disclosure, return status 130 for interruption, and retain observed final runtime reporting on interrupted or unexpected stops. | Released |
+| 0.2.6 | Staged command architecture | Separate discovery, analysis, cache, grouping, planning, apply, verification, and report construction into typed testable stages; consolidate shared duplicate policy; and include CLI subprocesses in coverage without changing public behavior. | Released |
+
 ## Version 0.3 stabilization
 
 | Version | Primary purpose | Acceptance boundary | Status |
 | --- | --- | --- | --- |
+| 0.3.0 | Report-only validation | Add standard image/video structure checks and optional full frame/stream decoding over any collection layout, with path-private reports, explicit filename opt-in, health exit status, and no mutation, cache, or action-history writes. | Released |
+| 0.3.1 | Validation safety and privacy | Surface unreadable traversal, keep collection roots and native diagnostics private, validate core stream facts, and make concurrent change take precedence over a corruption finding. | Released |
+| 0.3.2 | Staged validation architecture | Separate discovery, directory policy, media inspection, stream policy, execution options, and report construction into typed testable stages without changing schema 1 or CLI behavior. | Released |
+| 0.3.3 | Descriptor-pinned validation | Pin classification and image/video decoder reads to stable collection-relative no-follow descriptors, rejecting path or parent substitution and reporting concurrent replacement as changed. | Released |
 | 0.3.4 | Documentation map | Separate research from scheduled work, centralize durable engineering docs, and record the small-release policy. | Released |
 | 0.3.5 | Complete scan advice | Recommend rename whenever non-canonical source media exists, while retaining the safe organize-before-rename order. | Released |
 | 0.3.6 | Continuous integration | Run the locked quality and test gates on branches, pull requests, `main`, and release tags; document the branch and release workflow. | Released |
@@ -43,28 +70,30 @@ ledger, while the changelog and handoff hold the detailed shipped behavior.
 The order may change when a safety dependency is found, but unrelated primary
 purposes are not folded together merely to reduce tag count.
 
-## Version 0.4 cache foundation
+## Version 0.4 preservation and cache foundation
 
-Version 0.4 introduces a shared, derived cache service. The append-only
-collection action log remains the authoritative mutation history; SQLite stays
-disposable and rebuildable. The service must support analyzing a read-only
-source while persisting derived evidence only at an explicitly writable cache
-location. This separation is a prerequisite for migration verification: pymo
-must never create a cache, lock, configuration file, or action log on a source
-being preserved.
+Version 0.4 first makes collection discovery and first-pass health guidance
+explicitly corruption-tolerant, then introduces a shared, derived cache
+service. The append-only collection action log remains the authoritative
+mutation history; SQLite stays disposable and rebuildable. The service must
+support analyzing a read-only source while persisting derived evidence only at
+an explicitly writable cache location. This separation is a prerequisite for
+migration verification: pymo must never create a cache, lock, configuration
+file, or action log on a source being preserved.
 
 | Version | Primary purpose | Intended result |
 | --- | --- | --- |
-| 0.4.0 | Shared cache core | Versioned schema, file identity, algorithm/runtime keys, migrations, and reusable service interfaces. |
-| 0.4.1 | Cache status | Read-only cache health, coverage, version, and stale-record reporting. |
-| 0.4.2 | Video cache warm | Explicitly precompute exact-video fingerprints without running duplicate planning. |
-| 0.4.3 | Stable hashes | Reuse carefully keyed whole-file SHA records while rechecking content before an exact move. |
-| 0.4.4 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. |
-| 0.4.5 | Image fingerprint cache | Persist deterministic displayed-pixel image fingerprints for safe rescans. |
-| 0.4.6 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. |
-| 0.4.7 | Validation evidence | Record validation profile, result, file identity, runtime/tool versions, and completion time as disposable history without allowing an old healthy result to satisfy a fresh full validation. |
-| 0.4.8 | Explicit cached validation | Offer an explicitly named cache-assisted validation mode for unchanged files while retaining fresh reads as the default contract of `validate --full`. |
-| 0.4.9 | Targeted cache refresh | Recompute selected validation or fingerprint records without deleting unrelated cache evidence; reserve `--no-cache` for disabling both cache reads and writes. |
+| 0.4.0 | Corruption-tolerant evidence | Make scan report directory traversal failures instead of silently omitting them, keep per-file decode failures as validation findings without aborting the collection, recommend validation before mutation, and prove through synthetic plus local acceptance tests that corrupt, unreadable, changing, unsupported, and mismatched media remain visible rather than becoming automatic ignore rules. |
+| 0.4.1 | Shared cache core | Versioned schema, file identity, algorithm/runtime keys, migrations, and reusable service interfaces. |
+| 0.4.2 | Cache status | Read-only cache health, coverage, version, and stale-record reporting. |
+| 0.4.3 | Video cache warm | Explicitly precompute exact-video fingerprints without running duplicate planning. |
+| 0.4.4 | Stable hashes | Reuse carefully keyed whole-file SHA records while rechecking content before an exact move. |
+| 0.4.5 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. |
+| 0.4.6 | Image fingerprint cache | Persist deterministic displayed-pixel image fingerprints for safe rescans. |
+| 0.4.7 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. |
+| 0.4.8 | Validation evidence | Record validation profile, result, file identity, runtime/tool versions, and completion time as disposable history without allowing an old healthy result to satisfy a fresh full validation. |
+| 0.4.9 | Explicit cached validation | Offer an explicitly named cache-assisted validation mode for unchanged files while retaining fresh reads as the default contract of `validate --full`. |
+| 0.4.10 | Targeted cache refresh | Recompute selected validation or fingerprint records without deleting unrelated cache evidence; reserve `--no-cache` for disabling both cache reads and writes. |
 
 Cache reuse is incremental: new or changed files add or replace only their own
 derived records. Unchanged records survive collection growth. No scan command
