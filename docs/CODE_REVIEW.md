@@ -90,6 +90,12 @@ The same adversarial method was repeated after the first validation release.
 | OUT-001 | Low | Duplicate-finder previews always print collection paths, filenames, per-group plans, and skipped-file details, leaving no concise aggregate mode for private logs or quick status checks. | 0.3.17 | Resolved in ADR 0054 |
 | OUT-002 | Low | Wall-clock correlation required an opt-in flag, so ordinary long-running console records lacked timestamps even though elapsed and stage durations were available. | 0.3.18 | Resolved in ADR 0055 |
 
+## Documentation review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| DOC-001 | Low | The roadmap claimed released rows were removed even though it retained the stabilization ledger, while the README still described the completed validation review as future work. | 0.3.19 | Resolved in ADR 0056 |
+
 ## Release groups
 
 - `0.2.2`: establish ADRs and the locked Ruff, Black, mypy, pre-commit, and
@@ -137,8 +143,8 @@ The same adversarial method was repeated after the first validation release.
 - `0.3.18`: timestamp normal human-readable console records by default, retain
   the explicit compatible spelling, and provide a plain-console opt-out without
   affecting structured JSON.
-- `0.3.x`: close any remaining validation safety findings without crossing the
-  approved version boundary.
+- `0.3.19`: reconcile the roadmap's retained release ledger and repository
+  next-work guidance with the completed 0.3 stabilization.
 
 ## Independent review evidence
 

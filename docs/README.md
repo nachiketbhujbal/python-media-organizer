@@ -3,7 +3,7 @@
 The repository root contains the package overview and the operational files
 needed by coding agents. Durable engineering documentation lives here:
 
-- [Roadmap](ROADMAP.md) — planned releases and promotion criteria.
+- [Roadmap](ROADMAP.md) — promoted releases, status, and acceptance criteria.
 - [Changelog](CHANGELOG.md) — behavior that has shipped.
 - [Research](RESEARCH.md) — evaluated products, open questions, and ideas that
   do not yet have a committed release.
