@@ -41,7 +41,8 @@ from pymo.config import (
     ConfigError,
     PymoConfig,
     add_config_argument,
-    ignored_summary,
+    add_show_ignored_argument,
+    ignored_messages,
     load_config,
 )
 from pymo.logging_config import emit as print
@@ -781,6 +782,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     add_config_argument(parser)
+    add_show_ignored_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -832,9 +834,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     classifier = Classifier(config.classification)
     paths, ignored = discover_videos(vids, root, classifier, config)
     print(f"Scanning {len(paths)} video(s) in {vids}")
-    summary = ignored_summary(ignored)
-    if summary:
-        print(summary)
+    for message in ignored_messages(ignored, root, args.show_ignored):
+        print(message)
     print(f"FFmpeg runtime: {ffmpeg_release}")
 
     records: list[VideoRecord] = []

@@ -33,7 +33,8 @@ from pymo.config import (
     ConfigError,
     PymoConfig,
     add_config_argument,
-    ignored_summary,
+    add_show_ignored_argument,
+    ignored_messages,
     load_config,
 )
 from pymo.logging_config import emit as print
@@ -432,6 +433,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     add_config_argument(parser)
+    add_show_ignored_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -487,9 +489,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     pics = CollectionLayout(root).pics
     paths, ignored = discover_images(pics, root, config)
     print(f"Scanning {len(paths)} image(s) in {pics}")
-    summary = ignored_summary(ignored)
-    if summary:
-        print(summary)
+    for message in ignored_messages(ignored, root, args.show_ignored):
+        print(message)
 
     groups: dict[str, list[ImageRecord]] = defaultdict(list)
     scanned_bytes = 0

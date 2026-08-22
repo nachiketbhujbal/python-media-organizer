@@ -2,6 +2,15 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.1.4 - 2026-08-22
+
+- Add an explicit `--show-ignored` option to every forward command and the
+  unified CLI for reviewing collection-relative ignored paths.
+- Keep ignored filenames private by default, including under `--verbose`,
+  while continuing to report the ignored path count.
+- Add cross-command tests for private default output, explicit relative-path
+  output, and global option forwarding.
+
 ## 0.1.3 - 2026-08-22
 
 - Move media classification lists, rename noise tokens, image-inspection

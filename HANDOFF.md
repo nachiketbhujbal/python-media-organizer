@@ -13,7 +13,7 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.1.3` configuration-architecture release. It is a
+`pymo` command, and has a `v0.1.4` ignored-path visibility release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
@@ -39,6 +39,8 @@ Hard requirements:
 11. Shared packaged policy provides ignore, classification, renaming,
     image-inspection, and video-timeout defaults. Custom arrays may extend but
     not disable packaged lists.
+12. Ignored path names remain private by default and under `--verbose`. Only
+    explicit `--show-ignored` may list deterministic collection-relative paths.
 
 `{collection-name}-actions-log.jsonl` remains the authoritative portable
 journal because it moves naturally with a media-collection on external storage.
@@ -81,7 +83,9 @@ pymo find-video-duplicates COLLECTION
 
 Each supports dry-run/apply behavior; all four support `--undo`, which is also
 a preview unless combined with `--apply`. Global `--verbose`, `--quiet`,
-`--log-file PATH`, and `--config PATH` options go before the subcommand.
+`--log-file PATH`, `--config PATH`, and `--show-ignored` options go before the
+subcommand. `--show-ignored` and command-specific options are also accepted by
+the selected command after its collection argument.
 
 ## Shared configuration and collection layout
 
@@ -112,6 +116,12 @@ verification treats such a metadata-only tree as intentionally preserved.
 Malformed, unknown, absolute, or parent-traversing configuration stops before
 mutation. Undo and legacy manifest reorganization remain action-driven and do
 not reinterpret historical operations through current ignore settings.
+
+All forward commands report the number of ignored entry points without naming
+them. `--verbose` does not relax that privacy default. Explicit
+`--show-ignored` adds a sorted collection-relative list without printing the
+absolute collection root. If the user also requests `--log-file`, those listed
+paths are deliberately included in that log.
 
 The source contains only three assigned module constants: the config schema,
 action-log schema, and video fingerprint algorithm versions. Each is an
@@ -264,6 +274,8 @@ behavioral tests.
 - `--verbose` enables diagnostic `DEBUG` output.
 - `--quiet` keeps only warnings and errors.
 - `--log-file PATH` creates a timestamped local log only at the requested path.
+- `--show-ignored` explicitly adds relative ignored paths; `--verbose` alone
+  never reveals them.
 - No persistent log is created by default.
 
 Do not put media bytes or unrelated metadata into exceptions or diagnostics.
@@ -318,7 +330,8 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   cache/sidecar behavior, cross-tool undo dependencies, missing runtime errors,
   and local-file-only/no-capture command construction;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
-  quiet mode, and global config forwarding;
+  quiet mode, global option forwarding, default ignored-name privacy, and
+  explicit relative ignored-path output;
 - typed configuration parsing, immutable/additive defaults, validated media
   extensions, MIME types, noise tokens and timeout, alternate-config
   selection, invalid-schema refusal, and config self-protection;

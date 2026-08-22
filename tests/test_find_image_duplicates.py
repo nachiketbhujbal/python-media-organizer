@@ -73,11 +73,14 @@ def test_duplicate_finder_honors_custom_file_rules(
         encoding="utf-8",
     )
 
-    result = run_script("find_image_duplicates.py", tmp_path, "--apply")
+    result = run_script(
+        "find_image_duplicates.py", tmp_path, "--show-ignored", "--apply"
+    )
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Scanning 1 image(s)" in result.stdout
     assert "Ignored by configuration: 1 path(s)." in result.stdout
+    assert "Ignored paths:\n  pics/protected-copy.png" in result.stdout
     assert "Moved 0 duplicate(s)" in result.stdout
     assert original.exists()
     assert protected_copy.exists()

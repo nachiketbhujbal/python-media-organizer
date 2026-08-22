@@ -26,6 +26,9 @@ never duplicate the version in source or static project metadata.
 - Keep processing local. No telemetry, analytics, automatic networking, cloud
   AI, hosted model fallback, or automatic downloads.
 - Persistent logs are opt-in because paths and filenames are sensitive.
+- Keep ignored path names private by default. `--verbose` may add diagnostics
+  but must not reveal ignored paths; only the explicit `--show-ignored` option
+  may list them, using deterministic collection-relative paths.
 - Keep packaged ignore defaults active for every forward command. Ignored paths
   are never moved, renamed, fingerprinted, deleted, or action-logged.
 - A collection `.pymo.toml` or explicit `--config` may only extend packaged

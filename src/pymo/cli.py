@@ -9,6 +9,7 @@ from pathlib import Path
 
 from pymo import __version__
 from pymo import organize, rename
+from pymo.config import add_show_ignored_argument
 from pymo.duplicates import images, videos
 from pymo.logging_config import configure_logging
 
@@ -46,6 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="use an alternate TOML configuration for this command",
     )
+    add_show_ignored_argument(parser)
     parser.add_argument("command", choices=tuple(_commands()))
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     return parser
@@ -63,4 +65,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     command_arguments = list(args.arguments)
     if args.config is not None:
         command_arguments[0:0] = ["--config", str(args.config)]
+    if args.show_ignored:
+        command_arguments[0:0] = ["--show-ignored"]
     return commands[args.command](command_arguments)

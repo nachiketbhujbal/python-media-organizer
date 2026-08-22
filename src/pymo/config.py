@@ -114,6 +114,14 @@ def add_config_argument(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_show_ignored_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--show-ignored",
+        action="store_true",
+        help="list ignored paths relative to the collection root",
+    )
+
+
 def _table(
     document: dict[str, Any],
     name: str,
@@ -418,7 +426,18 @@ def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
     )
 
 
-def ignored_summary(paths: list[Path]) -> str | None:
+def ignored_messages(
+    paths: list[Path], root: Path, show_paths: bool
+) -> tuple[str, ...]:
     if not paths:
-        return None
-    return f"Ignored by configuration: {len(paths)} path(s)."
+        return ()
+    messages = [f"Ignored by configuration: {len(paths)} path(s)."]
+    if show_paths:
+        messages.append("Ignored paths:")
+        for path in sorted(paths, key=lambda item: str(item).casefold()):
+            try:
+                relative = path.relative_to(root).as_posix()
+            except ValueError:
+                relative = path.name
+            messages.append(f"  {relative}")
+    return tuple(messages)

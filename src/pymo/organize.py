@@ -37,7 +37,8 @@ from pymo.config import (
     ConfigError,
     PymoConfig,
     add_config_argument,
-    ignored_summary,
+    add_show_ignored_argument,
+    ignored_messages,
     load_config,
 )
 from pymo.logging_config import emit as print
@@ -651,6 +652,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="specific legacy CSV organization manifest to use with --undo",
     )
     add_config_argument(parser)
+    add_show_ignored_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -760,9 +762,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"and {counts['other']} other file(s)."
     )
     print(f"Already correctly placed: {len(already_correct)} file(s).")
-    summary = ignored_summary(ignored)
-    if summary:
-        print(summary)
+    for message in ignored_messages(ignored, root, args.show_ignored):
+        print(message)
     if not args.apply and (plan or missing_destinations or source_directories):
         print("Dry run only. Add --apply after reviewing this list.")
     if log_path:

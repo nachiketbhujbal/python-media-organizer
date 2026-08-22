@@ -83,8 +83,34 @@ def test_cli_forwards_global_config_to_subcommand(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    result = run_pymo("--config", config, "organize", collection, "--apply")
+    result = run_pymo(
+        "--config",
+        config,
+        "--show-ignored",
+        "organize",
+        collection,
+        "--apply",
+    )
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Ignored by configuration: 1 path(s)." in result.stdout
+    assert "Ignored paths:\n  incoming/notes.txt" in result.stdout
     assert protected.read_text(encoding="utf-8") == "keep in place"
+
+
+def test_verbose_does_not_reveal_ignored_paths_without_opt_in(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "collection"
+    pics = collection / "pics"
+    vids = collection / "vids"
+    pics.mkdir(parents=True)
+    vids.mkdir()
+    (pics / ".DS_Store").write_bytes(b"view state")
+
+    result = run_pymo("--verbose", "organize", collection)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Ignored by configuration: 1 path(s)." in result.stdout
+    assert ".DS_Store" not in result.stdout
+    assert ".DS_Store" not in result.stderr

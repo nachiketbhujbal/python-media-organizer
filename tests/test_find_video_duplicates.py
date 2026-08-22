@@ -130,11 +130,15 @@ def test_video_finder_ignores_picture_folder_state(
     dups.mkdir()
     (dups / "pics").write_text("owned by the image finder", encoding="utf-8")
 
-    result = run_script("find_video_duplicates.py", tmp_path)
+    result = run_script(
+        "find_video_duplicates.py", tmp_path, "--show-ignored"
+    )
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Scanning 0 video(s)" in result.stdout
     assert "Ignored by configuration: 2 path(s)." in result.stdout
+    assert "  vids/.DS_Store" in result.stdout
+    assert "  vids/protected.mp4" in result.stdout
     assert (vids / "protected.mp4").read_bytes() == b"not inspected"
     assert (dups / "pics").read_text(encoding="utf-8") == "owned by the image finder"
 

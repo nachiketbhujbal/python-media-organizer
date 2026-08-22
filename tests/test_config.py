@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from pymo.collection import CollectionLayout
-from pymo.config import ConfigError, load_config
+from pymo.config import ConfigError, ignored_messages, load_config
 
 
 def write_config(path: Path, body: str) -> None:
@@ -131,3 +131,19 @@ def test_symbolic_link_configuration_is_rejected(tmp_path: Path) -> None:
 
     with pytest.raises(ConfigError, match="not a regular file"):
         load_config(tmp_path, link)
+
+
+def test_ignored_messages_are_private_by_default_and_relative_when_requested(
+    tmp_path: Path,
+) -> None:
+    paths = [tmp_path / "vids" / ".DS_Store", tmp_path / "pics" / "Thumbs.db"]
+
+    assert ignored_messages(paths, tmp_path, False) == (
+        "Ignored by configuration: 2 path(s).",
+    )
+    assert ignored_messages(paths, tmp_path, True) == (
+        "Ignored by configuration: 2 path(s).",
+        "Ignored paths:",
+        "  pics/Thumbs.db",
+        "  vids/.DS_Store",
+    )

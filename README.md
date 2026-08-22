@@ -105,6 +105,18 @@ to the collection. An ignored directory protects its whole subtree. pymo
 reports how many file or directory entry points it ignored without listing
 private names by default.
 
+To review exactly which paths were ignored, opt in explicitly:
+
+```bash
+pymo --show-ignored organize "/path/to/media-collection"
+pymo find-image-duplicates "/path/to/media-collection" --show-ignored
+```
+
+The list is deterministic and relative to the media-collection root, so it
+does not expose the root's absolute location. `--verbose` alone does not reveal
+ignored names. Combining `--show-ignored` with `--log-file` intentionally
+records those displayed relative paths in the requested log.
+
 Custom arrays extend rather than replace packaged defaults. Classification
 extensions are conservative filename fallbacks when content detection is
 generic or unknown. Image-duplicate extensions select files for Pillow to
@@ -258,10 +270,13 @@ terminal:
 pymo --verbose organize "/path/to/media-collection"
 pymo --quiet organize "/path/to/media-collection"
 pymo --log-file "/path/to/pymo.log" organize "/path/to/media-collection"
+pymo --show-ignored organize "/path/to/media-collection"
 ```
 
 Persistent logs are opt-in because paths and filenames can be private. No log
 file is created by default. Global logging options go before the subcommand.
+`--show-ignored` is a separate privacy opt-in and may appear globally or after
+the subcommand's collection argument.
 
 ## Tests
 
@@ -275,14 +290,15 @@ fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,
 content changes, strict folder ownership, exact image and video matching,
 different audio and timing, corrupt/ambiguous media, derived cache behavior,
 shared built-in and custom policy, malformed-config refusal, centralized
-collection paths, logging privacy, and the guarantee that video decoding never
-invokes capture devices. Private collections and their names are not fixtures
-or repository content.
+collection paths, default ignored-name privacy, explicit relative ignored-path
+output, logging privacy, and the guarantee that video decoding never invokes
+capture devices. Private collections and their names are not fixtures or
+repository content.
 
 ## Versions and releases
 
 Git tags are the authoritative release version. Hatchling builds the package,
-and hatch-vcs derives the Python package version from tags such as `v0.1.3`;
+and hatch-vcs derives the Python package version from tags such as `v0.1.4`;
 there is no second version string to update by hand. Untagged development
 commits receive a PEP 440 development version containing their Git revision.
 uv manages the environment and `uv.lock`, while ordinary standards-compatible

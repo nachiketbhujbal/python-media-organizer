@@ -152,9 +152,26 @@ def test_organizer_ignores_finder_metadata_without_logging_it(
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Moved 0 file(s)" in result.stdout
     assert "Ignored by configuration: 2 path(s)." in result.stdout
+    assert ".DS_Store" not in result.stdout
     assert picture_metadata.read_bytes() == b"picture view state"
     assert video_metadata.read_bytes() == b"video view state"
     assert not action_log_path(tmp_path).exists()
+
+
+def test_organizer_can_show_ignored_paths_explicitly(
+    tmp_path: Path, run_script
+) -> None:
+    pics = tmp_path / "pics"
+    vids = tmp_path / "vids"
+    pics.mkdir()
+    vids.mkdir()
+    (pics / ".DS_Store").write_bytes(b"picture view state")
+
+    result = run_script("organize_media.py", tmp_path, "--show-ignored")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Ignored paths:\n  pics/.DS_Store" in result.stdout
+    assert str(tmp_path / "pics" / ".DS_Store") not in result.stdout
 
 
 def test_organizer_verifies_source_tree_containing_only_ignored_metadata(

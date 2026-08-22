@@ -175,10 +175,14 @@ def test_renamer_honors_custom_file_rules(tmp_path: Path, run_script) -> None:
         encoding="utf-8",
     )
 
-    result = run_script("rename_media.py", root, "--apply")
+    result = run_script(
+        "rename_media.py", root, "--show-ignored", "--apply"
+    )
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Ignored by configuration: 2 path(s)." in result.stdout
+    assert "  .pymo.toml" in result.stdout
+    assert "  pics/keep-original.png" in result.stdout
     assert protected.exists()
     assert not candidate.exists()
     assert len(list(pics.glob("collection__image_0001__*.png"))) == 1
