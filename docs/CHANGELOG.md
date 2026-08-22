@@ -2,6 +2,16 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.9 - 2026-08-22
+
+- Record the verified GitHub Free limitation that prevents branch protection
+  and rulesets from being enabled while this repository remains private.
+- Specify a future no-bypass `main` ruleset that blocks force pushes and
+  deletion, requires pull requests and all three platform checks, and requires
+  resolved conversations without imposing an impossible self-approval rule.
+- Keep the repository private and the same safeguards procedural until GitHub
+  Pro is enabled or a deliberate public transition makes rulesets available.
+
 ## 0.3.8 - 2026-08-22
 
 - Pin exact-video classification, whole-file hashing, ffprobe inspection, and

@@ -13,16 +13,19 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.8` video-read-safety release. It is a
+`pymo` command, and has a `v0.3.9` repository-governance release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.8 pins video classification, hashing, ffprobe, and frame/audio
-fingerprinting to stable collection-anchored descriptors. Version 0.3.7 limits
-automatic GitHub Actions runs to pull requests targeting `main` and pushes to
-`main`, retains deliberate manual dispatch, and caps each platform job at ten
-minutes while the repository is private. Version 0.3.6 adds a pinned GitHub
+Version 0.3.9 records that GitHub Free cannot enforce branch protection on this
+private repository and specifies the no-bypass `main` ruleset to activate after
+a Pro upgrade or public transition. Version 0.3.8 pins video classification,
+hashing, ffprobe, and frame/audio fingerprinting to stable collection-anchored
+descriptors. Version 0.3.7 limits automatic GitHub Actions runs to pull requests
+targeting `main` and pushes to `main`, retains deliberate manual dispatch, and
+caps each platform job at ten minutes while the repository is private. Version
+0.3.6 adds a pinned GitHub
 Actions quality gate, adopts short-lived branches with CI-verified merge
 boundaries, and streams descriptor-backed classification through portable
 `file` standard input rather than asking the utility to classify `/dev/fd`.
@@ -556,3 +559,11 @@ check could not be required until the workflow existed on `main`. GitHub CLI is
 authenticated for pull-request and Actions management; the repository deploy
 key remains the scoped Git transport credential. See `docs/CONTRIBUTING.md` for
 the safe sole-maintainer ruleset.
+
+GitHub's ruleset and classic branch-protection APIs currently return HTTP 403
+because the repository is private under GitHub Free. The repository must remain
+private unless the user explicitly changes that decision. Until GitHub Pro is
+enabled or the repository becomes public, PR review and the no-force-push,
+no-deletion policy are procedural rather than server-enforced. When eligible,
+activate the no-bypass `main` ruleset defined in ADR 0046 and verify it through
+the API before describing the branch as protected.

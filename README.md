@@ -435,7 +435,10 @@ Ordinary branch pushes and release tags do not repeat the matrix while the
 repository is private; manual dispatch remains available when an additional
 remote run is warranted. See
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for the branch and release
-workflow.
+workflow. GitHub Free does not offer server-side protection for private
+repositories, so the planned no-force-push, no-deletion, PR, status-check, and
+conversation-resolution rules remain procedural until the account gains Pro or
+the repository becomes public; ADR 0046 records the activation design.
 
 The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,
