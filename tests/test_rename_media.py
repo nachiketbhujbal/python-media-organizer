@@ -113,6 +113,28 @@ def test_renamer_refuses_incomplete_discovery_before_apply(
     assert not action_log_path(root).exists()
 
 
+def test_renamer_refuses_an_enumerated_entry_that_no_longer_resolves(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "media-collection"
+    pics = root / "pics"
+    pics.mkdir(parents=True)
+    source = pics / "photo.png"
+    Image.new("RGB", (2, 2), "blue").save(source)
+
+    def ghost_walk(_root: Path, *, topdown: bool, onerror):
+        assert topdown
+        assert onerror is not None
+        yield str(root), ["pics"], []
+        yield str(pics), [], [source.name, "vanished.jpg"]
+
+    monkeypatch.setattr(discovery.os, "walk", ghost_walk)
+
+    assert rename.main([str(root), "--apply"]) == 1
+    assert source.is_file()
+    assert not action_log_path(root).exists()
+
+
 def test_renamer_apply_and_undo_are_logged_and_reversible(
     tmp_path: Path, run_script
 ) -> None:

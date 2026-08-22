@@ -35,3 +35,16 @@ def test_complete_directory_listing_never_returns_partial_entries(
 
     with pytest.raises(DiscoveryError, match="filesystem discovery was incomplete"):
         discovery.list_directory_complete(tmp_path)
+
+
+def test_enumerated_entry_must_still_resolve() -> None:
+    with pytest.raises(DiscoveryError, match="1 location could not be read"):
+        discovery.entry_kind_complete(Path("media-collection/vanished.jpg"))
+
+
+def test_walk_entry_rejects_a_changed_category(tmp_path: Path) -> None:
+    directory = tmp_path / "became-a-directory"
+    directory.mkdir()
+
+    with pytest.raises(DiscoveryError, match="discovery changed"):
+        discovery.walk_entry_kind_complete(directory, listed_as_directory=False)

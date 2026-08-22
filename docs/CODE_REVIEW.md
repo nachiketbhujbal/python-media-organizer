@@ -56,6 +56,7 @@ The same adversarial method was repeated after the first validation release.
 | ID | Severity | Finding | Resolution target | Status |
 | --- | --- | --- | --- | --- |
 | DISC-001 | High | Organizer and renamer planning, organizer verification, and action-log undo snapshots can consume an `os.walk` traversal without an error callback, allowing an unreadable subtree to be mistaken for a complete namespace. Flat duplicate discovery also exposes raw enumeration failures instead of a consistent no-state failure boundary. | 0.4.1 | Resolved in ADR 0059 |
+| DISC-002 | High | A corrupt filesystem can return a name from directory enumeration and then return `ENOENT` for that same name. `Path.is_file()`, `is_dir()`, and `is_symlink()` suppress these metadata failures as false, so v0.4.1 traversal completeness can still omit a ghost entry from mutation and undo plans. | 0.4.2 | Resolved in ADR 0060 |
 
 ## CI portability findings
 
@@ -158,6 +159,8 @@ The same adversarial method was repeated after the first validation release.
   without becoming automatic ignore policy.
 - `0.4.1`: require complete namespace enumeration for mutation planning, undo
   simulation, duplicate analysis, and post-operation layout verification.
+- `0.4.2`: require no-follow metadata inspection for every enumerated entry and
+  reject names that disappear or change walk category before a plan is trusted.
 
 ## Independent review evidence
 

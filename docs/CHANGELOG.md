@@ -2,6 +2,18 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.2 - 2026-08-22
+
+- Require explicit no-follow metadata inspection for every name returned by
+  recursive or flat discovery instead of relying on error-suppressing `Path`
+  type predicates.
+- Stop organization, renaming, undo planning, and exact duplicate analysis when
+  an enumerated entry disappears or cannot be inspected.
+- Reject an entry whose directory/non-directory category changes during a walk
+  so a stale traversal cannot omit newly nested content.
+- Add synthetic ghost-entry tests proving all mutating command families leave
+  media, cache, duplicate directories, and action history unchanged.
+
 ## 0.4.1 - 2026-08-22
 
 - Require complete recursive filesystem discovery before organization,

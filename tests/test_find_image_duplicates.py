@@ -8,6 +8,7 @@ from PIL import Image, PngImagePlugin
 
 from pymo.action_log import action_log_path
 from pymo.discovery import DiscoveryError
+from pymo.duplicates import common as duplicate_common
 from pymo.duplicates import images as image_duplicates
 
 
@@ -363,5 +364,28 @@ def test_image_discovery_failure_creates_no_state(
 
     assert image_duplicates.main([str(tmp_path), "--apply"]) == 1
     assert (pics / "photo.png").is_file()
+    assert not (tmp_path / "dups").exists()
+    assert not action_log_path(tmp_path).exists()
+
+
+def test_image_ghost_entry_creates_no_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pics = tmp_path / "pics"
+    pics.mkdir()
+    source = pics / "photo.png"
+    Image.new("RGB", (2, 2), "blue").save(source)
+
+    monkeypatch.setattr(
+        duplicate_common, "list_directory_complete", lambda _path: (source,)
+    )
+    monkeypatch.setattr(
+        image_duplicates,
+        "list_directory_complete",
+        lambda _path: (source, pics / "vanished.jpg"),
+    )
+
+    assert image_duplicates.main([str(tmp_path), "--apply"]) == 1
+    assert source.is_file()
     assert not (tmp_path / "dups").exists()
     assert not action_log_path(tmp_path).exists()

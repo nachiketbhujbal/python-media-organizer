@@ -10,7 +10,11 @@ from typing import Literal
 from pymo.action_log import Action
 from pymo.collection import CollectionLayout
 from pymo.config import PymoConfig
-from pymo.discovery import DiscoveryError, list_directory_complete
+from pymo.discovery import (
+    DiscoveryError,
+    entry_kind_complete,
+    list_directory_complete,
+)
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
 
@@ -72,12 +76,17 @@ def layout_problems(
         problems.append("required media folder could not be read completely")
         return problems
     for path in source_entries:
-        if path.is_symlink():
+        try:
+            entry_kind = entry_kind_complete(path)
+        except DiscoveryError:
+            problems.append("required media folder contains an unreadable entry")
+            return problems
+        if entry_kind == "symlink":
             problems.append(f"symbolic link cannot be verified: {path}")
-        elif path.is_dir():
+        elif entry_kind == "directory":
             if not config.ignores_directory(path, root):
                 problems.append(f"unexpected directory in {layout.source.name}: {path}")
-        elif path.is_file():
+        elif entry_kind == "file":
             if config.ignores_file(path, root):
                 continue
             kind, _ = classifier.classify(path)

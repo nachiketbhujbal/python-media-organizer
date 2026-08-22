@@ -39,7 +39,11 @@ from pymo.config import (
     ignored_messages,
     load_config,
 )
-from pymo.discovery import DiscoveryError, walk_complete
+from pymo.discovery import (
+    DiscoveryError,
+    walk_complete,
+    walk_entry_kind_complete,
+)
 from pymo.logging_config import emit as print
 from pymo.progress import ProgressMeter
 
@@ -168,7 +172,8 @@ def discover_files(
         retained_directories: list[str] = []
         for name in directory_names:
             path = current_path / name
-            if path.is_symlink():
+            entry_kind = walk_entry_kind_complete(path, listed_as_directory=True)
+            if entry_kind == "symlink":
                 skipped_links.append(path)
             elif is_in_dups(path, root):
                 continue
@@ -180,11 +185,12 @@ def discover_files(
 
         for name in file_names:
             path = current_path / name
-            if path.is_symlink():
+            entry_kind = walk_entry_kind_complete(path, listed_as_directory=False)
+            if entry_kind == "symlink":
                 skipped_links.append(path)
             elif config.ignores_file(path, root):
                 ignored.append(path)
-            elif path.is_file() and not is_action_log_path(root, path):
+            elif entry_kind == "file" and not is_action_log_path(root, path):
                 files.append(path.absolute())
     files.sort(key=lambda item: str(item).casefold())
     skipped_links.sort(key=lambda item: str(item).casefold())
@@ -249,8 +255,9 @@ def removable_directories(
         retained_directories: list[str] = []
         for name in directory_names:
             path = current_path / name
+            entry_kind = walk_entry_kind_complete(path, listed_as_directory=True)
             if (
-                path.is_symlink()
+                entry_kind == "symlink"
                 or is_in_dups(path, root)
                 or config.ignores_directory(path, root)
             ):
@@ -259,11 +266,7 @@ def removable_directories(
             retained_directories.append(name)
         directory_names[:] = retained_directories
     directories.sort(key=lambda item: len(item.parts), reverse=True)
-    return [
-        directory
-        for directory in directories
-        if directory not in protected and not directory.is_symlink()
-    ]
+    return [directory for directory in directories if directory not in protected]
 
 
 def _contains_only_ignored_entries(
@@ -275,7 +278,8 @@ def _contains_only_ignored_entries(
         retained_directories: list[str] = []
         for name in directory_names:
             path = current_path / name
-            if path.is_symlink():
+            entry_kind = walk_entry_kind_complete(path, listed_as_directory=True)
+            if entry_kind == "symlink":
                 return False
             if config.ignores_directory(path, root):
                 found_ignored = True
@@ -284,7 +288,8 @@ def _contains_only_ignored_entries(
         directory_names[:] = retained_directories
         for name in file_names:
             path = current_path / name
-            if path.is_symlink() or not config.ignores_file(path, root):
+            entry_kind = walk_entry_kind_complete(path, listed_as_directory=False)
+            if entry_kind == "symlink" or not config.ignores_file(path, root):
                 return False
             found_ignored = True
     return found_ignored
@@ -307,8 +312,9 @@ def remaining_directories(
         retained_directories: list[str] = []
         for name in directory_names:
             path = current_path / name
+            entry_kind = walk_entry_kind_complete(path, listed_as_directory=True)
             if (
-                path.is_symlink()
+                entry_kind == "symlink"
                 or is_in_dups(path, root)
                 or config.ignores_directory(path, root)
             ):

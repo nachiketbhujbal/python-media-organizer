@@ -18,10 +18,15 @@ corruption-tolerant evidence and shared-cache foundation. Optional metadata
 enrichment, perceptual similarity, and local AI remain secondary to proving
 that source content is accounted for.
 
+Migration-verification reports must expose ignored and policy-excluded entry
+points and define their verdict relative to the declared media-collection
+scope. They must not silently turn system-managed or ignored trees into proven
+absence, and they must not claim whole-device recovery.
+
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.4.1` complete-discovery release. It is a
+`pymo` command, and has a `v0.4.2` entry-integrity release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
@@ -39,6 +44,14 @@ cache, duplicate directories, or action history when their owned flat media
 directory cannot be listed completely. Organizer verification also refuses an
 apparently complete verdict after a traversal failure. Report-only scan and
 validation retain their distinct evidence-collection behavior.
+
+Version 0.4.2 closes the remaining entry-level gap exposed by a read-only
+damaged-filesystem acceptance check. Every enumerated name in a mutation,
+undo, duplicate-analysis, or organizer-verification boundary now requires an
+explicit no-follow metadata result; a name that returns `ENOENT`, another
+metadata error, or a changed walk category stops the command before state is
+created. Report-only scan and validation continue to count such names as
+unreadable evidence and process readable neighbors.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -594,8 +607,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   custom-directory protection, custom classification extensions, and
   ignored-only source trees;
 - fail-closed recursive and flat discovery, including late traversal errors
-  after visible media and proof that organization, renaming, undo, and both
-  duplicate finders create no new state from an incomplete namespace;
+  after visible media, enumerated ghost names, changed walk categories, and
+  proof that organization, renaming, undo, and both duplicate finders create no
+  new state from an incomplete namespace;
 - renamer parsing and cleanup across varied filename structures, deterministic
   names, configurable additive noise tokens, collisions, apply/undo, and
   `dups` protection;
