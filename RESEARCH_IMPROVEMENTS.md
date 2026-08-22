@@ -472,6 +472,13 @@ optional `--full` frame loading and reports multi-page/animated inputs without
 calling them corrupt. Standard video validation uses local ffprobe structure
 inspection; `--full` performs a sequential local FFmpeg decode.
 
+The post-release adversarial pass established three additional boundaries:
+native-tool diagnostics are discarded and only required ffprobe fields are
+requested; unreadable traversal is an explicit health error; and a file that
+changes during decoding is reported only as changed rather than corrupt.
+Collection roots and filenames remain hidden unless their relative display is
+explicitly requested.
+
 Report:
 
 - unreadable or partially decodable media;

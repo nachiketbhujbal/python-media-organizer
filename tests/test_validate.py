@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import errno
 import json
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PIL import Image
@@ -50,6 +52,7 @@ def test_validation_reports_errors_without_paths_or_writes(
     assert "healthy.png" not in result.stdout
     assert "damaged.png" not in result.stdout
     assert ".DS_Store" not in result.stdout
+    assert str(root) not in result.stdout
     assert snapshot(root) == before
     assert not action_log_path(root).exists()
     assert not CollectionLayout(root).video_cache.exists()
@@ -152,6 +155,127 @@ def test_validation_honors_ignore_and_symlink_rules(tmp_path: Path, run_script) 
     assert "protected.png" in result.stdout
     assert "linked.png" not in result.stdout
     assert "symbolic_link_skipped" in result.stdout
+
+    explicit = run_script("validate.py", root, "--show-files")
+
+    assert explicit.returncode == 0, explicit.stdout + explicit.stderr
+    assert "linked.png: warning symbolic_link_skipped" in explicit.stdout
+
+
+def test_validation_does_not_require_video_tools_for_empty_videos(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    (root / "empty.mp4").write_bytes(b"")
+    monkeypatch.setattr(
+        validate,
+        "resolve_executable",
+        lambda *_: pytest.fail("empty videos do not need native video tools"),
+    )
+
+    assert validate.main([str(root)]) == 1
+
+
+def test_discovery_records_directory_walk_errors(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    blocked = root / "closed"
+
+    def inaccessible_walk(
+        _root: Path, *, topdown: bool, onerror
+    ) -> list[tuple[str, list[str], list[str]]]:
+        assert topdown
+        onerror(OSError(errno.EACCES, "permission denied", str(blocked)))
+        return []
+
+    monkeypatch.setattr(validate.os, "walk", inaccessible_walk)
+
+    discovery = validate.discover_candidates(root, load_config(root))
+    report = validate.build_report(root, discovery, (), False, 1, True, False)
+
+    assert discovery.unreadable_count == 1
+    assert discovery.unreadable_paths == (blocked,)
+    assert report["health"]["files_with_errors"] == 1
+    assert report["finding_files"][0]["path"] == "closed"
+
+
+def test_video_change_takes_precedence_over_decoder_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    path = tmp_path / "clip.mp4"
+    path.write_bytes(b"original bytes")
+    candidate = validate.MediaCandidate(
+        path=path,
+        state=validate.FileState.capture(path),
+        kind="video",
+        extension_kind="video",
+        detected_kind="video",
+    )
+
+    def change_then_fail(_path: Path, _ffprobe: str) -> dict[str, Any]:
+        path.write_bytes(b"replacement bytes")
+        raise validate.VideoInspectionError("synthetic decoder failure")
+
+    monkeypatch.setattr(validate, "_probe_video", change_then_fail)
+
+    result = validate.validate_video(candidate, "ffprobe", None, 30)
+
+    assert [finding.code for finding in result.findings] == [
+        "changed_during_validation"
+    ]
+
+
+def test_video_validation_reports_missing_codec_and_dimensions(
+    tmp_path: Path, monkeypatch
+) -> None:
+    path = tmp_path / "clip.mp4"
+    path.write_bytes(b"synthetic video")
+    candidate = validate.MediaCandidate(
+        path=path,
+        state=validate.FileState.capture(path),
+        kind="video",
+        extension_kind="video",
+        detected_kind="video",
+    )
+    monkeypatch.setattr(
+        validate,
+        "_probe_video",
+        lambda *_: {
+            "streams": [{"codec_type": "video", "width": 0}],
+            "format": {"duration": "1.0"},
+        },
+    )
+
+    result = validate.validate_video(candidate, "ffprobe", None, 30)
+    codes = {finding.code for finding in result.findings}
+
+    assert "missing_video_codec" in codes
+    assert "invalid_video_dimensions" in codes
+
+
+def test_video_probe_selects_metadata_and_discards_tool_diagnostics(
+    tmp_path: Path, monkeypatch
+) -> None:
+    path = tmp_path / "clip.mp4"
+    path.write_bytes(b"synthetic video")
+    observed: dict[str, Any] = {}
+
+    def completed(
+        command: list[str], **kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return subprocess.CompletedProcess(command, 0, '{"streams":[],"format":{}}')
+
+    monkeypatch.setattr(validate.subprocess, "run", completed)
+
+    payload = validate._probe_video(path, "ffprobe")
+
+    assert payload == {"streams": [], "format": {}}
+    assert "-show_entries" in observed["command"]
+    assert observed["kwargs"]["stdout"] is subprocess.PIPE
+    assert observed["kwargs"]["stderr"] is subprocess.DEVNULL
 
 
 @requires_ffmpeg

@@ -38,3 +38,6 @@ old one rather than rewriting why the earlier choice was made.
 | [0030](0030-path-private-validation-reports.md) | Path-private validation reports |
 | [0031](0031-validation-health-exit-status.md) | Validation health exit status |
 | [0032](0032-sequential-full-video-validation.md) | Sequential full video validation |
+| [0033](0033-minimize-native-validation-output.md) | Minimized native validation output |
+| [0034](0034-changing-input-precedes-corruption.md) | Changing input precedes corruption findings |
+| [0035](0035-report-discovery-failures.md) | Validation discovery failures are health findings |

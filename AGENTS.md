@@ -52,7 +52,9 @@ never duplicate the version in source or static project metadata.
 - Scan inventory, classification, and checksum facts must come from stable file
   state. Omit detected changes and report only their aggregate count by default.
 - `validate` is report-only: it never repairs, quarantines, moves, deletes,
-  caches, or action-logs media. Filenames require explicit `--show-files`.
+  caches, or action-logs media. Collection roots and filenames are private by
+  default; filenames require explicit `--show-files`. An unreadable subtree is
+  a health error, and changing input supersedes any decoder conclusion.
 
 ## Package layout and tools
 
@@ -152,6 +154,7 @@ action logs. Full FFmpeg decoding remains sequential until benchmarks justify
 bounded multi-process decoding; FFmpeg already uses internal threads and
 unmeasured concurrency can regress external-drive performance.
 
-Report-only validation is implemented in version 0.3.0. Any future repair or
-quarantine behavior requires a separate ADR and dry-run/action-log design.
+Report-only validation is implemented and hardened through version 0.3.1. Any
+future repair or quarantine behavior requires a separate ADR and
+dry-run/action-log design.
 Local AI naming remains optional future work only.

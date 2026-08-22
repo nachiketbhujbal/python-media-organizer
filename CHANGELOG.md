@@ -2,6 +2,18 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.1 - 2026-08-22
+
+- Remove the absolute collection root from default validation text.
+- Report unreadable directory traversal as a health error instead of silently
+  omitting the subtree.
+- Request only required ffprobe fields and discard native-tool diagnostics so
+  normal validation failures remain stable and path-private.
+- Give concurrent file changes precedence over image/video corruption findings.
+- Validate video codec names and positive dimensions, and replace an internal
+  dependency assertion with an explicit safe failure.
+- Add direct regression tests and ADRs for each validation hardening decision.
+
 ## 0.3.0 - 2026-08-22
 
 - Add report-only `pymo validate COLLECTION` for recursive media health checks

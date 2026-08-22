@@ -29,6 +29,18 @@ ignored.
 | REV-013 | Low | `fcntl` makes action history POSIX-only at import time, but the supported-platform boundary was not documented in package metadata or user documentation. | 0.2.2 | Accepted in ADR 0020 |
 | REV-014 | High | A destination created after the last existence check could be overwritten by the underlying rename. Collision refusal needs to be atomic, not only a preflight convention. | 0.2.3 | Resolved in ADR 0021 |
 
+## Validation review findings
+
+The same adversarial method was repeated after the first validation release.
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| VAL-001 | High | Default human-readable validation output disclosed the absolute collection root even though the path-private report contract excludes collection names and roots. | 0.3.1 | Resolved in ADR 0030 |
+| VAL-002 | Medium | Recursive directory-walk errors were not supplied to an error callback, so an unreadable subtree could be silently omitted while the report appeared complete. | 0.3.1 | Resolved in ADR 0035 |
+| VAL-003 | Medium | Native video tools captured broader metadata and diagnostic output than validation needs, increasing memory use, output instability, and the chance of filename disclosure. | 0.3.1 | Resolved in ADR 0033 |
+| VAL-004 | Medium | A decoder failure could be recorded before the final state check, mislabeling a concurrently replaced file as corrupt. | 0.3.1 | Resolved in ADR 0034 |
+| VAL-005 | Low | Video validation relied on an assertion for a runtime dependency and accepted video streams without checking their codec name or positive dimensions. | 0.3.1 | Resolved |
+
 ## Release groups
 
 - `0.2.2`: establish ADRs and the locked Ruff, Black, mypy, pre-commit, and
@@ -42,8 +54,10 @@ ignored.
   duplicate utilities without changing command behavior.
 - `0.3.0`: add report-only validation after all preceding findings are closed or
   explicitly accepted in an ADR.
-- `0.3.x`: perform the same adversarial pass over validation and release any
-  resulting corrections without crossing the approved version boundary.
+- `0.3.1`: preserve path privacy, surface incomplete traversal, minimize native
+  tool output, and make changed-file findings supersede decoder conclusions.
+- `0.3.x`: close any remaining validation safety findings without crossing the
+  approved version boundary.
 
 ## Independent review evidence
 

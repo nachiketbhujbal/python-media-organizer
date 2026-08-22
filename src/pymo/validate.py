@@ -100,7 +100,15 @@ def discover_candidates(root: Path, config: PymoConfig) -> DiscoveryResult:
     symlink_paths: list[Path] = []
     unreadable_paths: list[Path] = []
     changed_paths: list[Path] = []
-    for current, directory_names, file_names in os.walk(root, topdown=True):
+
+    def record_walk_error(error: OSError) -> None:
+        nonlocal unreadable_count
+        unreadable_count += 1
+        unreadable_paths.append(Path(error.filename) if error.filename else root)
+
+    for current, directory_names, file_names in os.walk(
+        root, topdown=True, onerror=record_walk_error
+    ):
         current_path = Path(current)
         retained: list[str] = []
         for name in sorted(directory_names, key=str.casefold):
@@ -180,6 +188,15 @@ def _finding(
     return Finding(candidate.path, candidate.kind, severity, code, description)
 
 
+def _changed_finding(candidate: MediaCandidate) -> Finding:
+    return _finding(
+        candidate,
+        "warning",
+        "changed_during_validation",
+        "file changed while it was being validated",
+    )
+
+
 def _classification_findings(candidate: MediaCandidate) -> list[Finding]:
     findings: list[Finding] = []
     if candidate.state.size == 0:
@@ -256,14 +273,7 @@ def validate_image(candidate: MediaCandidate, full: bool) -> ValidationResult:
                     frame.load()
         candidate.state.require_unchanged(candidate.path, "image validation")
     except FileChangedError:
-        findings.append(
-            _finding(
-                candidate,
-                "warning",
-                "changed_during_validation",
-                "file changed while it was being validated",
-            )
-        )
+        findings = [_changed_finding(candidate)]
     except (
         Image.DecompressionBombError,
         Image.DecompressionBombWarning,
@@ -272,9 +282,14 @@ def validate_image(candidate: MediaCandidate, full: bool) -> ValidationResult:
         UnidentifiedImageError,
         ValueError,
     ):
-        findings.append(
-            _finding(candidate, "error", "invalid_image", "image decode failed")
-        )
+        try:
+            candidate.state.require_unchanged(candidate.path, "image validation")
+        except FileChangedError:
+            findings = [_changed_finding(candidate)]
+        else:
+            findings.append(
+                _finding(candidate, "error", "invalid_image", "image decode failed")
+            )
     return ValidationResult(candidate, tuple(findings), animated_or_multipage)
 
 
@@ -289,20 +304,22 @@ def _probe_video(path: Path, ffprobe: str) -> dict[str, Any]:
                 "file,pipe",
                 "-show_streams",
                 "-show_format",
+                "-show_entries",
+                "stream=codec_type,codec_name,width,height,pix_fmt,sample_rate,channels:format=duration,format_name",
                 "-of",
                 "json",
                 str(path),
             ],
             check=False,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             text=True,
             timeout=60,
         )
     except (OSError, UnicodeError, subprocess.SubprocessError) as error:
         raise VideoInspectionError(f"ffprobe failed: {error}") from error
     if result.returncode != 0:
-        detail = result.stderr.strip() or "unrecognized or unreadable media"
-        raise VideoInspectionError(f"ffprobe rejected the file: {detail}")
+        raise VideoInspectionError("ffprobe rejected the file")
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as error:
@@ -333,17 +350,14 @@ def _full_video_decode(path: Path, ffmpeg: str, timeout: int) -> None:
                 "-",
             ],
             check=False,
-            capture_output=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             timeout=timeout,
         )
     except (OSError, subprocess.SubprocessError) as error:
         raise VideoInspectionError(f"FFmpeg validation failed: {error}") from error
     if result.returncode != 0:
-        detail = result.stderr.decode("utf-8", "replace").strip()
-        raise VideoInspectionError(
-            "FFmpeg could not completely decode the file"
-            + (f": {detail}" if detail else "")
-        )
+        raise VideoInspectionError("FFmpeg could not completely decode the file")
 
 
 def validate_video(
@@ -355,7 +369,8 @@ def validate_video(
     findings = _classification_findings(candidate)
     if candidate.state.size == 0:
         return ValidationResult(candidate, tuple(findings))
-    assert ffprobe is not None
+    if ffprobe is None:
+        raise VideoInspectionError("ffprobe is required for non-empty video")
     try:
         candidate.state.require_unchanged(candidate.path, "video validation")
         payload = _probe_video(candidate.path, ffprobe)
@@ -375,6 +390,32 @@ def validate_video(
             findings.append(
                 _finding(candidate, "error", "missing_video_stream", "no video stream")
             )
+        for stream in videos:
+            if not stream.get("codec_name"):
+                findings.append(
+                    _finding(
+                        candidate,
+                        "warning",
+                        "missing_video_codec",
+                        "video codec name is missing",
+                    )
+                )
+            try:
+                dimensions_valid = (
+                    int(str(stream.get("width"))) > 0
+                    and int(str(stream.get("height"))) > 0
+                )
+            except (TypeError, ValueError):
+                dimensions_valid = False
+            if not dimensions_valid:
+                findings.append(
+                    _finding(
+                        candidate,
+                        "error",
+                        "invalid_video_dimensions",
+                        "video dimensions are missing or invalid",
+                    )
+                )
         if len(videos) > 1:
             findings.append(
                 _finding(
@@ -424,23 +465,21 @@ def validate_video(
             _full_video_decode(candidate.path, ffmpeg, timeout)
         candidate.state.require_unchanged(candidate.path, "video validation")
     except FileChangedError:
-        findings.append(
-            _finding(
-                candidate,
-                "warning",
-                "changed_during_validation",
-                "file changed while it was being validated",
-            )
-        )
+        findings = [_changed_finding(candidate)]
     except VideoInspectionError:
-        findings.append(
-            _finding(
-                candidate,
-                "error",
-                "invalid_video",
-                "video probe or full decode failed",
+        try:
+            candidate.state.require_unchanged(candidate.path, "video validation")
+        except FileChangedError:
+            findings = [_changed_finding(candidate)]
+        else:
+            findings.append(
+                _finding(
+                    candidate,
+                    "error",
+                    "invalid_video",
+                    "video probe or full decode failed",
+                )
             )
-        )
     return ValidationResult(candidate, tuple(findings))
 
 
@@ -466,6 +505,7 @@ def validate_candidates(
         return validate_video(candidate, ffprobe, ffmpeg, timeout)
 
     results: list[ValidationResult] = []
+    Image.init()
     with warnings.catch_warnings():
         warnings.simplefilter("error", Image.DecompressionBombWarning)
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -583,7 +623,11 @@ def build_report(
         },
         "health": {
             "files_with_errors": len(error_paths) + discovery.unreadable_count,
-            "files_with_warnings": len(warning_paths - error_paths),
+            "files_with_warnings": (
+                len(warning_paths - error_paths)
+                + discovery.changed_count
+                + discovery.symlink_count
+            ),
             "healthy_files": sum(
                 not any(
                     finding.severity in {"error", "warning"}
@@ -716,7 +760,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     if not args.json:
-        print(f"Validating {len(discovery.candidates)} media file(s) in {root}")
+        print(f"Validating {len(discovery.candidates)} media file(s).")
         for message in ignored_messages(
             list(discovery.ignored), root, args.show_ignored
         ):

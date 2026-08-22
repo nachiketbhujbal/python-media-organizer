@@ -210,12 +210,15 @@ image frame and completely decodes video/audio streams through local FFmpeg.
 
 Reports cover empty and invalid media, unreadable or changing entries,
 extension/content mismatches, unsupported recognized image formats, video
-stream layouts, extra streams, and missing/invalid duration. Animated and
-multi-page images are counted as valid characteristics rather than corruption.
+stream layouts, missing codec names or dimensions, extra streams, and
+missing/invalid duration. Unreadable subtrees make the report unhealthy rather
+than being silently omitted. Animated and multi-page images are counted as
+valid characteristics rather than corruption.
 
-Filenames are hidden by default. `--show-files` adds collection-relative
-affected paths; `--show-ignored` controls ignored paths separately. JSON uses
-stable schema version 1 without collection names or roots. Exit status is 0
+Collection roots and filenames are hidden by default. `--show-files` adds
+collection-relative affected paths; `--show-ignored` controls ignored paths
+separately. JSON uses stable schema version 1 without collection names or
+roots. Native video diagnostics are not copied into reports. Exit status is 0
 when no errors are found, 1 when validation reports errors, and 2 when the
 command cannot run safely. Warnings alone return 0. Standard validation uses
 bounded workers; full validation containing video uses one worker to avoid

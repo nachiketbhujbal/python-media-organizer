@@ -13,12 +13,15 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.0` report-only validation release. It is a
+`pymo` command, and has a `v0.3.1` report-only validation release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.0 adds standard and full-decode collection health reports with
+Version 0.3.1 hardens validation path privacy, reports unreadable traversal,
+minimizes native-tool output, validates basic video stream fields, and ensures
+changing inputs are never mislabeled corrupt. Version 0.3.0 adds standard and
+full-decode collection health reports with
 path-private JSON, explicit relative-path opt-in, stable file-state checks, and
 no media or collection-state writes. Version 0.2.6 separates command analysis,
 planning, apply, and verification stages, consolidates shared duplicate policy,
@@ -387,7 +390,9 @@ affected paths, while `--show-ignored` remains a separate opt-in. Status 0 means
 no error-severity finding, 1 means health errors were reported, and 2 means the
 command could not run safely. Animated or multi-page images are counted, not
 classified as corrupt. Unsupported recognized formats remain warnings rather
-than unverified claims of corruption.
+than unverified claims of corruption. Unreadable subtrees are health errors,
+native-tool diagnostics are discarded, and concurrent changes supersede
+decoder conclusions.
 
 ## Logging
 
