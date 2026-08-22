@@ -85,6 +85,8 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-003 | Low | Video-cache output calls every absent record a miss and promises incremental updates without saying how many fingerprints were successfully persisted; `--no-cache` is mixed into the same hit/miss sentence. | 0.3.16 | Resolved in ADR 0053 |
 | CACHE-004 | Medium | Shared-schema creation used `executescript()` inside legacy migration even though that API may commit a pending transaction before executing, weakening the cache service's all-or-nothing migration guarantee. | 0.4.3 | Resolved with transaction-preserving statements and rollback regression coverage |
 | CACHE-005 | Low | Schema signatures were stored as several module globals despite the project's rule that assigned constants represent durable persisted identifiers only. | 0.4.3 | Resolved by constructing validation signatures locally; only persisted cache identifiers remain constants |
+| CACHE-006 | Medium | The existing coordinated cache reader creates the persistent lock when absent, so reusing it for status would violate a zero-write inspection contract. | 0.4.4 | Resolved with a descriptor-pinned read-only snapshot that creates no lock or other state |
+| CACHE-007 | Medium | A cached relative observation containing a symbolic-link parent could redirect a metadata freshness check outside the selected collection. | 0.4.4 | Resolved with collection-anchored no-follow descriptor traversal |
 
 ## Progress and timing review findings
 
@@ -100,6 +102,7 @@ The same adversarial method was repeated after the first validation release.
 | --- | --- | --- | --- | --- |
 | OUT-001 | Low | Duplicate-finder previews always print collection paths, filenames, per-group plans, and skipped-file details, leaving no concise aggregate mode for private logs or quick status checks. | 0.3.17 | Resolved in ADR 0054 |
 | OUT-002 | Low | Wall-clock correlation required an opt-in flag, so ordinary long-running console records lacked timestamps even though elapsed and stage durations were available. | 0.3.18 | Resolved in ADR 0055 |
+| OUT-003 | Low | Help and argument errors raised by a dispatched command parser were followed by the outer CLI's timestamped stopped-runtime message. | 0.4.4 | Resolved by recognizing parser exits and leaving their output plain |
 
 ## Documentation review findings
 
@@ -165,6 +168,8 @@ The same adversarial method was repeated after the first validation release.
   reject names that disappear or change walk category before a plan is trusted.
 - `0.4.3`: extract the shared cache safety and schema service, retain atomic
   legacy migration, and reject malformed generic evidence before reuse.
+- `0.4.4`: expose strictly read-only cache health and evidence coverage without
+  creating coordination state or following observed path components.
 
 ## Independent review evidence
 

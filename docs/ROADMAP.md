@@ -87,7 +87,7 @@ file, or action log on a source being preserved.
 | 0.4.1 | Complete filesystem discovery | Require complete recursive enumeration before organization, renaming, or undo planning; require complete flat enumeration before duplicate analysis; and fail safely without creating state when the namespace cannot be read completely. | Released |
 | 0.4.2 | Entry-level discovery integrity | Require every enumerated name to resolve through no-follow metadata inspection, reject entries that disappear or change category during a walk, and prove that mutating planners create no state from a ghost directory entry. | Released |
 | 0.4.3 | Shared cache core | Versioned schema, file identity, algorithm/runtime keys, migrations, and reusable service interfaces. | Released |
-| 0.4.4 | Cache status | Read-only cache health, coverage, version, and stale-record reporting. | Planned |
+| 0.4.4 | Cache status | Read-only cache health, coverage, version, and stale-record reporting. | In progress |
 | 0.4.5 | Video cache warm | Explicitly precompute exact-video fingerprints without running duplicate planning. | Planned |
 | 0.4.6 | Stable hashes | Reuse carefully keyed whole-file SHA records while rechecking content before an exact move. | Planned |
 | 0.4.7 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. | Planned |

@@ -50,6 +50,9 @@ never duplicate the version in source or static project metadata.
   recorded actions and remains independent of current configuration.
 - Treat `.pymo.sqlite3` as derived, disposable cache data, never as the
   authoritative action history.
+- `cache status` is strictly read-only: it must not create a cache, lock,
+  sidecar, directory, action record, or media state. Its normal output remains
+  path-private, and an explicit cache path selects inspection only.
 - Bind exact-media analysis to a stable regular-file state. Revalidate complete
   duplicate groups before apply and retained originals through journal commit.
 - Keep exact-media classification, hashing, probing, and decoding pinned to
@@ -100,6 +103,8 @@ never duplicate the version in source or static project metadata.
   dependency-aware undo.
 - `src/pymo/cache.py`: versioned shared cache schema plus descriptor-pinned,
   locked, atomically published disposable derived state.
+- `src/pymo/cache_status.py`: zero-write cache health, evidence coverage, and
+  stale-observation reporting for local or explicitly selected cache files.
 - `src/pymo/collection.py`: immutable canonical paths for one collection.
 - `src/pymo/logging_config.py`: console logging plus explicitly requested local
   log files.

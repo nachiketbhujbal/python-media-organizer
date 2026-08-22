@@ -228,6 +228,35 @@ snapshot. Directory traversal failures are counted and warned about rather than
 silently omitted; run `validate --show-files` when collection-relative finding
 paths are needed.
 
+### Inspect the derived cache
+
+```bash
+pymo cache status "/path/to/media-collection"
+pymo cache status "/path/to/media-collection" --json
+pymo cache status "/path/to/media-collection" --cache "/path/to/cache.sqlite3"
+```
+
+`cache status` is a strictly read-only snapshot. It does not create a cache,
+lock, sidecar, directory, action record, or media state. A missing cache is an
+ordinary status with exit 0. A healthy current or legacy cache also returns 0;
+an unsafe, unreadable, corrupt, malformed, or incompatible cache returns 1,
+and invalid command setup returns 2.
+
+The report includes cache format and storage, evidence records by type and
+namespace, current versus stale algorithms, file-observation freshness, and
+evidence linkage to recorded observations. It validates known exact-video
+payloads but deliberately does not invoke FFmpeg to decide runtime reuse; the
+video duplicate finder remains authoritative for actual reusable records.
+Legacy video caches are reported with migration pending and remain unchanged.
+
+The default is the collection-local `.pymo.sqlite3`. `--cache` can inspect a
+derived database stored elsewhere without writing into either location; it
+does not configure another command to write externally. Cache and observation
+paths are opened through no-follow descriptors, and a concurrent cache
+replacement invalidates the snapshot. Human and schema-1 JSON output omit the
+collection root, cache path, filenames, scopes, hashes, algorithms, and runtime
+strings.
+
 ### Validate collection health
 
 ```bash
@@ -491,9 +520,10 @@ file is created by default. Global logging options go before the subcommand.
 Normal human-readable command logging prefixes every physical console line
 with an ISO timestamp. Use `--no-timestamps` for plain console output;
 `--timestamps` remains accepted for compatibility and for callers that want to
-state the default explicitly. Structured `scan --json` and `validate --json`
-results remain clean JSON regardless of either flag. Help, version, and
-argument-parser output also remain unprefixed. Explicit log files always
+state the default explicitly. Structured `scan --json`, `validate --json`, and
+`cache status --json` results remain clean JSON regardless of either flag.
+Help, version, and argument-parser output also remain unprefixed. Explicit log
+files always
 include ISO timestamps, levels, and logger names on every line regardless of
 the console choice.
 `--show-ignored` is a separate privacy opt-in and may appear globally or after
@@ -533,7 +563,8 @@ The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,
 content changes, strict folder ownership, exact image and video matching,
 different audio and timing, corrupt/ambiguous media, derived cache behavior,
-incremental cache recovery, cache opt-out, scan reports and JSON stability,
+incremental cache recovery, cache opt-out, zero-write cache status, cache
+health/coverage JSON, scan reports and JSON stability,
 bounded scan workers, removed v0.1 interfaces,
 elapsed-time summaries, default and opt-out console timestamps, timestamped
 multi-line logs, observed throughput and ETA reporting, FFmpeg heartbeats,
