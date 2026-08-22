@@ -2,6 +2,17 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.4 - 2026-08-22
+
+- Separate evaluated research from promoted release plans in `docs/RESEARCH.md`
+  and `docs/ROADMAP.md`.
+- Centralize the changelog, adversarial review, research, roadmap, and ADRs
+  under an indexed `docs/` tree while retaining root operational documents.
+- Define small, single-purpose patch releases through the planned 0.3
+  stabilization and 0.4 cache foundation.
+- Record the repository documentation map and cohesive-release policy in
+  separate ADRs.
+
 ## 0.3.3 - 2026-08-22
 
 - Pin validation classification, Pillow, ffprobe, and FFmpeg reads to stable

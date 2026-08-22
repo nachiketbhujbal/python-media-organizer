@@ -136,12 +136,13 @@ report-only future work and must never silently enter the exact move path.
   decode speeds as if they were measurements.
 - Preserve exit status 130 for Ctrl-C and final observed runtime reporting for
   interrupted or unexpectedly stopped human-readable commands.
-- Keep `README.md`, `HANDOFF.md`, and `RESEARCH_IMPROVEMENTS.md` current when a
-  decision changes their claims.
+- Keep `README.md`, `HANDOFF.md`, `docs/ROADMAP.md`, `docs/RESEARCH.md`, and
+  `docs/CHANGELOG.md` current when a decision changes their claims.
 - Record each durable architecture or product decision in one numbered file
-  under `adrs/`. Add a superseding ADR instead of rewriting accepted history.
-- Keep `CODE_REVIEW.md` finding statuses synchronized with the release that
-  resolves or explicitly accepts them.
+  under `docs/adr/`. Add a superseding ADR instead of rewriting accepted
+  history.
+- Keep `docs/CODE_REVIEW.md` finding statuses synchronized with the release
+  that resolves or explicitly accepts them.
 - Keep command entry points as coordinators around explicit discovery,
   analysis, planning, apply, and verification stages. Treat complexity output
   as focused review evidence rather than a blanket commit failure.
@@ -154,13 +155,12 @@ report-only future work and must never silently enter the exact move path.
 
 ## Current roadmap
 
-Version 0.2.0 provides `pymo scan`, bounded scan classification workers,
-incremental video fingerprints during dry runs, and only collection-named
-action logs. Full FFmpeg decoding remains sequential until benchmarks justify
-bounded multi-process decoding; FFmpeg already uses internal threads and
-unmeasured concurrency can regress external-drive performance.
+`docs/ROADMAP.md` is the authoritative promoted release plan.
+`docs/RESEARCH.md` contains uncommitted ideas and open questions. Do not present
+research as scheduled work until it is promoted into the roadmap.
 
-Report-only validation is implemented and hardened through version 0.3.3. Any
-future repair or quarantine behavior requires a separate ADR and
-dry-run/action-log design.
-Local AI naming remains optional future work only.
+Report-only validation is implemented and hardened through version 0.3.3. Full
+FFmpeg decoding remains sequential until representative benchmarks justify
+bounded native-process concurrency. Any future repair or quarantine behavior
+requires a separate ADR and reversible dry-run/action-log design. Local AI
+naming remains optional future work only.
