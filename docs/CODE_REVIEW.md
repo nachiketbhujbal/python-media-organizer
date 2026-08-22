@@ -43,6 +43,12 @@ The same adversarial method was repeated after the first validation release.
 | VAL-006 | Medium | Validation discovery and video inspection mixed traversal, classification, stream policy, decoding, and reporting through branch-heavy functions and long positional interfaces. | 0.3.2 | Resolved in ADR 0036 |
 | VAL-007 | High | Validation checks path state before and after content reads, but a hostile pathname swap could still redirect Pillow or a native tool to a symbolic link during the read itself. | 0.3.3 | Resolved in ADR 0037 |
 
+## Scan review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| SCAN-001 | Low | Scan counted non-canonical media names but suppressed rename advice whenever organization was also needed, even though it continued to show later duplicate-finder recommendations. | 0.3.5 | Resolved in ADR 0040 |
+
 ## Release groups
 
 - `0.2.2`: establish ADRs and the locked Ruff, Black, mypy, pre-commit, and
@@ -62,6 +68,10 @@ The same adversarial method was repeated after the first validation release.
   report options into typed, independently reviewable stages.
 - `0.3.3`: pin classification and decoder reads to stable, descriptor-relative,
   no-follow file handles beneath the collection root.
+- `0.3.4`: separate durable research, roadmap, shipped behavior, review, and
+  decision records under an indexed documentation tree.
+- `0.3.5`: report the complete ordered scan action plan when both organization
+  and deterministic renaming are applicable.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 

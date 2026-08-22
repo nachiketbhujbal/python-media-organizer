@@ -467,7 +467,7 @@ def build_report(
         or summary.layout["proposed_organizer_moves"]
     ):
         recommendations.append("Run pymo organize after reviewing its dry run.")
-    elif summary.rename_candidates:
+    if summary.rename_candidates:
         recommendations.append("Run pymo rename after reviewing its dry run.")
     if summary.source_picture_count > 1:
         recommendations.append("Run pymo find-image-duplicates for exact pixels.")

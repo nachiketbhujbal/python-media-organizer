@@ -45,3 +45,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0037](0037-descriptor-pinned-validation-reads.md) | Descriptor-pinned validation reads |
 | [0038](0038-repository-documentation-map.md) | Repository documentation map |
 | [0039](0039-small-cohesive-releases.md) | Small cohesive release tags |
+| [0040](0040-complete-ordered-scan-recommendations.md) | Complete ordered scan recommendations |
