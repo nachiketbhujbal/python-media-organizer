@@ -25,7 +25,7 @@ behavior is captured in the changelog and handoff.
 | --- | --- | --- | --- |
 | 0.3.4 | Documentation map | Separate research from scheduled work, centralize durable engineering docs, and record the small-release policy. | Released |
 | 0.3.5 | Complete scan advice | Recommend rename whenever non-canonical source media exists, while retaining the safe organize-before-rename order. | Released |
-| 0.3.6 | Continuous integration | Run the locked quality and test gates on branches, pull requests, `main`, and release tags; document the branch and release workflow. | Planned |
+| 0.3.6 | Continuous integration | Run the locked quality and test gates on branches, pull requests, `main`, and release tags; document the branch and release workflow. | Released |
 | 0.3.7 | Video read safety | Descriptor-pin exact-video discovery, probing, hashing, and fingerprint inputs without changing duplicate semantics. | Planned |
 | 0.3.8 | Image read safety | Descriptor-pin exact-image classification and pixel reads without changing duplicate semantics. | Planned |
 | 0.3.9 | Cache access safety | Harden the derived SQLite cache path, locking, replacement, corruption, and interruption boundaries. | Planned |
@@ -54,11 +54,18 @@ disposable and rebuildable.
 | 0.4.4 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. |
 | 0.4.5 | Image fingerprint cache | Persist deterministic displayed-pixel image fingerprints for safe rescans. |
 | 0.4.6 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. |
+| 0.4.7 | Validation evidence | Record validation profile, result, file identity, runtime/tool versions, and completion time as disposable history without allowing an old healthy result to satisfy a fresh full validation. |
+| 0.4.8 | Explicit cached validation | Offer an explicitly named cache-assisted validation mode for unchanged files while retaining fresh reads as the default contract of `validate --full`. |
+| 0.4.9 | Targeted cache refresh | Recompute selected validation or fingerprint records without deleting unrelated cache evidence; reserve `--no-cache` for disabling both cache reads and writes. |
 
 Cache reuse is incremental: new or changed files add or replace only their own
 derived records. Unchanged records survive collection growth. No scan command
 silently creates state, and `--no-cache` remains a complete cache read/write
-opt-out where supported.
+opt-out where supported. It never means "delete the cache." A requested
+`validate --full` continues to decode current file content from scratch by
+default, because cached success cannot prove that the bytes remain readable
+now. Validation may write new evidence after that fresh read, while any future
+reuse of prior validation results must be explicit and identity/version keyed.
 
 ## Later promoted work
 
@@ -71,6 +78,9 @@ These have an accepted product direction but no release number yet:
 - explainable keeper-quality recommendations;
 - reversible metadata or quarantine actions only after dedicated safety ADRs;
 - benchmark-driven bounded native-process concurrency;
+- broader POSIX portability beyond the tested Debian-family Linux, Red
+  Hat-family Linux, macOS, and Linux-based WSL execution models, including safe
+  atomic no-replace mutation primitives;
 - dependency inventory, release SBOM, and outbound-network-denied tests;
 - a local interface over the same command engine.
 

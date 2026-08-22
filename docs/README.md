@@ -9,6 +9,8 @@ needed by coding agents. Durable engineering documentation lives here:
   do not yet have a committed release.
 - [Adversarial code review](CODE_REVIEW.md) — findings and their resolution
   history.
+- [Contributing and releases](CONTRIBUTING.md) — local gates, branches, CI, and
+  release procedure.
 - [Architecture decisions](adr/README.md) — one durable decision per record.
 
 A future `CONTRIBUTING.md` will document the branch, review, and release

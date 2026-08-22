@@ -127,6 +127,9 @@ report-only future work and must never silently enter the exact move path.
 - Real FFmpeg integration tests are required for video behavior; controlled
   unit tests remain useful for safety properties and error paths.
 - Run the complete suite before handoff.
+- Make ordinary changes on a short-lived branch based on `main`; do not place a
+  feature or fix commit directly on `main`. Push the branch and require the CI
+  `quality` result before merge once the repository ruleset is active.
 - Run subprocess-aware coverage for release review with
   `uv run --locked pytest --cov=pymo --cov-report=term-missing`.
 - Run Ruff, Black, and mypy before the complete suite. Keep the installed
@@ -149,9 +152,10 @@ report-only future work and must never silently enter the exact move path.
 - Keep validation traversal, media-specific inspection, execution policy, and
   report construction as separate typed stages; do not reintroduce long
   positional orchestration interfaces.
-- Maintain local Git history with concise one-line commits. Do not configure a
-  new remote or push a release without explicit user approval. The approved
-  `origin` is the personal GitHub repository recorded in `HANDOFF.md`.
+- Maintain Git history with concise one-line commits and an explicit merge
+  boundary per release. Do not configure a new remote or push a release without
+  explicit user approval. The approved `origin` is the personal GitHub
+  repository recorded in `HANDOFF.md`.
 
 ## Current roadmap
 

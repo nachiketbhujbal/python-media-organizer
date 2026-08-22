@@ -2,6 +2,27 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.6 - 2026-08-22
+
+- Add a least-privilege GitHub Actions `quality` job for branch pushes, pull
+  requests to `main`, mainline pushes, and version tags.
+- Reproduce the locked Python 3.11, uv 0.12.5, pre-commit, real FFmpeg,
+  subprocess-aware coverage, and package-build release gates in CI.
+- Fetch complete history for hatch-vcs and verify that each release tag matches
+  the installed CLI version.
+- Stream descriptor-pinned classification bytes to the `file` utility through
+  standard input, avoiding platform-specific `/dev/fd` type detection on Linux.
+- Run the complete quality gate on Ubuntu, Fedora, and macOS representatives;
+  Linux-based WSL follows the Linux execution model, while native Windows
+  remains out of scope.
+- Make exact-video integration coverage independent of FFmpeg's
+  container-specific remux timestamp choices while retaining a
+  non-byte-identical exact-playback case.
+- Generate synthetic video fixtures with an encoder available in official free
+  FFmpeg builds, avoiding an unnecessary H.264 encoder requirement in tests.
+- Document the short-lived branch, sole-maintainer protection, and release
+  workflow in `docs/CONTRIBUTING.md` and separate ADRs.
+
 ## 0.3.5 - 2026-08-22
 
 - Recommend `pymo rename` whenever scan finds non-canonical source-media names,

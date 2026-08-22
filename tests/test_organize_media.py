@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
 from pymo.action_log import action_log_path
+from pymo.config import load_config
+from pymo.organize import Classifier
 
 
 def make_fixture(root: Path) -> None:
@@ -16,6 +21,33 @@ def make_fixture(root: Path) -> None:
         b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"
     )
     (root / "album" / "notes.txt").write_text("notes", encoding="utf-8")
+
+
+def test_classifier_streams_descriptor_to_file_standard_input(
+    tmp_path: Path, monkeypatch
+) -> None:
+    path = tmp_path / "unknown.data"
+    path.write_bytes(b"synthetic image content")
+    observed: dict[str, Any] = {}
+
+    def completed(
+        command: list[str], **kwargs: Any
+    ) -> subprocess.CompletedProcess[str]:
+        observed["command"] = command
+        observed["stdin"] = kwargs["stdin"]
+        return subprocess.CompletedProcess(command, 0, "image/png\n", "")
+
+    classifier = Classifier(load_config(tmp_path).classification)
+    classifier.file_command = "file"
+    monkeypatch.setattr("pymo.organize.subprocess.run", completed)
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        assert classifier.classify(path, descriptor) == ("picture", "image/png")
+    finally:
+        os.close(descriptor)
+
+    assert observed["command"] == ["file", "--brief", "--mime-type", "-"]
+    assert observed["stdin"] == descriptor
 
 
 def test_organizer_dry_run_changes_nothing(tmp_path: Path, run_script) -> None:

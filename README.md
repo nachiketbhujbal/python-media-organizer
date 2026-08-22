@@ -11,7 +11,8 @@ it belongs to.
 ## Requirements and installation
 
 - Python 3.11 or newer
-- macOS or Linux; the current append-only journal uses POSIX file locking
+- macOS, Debian-family or Red Hat-family Linux, or Linux running under WSL;
+  the current append-only journal uses POSIX file locking
 - uv 0.12 or newer for the reproducible development workflow
 - Pillow, installed from `pyproject.toml`
 - FFmpeg and ffprobe for exact video duplicate detection
@@ -422,6 +423,10 @@ build remain release gates so normal commits do not repeatedly run FFmpeg
 integration tests. Development-tool versions are resolved in `uv.lock`.
 Coverage is configured to include the real child-process CLI tests; the normal
 test command stays fast, while the coverage form is a release review gate.
+GitHub Actions runs the same locked quality, coverage, native-FFmpeg, and build
+gate on branches, pull requests, `main`, and release tags. See
+[`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for the branch and release
+workflow.
 
 The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,
