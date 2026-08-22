@@ -84,6 +84,10 @@ class ProgressMeter:
             self._next_milestone_index += 1
 
     def _eta_seconds(self, elapsed: float) -> float | None:
+        # Fewer than three completed items is too little evidence for a useful
+        # projection, especially when media sizes and decode costs vary widely.
+        if self.completed_items < 3:
+            return None
         if self.total_bytes and self.completed_bytes:
             remaining = max(0, self.total_bytes - self.completed_bytes)
             return elapsed * remaining / self.completed_bytes
@@ -126,10 +130,15 @@ class ProgressMeter:
         return self._status(label, now)
 
     def heartbeat(self, label: str, active_item: int) -> str | None:
-        """Report that one long item is active without claiming completion."""
+        """Report active work without presenting stale completed-work estimates."""
         now = self.clock()
         if not self._time_is_due(now):
             return None
         self._last_reported_at = now
-        status = self._status(label, now)
-        return f"{status}; item {active_item}/{self.total_items} still running"
+        elapsed = max(0.0, now - self._started_at)
+        bounded_active_item = min(max(1, active_item), self.total_items)
+        return (
+            f"{label}: active item {bounded_active_item}/{self.total_items}; "
+            f"completed {self.completed_items}/{self.total_items}; "
+            f"elapsed {format_duration(elapsed)}"
+        )

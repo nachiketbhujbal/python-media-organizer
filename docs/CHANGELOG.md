@@ -2,6 +2,17 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.14 - 2026-08-22
+
+- Separate active-item heartbeat wording from completed-work status so a long
+  native decode no longer repeats a stale rate or ETA.
+- Report the active item, completed count, and elapsed time in heartbeats
+  without filenames or an implication that the active item has completed.
+- Require at least three completed observations before projecting an ETA,
+  while retaining observed rates and the stable v0.3.13 reporting cadence.
+- Add deterministic-clock coverage for early ETA suppression and distinct
+  heartbeat semantics.
+
 ## 0.3.13 - 2026-08-22
 
 - Replace per-item forced progress output with at most ten evenly spaced

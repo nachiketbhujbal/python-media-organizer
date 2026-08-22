@@ -19,20 +19,28 @@ def test_duration_and_byte_formatting() -> None:
     assert format_bytes(1_572_864) == "1.5 MiB"
 
 
-def test_progress_reports_observed_rate_and_eta() -> None:
+def test_progress_suppresses_eta_until_three_items_complete() -> None:
     clock = Clock()
     meter = ProgressMeter(20, 20 * 1024 * 1024, 10, clock=clock)
 
     clock.now = 5
     assert meter.advance("processed", byte_count=1024 * 1024) is None
     clock.now = 10
-    message = meter.advance("processed", byte_count=1024 * 1024)
+    early_message = meter.advance("processed", byte_count=1024 * 1024)
 
-    assert message is not None
-    assert "processed 2/20 (10.0%)" in message
-    assert "2.0 MiB/20.0 MiB" in message
-    assert "204.8 KiB/s" in message
-    assert "ETA 1m 30s" in message
+    assert early_message is not None
+    assert "processed 2/20 (10.0%)" in early_message
+    assert "2.0 MiB/20.0 MiB" in early_message
+    assert "204.8 KiB/s" in early_message
+    assert "ETA" not in early_message
+
+    clock.now = 20
+    mature_message = meter.advance("processed", byte_count=1024 * 1024)
+
+    assert mature_message is not None
+    assert "processed 3/20 (15.0%)" in mature_message
+    assert "153.6 KiB/s" in mature_message
+    assert "ETA 1m 53s" in mature_message
 
 
 def test_heartbeat_does_not_claim_current_item_is_complete() -> None:
@@ -43,8 +51,26 @@ def test_heartbeat_does_not_claim_current_item_is_complete() -> None:
     message = meter.heartbeat("fingerprinted", 1)
 
     assert message is not None
-    assert "fingerprinted 0/2" in message
-    assert "item 1/2 still running" in message
+    assert message == "fingerprinted: active item 1/2; completed 0/2; elapsed 10s"
+    assert "ETA" not in message
+    assert "/s" not in message
+
+
+def test_heartbeat_separates_active_item_from_completed_work() -> None:
+    clock = Clock()
+    meter = ProgressMeter(10, 10_000, 10, clock=clock)
+    clock.now = 1
+    assert meter.advance("fingerprinted", byte_count=1_000) is not None
+    clock.now = 11
+
+    message = meter.heartbeat("fingerprint progress", 2)
+
+    assert message is not None
+    assert "active item 2/10" in message
+    assert "completed 1/10" in message
+    assert "elapsed 11s" in message
+    assert "ETA" not in message
+    assert "/s" not in message
 
 
 def test_progress_uses_ten_stable_count_milestones() -> None:

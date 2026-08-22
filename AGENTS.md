@@ -156,6 +156,9 @@ report-only future work and must never silently enter the exact move path.
   count checkpoints plus genuinely due time reports and one final row. Do not
   force a row after every item; long active-item output belongs to heartbeat
   reporting.
+- Keep active-item heartbeats separate from completed-work rate and ETA output.
+  Heartbeats report only the active item, completed count, and elapsed time;
+  require at least three completed observations before projecting an ETA.
 - Preserve exit status 130 for Ctrl-C and final observed runtime reporting for
   interrupted or unexpectedly stopped human-readable commands.
 - Keep `README.md`, `HANDOFF.md`, `docs/ROADMAP.md`, `docs/RESEARCH.md`, and
