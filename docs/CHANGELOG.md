@@ -18,6 +18,8 @@ All notable changes to `python-media-organizer` will be recorded here.
 - Make exact-video integration coverage independent of FFmpeg's
   container-specific remux timestamp choices while retaining a
   non-byte-identical exact-playback case.
+- Generate synthetic video fixtures with an encoder available in official free
+  FFmpeg builds, avoiding an unnecessary H.264 encoder requirement in tests.
 - Document the short-lived branch, sole-maintainer protection, and release
   workflow in `docs/CONTRIBUTING.md` and separate ADRs.
 

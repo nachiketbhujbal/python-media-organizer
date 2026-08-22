@@ -373,7 +373,7 @@ def test_full_video_validation_uses_one_decode_worker_and_stays_read_only(
             "-i",
             "testsrc2=size=32x24:rate=4:duration=0.5",
             "-c:v",
-            "libx264",
+            "mpeg4",
             "-pix_fmt",
             "yuv420p",
             video,

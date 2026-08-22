@@ -49,7 +49,7 @@ def make_video(path: Path, *, frequency: int = 440, audio: bool = True) -> None:
                 f"sine=frequency={frequency}:sample_rate=8000:duration=1",
             ]
         )
-    arguments.extend(["-c:v", "libx264", "-pix_fmt", "yuv420p"])
+    arguments.extend(["-c:v", "mpeg4", "-pix_fmt", "yuv420p"])
     if audio:
         arguments.extend(["-c:a", "aac", "-shortest"])
     arguments.append(path)
@@ -256,7 +256,7 @@ def test_video_finder_skips_corrupt_and_multiple_audio_streams(
         "-map",
         "2:a:0",
         "-c:v",
-        "libx264",
+        "mpeg4",
         "-c:a",
         "aac",
         "-shortest",
