@@ -64,6 +64,9 @@ never duplicate the version in source or static project metadata.
   It owns only `pics` and `dups/pics`.
 - `src/pymo/duplicates/videos.py`: conservative exact decoded-playback
   duplicate detection using FFmpeg/ffprobe. It owns only `vids` and `dups/vids`.
+- `src/pymo/duplicates/common.py`: shared duplicate-folder validation,
+  collision naming, review destinations, and undo display without combining
+  image/video analysis policy.
 - `src/pymo/action_log.py`: shared append-only mutation journal and guarded
   dependency-aware undo.
 - `src/pymo/collection.py`: immutable canonical paths for one collection.
@@ -115,6 +118,8 @@ report-only future work and must never silently enter the exact move path.
 - Real FFmpeg integration tests are required for video behavior; controlled
   unit tests remain useful for safety properties and error paths.
 - Run the complete suite before handoff.
+- Run subprocess-aware coverage for release review with
+  `uv run --locked pytest --cov=pymo --cov-report=term-missing`.
 - Run Ruff, Black, and mypy before the complete suite. Keep the installed
   pre-commit gate and its locked configuration passing.
 - Base performance rates and ETAs on observed work only. Keep aggregate timing
@@ -128,6 +133,9 @@ report-only future work and must never silently enter the exact move path.
   under `adrs/`. Add a superseding ADR instead of rewriting accepted history.
 - Keep `CODE_REVIEW.md` finding statuses synchronized with the release that
   resolves or explicitly accepts them.
+- Keep command entry points as coordinators around explicit discovery,
+  analysis, planning, apply, and verification stages. Treat complexity output
+  as focused review evidence rather than a blanket commit failure.
 - Maintain local Git history with concise one-line commits. Do not configure a
   new remote or push a release without explicit user approval. The approved
   `origin` is the personal GitHub repository recorded in `HANDOFF.md`.

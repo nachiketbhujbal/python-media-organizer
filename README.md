@@ -367,6 +367,7 @@ the subcommand's collection argument.
 
 ```bash
 uv run --locked pytest
+uv run --locked pytest --cov=pymo --cov-report=term-missing
 uv run --locked ruff check src tests
 uv run --locked black --check src tests
 uv run --locked mypy
@@ -379,6 +380,8 @@ Install the local commit gate once per clone with
 Ruff linting, Black formatting, and mypy typing. The complete pytest suite and
 build remain release gates so normal commits do not repeatedly run FFmpeg
 integration tests. Development-tool versions are resolved in `uv.lock`.
+Coverage is configured to include the real child-process CLI tests; the normal
+test command stays fast, while the coverage form is a release review gate.
 
 The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,

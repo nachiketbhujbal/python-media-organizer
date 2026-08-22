@@ -595,6 +595,12 @@ aggregate reports cannot combine an old size with newly read content. This is a
 snapshot guarantee, not a filesystem lock; active collections should be
 rescanned after writers become idle.
 
+Command implementations now expose explicit analysis, candidate selection,
+planning, apply, and verification stages. The duplicate finders share folder
+ownership and collision mechanics but not their image-pixel or video-playback
+definitions. Subprocess-aware coverage measures real CLI workflows while
+direct tests target mutation races and malformed-state branches.
+
 Applied file moves follow ADR 0021: descriptor-relative atomic no-replace
 renames are preferred over a cross-filesystem copy fallback. This keeps the
 action journal's completed boundary aligned with one atomic filesystem event.

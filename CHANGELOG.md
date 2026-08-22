@@ -2,6 +2,19 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.2.6 - 2026-08-22
+
+- Split exact-media discovery, analysis, fingerprint-cache work, grouping,
+  planning, apply, and verification into typed, independently testable stages.
+- Split organizer and renamer apply/verification stages from their command
+  coordination and separate scan entry summarization from report assembly.
+- Consolidate duplicate-folder ownership checks, review destinations,
+  collision naming, undo display, and human-readable byte formatting.
+- Configure subprocess-aware Coverage.py collection so real child-process CLI
+  tests contribute to the report; the full 127-test suite now measures 86%.
+- Preserve command text, dry-run/apply behavior, exact matching, cache rules,
+  action history, collision refusal, and privacy defaults through the refactor.
+
 ## 0.2.5 - 2026-08-22
 
 - Carry stable regular-file state through scan discovery, classification, and

@@ -28,7 +28,6 @@ from pymo.action_log import (
     NoUndoableRun,
     ToolId,
 )
-from pymo.collection import CollectionLayout
 from pymo.config import (
     ConfigError,
     PymoConfig,
@@ -37,10 +36,15 @@ from pymo.config import (
     ignored_messages,
     load_config,
 )
+from pymo.duplicates.common import (
+    copy_target,
+    describe_undo_action,
+    duplicate_layout,
+    layout_problems,
+)
 from pymo.file_safety import FileChangedError, FileState
 from pymo.logging_config import emit as print
-from pymo.organize import Classifier
-from pymo.progress import ProgressMeter
+from pymo.progress import ProgressMeter, format_bytes
 
 try:
     from PIL import Image, ImageOps, UnidentifiedImageError
@@ -66,6 +70,9 @@ class ImageRecord:
     @property
     def modified_ns(self) -> int:
         return self.state.modified_ns
+
+
+ImageMove = tuple[str, ImageRecord, ImageRecord, Path]
 
 
 def displayed_pixel_hash(path: Path) -> str:
@@ -129,67 +136,6 @@ def discover_images(
     )
 
 
-def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
-    """Validate only the image finder's owned source and review locations."""
-    layout = CollectionLayout(root)
-    pics = layout.pics
-    problems: list[str] = []
-    if pics.is_symlink():
-        problems.append(f"required folder is a symbolic link: {pics}")
-    elif not pics.exists():
-        problems.append(f"missing required folder: {pics}")
-    elif not pics.is_dir():
-        problems.append(f"required folder is not a directory: {pics}")
-
-    dups = layout.dups
-    if dups.is_symlink():
-        problems.append(f"reserved folder is a symbolic link: {dups}")
-    elif dups.exists() and not dups.is_dir():
-        problems.append(f"reserved path is not a directory: {dups}")
-    elif dups.is_dir():
-        duplicate_pics = layout.duplicate_pics
-        if duplicate_pics.is_symlink():
-            problems.append(f"reserved media path is a symbolic link: {duplicate_pics}")
-        elif duplicate_pics.exists() and not duplicate_pics.is_dir():
-            problems.append(f"reserved media path is not a directory: {duplicate_pics}")
-
-    if problems:
-        return problems
-
-    classifier = Classifier(config.classification)
-    for path in pics.iterdir():
-        if path.is_symlink():
-            problems.append(f"symbolic link cannot be verified: {path}")
-        elif path.is_dir():
-            if not config.ignores_directory(path, root):
-                problems.append(f"unexpected directory in pics: {path}")
-        elif path.is_file():
-            if config.ignores_file(path, root):
-                continue
-            kind, _ = classifier.classify(path)
-            if kind == "video":
-                problems.append(
-                    f"misplaced video: {path} "
-                    "(expected outside the image finder's pics folder)"
-                )
-    return problems
-
-
-def review_directories(root: Path) -> tuple[Path, Path]:
-    layout = CollectionLayout(root)
-    return layout.dups, layout.duplicate_pics
-
-
-def format_size(size: int) -> str:
-    value = float(size)
-    units = ("B", "KiB", "MiB", "GiB", "TiB")
-    for unit in units:
-        if value < 1024 or unit == units[-1]:
-            return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
-        value /= 1024
-    raise AssertionError("unreachable")
-
-
 def print_storage_summary(
     duplicate_groups: list[list[ImageRecord]], scanned_bytes: int
 ) -> None:
@@ -210,49 +156,19 @@ def print_storage_summary(
     print("\nDuplicate storage summary:")
     print(
         f"  Retained originals: {len(duplicate_groups)} file(s), "
-        f"{format_size(retained_bytes)}"
+        f"{format_bytes(retained_bytes)}"
     )
     print(
         f"  Extra duplicate copies: {duplicate_count} file(s), "
-        f"{format_size(duplicate_bytes)}"
+        f"{format_bytes(duplicate_bytes)}"
     )
-    print(f"  Duplicate sets combined: {format_size(duplicate_set_bytes)}")
+    print(f"  Duplicate sets combined: {format_bytes(duplicate_set_bytes)}")
     print(
         "  Potentially reclaimable if extra copies were deleted: "
-        f"{format_size(duplicate_bytes)} ({set_percentage:.1f}% of duplicate-set "
+        f"{format_bytes(duplicate_bytes)} ({set_percentage:.1f}% of duplicate-set "
         f"storage; {scan_percentage:.1f}% of scanned picture storage)"
     )
     print("  No files are deleted by this tool.")
-
-
-def copy_target(
-    destination: Path,
-    kept_path: Path,
-    duplicate_path: Path,
-    starting_number: int,
-    reserved: set[str],
-) -> tuple[Path, int]:
-    """Choose a flat, readable, collision-safe duplicate filename."""
-    number = starting_number
-    suffix = duplicate_path.suffix or kept_path.suffix
-    while True:
-        target = destination / f"{kept_path.stem}_copy({number}){suffix}"
-        key = str(target).casefold()
-        if key not in reserved and not os.path.lexists(target):
-            reserved.add(key)
-            return target, number
-        number += 1
-
-
-def describe_undo_action(root: Path, action: Action, apply: bool) -> None:
-    verb = action.operation.lower().replace("_", " ")
-    prefix = verb if apply else f"would {verb}"
-    if action.before and action.after:
-        print(f"\n{prefix}: {root / action.before}\n  to: {root / action.after}")
-    elif action.after:
-        print(f"\n{prefix}: {root / action.after}")
-    elif action.before:
-        print(f"\n{prefix}: {root / action.before}")
 
 
 def undo_duplicate_run(root: Path, apply: bool) -> int:
@@ -290,6 +206,116 @@ def keep_sort_key(record: ImageRecord) -> tuple[int, int, str]:
     # Prefer the largest file because it may retain more metadata. Then prefer
     # the older file, followed by a stable filename ordering.
     return (-record.file_size, record.modified_ns, str(record.path).casefold())
+
+
+def analyze_images(
+    paths: list[Path], progress_interval_seconds: int
+) -> tuple[list[list[ImageRecord]], int, list[tuple[Path, str]]]:
+    groups: dict[str, list[ImageRecord]] = defaultdict(list)
+    scanned_bytes = 0
+    skipped: list[tuple[Path, str]] = []
+    path_sizes: dict[Path, int] = {}
+    for path in paths:
+        try:
+            path_sizes[path] = path.stat().st_size
+        except OSError:
+            path_sizes[path] = 0
+    progress = ProgressMeter(
+        len(paths), sum(path_sizes.values()), progress_interval_seconds
+    )
+    for path in paths:
+        try:
+            record = inspect_image(path)
+            groups[record.pixel_hash].append(record)
+            scanned_bytes += record.file_size
+        except (
+            FileChangedError,
+            Image.DecompressionBombError,
+            Image.DecompressionBombWarning,
+            OSError,
+            UnidentifiedImageError,
+            ValueError,
+        ) as error:
+            skipped.append((path, str(error)))
+        progress_message = progress.advance("processed", byte_count=path_sizes[path])
+        if progress_message:
+            print(f"  {progress_message}")
+
+    duplicate_groups = [items for items in groups.values() if len(items) > 1]
+    duplicate_groups.sort(key=lambda items: str(min(r.path for r in items)).casefold())
+    return duplicate_groups, scanned_bytes, skipped
+
+
+def plan_image_moves(
+    duplicate_groups: list[list[ImageRecord]], destination: Path, apply: bool
+) -> list[ImageMove]:
+    move_plan: list[ImageMove] = []
+    reserved_targets: set[str] = set()
+    for group_number, records in enumerate(duplicate_groups, start=1):
+        ordered = sorted(records, key=keep_sort_key)
+        kept = ordered[0]
+        group_name = f"set_{group_number:04d}"
+        print(f"\nGroup {group_number}: keep {kept.path}")
+        next_number = 1
+        for duplicate in ordered[1:]:
+            target, used_number = copy_target(
+                destination,
+                kept.path,
+                duplicate.path,
+                next_number,
+                reserved_targets,
+            )
+            next_number = used_number + 1
+            move_plan.append((group_name, kept, duplicate, target))
+            print(f"  duplicate: {duplicate.path}")
+            print(f"  {'move to' if apply else 'would move to'}: {target}")
+    return move_plan
+
+
+def apply_image_moves(
+    root: Path,
+    duplicate_groups: list[list[ImageRecord]],
+    move_plan: list[ImageMove],
+) -> Path:
+    layout = duplicate_layout(root, "picture")
+    current_records = {
+        record.path: record for records in duplicate_groups for record in records
+    }
+    keepers = {kept.path: kept for _, kept, _, _ in move_plan}
+    for record in current_records.values():
+        require_current_image(record)
+    actions: list[Action] = []
+    for _, _, duplicate, target in move_plan:
+        action = Action.for_file(root, duplicate.path, target, "MOVE")
+        require_current_image(duplicate)
+        actions.append(action)
+    for record in current_records.values():
+        require_current_image(record)
+
+    log = ActionLog(root)
+    with log.transaction(ToolId.IMAGE_DUPLICATES) as transaction:
+        for record in current_records.values():
+            require_current_image(record)
+        for directory in (layout.review_root, layout.destination):
+            if not directory.exists():
+                transaction.perform(Action.create_directory(root, directory))
+        for action, (_, kept, _, _) in zip(actions, move_plan, strict=True):
+            require_current_image(kept)
+            transaction.perform(action)
+        for record in keepers.values():
+            require_current_image(record)
+        transaction.commit()
+    return log.path
+
+
+def verify_image_moves(move_plan: list[ImageMove]) -> list[tuple[Path, Path]]:
+    return [
+        (duplicate.path, target)
+        for _, _, duplicate, target in move_plan
+        if os.path.lexists(duplicate.path)
+        or target.is_symlink()
+        or not target.is_file()
+    ]
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -335,9 +361,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Cannot use configuration: {error}", file=sys.stderr)
         return 2
 
-    _, destination = review_directories(root)
+    layout = duplicate_layout(root, "picture")
+    destination = layout.destination
 
-    problems = collection_layout_problems(root, config)
+    problems = layout_problems(root, config, "picture")
     if problems:
         print("Collection is not ready for duplicate scanning:", file=sys.stderr)
         for problem in problems:
@@ -348,111 +375,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
-    pics = CollectionLayout(root).pics
+    pics = layout.source
     paths, ignored = discover_images(pics, root, config)
     print(f"Scanning {len(paths)} image(s) in {pics}")
     for message in ignored_messages(ignored, root, args.show_ignored):
         print(message)
 
-    groups: dict[str, list[ImageRecord]] = defaultdict(list)
-    scanned_bytes = 0
-    skipped: list[tuple[Path, str]] = []
-    path_sizes: dict[Path, int] = {}
-    for path in paths:
-        try:
-            path_sizes[path] = path.stat().st_size
-        except OSError:
-            path_sizes[path] = 0
-    progress = ProgressMeter(
-        len(paths),
-        sum(path_sizes.values()),
+    duplicate_groups, scanned_bytes, skipped = analyze_images(
+        paths,
         config.performance.progress_interval_seconds,
     )
-    for path in paths:
-        try:
-            record = inspect_image(path)
-            groups[record.pixel_hash].append(record)
-            scanned_bytes += record.file_size
-        except (
-            FileChangedError,
-            Image.DecompressionBombError,
-            Image.DecompressionBombWarning,
-            OSError,
-            UnidentifiedImageError,
-            ValueError,
-        ) as error:
-            skipped.append((path, str(error)))
-        progress_message = progress.advance("processed", byte_count=path_sizes[path])
-        if progress_message:
-            print(f"  {progress_message}")
-
-    duplicate_groups = [items for items in groups.values() if len(items) > 1]
-    duplicate_groups.sort(key=lambda items: str(min(r.path for r in items)).casefold())
-
-    move_plan: list[tuple[str, ImageRecord, ImageRecord, Path]] = []
-    reserved_targets: set[str] = set()
-    for group_number, records in enumerate(duplicate_groups, start=1):
-        ordered = sorted(records, key=keep_sort_key)
-        kept = ordered[0]
-        group_name = f"set_{group_number:04d}"
-        print(f"\nGroup {group_number}: keep {kept.path}")
-
-        next_number = 1
-        for duplicate in ordered[1:]:
-            target, used_number = copy_target(
-                destination,
-                kept.path,
-                duplicate.path,
-                next_number,
-                reserved_targets,
-            )
-            next_number = used_number + 1
-            move_plan.append((group_name, kept, duplicate, target))
-            print(f"  duplicate: {duplicate.path}")
-            print(f"  {'move to' if args.apply else 'would move to'}: {target}")
+    move_plan = plan_image_moves(duplicate_groups, destination, args.apply)
 
     if args.apply and move_plan:
         try:
-            current_records = {
-                record.path: record
-                for records in duplicate_groups
-                for record in records
-            }
-            keepers = {kept.path: kept for _, kept, _, _ in move_plan}
-            for record in current_records.values():
-                require_current_image(record)
-            actions: list[Action] = []
-            for _, _, duplicate, target in move_plan:
-                action = Action.for_file(root, duplicate.path, target, "MOVE")
-                require_current_image(duplicate)
-                actions.append(action)
-            for record in current_records.values():
-                require_current_image(record)
-            log = ActionLog(root)
-            with log.transaction(ToolId.IMAGE_DUPLICATES) as transaction:
-                for record in current_records.values():
-                    require_current_image(record)
-                for directory in review_directories(root):
-                    if not directory.exists():
-                        transaction.perform(Action.create_directory(root, directory))
-                for action, (_, kept, _, _) in zip(actions, move_plan, strict=True):
-                    require_current_image(kept)
-                    transaction.perform(action)
-                for record in keepers.values():
-                    require_current_image(record)
-                transaction.commit()
-            print(f"\nAction log: {log.path}")
+            log_path = apply_image_moves(root, duplicate_groups, move_plan)
+            print(f"\nAction log: {log_path}")
         except (ActionConflict, ActionLogError, FileChangedError, OSError) as error:
             print(f"Duplicate moves stopped safely: {error}", file=sys.stderr)
             return 1
 
-        verification_failures = [
-            (duplicate.path, target)
-            for _, _, duplicate, target in move_plan
-            if os.path.lexists(duplicate.path)
-            or target.is_symlink()
-            or not target.is_file()
-        ]
+        verification_failures = verify_image_moves(move_plan)
         if verification_failures:
             print("\nVerification needs attention:", file=sys.stderr)
             for source, target in verification_failures:

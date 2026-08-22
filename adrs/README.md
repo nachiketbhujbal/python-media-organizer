@@ -32,3 +32,5 @@ old one rather than rewriting why the earlier choice was made.
 | [0024](0024-resolve-native-tools-only-when-needed.md) | Lazy native-tool resolution |
 | [0025](0025-omit-changing-files-from-scan.md) | Omit changing files from scan reports |
 | [0026](0026-interruption-exit-and-runtime.md) | Interruption exit and runtime reporting |
+| [0027](0027-staged-command-orchestration.md) | Explicit command stages and shared duplicate policy |
+| [0028](0028-subprocess-aware-test-coverage.md) | Subprocess-aware test coverage |

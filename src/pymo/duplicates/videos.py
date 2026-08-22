@@ -44,6 +44,12 @@ from pymo.config import (
     ignored_messages,
     load_config,
 )
+from pymo.duplicates.common import (
+    copy_target,
+    describe_undo_action,
+    duplicate_layout,
+    layout_problems,
+)
 from pymo.file_safety import FileChangedError, FileState
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
@@ -56,6 +62,10 @@ FINGERPRINT_ALGORITHM = "exact-playback-v2"
 
 class VideoInspectionError(RuntimeError):
     """A video cannot be safely included in exact duplicate matching."""
+
+
+class VideoCacheError(RuntimeError):
+    """The derived fingerprint cache cannot be used safely."""
 
 
 @dataclass(frozen=True)
@@ -106,6 +116,9 @@ class DerivedFingerprint:
     digest: str
     video_frames: int
     audio_bytes: int
+
+
+VideoMove = tuple[VideoRecord, VideoRecord, Path]
 
 
 def sha256_file(path: Path) -> str:
@@ -329,56 +342,6 @@ def discover_videos(
         sorted(videos, key=lambda item: str(item).casefold()),
         sorted(ignored, key=lambda item: str(item).casefold()),
     )
-
-
-def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
-    """Validate only the video finder's owned source and review locations."""
-    layout = CollectionLayout(root)
-    vids = layout.vids
-    problems: list[str] = []
-    if vids.is_symlink():
-        problems.append(f"required folder is a symbolic link: {vids}")
-    elif not vids.exists():
-        problems.append(f"missing required folder: {vids}")
-    elif not vids.is_dir():
-        problems.append(f"required folder is not a directory: {vids}")
-
-    dups = layout.dups
-    if dups.is_symlink():
-        problems.append(f"reserved folder is a symbolic link: {dups}")
-    elif dups.exists() and not dups.is_dir():
-        problems.append(f"reserved path is not a directory: {dups}")
-    elif dups.is_dir():
-        duplicate_vids = layout.duplicate_vids
-        if duplicate_vids.is_symlink():
-            problems.append(f"reserved media path is a symbolic link: {duplicate_vids}")
-        elif duplicate_vids.exists() and not duplicate_vids.is_dir():
-            problems.append(f"reserved media path is not a directory: {duplicate_vids}")
-
-    if problems:
-        return problems
-    classifier = Classifier(config.classification)
-    for path in vids.iterdir():
-        if path.is_symlink():
-            problems.append(f"symbolic link cannot be verified: {path}")
-        elif path.is_dir():
-            if not config.ignores_directory(path, root):
-                problems.append(f"unexpected directory in vids: {path}")
-        elif path.is_file():
-            if config.ignores_file(path, root):
-                continue
-            kind, _ = classifier.classify(path)
-            if kind == "picture":
-                problems.append(
-                    f"misplaced picture: {path} "
-                    "(expected outside the video finder's vids folder)"
-                )
-    return problems
-
-
-def review_directories(root: Path) -> tuple[Path, Path]:
-    layout = CollectionLayout(root)
-    return layout.dups, layout.duplicate_vids
 
 
 def resolve_executable(value: Path | None, name: str) -> str:
@@ -714,16 +677,6 @@ def keep_sort_key(record: VideoRecord) -> tuple[int, int, str]:
     return (-record.file_size, record.modified_ns, str(record.path).casefold())
 
 
-def format_size(size: int) -> str:
-    value = float(size)
-    units = ("B", "KiB", "MiB", "GiB", "TiB")
-    for unit in units:
-        if value < 1024 or unit == units[-1]:
-            return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
-        value /= 1024
-    raise AssertionError("unreachable")
-
-
 def print_storage_summary(
     duplicate_groups: list[list[VideoRecord]], scanned_bytes: int
 ) -> None:
@@ -743,48 +696,19 @@ def print_storage_summary(
     print("\nDuplicate storage summary:")
     print(
         f"  Retained originals: {len(duplicate_groups)} file(s), "
-        f"{format_size(retained_bytes)}"
+        f"{format_bytes(retained_bytes)}"
     )
     print(
         f"  Extra duplicate copies: {duplicate_count} file(s), "
-        f"{format_size(duplicate_bytes)}"
+        f"{format_bytes(duplicate_bytes)}"
     )
-    print(f"  Duplicate sets combined: {format_size(duplicate_set_bytes)}")
+    print(f"  Duplicate sets combined: {format_bytes(duplicate_set_bytes)}")
     print(
         "  Potentially reclaimable if extra copies were deleted: "
-        f"{format_size(duplicate_bytes)} ({set_percentage:.1f}% of duplicate-set "
+        f"{format_bytes(duplicate_bytes)} ({set_percentage:.1f}% of duplicate-set "
         f"storage; {scan_percentage:.1f}% of scanned video storage)"
     )
     print("  No files are deleted by this tool.")
-
-
-def copy_target(
-    destination: Path,
-    kept_path: Path,
-    duplicate_path: Path,
-    starting_number: int,
-    reserved: set[str],
-) -> tuple[Path, int]:
-    number = starting_number
-    suffix = duplicate_path.suffix or kept_path.suffix
-    while True:
-        target = destination / f"{kept_path.stem}_copy({number}){suffix}"
-        key = str(target).casefold()
-        if key not in reserved and not os.path.lexists(target):
-            reserved.add(key)
-            return target, number
-        number += 1
-
-
-def describe_undo_action(root: Path, action: Action, apply: bool) -> None:
-    verb = action.operation.lower().replace("_", " ")
-    prefix = verb if apply else f"would {verb}"
-    if action.before and action.after:
-        print(f"\n{prefix}: {root / action.before}\n  to: {root / action.after}")
-    elif action.after:
-        print(f"\n{prefix}: {root / action.after}")
-    elif action.before:
-        print(f"\n{prefix}: {root / action.before}")
 
 
 def undo_duplicate_run(root: Path, apply: bool) -> int:
@@ -814,6 +738,243 @@ def undo_duplicate_run(root: Path, apply: bool) -> int:
     print(f"\nReversed {result.action_count} recorded action(s).")
     print("Verification passed: every recorded duplicate-video action was reversed.")
     return 0
+
+
+def inspect_video_paths(
+    paths: list[Path], ffprobe: str, progress_interval_seconds: int
+) -> tuple[list[VideoRecord], int, list[tuple[Path, str]]]:
+    records: list[VideoRecord] = []
+    scanned_bytes = 0
+    skipped: list[tuple[Path, str]] = []
+    path_sizes: dict[Path, int] = {}
+    for path in paths:
+        try:
+            path_sizes[path] = path.stat().st_size
+        except OSError:
+            path_sizes[path] = 0
+    progress = ProgressMeter(
+        len(paths), sum(path_sizes.values()), progress_interval_seconds
+    )
+    for path in paths:
+        try:
+            record = inspect_video(path, ffprobe)
+            records.append(record)
+            scanned_bytes += record.file_size
+        except (FileChangedError, OSError, VideoInspectionError) as error:
+            skipped.append((path, str(error)))
+        progress_message = progress.advance("inspected", byte_count=path_sizes[path])
+        if progress_message:
+            print(f"  {progress_message}")
+    return records, scanned_bytes, skipped
+
+
+def candidate_video_records(records: list[VideoRecord]) -> list[VideoRecord]:
+    candidates: dict[tuple[object, ...], list[VideoRecord]] = defaultdict(list)
+    for record in records:
+        candidates[record.probe.candidate_key].append(record)
+    return [
+        record for bucket in candidates.values() if len(bucket) > 1 for record in bucket
+    ]
+
+
+def derive_candidate_fingerprints(
+    candidate_records: list[VideoRecord],
+    database: Path,
+    ffmpeg: str,
+    ffmpeg_release: str,
+    decode_timeout: int,
+    progress_interval_seconds: int,
+    no_cache: bool,
+) -> tuple[dict[str, DerivedFingerprint], list[tuple[Path, str]]]:
+    unique_hashes = {record.byte_sha256: record for record in candidate_records}
+    if not no_cache and (
+        database.is_symlink() or (database.exists() and not database.is_file())
+    ):
+        raise VideoCacheError(f"Unsafe SQLite cache path: {database}")
+    try:
+        cached = {} if no_cache else load_cached_fingerprints(database, ffmpeg_release)
+    except VideoInspectionError as error:
+        raise VideoCacheError(
+            "Fingerprint cache cannot be used safely: "
+            f"{error}\nThe cache is disposable; move it aside or rerun with --no-cache."
+        ) from error
+
+    cache_hits = sum(file_hash in cached for file_hash in unique_hashes)
+    cache_misses = len(unique_hashes) - cache_hits
+    print(
+        f"Fingerprint cache: {cache_hits} hit(s), {cache_misses} miss(es); "
+        + ("disabled by --no-cache." if no_cache else "incremental updates enabled.")
+    )
+    ordered_hashes = sorted(
+        unique_hashes.items(), key=lambda item: str(item[1].path).casefold()
+    )
+    derived = {
+        file_hash: cached[file_hash]
+        for file_hash, _ in ordered_hashes
+        if file_hash in cached
+    }
+    decode_items = [
+        (file_hash, representative)
+        for file_hash, representative in ordered_hashes
+        if file_hash not in cached
+    ]
+    progress = ProgressMeter(
+        len(decode_items),
+        sum(representative.file_size for _, representative in decode_items),
+        progress_interval_seconds,
+    )
+    if decode_items:
+        print(
+            f"Fingerprinting {len(decode_items)} uncached candidate content "
+            f"file(s), {format_bytes(progress.total_bytes or 0)} total."
+        )
+
+    skipped: list[tuple[Path, str]] = []
+    for number, (file_hash, representative) in enumerate(decode_items, start=1):
+        print(
+            f"  starting fingerprint {number}/{len(decode_items)} "
+            f"({format_bytes(representative.file_size)})"
+        )
+
+        def report_heartbeat(active_number: int = number) -> None:
+            message = progress.heartbeat("fingerprint progress", active_number)
+            if message:
+                print(f"  {message}")
+
+        try:
+            require_current_video(representative, "video fingerprinting")
+            fingerprint = derive_fingerprint(
+                representative.path,
+                representative.probe,
+                ffmpeg,
+                decode_timeout,
+                report_heartbeat,
+            )
+            require_current_video(representative, "video fingerprinting")
+        except (FileChangedError, VideoInspectionError) as error:
+            skipped.extend(
+                (record.path, str(error))
+                for record in candidate_records
+                if record.byte_sha256 == file_hash
+            )
+        else:
+            derived[file_hash] = fingerprint
+            try:
+                if not no_cache:
+                    save_cached_fingerprints(
+                        database, ffmpeg_release, {file_hash: fingerprint}
+                    )
+            except VideoInspectionError as error:
+                raise VideoCacheError(
+                    f"Fingerprint cache update failed safely: {error}"
+                ) from error
+        progress_message = progress.advance(
+            "fingerprint progress",
+            byte_count=representative.file_size,
+            force=True,
+        )
+        if progress_message:
+            print(f"  {progress_message}")
+    return derived, skipped
+
+
+def group_video_duplicates(
+    candidate_records: list[VideoRecord],
+    derived: dict[str, DerivedFingerprint],
+) -> tuple[list[list[VideoRecord]], list[tuple[Path, str]]]:
+    stable_records: list[VideoRecord] = []
+    skipped: list[tuple[Path, str]] = []
+    for record in candidate_records:
+        try:
+            require_current_video(record, "duplicate analysis")
+        except FileChangedError as error:
+            skipped.append((record.path, str(error)))
+        else:
+            stable_records.append(record)
+
+    fingerprint_groups: dict[str, list[VideoRecord]] = defaultdict(list)
+    for record in stable_records:
+        fingerprint = derived.get(record.byte_sha256)
+        if fingerprint is not None:
+            fingerprint_groups[fingerprint.digest].append(record)
+    duplicate_groups = [
+        group for group in fingerprint_groups.values() if len(group) > 1
+    ]
+    duplicate_groups.sort(
+        key=lambda items: str(min(record.path for record in items)).casefold()
+    )
+    return duplicate_groups, skipped
+
+
+def plan_video_moves(
+    duplicate_groups: list[list[VideoRecord]], destination: Path, apply: bool
+) -> list[VideoMove]:
+    move_plan: list[VideoMove] = []
+    reserved_targets: set[str] = set()
+    for group_number, group in enumerate(duplicate_groups, start=1):
+        ordered = sorted(group, key=keep_sort_key)
+        kept = ordered[0]
+        print(f"\nGroup {group_number}: keep {kept.path}")
+        next_number = 1
+        for duplicate in ordered[1:]:
+            target, used_number = copy_target(
+                destination,
+                kept.path,
+                duplicate.path,
+                next_number,
+                reserved_targets,
+            )
+            next_number = used_number + 1
+            move_plan.append((kept, duplicate, target))
+            print(f"  duplicate: {duplicate.path}")
+            print(f"  {'move to' if apply else 'would move to'}: {target}")
+    return move_plan
+
+
+def apply_video_moves(
+    root: Path,
+    duplicate_groups: list[list[VideoRecord]],
+    move_plan: list[VideoMove],
+) -> Path:
+    layout = duplicate_layout(root, "video")
+    current_records = {
+        record.path: record for records in duplicate_groups for record in records
+    }
+    keepers = {kept.path: kept for kept, _, _ in move_plan}
+    for record in current_records.values():
+        require_current_video(record, "duplicate apply preflight")
+    actions: list[Action] = []
+    for _, duplicate, target in move_plan:
+        action = Action.for_file(root, duplicate.path, target, "MOVE")
+        require_current_video(duplicate, "duplicate apply preflight")
+        actions.append(action)
+    for record in current_records.values():
+        require_current_video(record, "duplicate apply preflight")
+
+    log = ActionLog(root)
+    with log.transaction(ToolId.VIDEO_DUPLICATES) as transaction:
+        for record in current_records.values():
+            require_current_video(record, "duplicate apply preflight")
+        for directory in (layout.review_root, layout.destination):
+            if not directory.exists():
+                transaction.perform(Action.create_directory(root, directory))
+        for action, (kept, _, _) in zip(actions, move_plan, strict=True):
+            require_current_video(kept, "duplicate apply preflight")
+            transaction.perform(action)
+        for record in keepers.values():
+            require_current_video(record, "duplicate apply preflight")
+        transaction.commit()
+    return log.path
+
+
+def verify_video_moves(move_plan: list[VideoMove]) -> list[tuple[Path, Path]]:
+    return [
+        (duplicate.path, target)
+        for _, duplicate, target in move_plan
+        if os.path.lexists(duplicate.path)
+        or target.is_symlink()
+        or not target.is_file()
+    ]
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -882,7 +1043,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         else config.video_duplicates.decode_timeout_seconds
     )
 
-    problems = collection_layout_problems(root, config)
+    problems = layout_problems(root, config, "video")
     if problems:
         print("Collection is not ready for video duplicate scanning:", file=sys.stderr)
         for problem in problems:
@@ -894,8 +1055,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     layout = CollectionLayout(root)
-    vids = layout.vids
-    _, destination = review_directories(root)
+    duplicate_paths = duplicate_layout(root, "video")
+    vids = duplicate_paths.source
+    destination = duplicate_paths.destination
     classifier = Classifier(config.classification)
     paths, ignored = discover_videos(vids, root, classifier, config)
     print(f"Scanning {len(paths)} video(s) in {vids}")
@@ -924,213 +1086,34 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     print(f"FFmpeg runtime: {ffmpeg_release}")
 
-    records: list[VideoRecord] = []
-    scanned_bytes = 0
-    skipped: list[tuple[Path, str]] = []
-    path_sizes: dict[Path, int] = {}
-    for path in paths:
-        try:
-            path_sizes[path] = path.stat().st_size
-        except OSError:
-            path_sizes[path] = 0
-    inspection_progress = ProgressMeter(
-        len(paths),
-        sum(path_sizes.values()),
+    records, scanned_bytes, skipped = inspect_video_paths(
+        paths,
+        ffprobe,
         config.performance.progress_interval_seconds,
     )
-    for path in paths:
-        try:
-            record = inspect_video(path, ffprobe)
-            records.append(record)
-            scanned_bytes += record.file_size
-        except (FileChangedError, OSError, VideoInspectionError) as error:
-            skipped.append((path, str(error)))
-        progress_message = inspection_progress.advance(
-            "inspected", byte_count=path_sizes[path]
-        )
-        if progress_message:
-            print(f"  {progress_message}")
-
-    candidates: dict[tuple[object, ...], list[VideoRecord]] = defaultdict(list)
-    for record in records:
-        candidates[record.probe.candidate_key].append(record)
-    candidate_records = [
-        record for bucket in candidates.values() if len(bucket) > 1 for record in bucket
-    ]
-    unique_hashes = {record.byte_sha256: record for record in candidate_records}
-    database = layout.video_cache
-    if not args.no_cache and (
-        database.is_symlink() or (database.exists() and not database.is_file())
-    ):
-        print(f"Unsafe SQLite cache path: {database}", file=sys.stderr)
-        return 1
+    candidate_records = candidate_video_records(records)
     try:
-        cached = (
-            {} if args.no_cache else load_cached_fingerprints(database, ffmpeg_release)
+        derived, fingerprint_skips = derive_candidate_fingerprints(
+            candidate_records,
+            layout.video_cache,
+            ffmpeg,
+            ffmpeg_release,
+            decode_timeout,
+            config.performance.progress_interval_seconds,
+            args.no_cache,
         )
-    except VideoInspectionError as error:
-        print(f"Fingerprint cache cannot be used safely: {error}", file=sys.stderr)
-        print(
-            "The cache is disposable; move it aside or rerun with --no-cache.",
-            file=sys.stderr,
-        )
+    except VideoCacheError as error:
+        print(str(error), file=sys.stderr)
         return 1
-    cache_hits = sum(file_hash in cached for file_hash in unique_hashes)
-    cache_misses = len(unique_hashes) - cache_hits
-    print(
-        f"Fingerprint cache: {cache_hits} hit(s), {cache_misses} miss(es); "
-        + (
-            "disabled by --no-cache."
-            if args.no_cache
-            else "incremental updates enabled."
-        )
-    )
-    ordered_hashes = sorted(
-        unique_hashes.items(), key=lambda item: str(item[1].path).casefold()
-    )
-    derived: dict[str, DerivedFingerprint] = {
-        file_hash: cached[file_hash]
-        for file_hash, _ in ordered_hashes
-        if file_hash in cached
-    }
-    decode_items = [
-        (file_hash, representative)
-        for file_hash, representative in ordered_hashes
-        if file_hash not in cached
-    ]
-    decode_progress = ProgressMeter(
-        len(decode_items),
-        sum(representative.file_size for _, representative in decode_items),
-        config.performance.progress_interval_seconds,
-    )
-    if decode_items:
-        print(
-            f"Fingerprinting {len(decode_items)} uncached candidate content "
-            f"file(s), {format_bytes(decode_progress.total_bytes or 0)} total."
-        )
-    for number, (file_hash, representative) in enumerate(decode_items, start=1):
-        print(
-            f"  starting fingerprint {number}/{len(decode_items)} "
-            f"({format_bytes(representative.file_size)})"
-        )
-
-        def report_heartbeat(active_number: int = number) -> None:
-            message = decode_progress.heartbeat("fingerprint progress", active_number)
-            if message:
-                print(f"  {message}")
-
-        try:
-            require_current_video(representative, "video fingerprinting")
-            fingerprint = derive_fingerprint(
-                representative.path,
-                representative.probe,
-                ffmpeg,
-                decode_timeout,
-                report_heartbeat,
-            )
-            require_current_video(representative, "video fingerprinting")
-        except (FileChangedError, VideoInspectionError) as error:
-            same_bytes = [
-                record
-                for record in candidate_records
-                if record.byte_sha256 == file_hash
-            ]
-            skipped.extend((record.path, str(error)) for record in same_bytes)
-        else:
-            derived[file_hash] = fingerprint
-            try:
-                if not args.no_cache:
-                    save_cached_fingerprints(
-                        database,
-                        ffmpeg_release,
-                        {file_hash: fingerprint},
-                    )
-            except VideoInspectionError as error:
-                print(
-                    f"Fingerprint cache update failed safely: {error}",
-                    file=sys.stderr,
-                )
-                return 1
-        progress_message = decode_progress.advance(
-            "fingerprint progress",
-            byte_count=representative.file_size,
-            force=True,
-        )
-        if progress_message:
-            print(f"  {progress_message}")
-
-    stable_candidate_records: list[VideoRecord] = []
-    for record in candidate_records:
-        try:
-            require_current_video(record, "duplicate analysis")
-        except FileChangedError as error:
-            skipped.append((record.path, str(error)))
-        else:
-            stable_candidate_records.append(record)
-
-    fingerprint_groups: dict[str, list[VideoRecord]] = defaultdict(list)
-    for record in stable_candidate_records:
-        record_fingerprint = derived.get(record.byte_sha256)
-        if record_fingerprint is not None:
-            fingerprint_groups[record_fingerprint.digest].append(record)
-    duplicate_groups = [
-        group for group in fingerprint_groups.values() if len(group) > 1
-    ]
-    duplicate_groups.sort(
-        key=lambda items: str(min(record.path for record in items)).casefold()
-    )
-
-    move_plan: list[tuple[VideoRecord, VideoRecord, Path]] = []
-    reserved_targets: set[str] = set()
-    for group_number, group in enumerate(duplicate_groups, start=1):
-        ordered = sorted(group, key=keep_sort_key)
-        kept = ordered[0]
-        print(f"\nGroup {group_number}: keep {kept.path}")
-        next_number = 1
-        for duplicate in ordered[1:]:
-            target, used_number = copy_target(
-                destination,
-                kept.path,
-                duplicate.path,
-                next_number,
-                reserved_targets,
-            )
-            next_number = used_number + 1
-            move_plan.append((kept, duplicate, target))
-            print(f"  duplicate: {duplicate.path}")
-            print(f"  {'move to' if args.apply else 'would move to'}: {target}")
+    skipped.extend(fingerprint_skips)
+    duplicate_groups, group_skips = group_video_duplicates(candidate_records, derived)
+    skipped.extend(group_skips)
+    move_plan = plan_video_moves(duplicate_groups, destination, args.apply)
 
     if args.apply and move_plan:
         try:
-            current_records = {
-                record.path: record
-                for records in duplicate_groups
-                for record in records
-            }
-            keepers = {kept.path: kept for kept, _, _ in move_plan}
-            for record in current_records.values():
-                require_current_video(record, "duplicate apply preflight")
-            actions: list[Action] = []
-            for _, duplicate, target in move_plan:
-                action = Action.for_file(root, duplicate.path, target, "MOVE")
-                require_current_video(duplicate, "duplicate apply preflight")
-                actions.append(action)
-            for record in current_records.values():
-                require_current_video(record, "duplicate apply preflight")
-            log = ActionLog(root)
-            with log.transaction(ToolId.VIDEO_DUPLICATES) as transaction:
-                for record in current_records.values():
-                    require_current_video(record, "duplicate apply preflight")
-                for directory in review_directories(root):
-                    if not directory.exists():
-                        transaction.perform(Action.create_directory(root, directory))
-                for action, (kept, _, _) in zip(actions, move_plan, strict=True):
-                    require_current_video(kept, "duplicate apply preflight")
-                    transaction.perform(action)
-                for record in keepers.values():
-                    require_current_video(record, "duplicate apply preflight")
-                transaction.commit()
-            print(f"\nAction log: {log.path}")
+            log_path = apply_video_moves(root, duplicate_groups, move_plan)
+            print(f"\nAction log: {log_path}")
         except (
             ActionConflict,
             ActionLogError,
@@ -1139,13 +1122,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ) as error:
             print(f"Duplicate moves stopped safely: {error}", file=sys.stderr)
             return 1
-        verification_failures = [
-            (duplicate.path, target)
-            for _, duplicate, target in move_plan
-            if os.path.lexists(duplicate.path)
-            or target.is_symlink()
-            or not target.is_file()
-        ]
+        verification_failures = verify_video_moves(move_plan)
         if verification_failures:
             print("\nVerification needs attention:", file=sys.stderr)
             for source, target in verification_failures:

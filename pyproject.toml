@@ -68,6 +68,15 @@ testpaths = ["tests"]
 addopts = "-ra"
 pythonpath = ["src"]
 
+[tool.coverage.run]
+source = ["pymo"]
+parallel = true
+patch = ["subprocess"]
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = true
+
 [tool.black]
 line-length = 88
 target-version = ["py311"]

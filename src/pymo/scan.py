@@ -26,7 +26,7 @@ from pymo.config import (
 from pymo.file_safety import FileChangedError, FileState
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier, desired_directory
-from pymo.progress import ProgressMeter
+from pymo.progress import ProgressMeter, format_bytes
 from pymo.rename import canonical_match, collection_slug
 
 # This identifies the public machine-readable report contract.
@@ -64,16 +64,6 @@ class WalkResult:
     ignored: tuple[Path, ...]
     symlink_count: int
     unreadable_count: int
-
-
-def format_size(size: int) -> str:
-    value = float(size)
-    units = ("B", "KiB", "MiB", "GiB", "TiB")
-    for unit in units:
-        if value < 1024 or unit == units[-1]:
-            return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
-        value /= 1024
-    raise AssertionError("unreachable")
 
 
 def _collect_entries(root: Path, config: PymoConfig) -> WalkResult:
@@ -324,47 +314,21 @@ def _safe_file_size(path: Path) -> int:
         return 0
 
 
-def build_report(
-    root: Path,
-    config: PymoConfig,
-    workers: int,
-    checksums: bool,
-    show_ignored: bool,
-    show_progress: bool,
-) -> dict[str, Any]:
-    layout = CollectionLayout(root)
-    walk = _collect_entries(root, config)
-    classifier = Classifier(config.classification)
-    entries, changed_count = _classify_entries(
-        walk.entries,
-        classifier,
-        workers,
-        config.performance.progress_interval_seconds,
-        show_progress,
-    )
+@dataclass(frozen=True)
+class EntrySummary:
+    kinds: dict[str, dict[str, int]]
+    extensions: dict[str, dict[str, int]]
+    review: dict[str, dict[str, int]]
+    layout: dict[str, int | str]
+    source_videos: tuple[ScanEntry, ...]
+    source_picture_count: int
+    source_video_count: int
+    rename_candidates: int
 
-    stable_entries: list[ScanEntry] = []
-    for entry in entries:
-        try:
-            entry.state.require_unchanged(entry.path, "collection scan")
-        except FileChangedError:
-            changed_count += 1
-        else:
-            stable_entries.append(entry)
-    entries = tuple(stable_entries)
 
-    duplicate_report, checksum_changes = _duplicate_statistics(
-        entries,
-        checksums,
-        config.performance.progress_interval_seconds,
-        show_progress,
-    )
-    if checksum_changes:
-        entries = tuple(
-            entry for entry in entries if entry.path not in checksum_changes
-        )
-        changed_count += len(checksum_changes)
-
+def _summarize_entries(
+    root: Path, layout: CollectionLayout, entries: tuple[ScanEntry, ...]
+) -> EntrySummary:
     kind_counts: Counter[str] = Counter()
     kind_sizes: Counter[str] = Counter()
     review_counts: Counter[str] = Counter()
@@ -427,7 +391,7 @@ def build_report(
         kind: {"files": review_counts[kind], "bytes": review_sizes[kind]}
         for kind in ("pictures", "videos", "other")
     }
-    layout_report = {
+    layout_report: dict[str, int | str] = {
         "pics": _folder_status(layout.pics),
         "vids": _folder_status(layout.vids),
         "dups": _folder_status(layout.dups),
@@ -437,23 +401,77 @@ def build_report(
         "canonical_media_names": canonical_names,
         "proposed_renames": rename_candidates,
     }
-    source_videos = [
+    source_videos = tuple(
         entry for entry in entries if entry.kind == "video" and not entry.in_review
-    ]
+    )
+    return EntrySummary(
+        kinds=kinds,
+        extensions=extensions,
+        review=review,
+        layout=layout_report,
+        source_videos=source_videos,
+        source_picture_count=kind_counts["picture"] - review_counts["pictures"],
+        source_video_count=kind_counts["video"] - review_counts["videos"],
+        rename_candidates=rename_candidates,
+    )
+
+
+def build_report(
+    root: Path,
+    config: PymoConfig,
+    workers: int,
+    checksums: bool,
+    show_ignored: bool,
+    show_progress: bool,
+) -> dict[str, Any]:
+    layout = CollectionLayout(root)
+    walk = _collect_entries(root, config)
+    classifier = Classifier(config.classification)
+    entries, changed_count = _classify_entries(
+        walk.entries,
+        classifier,
+        workers,
+        config.performance.progress_interval_seconds,
+        show_progress,
+    )
+
+    stable_entries: list[ScanEntry] = []
+    for entry in entries:
+        try:
+            entry.state.require_unchanged(entry.path, "collection scan")
+        except FileChangedError:
+            changed_count += 1
+        else:
+            stable_entries.append(entry)
+    entries = tuple(stable_entries)
+
+    duplicate_report, checksum_changes = _duplicate_statistics(
+        entries,
+        checksums,
+        config.performance.progress_interval_seconds,
+        show_progress,
+    )
+    if checksum_changes:
+        entries = tuple(
+            entry for entry in entries if entry.path not in checksum_changes
+        )
+        changed_count += len(checksum_changes)
+
+    summary = _summarize_entries(root, layout, entries)
     recommendations: list[str] = []
     if walk.symlink_count or walk.unreadable_count:
         recommendations.append("Review symbolic links and unreadable entries first.")
     if (
-        layout_report["pics"] != "ready"
-        or layout_report["vids"] != "ready"
-        or proposed_moves
+        summary.layout["pics"] != "ready"
+        or summary.layout["vids"] != "ready"
+        or summary.layout["proposed_organizer_moves"]
     ):
         recommendations.append("Run pymo organize after reviewing its dry run.")
-    elif rename_candidates:
+    elif summary.rename_candidates:
         recommendations.append("Run pymo rename after reviewing its dry run.")
-    if kind_counts["picture"] - review_counts["pictures"] > 1:
+    if summary.source_picture_count > 1:
         recommendations.append("Run pymo find-image-duplicates for exact pixels.")
-    if kind_counts["video"] - review_counts["videos"] > 1:
+    if summary.source_video_count > 1:
         recommendations.append("Run pymo find-video-duplicates for exact playback.")
     if not recommendations:
         recommendations.append(
@@ -489,12 +507,12 @@ def build_report(
             "symbolic_links": walk.symlink_count,
             "unreadable_entries": walk.unreadable_count,
             "changed_entries": changed_count,
-            "kinds": kinds,
-            "extensions": extensions,
+            "kinds": summary.kinds,
+            "extensions": summary.extensions,
             "mime_types": _counter_report(entries, "mime_type"),
         },
-        "review_storage": review,
-        "layout": layout_report,
+        "review_storage": summary.review,
+        "layout": summary.layout,
         "duplicate_potential": duplicate_report,
         "estimated_work": {
             "classification_files": len(entries),
@@ -502,9 +520,9 @@ def build_report(
                 duplicate_report["pictures"]["candidate_bytes"]
                 + duplicate_report["videos"]["candidate_bytes"]
             ),
-            "exact_video_source_files": len(source_videos),
+            "exact_video_source_files": len(summary.source_videos),
             "exact_video_source_bytes_upper_bound": sum(
-                entry.size for entry in source_videos
+                entry.size for entry in summary.source_videos
             ),
         },
         "derived_state": {
@@ -524,7 +542,7 @@ def build_report(
 
 
 def _print_count_and_size(label: str, values: dict[str, int]) -> None:
-    print(f"  {label}: {values['files']} file(s), {format_size(values['bytes'])}")
+    print(f"  {label}: {values['files']} file(s), {format_bytes(values['bytes'])}")
 
 
 def _print_breakdown(
@@ -550,7 +568,7 @@ def print_report(report: dict[str, Any], show_ignored: bool) -> None:
     print("\nInventory:")
     print(f"  Files: {inventory['files']}")
     print(f"  Directories: {inventory['directories']}")
-    print(f"  Storage: {format_size(inventory['bytes'])}")
+    print(f"  Storage: {format_bytes(inventory['bytes'])}")
     kind_labels = {
         "picture": "Pictures",
         "video": "Videos",
@@ -581,7 +599,7 @@ def print_report(report: dict[str, Any], show_ignored: bool) -> None:
     print(f"  Correctly placed files: {layout['correctly_placed_files']}")
     print(
         f"  Proposed organizer moves: {layout['proposed_organizer_moves']} "
-        f"file(s), {format_size(layout['proposed_organizer_move_bytes'])}"
+        f"file(s), {format_bytes(layout['proposed_organizer_move_bytes'])}"
     )
     print(f"  Canonical media names: {layout['canonical_media_names']}")
     print(f"  Proposed renames: {layout['proposed_renames']}")
@@ -598,7 +616,7 @@ def print_report(report: dict[str, Any], show_ignored: bool) -> None:
         print(
             f"  {kind.capitalize()}: {values['same_size_groups']} same-size group(s), "
             f"{values['candidate_files']} candidate file(s), "
-            f"up to {format_size(values['potential_reclaimable_bytes_upper_bound'])} reclaimable"
+            f"up to {format_bytes(values['potential_reclaimable_bytes_upper_bound'])} reclaimable"
         )
     exact = duplicates["exact_bytes"]
     if exact is None:
@@ -607,19 +625,19 @@ def print_report(report: dict[str, Any], show_ignored: bool) -> None:
         print(
             f"  Exact-byte matches: {exact['groups']} group(s), "
             f"{exact['extra_copies']} extra copy or copies, "
-            f"{format_size(exact['reclaimable_bytes'])} reclaimable"
+            f"{format_bytes(exact['reclaimable_bytes'])} reclaimable"
         )
 
     work = report["estimated_work"]
     print("\nEstimated expensive work:")
     print(
         "  Exact-byte mode reads up to "
-        f"{format_size(work['checksum_candidate_bytes'])} from same-size candidates."
+        f"{format_bytes(work['checksum_candidate_bytes'])} from same-size candidates."
     )
     print(
         "  Exact-video analysis may inspect up to "
         f"{work['exact_video_source_files']} source video(s), "
-        f"{format_size(work['exact_video_source_bytes_upper_bound'])}; "
+        f"{format_bytes(work['exact_video_source_bytes_upper_bound'])}; "
         "ffprobe bucketing and fingerprint-cache hits reduce actual decoding."
     )
 
@@ -631,7 +649,7 @@ def print_report(report: dict[str, Any], show_ignored: bool) -> None:
     print(
         "  Video fingerprint cache: "
         + (
-            f"present, {format_size(state['video_cache_bytes'])}"
+            f"present, {format_bytes(state['video_cache_bytes'])}"
             if state["video_cache_present"]
             else "not created"
         )

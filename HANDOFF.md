@@ -13,12 +13,14 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.2.5` scan-consistency release. It is a
+`pymo` command, and has a `v0.2.6` staged-orchestration release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.2.5 omits files detected changing during scan classification or
+Version 0.2.6 separates command analysis/planning/apply/verification stages,
+consolidates shared duplicate policy, and measures coverage across real CLI
+subprocesses. Version 0.2.5 omits files detected changing during scan classification or
 checksumming and guarantees final runtime/status reporting for interruption.
 Version 0.2.4 binds exact image/video conclusions to stable file state,
 revalidates duplicate groups through apply, handles malformed media
@@ -67,6 +69,11 @@ Hard requirements:
     counted without revealing paths.
 20. Ctrl-C returns status 130 and human-readable commands report their observed
     runtime even when interrupted or stopped unexpectedly.
+21. Command entry points coordinate explicit, independently testable stages;
+    image and video content definitions remain separate despite shared layout
+    and collision utilities.
+22. Release coverage includes child-process CLI execution and complements,
+    rather than replaces, real integration and adversarial behavior tests.
 
 `{collection-name}-actions-log.jsonl` remains the authoritative portable
 journal because it moves naturally with a media-collection on external storage.
@@ -93,11 +100,13 @@ python-media-organizer/
     default_config.toml
     logging_config.py
     progress.py
+    file_safety.py
     action_log.py
     organize.py
     rename.py
     scan.py
     duplicates/
+      common.py
       images.py
       videos.py
   tests/
@@ -443,7 +452,8 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - dynamic package metadata, packaged TOML data, runtime/distribution version
   agreement, and the selected Hatchling plus hatch-vcs configuration.
 
-Run the committed quality gates and complete suite after every change. Do not
+Run the committed quality gates and complete suite after every change. Release
+review also runs subprocess-aware coverage. Do not
 replace real FFmpeg integration coverage with mocks alone. `CODE_REVIEW.md`
 records the pre-validation findings, their severity, target release, and durable
 resolution state; keep it synchronized as each release closes a group.
@@ -458,13 +468,12 @@ local indexing, keeper scoring, similarity levels, and local-AI rules.
 
 Near-term roadmap:
 
-1. Resolve orchestration and duplicated-utility findings targeted for 0.2.6.
-2. Add report-only media validation in 0.3.0 and review it adversarially.
-3. Add metadata inspection/export and confidence-based date provenance.
-4. Add read-only collection/backup comparison.
-5. Expand the disposable SQLite index for local statistics and fingerprints.
-6. Add perceptual similarity as report-only functionality.
-7. Revisit optional local AI suggestions after deterministic tooling matures.
+1. Add report-only media validation in 0.3.0 and review it adversarially.
+2. Add metadata inspection/export and confidence-based date provenance.
+3. Add read-only collection/backup comparison.
+4. Expand the disposable SQLite index for local statistics and fingerprints.
+5. Add perceptual similarity as report-only functionality.
+6. Revisit optional local AI suggestions after deterministic tooling matures.
 
 `scan` is implemented; do not rename it to `inspect`.
 

@@ -58,6 +58,12 @@ class MoveRecord:
     mime_type: str
 
 
+@dataclass(frozen=True)
+class OrganizationResult:
+    log_path: Path
+    removed_directories: int
+
+
 class Classifier:
     def __init__(self, policy: ClassificationConfig) -> None:
         self.policy = policy
@@ -375,6 +381,78 @@ def verify_layout(
     return misplaced, remaining_directories(root, pics, vids, config), links
 
 
+def collection_destination_problem(layout: CollectionLayout) -> str | None:
+    for destination in (layout.pics, layout.vids):
+        if destination.is_symlink():
+            return f"Refusing to use a symbolic link as a destination: {destination}"
+        if destination.exists() and not destination.is_dir():
+            return f"A file is blocking the required directory: {destination}"
+    if layout.dups.is_symlink():
+        return (
+            "Refusing to use a symbolic link as the reserved directory: "
+            f"{layout.dups}"
+        )
+    if layout.dups.exists() and not layout.dups.is_dir():
+        return f"A file is blocking the reserved directory: {layout.dups}"
+    return None
+
+
+def apply_organization_plan(
+    root: Path,
+    missing_destinations: list[Path],
+    plan: list[MoveRecord],
+    source_directories: list[Path],
+) -> OrganizationResult:
+    file_actions = [
+        Action.for_file(root, move.source, move.target, "MOVE") for move in plan
+    ]
+    removed_count = 0
+    log = ActionLog(root)
+    with log.transaction(ToolId.ORGANIZE) as transaction:
+        for destination in missing_destinations:
+            transaction.perform(Action.create_directory(root, destination))
+        for file_action in file_actions:
+            transaction.perform(file_action)
+        for directory in source_directories:
+            if (
+                directory.is_dir()
+                and not directory.is_symlink()
+                and not any(directory.iterdir())
+            ):
+                transaction.perform(Action.remove_directory(root, directory))
+                removed_count += 1
+        transaction.commit()
+    return OrganizationResult(log.path, removed_count)
+
+
+def report_layout_verification(
+    root: Path,
+    pics: Path,
+    vids: Path,
+    classifier: Classifier,
+    config: PymoConfig,
+) -> int:
+    misplaced, extra_directories, remaining_links = verify_layout(
+        root, pics, vids, classifier, config
+    )
+    if not misplaced and not extra_directories and not remaining_links:
+        print(
+            "\nVerification passed: pics contains only pictures, vids "
+            "contains only videos, dups remains isolated, and all other "
+            "files are at the root."
+        )
+        return 0
+
+    print("\nVerification needs attention:")
+    for path, expected, kind in misplaced:
+        print(f"  misplaced {kind}: {path} (expected directly in {expected})")
+    for directory in extra_directories:
+        print(f"  remaining directory: {directory}")
+    for link in remaining_links:
+        print(f"  unverified symbolic link: {link}")
+    return 1
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -420,20 +498,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     layout = CollectionLayout(root)
     pics = layout.pics
     vids = layout.vids
-    for destination in (pics, vids):
-        if destination.is_symlink():
-            print(f"Refusing to use a symbolic link as a destination: {destination}")
-            return 2
-        if destination.exists() and not destination.is_dir():
-            print(f"A file is blocking the required directory: {destination}")
-            return 2
-
-    dups = layout.dups
-    if dups.is_symlink():
-        print(f"Refusing to use a symbolic link as the reserved directory: {dups}")
-        return 2
-    if dups.exists() and not dups.is_dir():
-        print(f"A file is blocking the reserved directory: {dups}")
+    destination_problem = collection_destination_problem(layout)
+    if destination_problem:
+        print(destination_problem)
         return 2
 
     classifier = Classifier(config.classification)
@@ -460,25 +527,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     log_path: Path | None = None
     if args.apply and (missing_destinations or plan or source_directories):
         try:
-            file_actions = [
-                Action.for_file(root, move.source, move.target, "MOVE") for move in plan
-            ]
-            log = ActionLog(root)
-            with log.transaction(ToolId.ORGANIZE) as transaction:
-                for destination in missing_destinations:
-                    transaction.perform(Action.create_directory(root, destination))
-                for file_action in file_actions:
-                    transaction.perform(file_action)
-                for directory in source_directories:
-                    if (
-                        directory.is_dir()
-                        and not directory.is_symlink()
-                        and not any(directory.iterdir())
-                    ):
-                        transaction.perform(Action.remove_directory(root, directory))
-                        removed_count += 1
-                transaction.commit()
-            log_path = log.path
+            result = apply_organization_plan(
+                root, missing_destinations, plan, source_directories
+            )
+            removed_count = result.removed_directories
+            log_path = result.log_path
         except (ActionConflict, ActionLogError, OSError) as error:
             print(f"\nOrganization stopped safely: {error}", file=sys.stderr)
             print(
@@ -514,25 +567,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"  {path}")
 
     if args.apply:
-        misplaced, extra_directories, remaining_links = verify_layout(
-            root, pics, vids, classifier, config
-        )
-        if not misplaced and not extra_directories and not remaining_links:
-            print(
-                "\nVerification passed: pics contains only pictures, vids "
-                "contains only videos, dups remains isolated, and all other "
-                "files are at the root."
-            )
-            return 0
-
-        print("\nVerification needs attention:")
-        for path, expected, kind in misplaced:
-            print(f"  misplaced {kind}: {path} (expected directly in {expected})")
-        for directory in extra_directories:
-            print(f"  remaining directory: {directory}")
-        for link in remaining_links:
-            print(f"  unverified symbolic link: {link}")
-        return 1
+        return report_layout_verification(root, pics, vids, classifier, config)
 
     return 0
 

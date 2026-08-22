@@ -28,7 +28,6 @@ from pymo.action_log import (
     ActionLogError,
     NoUndoableRun,
     ToolId,
-    action_log_path,
 )
 from pymo.config import (
     ConfigError,
@@ -306,6 +305,28 @@ def undo_renames(root: Path, apply: bool) -> int:
     return 0
 
 
+def apply_rename_plan(root: Path, plan: list[RenameRecord]) -> Path:
+    actions = [
+        Action.for_file(root, record.source, record.target, "RENAME") for record in plan
+    ]
+    log = ActionLog(root)
+    with log.transaction(ToolId.RENAME) as transaction:
+        for action in actions:
+            transaction.perform(action)
+        transaction.commit()
+    return log.path
+
+
+def verify_rename_plan(plan: list[RenameRecord]) -> list[RenameRecord]:
+    return [
+        record
+        for record in plan
+        if os.path.lexists(record.source)
+        or record.target.is_symlink()
+        or not record.target.is_file()
+    ]
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Give media deterministic, readable, reversible names."
@@ -379,15 +400,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     try:
-        actions = [
-            Action.for_file(root, record.source, record.target, "RENAME")
-            for record in plan
-        ]
-        log = ActionLog(root)
-        with log.transaction(ToolId.RENAME) as transaction:
-            for action in actions:
-                transaction.perform(action)
-            transaction.commit()
+        log_path = apply_rename_plan(root, plan)
     except (ActionConflict, ActionLogError, OSError) as error:
         print(f"\nRenaming stopped safely: {error}", file=sys.stderr)
         print(
@@ -396,16 +409,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
 
-    verification_failures = [
-        record
-        for record in plan
-        if os.path.lexists(record.source)
-        or record.target.is_symlink()
-        or not record.target.is_file()
-    ]
+    verification_failures = verify_rename_plan(plan)
     print(f"\nRenamed {len(plan)} media file(s).")
     print(f"Already using this naming scheme: {already_named} file(s).")
-    print(f"Action log: {action_log_path(root)}")
+    print(f"Action log: {log_path}")
     if verification_failures:
         print("\nRename verification needs attention:")
         for record in verification_failures:
