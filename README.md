@@ -78,7 +78,7 @@ media-collection/
   media-collection-actions-log.jsonl
                         portable append-only action history, after an apply
   .pymo.toml            optional collection-specific configuration
-  .pymo.sqlite3         disposable video fingerprint cache, after a persisted fingerprint
+  .pymo.sqlite3         disposable shared derived-data cache, after persisted evidence
   .pymo.sqlite3.lock    persistent cache reader/writer coordination
   other files           non-media files at the collection root
 ```
@@ -355,14 +355,16 @@ state. Pillow decompression-bomb inputs and malformed ffprobe values are also
 conservative skips.
 
 Preview and applied runs use `.pymo.sqlite3`, a disposable collection-local
-cache keyed by content, fingerprint algorithm, and FFmpeg version. Each newly
-decoded fingerprint is saved immediately, so an interrupted preview can resume
-and the later `--apply` usually reuses the reviewed work. The command reports
-candidate-relevant reusable records, fingerprints still required, and the
-number of new records durably persisted. Add `--no-cache` for a run that
-neither reads nor writes the cache; that mode emits no lookup or update claim.
-Cache writes are derived local state only: they never move media or write
-action history.
+shared cache. Schema version 1 stores generic evidence by content SHA-256,
+evidence type, algorithm version, and runtime version, plus stable file
+observations for future producers. Exact-video fingerprints are the first
+evidence type. Each newly decoded fingerprint is saved immediately, so an
+interrupted preview can resume and the later `--apply` usually reuses the
+reviewed work. The command reports candidate-relevant reusable records,
+fingerprints still required, and the number of new records durably persisted.
+Add `--no-cache` for a run that neither reads nor writes the cache; that mode
+emits no lookup or update claim. Cache writes are derived local state only:
+they never move media or write action history.
 
 An existing cache is opened read-only through a stable no-follow descriptor
 anchored beneath the collection root, then its exact schema, integrity, and
@@ -370,6 +372,11 @@ every row are validated before expensive decoding. A concurrent pathname swap
 cannot redirect SQLite to unrelated local data and instead stops the run. If
 the cache is corrupt or incompatible, pymo leaves it untouched and stops with
 instructions to move it aside or rerun with `--no-cache`.
+
+Valid caches from the earlier video-only schema remain byte-for-byte unchanged
+during lookup. The next successful fingerprint write migrates their completed
+records only inside the private staged replacement, so a failed migration
+leaves the public legacy cache intact.
 
 Readers share `.pymo.sqlite3.lock`; writers take it exclusively and merge the
 latest completed records. A write is first built in memory, serialized to a

@@ -83,6 +83,8 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-001 | High | Cache reads checked and resolved the public pathname before giving it to SQLite, so a concurrent link substitution could redirect a transient read outside the collection. | 0.3.11 | Resolved in ADR 0048 |
 | CACHE-002 | High | Cache writes use check-then-open pathname access without a dedicated inter-process lock or atomic publication, allowing path substitution, racing updates, and an interrupted update to affect the public cache directly. | 0.3.12 | Resolved in ADR 0049 |
 | CACHE-003 | Low | Video-cache output calls every absent record a miss and promises incremental updates without saying how many fingerprints were successfully persisted; `--no-cache` is mixed into the same hit/miss sentence. | 0.3.16 | Resolved in ADR 0053 |
+| CACHE-004 | Medium | Shared-schema creation used `executescript()` inside legacy migration even though that API may commit a pending transaction before executing, weakening the cache service's all-or-nothing migration guarantee. | 0.4.3 | Resolved with transaction-preserving statements and rollback regression coverage |
+| CACHE-005 | Low | Schema signatures were stored as several module globals despite the project's rule that assigned constants represent durable persisted identifiers only. | 0.4.3 | Resolved by constructing validation signatures locally; only persisted cache identifiers remain constants |
 
 ## Progress and timing review findings
 
@@ -161,6 +163,8 @@ The same adversarial method was repeated after the first validation release.
   simulation, duplicate analysis, and post-operation layout verification.
 - `0.4.2`: require no-follow metadata inspection for every enumerated entry and
   reject names that disappear or change walk category before a plan is trusted.
+- `0.4.3`: extract the shared cache safety and schema service, retain atomic
+  legacy migration, and reject malformed generic evidence before reuse.
 
 ## Independent review evidence
 

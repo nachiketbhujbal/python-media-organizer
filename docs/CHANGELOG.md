@@ -15,6 +15,9 @@ All notable changes to `python-media-organizer` will be recorded here.
   cache update.
 - Preserve fail-closed handling for corrupt, malformed, substituted, or
   unsupported cache data without deleting or rewriting the unexpected file.
+- Keep legacy migration fully transactional, reject non-standard JSON and
+  non-canonical observation paths, and retain only persisted compatibility
+  identifiers as cache module constants.
 
 ## 0.4.2 - 2026-08-22
 

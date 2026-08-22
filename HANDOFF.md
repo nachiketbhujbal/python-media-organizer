@@ -26,8 +26,7 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.4.2` entry-integrity release. Version 0.4.3 is in
-progress on `cache/v0.4.3-shared-core`; it is not released or tagged. It is a
+`pymo` command, and has a `v0.4.3` shared-cache-core release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
@@ -54,13 +53,15 @@ metadata error, or a changed walk category stops the command before state is
 created. Report-only scan and validation continue to count such names as
 unreadable evidence and process readable neighbors.
 
-The in-progress version 0.4.3 extracts cache filesystem coordination into
+Version 0.4.3 extracts cache filesystem coordination into
 `src/pymo/cache.py` and introduces schema version 1. Generic derived evidence
 is keyed by content SHA-256, evidence type, algorithm, and runtime. Stable file
 observations retain an explicit analysis scope, relative path, device/inode,
 size, modification/change times, and optional verified byte hash. Valid legacy
 video caches remain read-only during lookup and migrate inside the private
 staged database only when a subsequent fingerprint is successfully saved.
+Migration uses an explicit SQLite savepoint, and schema validation rejects
+non-standard JSON values and non-canonical observation paths.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -217,6 +218,7 @@ python-media-organizer/
     progress.py
     discovery.py
     file_safety.py
+    cache.py
     action_log.py
     organize.py
     rename.py
@@ -287,10 +289,10 @@ them. `--verbose` does not relax that privacy default. Explicit
 absolute collection root. If the user also requests `--log-file`, those listed
 paths are deliberately included in that log.
 
-The source contains only five assigned module constants: the config schema,
-action-log schema, shared cache schema, video fingerprint algorithm, and
-scan-report schema
-versions. Each is an
+The source contains only seven assigned module constants: the config schema,
+action-log schema, shared cache schema, shared exact-video evidence type,
+video fingerprint algorithm, scan-report schema, and validation-report schema
+versions or identifiers. Each is an
 on-disk compatibility boundary and has an adjacent justification. Dispatch,
 logging, collection paths, tool identifiers, operation identifiers, timestamp
 patterns, and policy collections no longer use scattered mutable globals.

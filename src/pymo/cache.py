@@ -1,8 +1,9 @@
 """Descriptor-pinned, atomically published cache-file primitives.
 
-This module owns cache filesystem safety and process coordination. Cache
-schemas and evidence types belong to higher-level services so the same safe
-publication boundary can support video, image, hash, and probe evidence.
+This module owns cache filesystem safety, process coordination, and the shared
+schema. Evidence-specific payload policy belongs to higher-level services so
+the same safe publication boundary can support video, image, hash, and probe
+evidence.
 """
 
 from __future__ import annotations
@@ -23,6 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Literal
 
+# These values are persisted in the shared SQLite cache. Changing either one
+# without an explicit migration would make stored evidence ambiguous.
 SCHEMA_VERSION = 1
 LEGACY_VIDEO_EVIDENCE_TYPE = "exact-video-playback"
 CacheSchemaKind = Literal["empty", "legacy-video", "current"]
@@ -71,43 +74,45 @@ def _table_signature(
     return [(row[1], str(row[2]).upper(), row[3], row[5]) for row in rows]
 
 
-_CURRENT_OBJECTS = [
-    ("table", "cache_schema"),
-    ("table", "derived_evidence"),
-    ("table", "file_observations"),
-]
-_LEGACY_OBJECTS = [("table", "video_fingerprints")]
-_CURRENT_SIGNATURES = {
-    "cache_schema": [
-        ("singleton", "INTEGER", 1, 1),
-        ("schema_version", "INTEGER", 1, 0),
-    ],
-    "derived_evidence": [
+def _current_signatures() -> dict[str, list[tuple[str, str, int, int]]]:
+    return {
+        "cache_schema": [
+            ("singleton", "INTEGER", 1, 1),
+            ("schema_version", "INTEGER", 1, 0),
+        ],
+        "derived_evidence": [
+            ("file_sha256", "TEXT", 1, 1),
+            ("evidence_type", "TEXT", 1, 2),
+            ("algorithm", "TEXT", 1, 3),
+            ("runtime", "TEXT", 1, 4),
+            ("payload_json", "TEXT", 1, 0),
+        ],
+        "file_observations": [
+            ("scope", "TEXT", 1, 1),
+            ("relative_path", "TEXT", 1, 2),
+            ("device", "INTEGER", 1, 0),
+            ("inode", "INTEGER", 1, 0),
+            ("size", "INTEGER", 1, 0),
+            ("modified_ns", "INTEGER", 1, 0),
+            ("changed_ns", "INTEGER", 1, 0),
+            ("byte_sha256", "TEXT", 0, 0),
+        ],
+    }
+
+
+def _current_objects() -> list[tuple[str, str]]:
+    return [("table", name) for name in sorted(_current_signatures())]
+
+
+def _legacy_video_signature() -> list[tuple[str, str, int, int]]:
+    return [
         ("file_sha256", "TEXT", 1, 1),
-        ("evidence_type", "TEXT", 1, 2),
-        ("algorithm", "TEXT", 1, 3),
-        ("runtime", "TEXT", 1, 4),
-        ("payload_json", "TEXT", 1, 0),
-    ],
-    "file_observations": [
-        ("scope", "TEXT", 1, 1),
-        ("relative_path", "TEXT", 1, 2),
-        ("device", "INTEGER", 1, 0),
-        ("inode", "INTEGER", 1, 0),
-        ("size", "INTEGER", 1, 0),
-        ("modified_ns", "INTEGER", 1, 0),
-        ("changed_ns", "INTEGER", 1, 0),
-        ("byte_sha256", "TEXT", 0, 0),
-    ],
-}
-_LEGACY_VIDEO_SIGNATURE = [
-    ("file_sha256", "TEXT", 1, 1),
-    ("algorithm", "TEXT", 1, 2),
-    ("ffmpeg_version", "TEXT", 1, 3),
-    ("fingerprint", "TEXT", 1, 0),
-    ("video_frames", "INTEGER", 1, 0),
-    ("audio_bytes", "INTEGER", 1, 0),
-]
+        ("algorithm", "TEXT", 1, 2),
+        ("ffmpeg_version", "TEXT", 1, 3),
+        ("fingerprint", "TEXT", 1, 0),
+        ("video_frames", "INTEGER", 1, 0),
+        ("audio_bytes", "INTEGER", 1, 0),
+    ]
 
 
 def _require_integrity(connection: sqlite3.Connection) -> None:
@@ -122,38 +127,57 @@ def detect_schema(connection: sqlite3.Connection) -> CacheSchemaKind:
     objects = _schema_objects(connection)
     if not objects:
         return "empty"
-    if objects == _LEGACY_OBJECTS:
+    if objects == [("table", "video_fingerprints")]:
         if _table_signature(connection, "video_fingerprints") != (
-            _LEGACY_VIDEO_SIGNATURE
+            _legacy_video_signature()
         ):
             raise CacheError("SQLite cache has an incompatible legacy schema")
         _validated_legacy_video_rows(connection)
         return "legacy-video"
-    if objects != _CURRENT_OBJECTS:
+    if objects != _current_objects():
         raise CacheError("SQLite cache has an incompatible schema")
     validate_current_schema(connection)
     return "current"
 
 
 def _create_current_tables(connection: sqlite3.Connection) -> None:
-    connection.executescript(
+    # Individual execute calls preserve the caller's transaction. executescript()
+    # may commit a pending transaction before running its input.
+    statements = (
         "CREATE TABLE cache_schema ("
         "singleton INTEGER NOT NULL PRIMARY KEY CHECK (singleton = 1), "
-        "schema_version INTEGER NOT NULL);"
+        "schema_version INTEGER NOT NULL)",
         "CREATE TABLE derived_evidence ("
         "file_sha256 TEXT NOT NULL, evidence_type TEXT NOT NULL, "
         "algorithm TEXT NOT NULL, runtime TEXT NOT NULL, payload_json TEXT NOT NULL, "
-        "PRIMARY KEY (file_sha256, evidence_type, algorithm, runtime));"
+        "PRIMARY KEY (file_sha256, evidence_type, algorithm, runtime))",
         "CREATE TABLE file_observations ("
         "scope TEXT NOT NULL, relative_path TEXT NOT NULL, device INTEGER NOT NULL, "
         "inode INTEGER NOT NULL, size INTEGER NOT NULL, modified_ns INTEGER NOT NULL, "
         "changed_ns INTEGER NOT NULL, byte_sha256 TEXT, "
-        "PRIMARY KEY (scope, relative_path));"
+        "PRIMARY KEY (scope, relative_path))",
     )
+    for statement in statements:
+        connection.execute(statement)
     connection.execute(
         "INSERT INTO cache_schema (singleton, schema_version) VALUES (1, ?)",
         (SCHEMA_VERSION,),
     )
+
+
+@contextmanager
+def _schema_transaction(connection: sqlite3.Connection) -> Iterator[None]:
+    """Make a multi-statement schema change atomic, including SQLite DDL."""
+
+    connection.execute("SAVEPOINT pymo_schema_change")
+    try:
+        yield
+    except BaseException:
+        connection.execute("ROLLBACK TO pymo_schema_change")
+        connection.execute("RELEASE pymo_schema_change")
+        raise
+    else:
+        connection.execute("RELEASE pymo_schema_change")
 
 
 def initialize_schema(connection: sqlite3.Connection) -> None:
@@ -161,8 +185,8 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
 
     if detect_schema(connection) != "empty":
         raise CacheError("SQLite cache schema is already initialized")
-    _create_current_tables(connection)
-    connection.commit()
+    with _schema_transaction(connection):
+        _create_current_tables(connection)
     validate_current_schema(connection)
 
 
@@ -171,9 +195,14 @@ def _is_sha256(value: object) -> bool:
 
 
 def _validate_derived_evidence(record: DerivedEvidence) -> None:
+    def reject_nonstandard_constant(value: str) -> object:
+        raise ValueError(f"non-standard JSON constant: {value}")
+
     try:
-        payload = json.loads(record.payload_json)
-    except (TypeError, json.JSONDecodeError) as error:
+        payload = json.loads(
+            record.payload_json, parse_constant=reject_nonstandard_constant
+        )
+    except (TypeError, ValueError) as error:
         raise CacheError("SQLite cache contains invalid derived evidence") from error
     if (
         not _is_sha256(record.file_sha256)
@@ -209,7 +238,9 @@ def _validate_file_observation(record: FileObservation) -> None:
         or "\0" in record.scope
         or "\0" in record.relative_path
         or relative.is_absolute()
-        or any(part in {"", ".", ".."} for part in relative.parts)
+        or not relative.parts
+        or relative.as_posix() != record.relative_path
+        or any(part == ".." for part in relative.parts)
         or any(
             isinstance(value, bool) or not isinstance(value, int) for value in integers
         )
@@ -225,9 +256,9 @@ def validate_current_schema(connection: sqlite3.Connection) -> None:
     """Validate the exact current schema, version row, and every stored record."""
 
     _require_integrity(connection)
-    if _schema_objects(connection) != _CURRENT_OBJECTS:
+    if _schema_objects(connection) != _current_objects():
         raise CacheError("SQLite cache has an incompatible schema")
-    for table, expected in _CURRENT_SIGNATURES.items():
+    for table, expected in _current_signatures().items():
         if _table_signature(connection, table) != expected:
             raise CacheError("SQLite cache has an incompatible schema")
     versions = connection.execute(
@@ -279,7 +310,7 @@ def migrate_legacy_video_schema(connection: sqlite3.Connection) -> None:
     if detect_schema(connection) != "legacy-video":
         raise CacheError("SQLite cache is not a legacy video cache")
     rows = _validated_legacy_video_rows(connection)
-    with connection:
+    with _schema_transaction(connection):
         connection.execute(
             "ALTER TABLE video_fingerprints RENAME TO legacy_video_fingerprints"
         )

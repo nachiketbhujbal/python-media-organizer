@@ -168,6 +168,38 @@ def test_legacy_video_schema_migrates_to_generic_evidence() -> None:
     connection.close()
 
 
+def test_legacy_migration_rolls_back_every_schema_change_on_failure() -> None:
+    connection = sqlite3.connect(":memory:")
+    legacy_video_schema(connection)
+    connection.execute(
+        "INSERT INTO video_fingerprints VALUES (?, ?, ?, ?, ?, ?)",
+        ("a" * 64, "exact-playback-v2", "ffmpeg-test", "b" * 64, 12, 34),
+    )
+    connection.commit()
+
+    def deny_drop(
+        action: int,
+        _arg1: str | None,
+        _arg2: str | None,
+        _database: str | None,
+        _trigger: str | None,
+    ) -> int:
+        if action == sqlite3.SQLITE_DROP_TABLE:
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
+
+    connection.set_authorizer(deny_drop)
+    with pytest.raises(sqlite3.DatabaseError):
+        migrate_legacy_video_schema(connection)
+    connection.set_authorizer(None)
+
+    assert detect_schema(connection) == "legacy-video"
+    assert connection.execute(
+        "SELECT file_sha256 FROM video_fingerprints"
+    ).fetchall() == [("a" * 64,)]
+    connection.close()
+
+
 def test_schema_rejects_an_unsupported_version_without_modifying_it() -> None:
     connection = sqlite3.connect(":memory:")
     initialize_schema(connection)
@@ -217,6 +249,41 @@ def test_current_schema_rejects_malformed_evidence_and_file_identity() -> None:
     connection.execute(
         "INSERT INTO file_observations VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         ("source-a", "../escape.jpg", 1, 2, 3, 4, 5, None),
+    )
+    connection.commit()
+
+    with pytest.raises(CacheError, match="invalid file observation"):
+        validate_current_schema(connection)
+    connection.close()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    ['{"value":NaN}', '{"value":Infinity}', '{"value":-Infinity}'],
+)
+def test_current_schema_rejects_nonstandard_json_constants(payload: str) -> None:
+    connection = sqlite3.connect(":memory:")
+    initialize_schema(connection)
+    connection.execute(
+        "INSERT INTO derived_evidence VALUES (?, ?, ?, ?, ?)",
+        ("a" * 64, "displayed-pixels", "pixels-v1", "runtime", payload),
+    )
+    connection.commit()
+
+    with pytest.raises(CacheError, match="invalid derived evidence"):
+        validate_current_schema(connection)
+    connection.close()
+
+
+@pytest.mark.parametrize("relative_path", [".", "pics//leaf.jpg", "pics/./leaf.jpg"])
+def test_current_schema_rejects_noncanonical_relative_paths(
+    relative_path: str,
+) -> None:
+    connection = sqlite3.connect(":memory:")
+    initialize_schema(connection)
+    connection.execute(
+        "INSERT INTO file_observations VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        ("source-a", relative_path, 1, 2, 3, 4, 5, None),
     )
     connection.commit()
 

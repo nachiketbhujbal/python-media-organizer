@@ -42,12 +42,24 @@ class CollectionLayout:
         return self.root / ".pymo.toml"
 
     @property
-    def video_cache(self) -> Path:
+    def derived_cache(self) -> Path:
         return self.root / ".pymo.sqlite3"
 
     @property
-    def video_cache_lock(self) -> Path:
+    def derived_cache_lock(self) -> Path:
         return self.root / ".pymo.sqlite3.lock"
+
+    @property
+    def video_cache(self) -> Path:
+        """Compatibility spelling retained after the cache became shared."""
+
+        return self.derived_cache
+
+    @property
+    def video_cache_lock(self) -> Path:
+        """Compatibility spelling retained after the cache became shared."""
+
+        return self.derived_cache_lock
 
     @property
     def action_log(self) -> Path:

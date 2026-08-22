@@ -98,6 +98,8 @@ never duplicate the version in source or static project metadata.
   image/video analysis policy.
 - `src/pymo/action_log.py`: shared append-only mutation journal and guarded
   dependency-aware undo.
+- `src/pymo/cache.py`: versioned shared cache schema plus descriptor-pinned,
+  locked, atomically published disposable derived state.
 - `src/pymo/collection.py`: immutable canonical paths for one collection.
 - `src/pymo/logging_config.py`: console logging plus explicitly requested local
   log files.

@@ -680,12 +680,12 @@ def load_cached_fingerprints(
     root: Path, database: Path, ffmpeg_release: str
 ) -> dict[str, DerivedFingerprint]:
     layout = CollectionLayout(root)
-    if database != layout.video_cache:
+    if database != layout.derived_cache:
         raise VideoInspectionError("unexpected SQLite cache path")
     connection: sqlite3.Connection | None = None
     try:
         with cache_service.locked_cache_directory(
-            root, layout.video_cache_lock, exclusive=False
+            root, layout.derived_cache_lock, exclusive=False
         ) as locked:
             root_descriptor = locked.descriptor
             entry_state = cache_service.cache_entry_at(
@@ -936,11 +936,11 @@ def save_cached_fingerprints(
     if not values:
         return
     layout = CollectionLayout(root)
-    if database != layout.video_cache:
+    if database != layout.derived_cache:
         raise VideoInspectionError("unexpected SQLite cache path")
     try:
         with cache_service.locked_cache_directory(
-            root, layout.video_cache_lock, exclusive=True
+            root, layout.derived_cache_lock, exclusive=True
         ) as locked:
             directory_descriptor = locked.descriptor
             existing_state = cache_service.cache_entry_at(
