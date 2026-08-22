@@ -215,6 +215,11 @@ missing/invalid duration. Unreadable subtrees make the report unhealthy rather
 than being silently omitted. Animated and multi-page images are counted as
 valid characteristics rather than corruption.
 
+Classification and decoding use stable, no-follow file descriptors anchored
+beneath the resolved collection root. If a file or parent path is replaced
+during validation, the decoder remains pinned to the original file and the
+result is reported as changed so the user can rerun safely.
+
 Collection roots and filenames are hidden by default. `--show-files` adds
 collection-relative affected paths; `--show-ignored` controls ignored paths
 separately. JSON uses stable schema version 1 without collection names or

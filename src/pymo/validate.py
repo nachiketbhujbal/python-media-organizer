@@ -28,7 +28,7 @@ from pymo.config import (
     load_config,
 )
 from pymo.duplicates.videos import VideoInspectionError, resolve_executable
-from pymo.file_safety import FileChangedError, FileState
+from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
 from pymo.progress import ProgressMeter, format_bytes
@@ -46,6 +46,7 @@ DiscoveryDisposition = Literal[
 
 @dataclass(frozen=True)
 class MediaCandidate:
+    root: Path
     path: Path
     state: FileState
     kind: MediaKind
@@ -147,9 +148,9 @@ def _discover_file(
         state = FileState.capture(path)
     except FileChangedError:
         return "unreadable", None
-    detected_kind, _ = classifier.classify(path)
     try:
-        state.require_unchanged(path, "media discovery")
+        with open_stable_file(root, path, state, "media discovery") as descriptor:
+            detected_kind, _ = classifier.classify(path, descriptor)
     except FileChangedError:
         return "changed", None
     extension_kind = _extension_kind(path, config)
@@ -162,6 +163,7 @@ def _discover_file(
     return (
         "candidate",
         MediaCandidate(
+            root=root,
             path=path.absolute(),
             state=state,
             kind=kind,
@@ -279,45 +281,55 @@ def _classification_findings(candidate: MediaCandidate) -> list[Finding]:
 
 def validate_image(candidate: MediaCandidate, full: bool) -> ValidationResult:
     findings = _classification_findings(candidate)
-    if candidate.state.size == 0:
-        return ValidationResult(candidate, tuple(findings))
     supported_extensions = Image.registered_extensions()
-    if (
-        candidate.extension_kind == "picture"
-        and candidate.path.suffix.casefold() not in supported_extensions
-        and candidate.detected_kind == "picture"
-    ):
-        findings.append(
-            _finding(
-                candidate,
-                "warning",
-                "unsupported_image_format",
-                "Pillow has no decoder for this recognized image format",
-            )
-        )
-        return ValidationResult(candidate, tuple(findings))
-
     animated_or_multipage = False
     try:
-        candidate.state.require_unchanged(candidate.path, "image validation")
-        with Image.open(candidate.path) as opened:
-            animated_or_multipage = getattr(opened, "n_frames", 1) > 1
-            expected_format = supported_extensions.get(candidate.path.suffix.casefold())
-            if expected_format and opened.format and expected_format != opened.format:
+        with open_stable_file(
+            candidate.root, candidate.path, candidate.state, "image validation"
+        ) as descriptor:
+            if candidate.state.size == 0:
+                return ValidationResult(candidate, tuple(findings))
+            if (
+                candidate.extension_kind == "picture"
+                and candidate.path.suffix.casefold() not in supported_extensions
+                and candidate.detected_kind == "picture"
+            ):
                 findings.append(
                     _finding(
                         candidate,
                         "warning",
-                        "extension_content_mismatch",
-                        "image decoder format does not match the extension",
+                        "unsupported_image_format",
+                        "Pillow has no decoder for this recognized image format",
                     )
                 )
-            opened.verify()
-        if full:
-            with Image.open(candidate.path) as opened:
-                for frame in ImageSequence.Iterator(opened):
-                    frame.load()
-        candidate.state.require_unchanged(candidate.path, "image validation")
+                return ValidationResult(candidate, tuple(findings))
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            with os.fdopen(os.dup(descriptor), "rb") as handle:
+                with Image.open(handle) as opened:
+                    animated_or_multipage = getattr(opened, "n_frames", 1) > 1
+                    expected_format = supported_extensions.get(
+                        candidate.path.suffix.casefold()
+                    )
+                    if (
+                        expected_format
+                        and opened.format
+                        and expected_format != opened.format
+                    ):
+                        findings.append(
+                            _finding(
+                                candidate,
+                                "warning",
+                                "extension_content_mismatch",
+                                "image decoder format does not match the extension",
+                            )
+                        )
+                    opened.verify()
+            if full:
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                with os.fdopen(os.dup(descriptor), "rb") as handle:
+                    with Image.open(handle) as opened:
+                        for frame in ImageSequence.Iterator(opened):
+                            frame.load()
     except FileChangedError:
         findings = [_changed_finding(candidate)]
     except (
@@ -339,7 +351,8 @@ def validate_image(candidate: MediaCandidate, full: bool) -> ValidationResult:
     return ValidationResult(candidate, tuple(findings), animated_or_multipage)
 
 
-def _probe_video(path: Path, ffprobe: str) -> dict[str, Any]:
+def _probe_video(descriptor: int, ffprobe: str) -> dict[str, Any]:
+    os.lseek(descriptor, 0, os.SEEK_SET)
     try:
         result = subprocess.run(
             [
@@ -354,13 +367,14 @@ def _probe_video(path: Path, ffprobe: str) -> dict[str, Any]:
                 "stream=codec_type,codec_name,width,height,pix_fmt,sample_rate,channels:format=duration,format_name",
                 "-of",
                 "json",
-                str(path),
+                f"/dev/fd/{descriptor}",
             ],
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
             timeout=60,
+            pass_fds=(descriptor,),
         )
     except (OSError, UnicodeError, subprocess.SubprocessError) as error:
         raise VideoInspectionError(f"ffprobe failed: {error}") from error
@@ -375,7 +389,8 @@ def _probe_video(path: Path, ffprobe: str) -> dict[str, Any]:
     return payload
 
 
-def _full_video_decode(path: Path, ffmpeg: str, timeout: int) -> None:
+def _full_video_decode(descriptor: int, ffmpeg: str, timeout: int) -> None:
+    os.lseek(descriptor, 0, os.SEEK_SET)
     try:
         result = subprocess.run(
             [
@@ -386,7 +401,7 @@ def _full_video_decode(path: Path, ffmpeg: str, timeout: int) -> None:
                 "-protocol_whitelist",
                 "file,pipe",
                 "-i",
-                str(path),
+                f"/dev/fd/{descriptor}",
                 "-map",
                 "0:v?",
                 "-map",
@@ -399,6 +414,7 @@ def _full_video_decode(path: Path, ffmpeg: str, timeout: int) -> None:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=timeout,
+            pass_fds=(descriptor,),
         )
     except (OSError, subprocess.SubprocessError) as error:
         raise VideoInspectionError(f"FFmpeg validation failed: {error}") from error
@@ -514,18 +530,19 @@ def _duration_finding(
 
 def _inspect_video(
     candidate: MediaCandidate,
+    descriptor: int,
     ffprobe: str,
     ffmpeg: str | None,
     timeout: int,
 ) -> list[Finding]:
-    payload = _probe_video(candidate.path, ffprobe)
+    payload = _probe_video(descriptor, ffprobe)
     videos, audios, others = _partition_streams(payload)
     findings = _stream_findings(candidate, videos, audios, others)
     duration_finding = _duration_finding(candidate, payload)
     if duration_finding is not None:
         findings.append(duration_finding)
     if ffmpeg is not None and videos:
-        _full_video_decode(candidate.path, ffmpeg, timeout)
+        _full_video_decode(descriptor, ffmpeg, timeout)
     return findings
 
 
@@ -536,14 +553,19 @@ def validate_video(
     timeout: int,
 ) -> ValidationResult:
     findings = _classification_findings(candidate)
-    if candidate.state.size == 0:
-        return ValidationResult(candidate, tuple(findings))
-    if ffprobe is None:
+    if candidate.state.size > 0 and ffprobe is None:
         raise VideoInspectionError("ffprobe is required for non-empty video")
     try:
-        candidate.state.require_unchanged(candidate.path, "video validation")
-        findings.extend(_inspect_video(candidate, ffprobe, ffmpeg, timeout))
-        candidate.state.require_unchanged(candidate.path, "video validation")
+        with open_stable_file(
+            candidate.root, candidate.path, candidate.state, "video validation"
+        ) as descriptor:
+            if candidate.state.size == 0:
+                return ValidationResult(candidate, tuple(findings))
+            if ffprobe is None:
+                raise VideoInspectionError("ffprobe is required for non-empty video")
+            findings.extend(
+                _inspect_video(candidate, descriptor, ffprobe, ffmpeg, timeout)
+            )
     except FileChangedError:
         findings = [_changed_finding(candidate)]
     except VideoInspectionError:

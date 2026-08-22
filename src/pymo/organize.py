@@ -75,15 +75,22 @@ class Classifier:
                 "fall back to filenames and extensions."
             )
 
-    def detect_mime(self, path: Path) -> str:
+    def detect_mime(self, path: Path, descriptor: int | None = None) -> str:
         if self.file_command:
             try:
+                source = str(path)
+                pass_fds: tuple[int, ...] = ()
+                if descriptor is not None:
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    source = f"/dev/fd/{descriptor}"
+                    pass_fds = (descriptor,)
                 result = subprocess.run(
-                    [self.file_command, "--brief", "--mime-type", "--", str(path)],
+                    [self.file_command, "--brief", "--mime-type", "--", source],
                     check=False,
                     capture_output=True,
                     text=True,
                     timeout=30,
+                    pass_fds=pass_fds,
                 )
                 detected = result.stdout.strip().split(";", 1)[0].lower()
                 if result.returncode == 0 and detected:
@@ -94,8 +101,8 @@ class Classifier:
         guessed, _ = mimetypes.guess_type(path.name)
         return guessed.lower() if guessed else "unknown"
 
-    def classify(self, path: Path) -> tuple[str, str]:
-        mime_type = self.detect_mime(path)
+    def classify(self, path: Path, descriptor: int | None = None) -> tuple[str, str]:
+        mime_type = self.detect_mime(path, descriptor)
         if mime_type.startswith("image/"):
             return "picture", mime_type
         if (

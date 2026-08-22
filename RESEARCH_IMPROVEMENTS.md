@@ -479,6 +479,11 @@ changes during decoding is reported only as changed rather than corrupt.
 Collection roots and filenames remain hidden unless their relative display is
 explicitly requested.
 
+Validation content reads are descriptor-pinned beneath the resolved collection
+root. This closes the path-swap interval between a pre-read state check and a
+decoder open: symbolic-link substitutions cannot redirect Pillow or native
+tools to unrelated local content.
+
 Report:
 
 - unreadable or partially decodable media;

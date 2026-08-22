@@ -13,12 +13,15 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.2` report-only validation release. It is a
+`pymo` command, and has a `v0.3.3` report-only validation release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.2 separates validation discovery, video stream policy, execution,
+Version 0.3.3 pins validation classification and decoder reads to stable,
+no-follow file descriptors beneath the collection root, preventing concurrent
+pathname swaps from redirecting reads. Version 0.3.2 separates validation
+discovery, video stream policy, execution,
 and report options into typed stages without changing behavior. Version 0.3.1
 hardens validation path privacy, reports unreadable traversal,
 minimizes native-tool output, validates basic video stream fields, and ensures
@@ -394,7 +397,8 @@ command could not run safely. Animated or multi-page images are counted, not
 classified as corrupt. Unsupported recognized formats remain warnings rather
 than unverified claims of corruption. Unreadable subtrees are health errors,
 native-tool diagnostics are discarded, and concurrent changes supersede
-decoder conclusions.
+decoder conclusions. Pillow and native tools read inherited stable descriptors,
+not a pathname that can be redirected after preflight.
 
 ## Logging
 

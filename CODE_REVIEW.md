@@ -41,7 +41,7 @@ The same adversarial method was repeated after the first validation release.
 | VAL-004 | Medium | A decoder failure could be recorded before the final state check, mislabeling a concurrently replaced file as corrupt. | 0.3.1 | Resolved in ADR 0034 |
 | VAL-005 | Low | Video validation relied on an assertion for a runtime dependency and accepted video streams without checking their codec name or positive dimensions. | 0.3.1 | Resolved |
 | VAL-006 | Medium | Validation discovery and video inspection mixed traversal, classification, stream policy, decoding, and reporting through branch-heavy functions and long positional interfaces. | 0.3.2 | Resolved in ADR 0036 |
-| VAL-007 | High | Validation checks path state before and after content reads, but a hostile pathname swap could still redirect Pillow or a native tool to a symbolic link during the read itself. | 0.3.3 | Open |
+| VAL-007 | High | Validation checks path state before and after content reads, but a hostile pathname swap could still redirect Pillow or a native tool to a symbolic link during the read itself. | 0.3.3 | Resolved in ADR 0037 |
 
 ## Release groups
 
@@ -60,6 +60,8 @@ The same adversarial method was repeated after the first validation release.
   tool output, and make changed-file findings supersede decoder conclusions.
 - `0.3.2`: split validation discovery, stream policy, execution options, and
   report options into typed, independently reviewable stages.
+- `0.3.3`: pin classification and decoder reads to stable, descriptor-relative,
+  no-follow file handles beneath the collection root.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 

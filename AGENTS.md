@@ -55,6 +55,9 @@ never duplicate the version in source or static project metadata.
   caches, or action-logs media. Collection roots and filenames are private by
   default; filenames require explicit `--show-files`. An unreadable subtree is
   a health error, and changing input supersedes any decoder conclusion.
+- Keep validation content reads pinned to stable, collection-anchored,
+  descriptor-relative no-follow handles. Do not reintroduce pathname-based
+  decoder opens after a separate state check.
 
 ## Package layout and tools
 
@@ -157,7 +160,7 @@ action logs. Full FFmpeg decoding remains sequential until benchmarks justify
 bounded multi-process decoding; FFmpeg already uses internal threads and
 unmeasured concurrency can regress external-drive performance.
 
-Report-only validation is implemented and hardened through version 0.3.1. Any
+Report-only validation is implemented and hardened through version 0.3.3. Any
 future repair or quarantine behavior requires a separate ADR and
 dry-run/action-log design.
 Local AI naming remains optional future work only.

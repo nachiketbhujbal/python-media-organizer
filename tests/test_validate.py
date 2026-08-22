@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import errno
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -17,9 +18,14 @@ from pymo.config import load_config
 
 FFMPEG = shutil.which("ffmpeg")
 FFPROBE = shutil.which("ffprobe")
+FILE_COMMAND = shutil.which("file")
 requires_ffmpeg = pytest.mark.skipif(
     not FFMPEG or not FFPROBE,
     reason="real video validation requires ffmpeg and ffprobe",
+)
+requires_file_command = pytest.mark.skipif(
+    not FILE_COMMAND,
+    reason="descriptor-backed content classification requires the file utility",
 )
 
 
@@ -125,6 +131,22 @@ def test_validation_does_not_require_video_tools_for_images(
     assert validate.main([str(root)]) == 0
 
 
+@requires_file_command
+def test_discovery_classifies_unknown_extension_through_stable_descriptor(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    path = root / "unknown.data"
+    Image.new("RGB", (2, 2), "green").save(path, format="PNG")
+
+    discovery = validate.discover_candidates(root, load_config(root))
+
+    assert len(discovery.candidates) == 1
+    assert discovery.candidates[0].detected_kind == "picture"
+    assert discovery.candidates[0].extension_kind is None
+
+
 def test_validation_rejects_unsafe_worker_counts(tmp_path: Path, run_script) -> None:
     root = tmp_path / "media-collection"
     root.mkdir()
@@ -213,6 +235,7 @@ def test_video_change_takes_precedence_over_decoder_failure(
     path = tmp_path / "clip.mp4"
     path.write_bytes(b"original bytes")
     candidate = validate.MediaCandidate(
+        root=tmp_path,
         path=path,
         state=validate.FileState.capture(path),
         kind="video",
@@ -220,7 +243,7 @@ def test_video_change_takes_precedence_over_decoder_failure(
         detected_kind="video",
     )
 
-    def change_then_fail(_path: Path, _ffprobe: str) -> dict[str, Any]:
+    def change_then_fail(_descriptor: int, _ffprobe: str) -> dict[str, Any]:
         path.write_bytes(b"replacement bytes")
         raise validate.VideoInspectionError("synthetic decoder failure")
 
@@ -233,12 +256,53 @@ def test_video_change_takes_precedence_over_decoder_failure(
     ]
 
 
+def test_image_validation_reads_pinned_descriptor_during_path_swap(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    path = root / "picture.png"
+    Image.new("RGB", (2, 2), "green").save(path)
+    original_bytes = path.read_bytes()
+    outside = tmp_path / "outside.png"
+    Image.new("RGB", (2, 2), "blue").save(outside)
+    candidate = validate.MediaCandidate(
+        root=root,
+        path=path,
+        state=validate.FileState.capture(path),
+        kind="picture",
+        extension_kind="picture",
+        detected_kind="picture",
+    )
+    original_open = validate.Image.open
+    observed: list[bytes] = []
+
+    def swap_then_open(handle):
+        position = handle.tell()
+        handle.seek(0)
+        observed.append(handle.read())
+        handle.seek(position)
+        path.unlink()
+        path.symlink_to(outside)
+        return original_open(handle)
+
+    monkeypatch.setattr(validate.Image, "open", swap_then_open)
+
+    result = validate.validate_image(candidate, False)
+
+    assert observed == [original_bytes]
+    assert [finding.code for finding in result.findings] == [
+        "changed_during_validation"
+    ]
+
+
 def test_video_validation_reports_missing_codec_and_dimensions(
     tmp_path: Path, monkeypatch
 ) -> None:
     path = tmp_path / "clip.mp4"
     path.write_bytes(b"synthetic video")
     candidate = validate.MediaCandidate(
+        root=tmp_path,
         path=path,
         state=validate.FileState.capture(path),
         kind="video",
@@ -277,12 +341,17 @@ def test_video_probe_selects_metadata_and_discards_tool_diagnostics(
 
     monkeypatch.setattr(validate.subprocess, "run", completed)
 
-    payload = validate._probe_video(path, "ffprobe")
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        payload = validate._probe_video(descriptor, "ffprobe")
+    finally:
+        os.close(descriptor)
 
     assert payload == {"streams": [], "format": {}}
     assert "-show_entries" in observed["command"]
     assert observed["kwargs"]["stdout"] is subprocess.PIPE
     assert observed["kwargs"]["stderr"] is subprocess.DEVNULL
+    assert observed["kwargs"]["pass_fds"] == (descriptor,)
 
 
 @requires_ffmpeg
@@ -336,8 +405,10 @@ def test_validation_discovery_omits_a_changing_file(
     Image.new("RGB", (2, 2), "green").save(path)
     original_classify = validate.Classifier.classify
 
-    def classify_then_change(classifier, target: Path) -> tuple[str, str]:
-        result = original_classify(classifier, target)
+    def classify_then_change(
+        classifier, target: Path, descriptor: int | None = None
+    ) -> tuple[str, str]:
+        result = original_classify(classifier, target, descriptor)
         target.write_bytes(target.read_bytes() + b"changed")
         return result
 

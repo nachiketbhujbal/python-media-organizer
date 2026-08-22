@@ -2,6 +2,17 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.3 - 2026-08-22
+
+- Pin validation classification, Pillow, ffprobe, and FFmpeg reads to stable
+  regular-file descriptors beneath the resolved collection root.
+- Refuse symbolic links in every collection-relative parent component and
+  prevent pathname swaps from redirecting a decoder outside the collection.
+- Recheck both the open descriptor and its pathname after inspection, reporting
+  concurrent replacement as changed rather than corrupt.
+- Add adversarial final-file and parent-link tests while retaining real FFmpeg
+  integration coverage.
+
 ## 0.3.2 - 2026-08-22
 
 - Split validation directory filtering, file discovery, video stream policy,
