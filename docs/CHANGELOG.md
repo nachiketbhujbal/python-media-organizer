@@ -2,6 +2,18 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.7 - 2026-08-22
+
+- Limit automatic GitHub Actions runs to pull requests targeting `main` and
+  pushes to `main`, avoiding duplicate private-repository runs on ordinary
+  branch pushes and version tags.
+- Retain explicit manual workflow dispatch for deliberate pre-PR or tag
+  verification.
+- Cap every platform job at ten minutes so a stalled dependency or subprocess
+  cannot consume the private-repository allowance indefinitely.
+- Keep the full Ubuntu, Fedora, and macOS quality matrix on every automatic
+  pre-merge and post-merge run.
+
 ## 0.3.6 - 2026-08-22
 
 - Add a least-privilege GitHub Actions `quality` job for branch pushes, pull

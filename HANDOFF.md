@@ -13,12 +13,15 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.6` continuous-integration release. It is a
+`pymo` command, and has a `v0.3.7` Actions cost-control release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.6 adds a pinned GitHub Actions quality gate, adopts short-lived
+Version 0.3.7 limits automatic GitHub Actions runs to pull requests targeting
+`main` and pushes to `main`, retains deliberate manual dispatch, and caps each
+platform job at ten minutes while the repository is private. Version 0.3.6
+adds a pinned GitHub Actions quality gate, adopts short-lived
 branches with CI-verified merge boundaries, and streams descriptor-backed
 classification through portable `file` standard input rather than asking the
 utility to classify `/dev/fd`. The gate verifies Ubuntu, Fedora, and macOS
@@ -537,9 +540,12 @@ a repository-specific deploy key. Push commits or release tags only when the
 user explicitly approves that release. Confirm private collection data and
 generated state are absent before every commit.
 
-Ordinary changes now use one short-lived branch per cohesive release. Push the
-branch, pass the GitHub `quality` check, then merge and tag the verified mainline
-commit. The v0.3.6 workflow merge is the one-time bootstrap because the check
-cannot be required until the workflow exists on `main`. The deploy key supports
-Git transport but does not authenticate pull-request or repository-settings
-APIs; see `docs/CONTRIBUTING.md` for the safe sole-maintainer ruleset.
+Ordinary changes now use one short-lived branch and pull request per cohesive
+release. The pull request and resulting `main` push run all GitHub `quality`
+checks automatically; ordinary branch pushes and tags do not. Manual dispatch
+is available when pre-PR platform evidence is worth the private-repository
+Actions usage. The v0.3.6 workflow merge was the one-time bootstrap because the
+check could not be required until the workflow existed on `main`. GitHub CLI is
+authenticated for pull-request and Actions management; the repository deploy
+key remains the scoped Git transport credential. See `docs/CONTRIBUTING.md` for
+the safe sole-maintainer ruleset.

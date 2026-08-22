@@ -424,7 +424,10 @@ integration tests. Development-tool versions are resolved in `uv.lock`.
 Coverage is configured to include the real child-process CLI tests; the normal
 test command stays fast, while the coverage form is a release review gate.
 GitHub Actions runs the same locked quality, coverage, native-FFmpeg, and build
-gate on branches, pull requests, `main`, and release tags. See
+gate automatically for pull requests targeting `main` and pushes to `main`.
+Ordinary branch pushes and release tags do not repeat the matrix while the
+repository is private; manual dispatch remains available when an additional
+remote run is warranted. See
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for the branch and release
 workflow.
 
