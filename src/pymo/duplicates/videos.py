@@ -50,7 +50,11 @@ from pymo.config import (
     ignored_messages,
     load_config,
 )
-from pymo.discovery import DiscoveryError, list_directory_complete
+from pymo.discovery import (
+    DiscoveryError,
+    entry_kind_complete,
+    list_directory_complete,
+)
 from pymo.duplicates.common import (
     copy_target,
     describe_undo_action,
@@ -553,13 +557,14 @@ def discover_videos(
     videos: list[Path] = []
     ignored: list[Path] = []
     for path in list_directory_complete(vids):
-        if path.is_symlink():
+        entry_kind = entry_kind_complete(path)
+        if entry_kind == "symlink":
             continue
-        if path.is_dir():
+        if entry_kind == "directory":
             if config.ignores_directory(path, root):
                 ignored.append(path)
             continue
-        if not path.is_file():
+        if entry_kind != "file":
             continue
         if config.ignores_file(path, root):
             ignored.append(path)

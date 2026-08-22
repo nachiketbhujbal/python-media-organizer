@@ -206,9 +206,10 @@ requires a separate ADR and reversible dry-run/action-log design. Local AI
 naming remains optional future work only. Version 0.4.0 hardens corruption-
 tolerant discovery and validation guidance; corrupt or unsupported media remain
 visible findings and never become automatic ignore configuration. Version
-0.4.1 requires complete filesystem discovery for mutation planning,
-undo simulation, duplicate analysis, and organizer verification. Versions
-0.4.2 through 0.4.11 build the shared derived-cache foundation, including
+0.4.1 requires complete filesystem traversal and version 0.4.2 requires every
+enumerated entry to remain inspectable for mutation planning, undo simulation,
+duplicate analysis, and organizer verification. Versions 0.4.3 through 0.4.12
+build the shared derived-cache foundation, including
 separation between the analyzed media root and the writable cache location.
 Version 0.5 then adds directional, report-only migration verification. It must
 never write to the source and must distinguish byte preservation from exact

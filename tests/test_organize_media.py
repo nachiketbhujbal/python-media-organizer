@@ -87,6 +87,26 @@ def test_organizer_refuses_incomplete_discovery_before_apply(
     assert not action_log_path(tmp_path).exists()
 
 
+def test_organizer_refuses_an_enumerated_entry_that_no_longer_resolves(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source = tmp_path / "photo.png"
+    Image.new("RGB", (2, 2), "blue").save(source)
+
+    def ghost_walk(_root: Path, *, topdown: bool, onerror):
+        assert topdown
+        assert onerror is not None
+        yield str(tmp_path), [], [source.name, "vanished.jpg"]
+
+    monkeypatch.setattr(discovery.os, "walk", ghost_walk)
+
+    assert organize.main([str(tmp_path), "--apply"]) == 1
+    assert source.is_file()
+    assert not (tmp_path / "pics").exists()
+    assert not (tmp_path / "vids").exists()
+    assert not action_log_path(tmp_path).exists()
+
+
 def test_organizer_apply_and_undo_restore_exact_structure(
     tmp_path: Path, run_script
 ) -> None:

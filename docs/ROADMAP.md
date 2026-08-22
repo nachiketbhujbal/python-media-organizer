@@ -85,16 +85,17 @@ file, or action log on a source being preserved.
 | --- | --- | --- | --- |
 | 0.4.0 | Corruption-tolerant evidence | Make scan report directory traversal failures instead of silently omitting them, keep per-file decode failures as validation findings without aborting the collection, recommend validation before mutation, and prove through synthetic plus local acceptance tests that corrupt, unreadable, changing, unsupported, and mismatched media remain visible rather than becoming automatic ignore rules. | Released |
 | 0.4.1 | Complete filesystem discovery | Require complete recursive enumeration before organization, renaming, or undo planning; require complete flat enumeration before duplicate analysis; and fail safely without creating state when the namespace cannot be read completely. | Released |
-| 0.4.2 | Shared cache core | Versioned schema, file identity, algorithm/runtime keys, migrations, and reusable service interfaces. | Planned |
-| 0.4.3 | Cache status | Read-only cache health, coverage, version, and stale-record reporting. | Planned |
-| 0.4.4 | Video cache warm | Explicitly precompute exact-video fingerprints without running duplicate planning. | Planned |
-| 0.4.5 | Stable hashes | Reuse carefully keyed whole-file SHA records while rechecking content before an exact move. | Planned |
-| 0.4.6 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. | Planned |
-| 0.4.7 | Image fingerprint cache | Persist deterministic displayed-pixel image fingerprints for safe rescans. | Planned |
-| 0.4.8 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. | Planned |
-| 0.4.9 | Validation evidence | Record validation profile, result, file identity, runtime/tool versions, and completion time as disposable history without allowing an old healthy result to satisfy a fresh full validation. | Planned |
-| 0.4.10 | Explicit cached validation | Offer an explicitly named cache-assisted validation mode for unchanged files while retaining fresh reads as the default contract of `validate --full`. | Planned |
-| 0.4.11 | Targeted cache refresh | Recompute selected validation or fingerprint records without deleting unrelated cache evidence; reserve `--no-cache` for disabling both cache reads and writes. | Planned |
+| 0.4.2 | Entry-level discovery integrity | Require every enumerated name to resolve through no-follow metadata inspection, reject entries that disappear or change category during a walk, and prove that mutating planners create no state from a ghost directory entry. | Released |
+| 0.4.3 | Shared cache core | Versioned schema, file identity, algorithm/runtime keys, migrations, and reusable service interfaces. | Planned |
+| 0.4.4 | Cache status | Read-only cache health, coverage, version, and stale-record reporting. | Planned |
+| 0.4.5 | Video cache warm | Explicitly precompute exact-video fingerprints without running duplicate planning. | Planned |
+| 0.4.6 | Stable hashes | Reuse carefully keyed whole-file SHA records while rechecking content before an exact move. | Planned |
+| 0.4.7 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. | Planned |
+| 0.4.8 | Image fingerprint cache | Persist deterministic displayed-pixel image fingerprints for safe rescans. | Planned |
+| 0.4.9 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. | Planned |
+| 0.4.10 | Validation evidence | Record validation profile, result, file identity, runtime/tool versions, and completion time as disposable history without allowing an old healthy result to satisfy a fresh full validation. | Planned |
+| 0.4.11 | Explicit cached validation | Offer an explicitly named cache-assisted validation mode for unchanged files while retaining fresh reads as the default contract of `validate --full`. | Planned |
+| 0.4.12 | Targeted cache refresh | Recompute selected validation or fingerprint records without deleting unrelated cache evidence; reserve `--no-cache` for disabling both cache reads and writes. | Planned |
 
 Cache reuse is incremental: new or changed files add or replace only their own
 derived records. Unchanged records survive collection growth. No scan command
@@ -122,7 +123,7 @@ and never writes derived state to `SOURCE`.
 
 | Version | Primary purpose | Intended result |
 | --- | --- | --- |
-| 0.5.0 | Directional byte coverage | Inventory two stable namespace-visible trees and prove whether every readable unique source byte stream has an exact SHA-backed representative in the destination, independent of paths and filenames. Report missing, extra, duplicate-count, traversal-failure, unreadable, changing, and storage facts with a machine-readable schema and health-style exit status. |
+| 0.5.0 | Directional byte coverage | Inventory two stable namespace-visible trees and prove whether every readable unique source byte stream has an exact SHA-backed representative in the destination, independent of paths and filenames. Report missing, extra, duplicate-count, traversal-failure, unreadable, changing, policy-excluded, and storage facts with a machine-readable schema and health-style exit status. |
 | 0.5.1 | Image-content coverage | Account separately for source pictures represented by the existing exact displayed-pixel definition when a byte-identical representative is absent, without describing metadata or container bytes as preserved. |
 | 0.5.2 | Video-content coverage | Account separately for source videos represented by the existing strict decoded-playback definition when a byte-identical representative is absent, retaining all conservative unsupported-case boundaries. |
 | 0.5.3 | Preservation verdict hardening | Combine byte and declared media-equivalence layers into an explicit evidence report, exercise interrupted and changing-source cases, reuse only validated cache evidence, and reserve a complete-success verdict for runs with no unreadable, unstable, unsupported, or unaccounted source entry. |
@@ -138,6 +139,12 @@ File-level verification cannot discover orphaned allocations or entries hidden
 by filesystem corruption. It must describe its scope as namespace-visible
 content and preserve recovery-tool evidence as a separate prerequisite rather
 than claiming whole-device completeness.
+
+Every report must also make its ignore and exclusion policy explicit, count
+excluded entry points, and state that its verdict is relative to that declared
+collection scope. A system-managed or intentionally ignored tree is not
+silently reclassified as inspected or preserved merely because it is outside
+normal media processing.
 
 This subsystem verifies an already performed rescue or copy. A future
 `pymo migrate` orchestration command remains separate because copying from

@@ -22,10 +22,12 @@ Use pymo on a healthy working copy; retain an unchanged baseline until the
 planned verification workflow—or an independently trusted equivalent—accounts
 for the source content.
 
-Mutation planning and undo require complete filesystem enumeration. If a
-directory cannot be read completely, pymo stops before creating action state or
-moving media; report-only scan and validation instead preserve the problem as
-a visible health finding while continuing over readable neighbors.
+Mutation planning and undo require complete filesystem enumeration plus
+successful no-follow metadata inspection of every returned name. If a
+directory or enumerated entry cannot be read completely, pymo stops before
+creating action state or moving media; report-only scan and validation instead
+preserve the problem as a visible health finding while continuing over readable
+neighbors.
 
 ## Requirements and installation
 

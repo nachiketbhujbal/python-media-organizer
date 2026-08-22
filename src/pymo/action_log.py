@@ -21,7 +21,7 @@ from pathlib import Path, PurePosixPath
 from typing import TextIO, cast
 
 from pymo.collection import CollectionLayout
-from pymo.discovery import walk_complete
+from pymo.discovery import walk_complete, walk_entry_kind_complete
 
 # This constant identifies the current on-disk journal schema and must remain
 # stable while collection-named action histories use it.
@@ -904,17 +904,18 @@ class ActionLog:
         result: dict[str, str] = {}
         for current, directory_names, file_names in walk_complete(self.root):
             current_path = Path(current)
-            for name in directory_names + file_names:
+            for name in directory_names:
                 path = current_path / name
                 relative = path.relative_to(self.root).as_posix()
-                if path.is_symlink():
-                    result[relative] = "symlink"
-                elif path.is_dir():
-                    result[relative] = "directory"
-                elif path.is_file():
-                    result[relative] = "file"
-                else:
-                    result[relative] = "other"
+                result[relative] = walk_entry_kind_complete(
+                    path, listed_as_directory=True
+                )
+            for name in file_names:
+                path = current_path / name
+                relative = path.relative_to(self.root).as_posix()
+                result[relative] = walk_entry_kind_complete(
+                    path, listed_as_directory=False
+                )
         return result
 
     def _simulate(self, actions: list[Action]) -> None:

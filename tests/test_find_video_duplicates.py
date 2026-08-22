@@ -15,6 +15,7 @@ from pymo.action_log import action_log_path
 from pymo.collection import CollectionLayout
 from pymo.config import load_config
 from pymo.discovery import DiscoveryError
+from pymo.duplicates import common as duplicate_common
 from pymo.duplicates import videos as video_duplicates
 from pymo.duplicates.videos import ProbeInfo
 from pymo.organize import Classifier
@@ -1082,6 +1083,30 @@ def test_video_discovery_failure_creates_no_cache_or_action_state(
 
     assert video_duplicates.main([str(tmp_path), "--apply"]) == 1
     assert (vids / "clip.mp4").is_file()
+    assert not (tmp_path / "dups").exists()
+    assert not action_log_path(tmp_path).exists()
+    assert not (tmp_path / ".pymo.sqlite3").exists()
+
+
+def test_video_ghost_entry_creates_no_cache_or_action_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vids = tmp_path / "vids"
+    vids.mkdir()
+    source = vids / "clip.mp4"
+    source.write_bytes(b"synthetic video")
+
+    monkeypatch.setattr(
+        duplicate_common, "list_directory_complete", lambda _path: (source,)
+    )
+    monkeypatch.setattr(
+        video_duplicates,
+        "list_directory_complete",
+        lambda _path: (source, vids / "vanished.mp4"),
+    )
+
+    assert video_duplicates.main([str(tmp_path), "--apply"]) == 1
+    assert source.is_file()
     assert not (tmp_path / "dups").exists()
     assert not action_log_path(tmp_path).exists()
     assert not (tmp_path / ".pymo.sqlite3").exists()

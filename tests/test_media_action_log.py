@@ -133,6 +133,35 @@ def test_undo_planning_refuses_an_incomplete_collection_snapshot(
     assert action_log_path(tmp_path).read_bytes() == before
 
 
+def test_undo_planning_refuses_an_enumerated_ghost_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source.bin"
+    destination = tmp_path / "destination.bin"
+    source.write_bytes(b"stable content")
+    log = ActionLog(tmp_path)
+    with log.transaction("rename_media") as transaction:
+        transaction.perform(Action.for_file(tmp_path, source, destination, "RENAME"))
+        transaction.commit()
+    before = action_log_path(tmp_path).read_bytes()
+
+    def ghost_walk(_root: Path, *, topdown: bool, onerror):
+        assert topdown
+        assert onerror is not None
+        yield str(tmp_path), [], [
+            destination.name,
+            action_log_path(tmp_path).name,
+            "vanished.bin",
+        ]
+
+    monkeypatch.setattr(discovery.os, "walk", ghost_walk)
+
+    with pytest.raises(OSError, match="filesystem discovery was incomplete"):
+        log.plan_undo("rename_media")
+    assert destination.read_bytes() == b"stable content"
+    assert action_log_path(tmp_path).read_bytes() == before
+
+
 def test_same_size_content_change_blocks_undo(tmp_path: Path) -> None:
     source = tmp_path / "source.bin"
     destination = tmp_path / "destination.bin"
