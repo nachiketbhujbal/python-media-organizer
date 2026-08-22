@@ -402,6 +402,34 @@ def read_derived_evidence(
     return [DerivedEvidence(*row) for row in rows]
 
 
+def read_all_derived_evidence(
+    connection: sqlite3.Connection,
+) -> list[DerivedEvidence]:
+    """Read all validated evidence namespaces from a current cache."""
+
+    validate_current_schema(connection)
+    rows = connection.execute(
+        "SELECT file_sha256, evidence_type, algorithm, runtime, payload_json "
+        "FROM derived_evidence "
+        "ORDER BY file_sha256, evidence_type, algorithm, runtime"
+    ).fetchall()
+    return [DerivedEvidence(*row) for row in rows]
+
+
+def read_file_observations(
+    connection: sqlite3.Connection,
+) -> list[FileObservation]:
+    """Read all validated file observations from a current cache."""
+
+    validate_current_schema(connection)
+    rows = connection.execute(
+        "SELECT scope, relative_path, device, inode, size, modified_ns, "
+        "changed_ns, byte_sha256 FROM file_observations "
+        "ORDER BY scope, relative_path"
+    ).fetchall()
+    return [FileObservation(*row) for row in rows]
+
+
 def upsert_derived_evidence(
     connection: sqlite3.Connection, records: Iterable[DerivedEvidence]
 ) -> None:
@@ -730,3 +758,99 @@ def create_cache_stage(directory_descriptor: int) -> tuple[str, int]:
             ) from error
         return name, descriptor
     raise CacheError("cannot allocate a unique SQLite cache staging file")
+
+
+@dataclass(frozen=True)
+class CacheSnapshot:
+    """One descriptor-pinned, read-only view of a public cache database."""
+
+    connection: sqlite3.Connection
+    state: CacheEntryState
+
+
+@contextmanager
+def read_cache_snapshot(database: Path) -> Iterator[CacheSnapshot | None]:
+    """Read a cache without creating a lock, sidecar, directory, or database.
+
+    A concurrent atomic publisher may replace the public pathname while this
+    descriptor remains a safe snapshot. Such a change is reported on context
+    exit rather than silently presenting the snapshot as current.
+    """
+
+    if database.name in {"", ".", ".."}:
+        raise CacheError("unexpected SQLite cache path")
+    directory = database.parent
+    directory_flags = (
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    )
+    directory_descriptor: int | None = None
+    cache_descriptor: int | None = None
+    connection: sqlite3.Connection | None = None
+    try:
+        try:
+            directory_descriptor = os.open(directory, directory_flags)
+        except FileNotFoundError:
+            yield None
+            return
+        except OSError as error:
+            raise CacheError("cannot open the SQLite cache directory safely") from error
+        directory_state = os.fstat(directory_descriptor)
+        if not stat.S_ISDIR(directory_state.st_mode):
+            raise CacheError("SQLite cache parent is not a directory")
+
+        def require_directory_current() -> None:
+            try:
+                current = os.stat(directory, follow_symlinks=False)
+            except OSError as error:
+                raise CacheError(
+                    "SQLite cache directory changed during status inspection"
+                ) from error
+            if (
+                not stat.S_ISDIR(current.st_mode)
+                or current.st_dev != directory_state.st_dev
+                or current.st_ino != directory_state.st_ino
+            ):
+                raise CacheError(
+                    "SQLite cache directory changed during status inspection"
+                )
+
+        require_directory_current()
+        entry_state = cache_entry_at(
+            directory_descriptor, database.name, "SQLite cache"
+        )
+        if entry_state is None:
+            yield None
+            require_directory_current()
+            if (
+                cache_entry_at(directory_descriptor, database.name, "SQLite cache")
+                is not None
+            ):
+                raise CacheError("SQLite cache changed during status inspection")
+            return
+
+        cache_descriptor = open_cache_entry(
+            directory_descriptor, database.name, entry_state
+        )
+        connection = connect_cache_descriptor(cache_descriptor, read_only=True)
+        connection.execute("PRAGMA query_only=ON")
+        try:
+            yield CacheSnapshot(connection=connection, state=entry_state)
+        finally:
+            connection.close()
+            connection = None
+            require_cache_entry(
+                directory_descriptor,
+                database.name,
+                entry_state,
+                "SQLite cache",
+            )
+            require_directory_current()
+    except sqlite3.Error as error:
+        raise CacheError("cannot read the SQLite cache") from error
+    finally:
+        if connection is not None:
+            connection.close()
+        if cache_descriptor is not None:
+            os.close(cache_descriptor)
+        if directory_descriptor is not None:
+            os.close(directory_descriptor)

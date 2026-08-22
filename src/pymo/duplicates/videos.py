@@ -610,7 +610,7 @@ def derive_fingerprint(
     )
 
 
-def _decode_video_evidence(
+def decode_video_evidence(
     records: list[cache_service.DerivedEvidence],
 ) -> dict[str, DerivedFingerprint]:
     decoded: dict[str, DerivedFingerprint] = {}
@@ -673,7 +673,7 @@ def _load_video_evidence(
         )
     else:
         raise VideoInspectionError("SQLite fingerprint cache has no schema")
-    return _decode_video_evidence(records)
+    return decode_video_evidence(records)
 
 
 def load_cached_fingerprints(

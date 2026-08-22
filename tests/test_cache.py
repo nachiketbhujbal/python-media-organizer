@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from pymo import cache as cache_service
 from pymo.cache import (
     LEGACY_VIDEO_EVIDENCE_TYPE,
     SCHEMA_VERSION,
@@ -82,6 +83,28 @@ def test_cache_stage_is_private_and_created_in_the_pinned_directory(
             os.unlink(name, dir_fd=locked.descriptor)
 
     assert not list(tmp_path.glob(".pymo.sqlite3.new.*"))
+
+
+def test_read_only_snapshot_detects_atomic_path_replacement(tmp_path: Path) -> None:
+    database = tmp_path / "cache.sqlite3"
+    replacement = tmp_path / "replacement.sqlite3"
+    connection = sqlite3.connect(database)
+    initialize_schema(connection)
+    connection.close()
+    connection = sqlite3.connect(replacement)
+    initialize_schema(connection)
+    connection.close()
+    displaced = tmp_path / "displaced.sqlite3"
+
+    with pytest.raises(CacheError, match="changed during"):
+        with cache_service.read_cache_snapshot(database) as snapshot:
+            assert snapshot is not None
+            assert detect_schema(snapshot.connection) == "current"
+            database.rename(displaced)
+            replacement.rename(database)
+
+    assert displaced.is_file()
+    assert database.is_file()
 
 
 def test_current_schema_records_versioned_evidence_and_file_identity() -> None:
