@@ -11,6 +11,7 @@ it belongs to.
 ## Requirements and installation
 
 - Python 3.11 or newer
+- uv 0.12 or newer for the reproducible development workflow
 - Pillow, installed from `pyproject.toml`
 - FFmpeg and ffprobe for exact video duplicate detection
 - pytest only for development and testing
@@ -19,15 +20,22 @@ On macOS, FFmpeg can be installed with Homebrew:
 
 ```bash
 brew install ffmpeg
+brew install uv
 ```
 
-Create an isolated project environment and install the package:
+Clone the repository, then create the locked development environment and run
+the command:
 
 ```bash
-python3.11 -m venv .venv
-.venv/bin/python -m pip install -e '.[dev]'
-.venv/bin/pymo --version
+uv sync --locked
+uv run pymo --version
 ```
+
+uv creates and maintains the project `.venv` automatically. To install a
+snapshot of the command outside the development environment, run
+`uv tool install .` from the repository. The package is not published to PyPI
+yet. Standard tools remain compatible: `python -m pip install .` installs a
+local checkout because the build metadata follows PyPA standards.
 
 FFmpeg is intentionally an explicit system dependency. A Python wrapper would
 still require a native binary while making its provenance and updates less
@@ -192,7 +200,8 @@ file is created by default. Global logging options go before the subcommand.
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest
+uv run --locked pytest
+uv build
 ```
 
 The suite uses temporary synthetic collections and tiny locally generated video
@@ -202,6 +211,15 @@ different audio and timing, corrupt/ambiguous media, derived cache behavior,
 logging privacy, and the guarantee that video decoding never invokes capture
 devices. Private collections and their names are not fixtures or repository
 content.
+
+## Versions and releases
+
+Git tags are the authoritative release version. Hatchling builds the package,
+and hatch-vcs derives the Python package version from tags such as `v0.1.1`;
+there is no second version string to update by hand. Untagged development
+commits receive a PEP 440 development version containing their Git revision.
+uv manages the environment and `uv.lock`, while ordinary standards-compatible
+installers can still build and install the package.
 
 ## Roadmap and research
 

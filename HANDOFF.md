@@ -13,8 +13,9 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and starts at version `0.1.0`. It is a deliberately local-first
-tool for personal media collections.
+`pymo` command, and has a `v0.1.1` packaging release. It is a deliberately
+local-first tool for personal media collections. Git tags are the authoritative
+version source; package code and `[project]` do not contain a static version.
 
 Hard requirements:
 
@@ -29,7 +30,8 @@ Hard requirements:
 6. All content processing stays local. There is no telemetry, cloud service,
    hosted AI, or automatic download behavior.
 7. Persistent logs require an explicit `--log-file` path.
-8. Python dependencies belong in `pyproject.toml` and development uses `.venv`.
+8. Python dependencies belong in `pyproject.toml`; uv owns the lockfile and
+   development `.venv`.
 9. Collection folders follow the four-character `pics`, `vids`, and `dups`
    convention.
 10. Repository text and tests use generic synthetic collections only.
@@ -227,7 +229,14 @@ Machine-readable result output is separate future work.
 ## Dependencies and environment
 
 Python 3.11 or newer is required. Runtime dependency: Pillow. Development
-dependency: pytest. Both are declared in `pyproject.toml`.
+dependency: pytest. Both are declared in `pyproject.toml`, and exact development
+resolutions are committed in `uv.lock`.
+
+uv 0.12 or newer manages Python selection, the project `.venv`, dependency
+locking, command execution, and builds. Hatchling is the PEP 517 build backend;
+hatch-vcs derives PEP 440 package versions from Git tags. The runtime version
+comes from installed distribution metadata through `importlib.metadata`.
+Neither uv nor Hatch is required to run an already installed wheel.
 
 FFmpeg/ffprobe remain external runtime dependencies to keep native binary
 origin, licensing, and updates explicit. The current development machine has a
@@ -237,10 +246,10 @@ the executables are absent.
 Setup and verification:
 
 ```bash
-python3.11 -m venv .venv
-.venv/bin/python -m pip install -e '.[dev]'
-.venv/bin/python -m pytest
-.venv/bin/pymo --version
+uv sync --locked
+uv run pymo --version
+uv run --locked pytest
+uv build
 ```
 
 ## Test coverage state
@@ -262,7 +271,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   cache/sidecar behavior, cross-tool undo dependencies, missing runtime errors,
   and local-file-only/no-capture command construction;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
-  and quiet mode.
+  and quiet mode;
+- dynamic package metadata, runtime/distribution version agreement, and the
+  selected Hatchling plus hatch-vcs configuration.
 
 Run the complete suite after every change. Do not replace real FFmpeg
 integration coverage with mocks alone.
@@ -290,7 +301,9 @@ Near-term roadmap:
 
 ## Git policy
 
-This project uses a local Git repository with concise one-line commits. No
-remote is configured and nothing should be pushed until the user supplies and
-explicitly approves a personal remote. Confirm private collection data and
+This project uses concise one-line commits authored as `nachiketbhujbal` with
+the account-specific GitHub no-reply address. `origin` is the approved personal
+repository at `git@github.com:nachiketbhujbal/python-media-organizer.git`, using
+a repository-specific deploy key. Push commits or release tags only when the
+user explicitly approves that release. Confirm private collection data and
 generated state are absent before every commit.

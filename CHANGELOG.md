@@ -2,6 +2,17 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.1.1 - 2026-08-21
+
+- Adopt uv for reproducible environments, dependency locking, tests, and
+  builds.
+- Replace the static Setuptools version with Hatchling and Git-tag-derived
+  hatch-vcs versioning.
+- Read the runtime version from installed package metadata and test that it
+  matches the distribution.
+- Document the standards-compatible installation, development, build, and
+  release workflow.
+
 ## 0.1.0 - 2026-08-21
 
 - Package the organizer, deterministic renamer, and exact duplicate finders

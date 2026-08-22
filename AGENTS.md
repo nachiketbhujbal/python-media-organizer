@@ -2,7 +2,8 @@
 
 This is the durable, local-first Python project for safe media collection
 organization. The package is `python-media-organizer`, its import package is
-`pymo`, and its CLI command is `pymo`. The current version is `0.1.0`.
+`pymo`, and its CLI command is `pymo`. Release versions come from Git tags;
+never duplicate the version in source or static project metadata.
 
 ## Start here
 
@@ -60,8 +61,13 @@ report-only future work and must never silently enter the exact move path.
 
 ## Development workflow
 
-- Manage Python and development dependencies in `pyproject.toml`.
-- Use the project `.venv`; Python 3.11 or newer is required.
+- Use uv 0.12 or newer for Python environments, dependency resolution, locking,
+  command execution, and builds. Commit `uv.lock`.
+- Use Hatchling as the build backend and hatch-vcs for Git-tag-derived dynamic
+  versions. Keep standard PEP 621 metadata so pip remains compatible.
+- Manage Python and development dependencies in `pyproject.toml`; do not add
+  requirements files.
+- Let uv manage the project `.venv`; Python 3.11 or newer is required.
 - Keep FFmpeg/ffprobe as explicit native runtime dependencies rather than
   hiding them behind a Python wrapper.
 - Add or update pytest coverage with every behavior change. Use temporary,
@@ -72,7 +78,8 @@ report-only future work and must never silently enter the exact move path.
 - Keep `README.md`, `HANDOFF.md`, and `RESEARCH_IMPROVEMENTS.md` current when a
   decision changes their claims.
 - Maintain local Git history with concise one-line commits. Do not configure a
-  remote or push until the user explicitly provides and approves one.
+  new remote or push a release without explicit user approval. The approved
+  `origin` is the personal GitHub repository recorded in `HANDOFF.md`.
 
 ## Current roadmap
 

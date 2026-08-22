@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from importlib.metadata import version
 from pathlib import Path
 
 
@@ -29,7 +30,7 @@ def test_cli_reports_package_version() -> None:
     result = run_pymo("--version")
 
     assert result.returncode == 0
-    assert result.stdout.strip() == "pymo 0.1.0"
+    assert result.stdout.strip() == f"pymo {version('python-media-organizer')}"
     assert result.stderr == ""
 
 

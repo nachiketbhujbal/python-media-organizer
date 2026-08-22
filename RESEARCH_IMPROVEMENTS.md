@@ -685,6 +685,19 @@ The `pymo` command should provide focused subcommands while internal modules
 remain reusable and independently tested. Action-log tool identities and schema
 must remain compatible with existing collections during the transition.
 
+The selected packaging toolchain separates standardized responsibilities:
+
+- uv 0.12 or newer manages Python, `.venv`, dependencies, `uv.lock`, command
+  execution, and build orchestration;
+- Hatchling is the PEP 517 build backend;
+- hatch-vcs derives PEP 440 package versions from Git release tags;
+- standard PEP 621 `[project]` metadata preserves compatibility with pip and
+  other build frontends.
+
+This avoids a manager-specific package format. The committed uv lockfile makes
+development and tests reproducible, but downstream installers continue to
+resolve the package's declared runtime requirements normally.
+
 ### Logging design
 
 Use Python's standard `logging` package throughout the packaged application.
@@ -704,12 +717,12 @@ Use Python's standard `logging` package throughout the packaged application.
 
 ### Native video runtime
 
-Python dependencies such as Pillow and pytest live in the project virtual
-environment. FFmpeg and ffprobe are native executables and should remain an
-explicit external runtime dependency. A pip-installed Python wrapper does not
-remove that requirement, while packages that silently bundle FFmpeg add binary
-provenance, platform, licensing, and update concerns. Prefer a known system
-installation and record its version in derived fingerprint-cache keys.
+Python dependencies such as Pillow and pytest live in the uv-managed project
+virtual environment. FFmpeg and ffprobe are native executables and should
+remain an explicit external runtime dependency. A pip-installed Python wrapper
+does not remove that requirement, while packages that silently bundle FFmpeg
+add binary provenance, platform, licensing, and update concerns. Prefer a known
+system installation and record its version in derived fingerprint-cache keys.
 
 ## Licensing guidance
 
@@ -750,7 +763,7 @@ installation and record its version in derived fingerprint-cache keys.
 ## Near-term implementation order
 
 Strict duplicate-finder ownership, deterministic exact video duplicate
-detection, and the `python-media-organizer` `0.1.0` package structure are now
+detection, and the version `0.1.1` uv/Hatchling package structure are now
 implemented and covered by tests. The remaining order is:
 
 1. Add `pymo scan` and local collection statistics.
