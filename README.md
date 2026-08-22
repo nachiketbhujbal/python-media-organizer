@@ -8,6 +8,20 @@ existing file, and does not include telemetry, cloud services, hosted AI, or
 automatic uploads. Every applied file operation is recorded in the collection
 it belongs to.
 
+The broader product goal is safe media preservation during collection moves
+between local storage devices. Organization, deterministic naming, validation,
+and duplicate isolation are steps toward proving that readable source content
+remains represented after paths change and redundant copies are reviewed. The
+current release does not copy drives or certify a migration; a directional,
+read-only migration-verification command is promoted in the roadmap ahead of
+optional metadata, similarity, and local-AI features.
+
+pymo is not a failing-drive recovery utility. Do not postpone making a
+recovery-grade copy of readable data while waiting for a future pymo release.
+Use pymo on a healthy working copy; retain an unchanged baseline until the
+planned verification workflow—or an independently trusted equivalent—accounts
+for the source content.
+
 ## Requirements and installation
 
 - Python 3.11 or newer
@@ -186,8 +200,9 @@ same-size duplicate candidates; estimated expensive work; existing local pymo
 state; and recommended next steps.
 
 Recommendations form an ordered plan rather than only naming the next command.
-When layout and filenames both need work, `scan` recommends `organize` first
-and `rename` second, followed by the applicable exact-duplicate finders.
+`scan` recommends report-only `validate` before any mutating command. When
+layout and filenames both need work, it then recommends `organize` before
+`rename`, followed by the applicable exact-duplicate finders.
 
 Same-size candidates are only an upper bound, not duplicate proof.
 `--checksums` additionally hashes those candidates to report exact-byte copies
@@ -202,7 +217,9 @@ Discovery, classification, and checksumming use stable regular-file snapshots.
 If a file changes during the run, it is omitted instead of combining old and
 new facts. Text and JSON reports include an aggregate `changed_entries` count
 and path-private warning; rerun after other writers become idle for a complete
-snapshot.
+snapshot. Directory traversal failures are counted and warned about rather than
+silently omitted; run `validate --show-files` when collection-relative finding
+paths are needed.
 
 ### Validate collection health
 
@@ -223,8 +240,11 @@ Reports cover empty and invalid media, unreadable or changing entries,
 extension/content mismatches, unsupported recognized image formats, video
 stream layouts, missing codec names or dimensions, extra streams, and
 missing/invalid duration. Unreadable subtrees make the report unhealthy rather
-than being silently omitted. Animated and multi-page images are counted as
-valid characteristics rather than corruption.
+than being silently omitted. A damaged file becomes a finding without aborting
+validation of its healthy neighbors. Unsupported media remains explicitly
+unverified and visible as a warning; pymo never converts a health finding into
+an ignore rule. Animated and multi-page images are counted as valid
+characteristics rather than corruption.
 
 Classification and decoding use stable, no-follow file descriptors anchored
 beneath the resolved collection root. If a file or parent path is replaced
@@ -393,15 +413,18 @@ For a mixed collection, preview and then apply:
 
 ```bash
 pymo scan "/path/to/media-collection"
+pymo validate "/path/to/media-collection"
 pymo organize "/path/to/media-collection" --apply
 pymo rename "/path/to/media-collection" --apply
 pymo find-image-duplicates "/path/to/media-collection" --apply
 pymo find-video-duplicates "/path/to/media-collection" --apply
 ```
 
-Image and video duplicate scans are independent and may run in either order.
-Undo dependent changes in reverse order. The action log refuses an earlier undo
-when a later active operation touched the same files or paths.
+Resolve or consciously account for validation errors before applying changes;
+use `validate --full` when complete local decoding is warranted. Image and
+video duplicate scans are independent and may run in either order. Undo
+dependent changes in reverse order. The action log refuses an earlier undo when
+a later active operation touched the same files or paths.
 
 ## Action history and undo
 
@@ -518,11 +541,13 @@ installers can still build and install the package.
 
 ## Roadmap and research
 
-`pymo scan COLLECTION` provides the fast local overview and
-`pymo validate COLLECTION` provides report-only health checks. The next
-promoted subsystem is the version 0.4 shared cache foundation; richer metadata
-and comparison tooling remain later roadmap or research work. Full video
-decoding remains sequential until representative
+`pymo scan COLLECTION` provides the fast local overview and recommends
+`pymo validate COLLECTION` before mutation. Version 0.4 begins with
+corruption-tolerant discovery and then builds the shared cache foundation,
+followed by directional migration verification. Corrupt, unreadable, changing,
+unsupported, and mismatched media remain visible findings rather than automatic
+ignore rules. Richer metadata and similarity tooling remain later roadmap or
+research work. Full video decoding remains sequential until representative
 benchmarks show that bounded process concurrency improves real external-drive
 workloads without increasing contention or reducing safety.
 

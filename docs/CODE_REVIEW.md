@@ -48,6 +48,8 @@ The same adversarial method was repeated after the first validation release.
 | ID | Severity | Finding | Resolution target | Status |
 | --- | --- | --- | --- | --- |
 | SCAN-001 | Low | Scan counted non-canonical media names but suppressed rename advice whenever organization was also needed, even though it continued to show later duplicate-finder recommendations. | 0.3.5 | Resolved in ADR 0040 |
+| SCAN-002 | Medium | Scan does not pass an error callback to recursive traversal, so an unreadable or corrupt subtree can be silently omitted while the inventory appears complete even though validation reports the equivalent failure. | 0.4.0 | Resolved in ADR 0058 |
+| SCAN-003 | Low | Scan's ordered recommendations omit report-only validation, allowing organization and renaming advice to precede an explicit health check in a preservation-first workflow. | 0.4.0 | Resolved in ADR 0058 |
 
 ## CI portability findings
 
@@ -145,6 +147,9 @@ The same adversarial method was repeated after the first validation release.
   affecting structured JSON.
 - `0.3.19`: reconcile the roadmap's retained release ledger and repository
   next-work guidance with the completed 0.3 stabilization.
+- `0.4.0`: surface scan traversal failures, recommend validation before
+  mutation, and prove corrupt or unsupported media remain visible findings
+  without becoming automatic ignore policy.
 
 ## Independent review evidence
 
