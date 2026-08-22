@@ -8,7 +8,7 @@ import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from pymo import __version__, organize, rename, scan
+from pymo import __version__, organize, rename, scan, validate
 from pymo.config import add_show_ignored_argument
 from pymo.duplicates import images, videos
 from pymo.logging_config import configure_logging
@@ -19,6 +19,7 @@ def _commands() -> dict[str, Callable[[Sequence[str] | None], int]]:
     """Build the small dispatch table without mutable module-level state."""
     return {
         "scan": scan.main,
+        "validate": validate.main,
         "organize": organize.main,
         "rename": rename.main,
         "find-image-duplicates": images.main,
@@ -63,7 +64,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     started_at = time.monotonic()
-    structured_json = args.command == "scan" and "--json" in args.arguments
+    structured_json = (
+        args.command in {"scan", "validate"} and "--json" in args.arguments
+    )
     configure_logging(
         verbose=args.verbose and not structured_json,
         quiet=args.quiet and not structured_json,

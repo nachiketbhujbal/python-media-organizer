@@ -171,6 +171,19 @@ def test_scan_json_stays_machine_readable_with_global_output_flags(
         assert json.loads(result.stdout)["schema_version"] == 1
 
 
+def test_validate_json_stays_machine_readable_with_global_output_flags(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "media-collection"
+    collection.mkdir()
+
+    for output_flag in ("--verbose", "--quiet", "--timestamps"):
+        result = run_pymo(output_flag, "validate", collection, "--json")
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads(result.stdout)["schema_version"] == 1
+
+
 def test_cli_returns_130_and_reports_runtime_after_keyboard_interrupt(
     monkeypatch, capsys
 ) -> None:

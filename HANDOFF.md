@@ -13,15 +13,19 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.2.6` staged-orchestration release. It is a
+`pymo` command, and has a `v0.3.0` report-only validation release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.2.6 separates command analysis/planning/apply/verification stages,
-consolidates shared duplicate policy, and measures coverage across real CLI
-subprocesses. Version 0.2.5 omits files detected changing during scan classification or
-checksumming and guarantees final runtime/status reporting for interruption.
+Version 0.3.0 adds standard and full-decode collection health reports with
+path-private JSON, explicit relative-path opt-in, stable file-state checks, and
+no media or collection-state writes. Version 0.2.6 separates command analysis,
+planning, apply, and verification stages, consolidates shared duplicate policy,
+and measures coverage across real CLI
+subprocesses. Version 0.2.5 omits files detected changing during scan
+classification or checksumming and guarantees final runtime/status reporting
+for interruption.
 Version 0.2.4 binds exact image/video conclusions to stable file state,
 revalidates duplicate groups through apply, handles malformed media
 conservatively, rejects invalid derived-cache data before decoding, and only
@@ -74,6 +78,10 @@ Hard requirements:
     and collision utilities.
 22. Release coverage includes child-process CLI execution and complements,
     rather than replaces, real integration and adversarial behavior tests.
+23. Validation is report-only and independent of organized layout. Repair or
+    quarantine requires a future ADR and reversible mutation design.
+24. Validation filenames are private unless `--show-files` is explicit; health
+    errors return 1, warnings-only reports return 0, and setup errors return 2.
 
 `{collection-name}-actions-log.jsonl` remains the authoritative portable
 journal because it moves naturally with a media-collection on external storage.
@@ -105,6 +113,7 @@ python-media-organizer/
     organize.py
     rename.py
     scan.py
+    validate.py
     duplicates/
       common.py
       images.py
@@ -118,12 +127,14 @@ The CLI subcommands are:
 pymo organize COLLECTION
 pymo rename COLLECTION
 pymo scan COLLECTION
+pymo validate COLLECTION
 pymo find-image-duplicates COLLECTION
 pymo find-video-duplicates COLLECTION
 ```
 
 The four mutating tools support dry-run/apply behavior and `--undo`, which is
-also a preview unless combined with `--apply`. `scan` is read-only. Global
+also a preview unless combined with `--apply`. `scan` and `validate` are
+read-only. Global
 `--verbose`, `--quiet`,
 `--log-file PATH`, `--timestamps`, `--config PATH`, and `--show-ignored`
 options go before the subcommand. `--show-ignored` and command-specific options are also accepted by
@@ -357,6 +368,27 @@ File state is captured at discovery and checked around classification and
 checksumming. Detected changes are omitted from inventory and duplicate facts
 and reported as an aggregate `changed_entries` count without revealing paths.
 
+## Media validation
+
+`src/pymo/validate.py` implements report-only `pymo validate COLLECTION` over
+any collection layout. It never repairs, quarantines, moves, renames, deletes,
+caches, or appends action history.
+
+The standard profile uses Pillow integrity verification for supported images
+and local ffprobe structure inspection for non-empty videos. `--full` also
+loads every image frame and decodes selected video/audio streams completely
+through local FFmpeg. Standard validation uses bounded workers; a full run
+containing video reports and uses one worker so full FFmpeg decodes remain
+sequential.
+
+Text and schema-1 JSON aggregate severity/code findings without collection
+names, root paths, or filenames. `--show-files` adds collection-relative
+affected paths, while `--show-ignored` remains a separate opt-in. Status 0 means
+no error-severity finding, 1 means health errors were reported, and 2 means the
+command could not run safely. Animated or multi-page images are counted, not
+classified as corrupt. Unsupported recognized formats remain warnings rather
+than unverified claims of corruption.
+
 ## Logging
 
 `src/pymo/logging_config.py` routes all command output through the standard
@@ -468,7 +500,7 @@ local indexing, keeper scoring, similarity levels, and local-AI rules.
 
 Near-term roadmap:
 
-1. Add report-only media validation in 0.3.0 and review it adversarially.
+1. Adversarially review validation and resolve findings in approved 0.3.x tags.
 2. Add metadata inspection/export and confidence-based date provenance.
 3. Add read-only collection/backup comparison.
 4. Expand the disposable SQLite index for local statistics and fingerprints.

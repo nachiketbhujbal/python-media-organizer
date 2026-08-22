@@ -159,8 +159,8 @@ calculate one honestly.
 
 Ctrl-C reports the interruption, observed runtime, and conventional exit status
 130 without claiming success. An unexpected error emits a stopped-runtime line
-before its diagnostic propagates. Quiet output and `scan --json` remain free of
-these human-facing records.
+before its diagnostic propagates. Quiet output and machine-readable JSON remain
+free of these human-facing records.
 
 ### Scan a collection
 
@@ -192,6 +192,34 @@ If a file changes during the run, it is omitted instead of combining old and
 new facts. Text and JSON reports include an aggregate `changed_entries` count
 and path-private warning; rerun after other writers become idle for a complete
 snapshot.
+
+### Validate collection health
+
+```bash
+pymo validate "/path/to/media-collection"
+pymo validate "/path/to/media-collection" --full
+pymo validate "/path/to/media-collection" --json
+pymo validate "/path/to/media-collection" --show-files
+```
+
+`validate` recursively checks media in any collection layout and never moves,
+deletes, repairs, quarantines, renames, caches, or action-logs a file. The
+standard profile uses Pillow integrity verification for supported images and
+local ffprobe structure checks for videos. `--full` additionally loads every
+image frame and completely decodes video/audio streams through local FFmpeg.
+
+Reports cover empty and invalid media, unreadable or changing entries,
+extension/content mismatches, unsupported recognized image formats, video
+stream layouts, extra streams, and missing/invalid duration. Animated and
+multi-page images are counted as valid characteristics rather than corruption.
+
+Filenames are hidden by default. `--show-files` adds collection-relative
+affected paths; `--show-ignored` controls ignored paths separately. JSON uses
+stable schema version 1 without collection names or roots. Exit status is 0
+when no errors are found, 1 when validation reports errors, and 2 when the
+command cannot run safely. Warnings alone return 0. Standard validation uses
+bounded workers; full validation containing video uses one worker to avoid
+unmeasured competing FFmpeg decodes.
 
 ### Organize a collection
 
@@ -393,9 +421,10 @@ elapsed-time summaries, timestamped multi-line logs, observed throughput and
 ETA reporting, FFmpeg heartbeats,
 shared built-in and custom policy, malformed-config refusal, centralized
 collection paths, default ignored-name privacy, explicit relative ignored-path
-output, logging privacy, and the guarantee that video decoding never invokes
-capture devices. Private collections and their names are not fixtures or
-repository content.
+output, logging privacy, report-only standard/full validation, validation JSON
+privacy and health exit codes, and the guarantee that video decoding never
+invokes capture devices. Private collections and their names are not fixtures
+or repository content.
 
 ## Versions and releases
 
@@ -408,9 +437,10 @@ installers can still build and install the package.
 
 ## Roadmap and research
 
-`pymo scan COLLECTION` now provides the fast local overview. The next major
-feature is report-only media validation, followed by richer metadata and
-comparison tooling. Full video decoding remains sequential until representative
+`pymo scan COLLECTION` provides the fast local overview and
+`pymo validate COLLECTION` provides report-only health checks. Next are the
+adversarial validation review, richer metadata, and comparison tooling. Full
+video decoding remains sequential until representative
 benchmarks show that bounded process concurrency improves real external-drive
 workloads without increasing contention or reducing safety.
 

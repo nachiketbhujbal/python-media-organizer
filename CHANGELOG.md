@@ -2,6 +2,22 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.0 - 2026-08-22
+
+- Add report-only `pymo validate COLLECTION` for recursive media health checks
+  without requiring an organized `pics`/`vids` layout.
+- Add a standard profile with Pillow image verification and local ffprobe video
+  structure checks, plus `--full` image-frame and FFmpeg stream decoding.
+- Report empty, invalid, unreadable, changing, extension-mismatched,
+  unsupported, multi-stream, extra-stream, and duration findings without ever
+  moving, deleting, repairing, quarantining, caching, or action-logging media.
+- Add stable path-private JSON schema 1 and aggregate text output, with explicit
+  `--show-files` and `--show-ignored` relative-path opt-ins.
+- Return health-aware status 0/1 while reserving 2 for setup/usage failures,
+  and keep full video decoding sequential despite configurable standard workers.
+- Add synthetic privacy/read-only/error/animation/config tests and real FFmpeg
+  full-decode integration coverage.
+
 ## 0.2.6 - 2026-08-22
 
 - Split exact-media discovery, analysis, fingerprint-cache work, grouping,

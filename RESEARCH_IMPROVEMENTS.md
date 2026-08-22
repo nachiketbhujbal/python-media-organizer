@@ -461,14 +461,16 @@ so they should also be treated as private collection data.
 
 ### 2. Media validation and collection health
 
-Add `pymo validate COLLECTION` as a report-only command first.
+`pymo validate COLLECTION` is implemented as a report-only command in version
+0.3.0.
 
 This boundary is accepted in ADR 0019. Implementation begins only after the
 pre-validation findings in `CODE_REVIEW.md` are resolved or explicitly accepted.
 
-Image validation should distinguish header recognition from full pixel decode
-and detect truncated, multi-page, and animated inputs. Video validation should
-combine ffprobe structure inspection with a bounded full decode when requested.
+Standard image validation distinguishes supported Pillow verification from
+optional `--full` frame loading and reports multi-page/animated inputs without
+calling them corrupt. Standard video validation uses local ffprobe structure
+inspection; `--full` performs a sequential local FFmpeg decode.
 
 Report:
 
@@ -879,10 +881,10 @@ system installation and record its version in derived fingerprint-cache keys.
 
 Strict duplicate-finder ownership, deterministic exact video duplicate
 detection, the uv/Hatchling package structure, resumable video fingerprints,
-and the version 0.2 collection scan are implemented and covered by tests. The
-remaining order is:
+the version 0.2 collection scan, and version 0.3 report-only validation are
+implemented and covered by tests. The remaining order is:
 
-1. Add report-only media validation.
+1. Adversarially review validation and resolve findings in version 0.3 patches.
 2. Add metadata inspection/export and confidence-based date resolution.
 3. Add collection/backup comparison.
 4. Mature the derived SQLite index/cache.

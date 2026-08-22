@@ -51,6 +51,8 @@ never duplicate the version in source or static project metadata.
   default; `--no-cache` restores a zero-cache-read/write run.
 - Scan inventory, classification, and checksum facts must come from stable file
   state. Omit detected changes and report only their aggregate count by default.
+- `validate` is report-only: it never repairs, quarantines, moves, deletes,
+  caches, or action-logs media. Filenames require explicit `--show-files`.
 
 ## Package layout and tools
 
@@ -58,6 +60,8 @@ never duplicate the version in source or static project metadata.
   `vids`, and root-level non-media files. It protects `dups`.
 - `src/pymo/scan.py`: path-private inventory, layout/naming readiness,
   duplicate potential, estimated work, and stable JSON output.
+- `src/pymo/validate.py`: standard and full-decode media health reports over
+  any collection layout, with path-private JSON and health exit status.
 - `src/pymo/rename.py`: deterministic timestamp/descriptor-based media names.
   It protects `dups` and does not claim visual recognition.
 - `src/pymo/duplicates/images.py`: exact displayed-pixel duplicate detection.
@@ -148,6 +152,6 @@ action logs. Full FFmpeg decoding remains sequential until benchmarks justify
 bounded multi-process decoding; FFmpeg already uses internal threads and
 unmeasured concurrency can regress external-drive performance.
 
-The next major planned feature is report-only media validation. Follow the
-privacy and cache boundaries documented in `RESEARCH_IMPROVEMENTS.md`. Local AI
-naming remains optional future work only.
+Report-only validation is implemented in version 0.3.0. Any future repair or
+quarantine behavior requires a separate ADR and dry-run/action-log design.
+Local AI naming remains optional future work only.

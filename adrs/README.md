@@ -34,3 +34,7 @@ old one rather than rewriting why the earlier choice was made.
 | [0026](0026-interruption-exit-and-runtime.md) | Interruption exit and runtime reporting |
 | [0027](0027-staged-command-orchestration.md) | Explicit command stages and shared duplicate policy |
 | [0028](0028-subprocess-aware-test-coverage.md) | Subprocess-aware test coverage |
+| [0029](0029-standard-and-full-validation-profiles.md) | Standard and full validation profiles |
+| [0030](0030-path-private-validation-reports.md) | Path-private validation reports |
+| [0031](0031-validation-health-exit-status.md) | Validation health exit status |
+| [0032](0032-sequential-full-video-validation.md) | Sequential full video validation |
