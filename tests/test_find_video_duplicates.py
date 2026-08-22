@@ -76,13 +76,15 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert "Would move 2 duplicate(s) from 1 group(s)" in dry_run.stdout
     assert "Potentially reclaimable if extra copies were deleted" in dry_run.stdout
     assert "No files are deleted by this tool" in dry_run.stdout
+    assert "Fingerprint cache: 0 hit(s), 2 miss(es)" in dry_run.stdout
     assert not (tmp_path / "dups").exists()
-    assert not cache.exists()
+    assert cache.is_file()
     assert not action_log_path(tmp_path).exists()
 
     applied = run_script("find_video_duplicates.py", tmp_path, "--apply")
 
     assert applied.returncode == 0, applied.stdout + applied.stderr
+    assert "Fingerprint cache: 2 hit(s), 0 miss(es)" in applied.stdout
     assert base.exists()
     assert not byte_copy.exists()
     assert not remux.exists()
@@ -103,6 +105,25 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert not (tmp_path / "dups").exists()
     assert cache.is_file()
     assert action_log_path(tmp_path).is_file()
+
+
+@requires_ffmpeg
+def test_video_finder_can_disable_all_cache_reads_and_writes(
+    tmp_path: Path, run_script
+) -> None:
+    vids = tmp_path / "vids"
+    vids.mkdir()
+    first = vids / "first.mp4"
+    second = vids / "second.mp4"
+    make_video(first)
+    shutil.copyfile(first, second)
+
+    result = run_script("find_video_duplicates.py", tmp_path, "--no-cache")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Fingerprint cache: 0 hit(s), 1 miss(es); disabled" in result.stdout
+    assert not CollectionLayout(tmp_path).video_cache.exists()
+    assert not action_log_path(tmp_path).exists()
 
 
 def test_video_finder_requires_only_vids(tmp_path: Path, run_script) -> None:
@@ -316,6 +337,62 @@ def test_video_finder_reports_missing_explicit_ffmpeg(
 
     assert result.returncode == 2
     assert "not an executable ffmpeg path" in result.stderr
+
+
+def test_video_cache_keeps_completed_fingerprints_after_interruption(
+    tmp_path: Path, monkeypatch
+) -> None:
+    vids = tmp_path / "vids"
+    vids.mkdir()
+    first = vids / "first.mp4"
+    second = vids / "second.mp4"
+    first.write_bytes(b"first content")
+    second.write_bytes(b"second content")
+    probe = ProbeInfo(
+        display_width=64,
+        display_height=48,
+        duration_us=1_000_000,
+        video_start_us=0,
+        audio_start_us=None,
+        audio_sample_rate=None,
+        audio_channels=None,
+        audio_layout=None,
+        has_audio=False,
+    )
+    calls = 0
+
+    monkeypatch.setattr(video_duplicates, "resolve_executable", lambda *_: "tool")
+    monkeypatch.setattr(video_duplicates, "ffmpeg_version", lambda _: "test-ffmpeg")
+    monkeypatch.setattr(
+        video_duplicates,
+        "discover_videos",
+        lambda *_: ([first, second], []),
+    )
+    monkeypatch.setattr(video_duplicates, "probe_video", lambda *_: probe)
+
+    def interrupt_after_first(*_):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise KeyboardInterrupt
+        return video_duplicates.DerivedFingerprint("first", 1, 0)
+
+    monkeypatch.setattr(
+        video_duplicates, "derive_fingerprint", interrupt_after_first
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        video_duplicates.main([str(tmp_path)])
+
+    cached = video_duplicates.load_cached_fingerprints(
+        CollectionLayout(tmp_path).video_cache,
+        "test-ffmpeg",
+    )
+    assert cached == {
+        video_duplicates.sha256_file(first): video_duplicates.DerivedFingerprint(
+            "first", 1, 0
+        )
+    }
 
 
 def test_ffmpeg_decode_commands_only_use_local_file_inputs(monkeypatch) -> None:

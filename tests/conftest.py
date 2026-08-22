@@ -12,6 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
 
 SCRIPT_COMMANDS = {
+    "scan.py": "scan",
     "organize_media.py": "organize",
     "rename_media.py": "rename",
     "find_image_duplicates.py": "find-image-duplicates",

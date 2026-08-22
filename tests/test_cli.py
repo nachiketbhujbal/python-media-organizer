@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -116,15 +117,14 @@ def test_verbose_does_not_reveal_ignored_paths_without_opt_in(
     assert ".DS_Store" not in result.stderr
 
 
-def test_deprecation_warnings_remain_visible_in_quiet_mode(tmp_path: Path) -> None:
+def test_scan_json_stays_machine_readable_with_global_output_flags(
+    tmp_path: Path,
+) -> None:
     collection = tmp_path / "media-collection"
-    (collection / "pics").mkdir(parents=True)
-    (collection / "vids").mkdir()
-    (collection / "media_actions.jsonl").write_text("", encoding="utf-8")
+    collection.mkdir()
 
-    result = run_pymo("--quiet", "rename", collection)
+    for output_flag in ("--verbose", "--quiet"):
+        result = run_pymo(output_flag, "scan", collection, "--json")
 
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout == ""
-    assert "DEPRECATION: the fixed media_actions.jsonl" in result.stderr
-    assert "removed in pymo 0.2.0" in result.stderr
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads(result.stdout)["schema_version"] == 1

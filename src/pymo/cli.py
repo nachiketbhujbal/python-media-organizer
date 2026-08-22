@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from pymo import __version__
-from pymo import organize, rename
+from pymo import organize, rename, scan
 from pymo.config import add_show_ignored_argument
 from pymo.duplicates import images, videos
 from pymo.logging_config import configure_logging
@@ -17,6 +17,7 @@ from pymo.logging_config import configure_logging
 def _commands():
     """Build the small dispatch table without mutable module-level state."""
     return {
+        "scan": scan.main,
         "organize": organize.main,
         "rename": rename.main,
         "find-image-duplicates": images.main,
@@ -55,12 +56,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    structured_json = args.command == "scan" and "--json" in args.arguments
     configure_logging(
-        verbose=args.verbose,
-        quiet=args.quiet,
+        verbose=args.verbose and not structured_json,
+        quiet=args.quiet and not structured_json,
         log_file=args.log_file,
     )
-    logging.getLogger("pymo").debug("Dispatching pymo command: %s", args.command)
+    if not structured_json:
+        logging.getLogger("pymo").debug(
+            "Dispatching pymo command: %s", args.command
+        )
     commands = _commands()
     command_arguments = list(args.arguments)
     if args.config is not None:

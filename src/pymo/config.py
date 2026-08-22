@@ -54,12 +54,18 @@ class VideoDuplicateConfig:
 
 
 @dataclass(frozen=True)
+class PerformanceConfig:
+    scan_workers: int
+
+
+@dataclass(frozen=True)
 class PymoConfig:
     ignore: IgnoreConfig
     classification: ClassificationConfig
     rename: RenameConfig
     image_duplicates: ImageDuplicateConfig
     video_duplicates: VideoDuplicateConfig
+    performance: PerformanceConfig
     custom_path: Path | None = None
 
     @staticmethod
@@ -104,6 +110,7 @@ class _ConfigLayer:
     rename_noise_tokens: tuple[str, ...] = ()
     image_duplicate_extensions: tuple[str, ...] = ()
     decode_timeout_seconds: int | None = None
+    scan_workers: int | None = None
 
 
 def add_config_argument(parser: argparse.ArgumentParser) -> None:
@@ -206,6 +213,7 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
             "rename",
             "image_duplicates",
             "video_duplicates",
+            "performance",
         }
     )
     unknown = set(document).difference(sections)
@@ -240,6 +248,12 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
         frozenset({"decode_timeout_seconds"}),
         source,
     )
+    performance = _table(
+        document,
+        "performance",
+        frozenset({"scan_workers"}),
+        source,
+    )
 
     timeout = video_duplicates.get("decode_timeout_seconds")
     if timeout is not None:
@@ -251,6 +265,17 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
             raise ConfigError(
                 f"{source}: video_duplicates.decode_timeout_seconds must be "
                 "between 1 and 86400"
+            )
+
+    scan_workers = performance.get("scan_workers")
+    if scan_workers is not None:
+        if isinstance(scan_workers, bool) or not isinstance(scan_workers, int):
+            raise ConfigError(
+                f"{source}: performance.scan_workers must be an integer"
+            )
+        if not 1 <= scan_workers <= 32:
+            raise ConfigError(
+                f"{source}: performance.scan_workers must be between 1 and 32"
             )
 
     return _ConfigLayer(
@@ -300,6 +325,7 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
             _extension,
         ),
         decode_timeout_seconds=timeout,
+        scan_workers=scan_workers,
     )
 
 
@@ -355,6 +381,10 @@ def _packaged_defaults() -> _ConfigLayer:
         raise ConfigError(
             "packaged defaults: video_duplicates.decode_timeout_seconds is required"
         )
+    if defaults.scan_workers is None:
+        raise ConfigError(
+            "packaged defaults: performance.scan_workers is required"
+        )
     return defaults
 
 
@@ -379,6 +409,13 @@ def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
         raise ConfigError(
             "packaged defaults: video_duplicates.decode_timeout_seconds is required"
         )
+    scan_workers = (
+        custom.scan_workers
+        if custom.scan_workers is not None
+        else defaults.scan_workers
+    )
+    if scan_workers is None:
+        raise ConfigError("packaged defaults: performance.scan_workers is required")
 
     return PymoConfig(
         ignore=IgnoreConfig(
@@ -422,6 +459,7 @@ def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
             )
         ),
         video_duplicates=VideoDuplicateConfig(decode_timeout_seconds=timeout),
+        performance=PerformanceConfig(scan_workers=scan_workers),
         custom_path=custom_path,
     )
 

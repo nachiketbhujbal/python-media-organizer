@@ -29,6 +29,7 @@ def test_packaged_defaults_cover_common_local_system_metadata(
     assert "photo" in config.rename.noise_tokens
     assert ".png" in config.image_duplicates.extensions
     assert config.video_duplicates.decode_timeout_seconds == 3600
+    assert config.performance.scan_workers == 4
 
 
 def test_collection_config_extends_defaults_and_protects_itself(
@@ -78,7 +79,9 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
         "[image_duplicates]\n"
         'extensions = [".flower"]\n'
         "[video_duplicates]\n"
-        "decode_timeout_seconds = 45\n",
+        "decode_timeout_seconds = 45\n"
+        "[performance]\n"
+        "scan_workers = 2\n",
         encoding="utf-8",
     )
 
@@ -93,6 +96,7 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
     assert {"photo", "planter"}.issubset(config.rename.noise_tokens)
     assert {".png", ".flower"}.issubset(config.image_duplicates.extensions)
     assert config.video_duplicates.decode_timeout_seconds == 45
+    assert config.performance.scan_workers == 2
 
 
 @pytest.mark.parametrize(
@@ -109,6 +113,8 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
         'version = 1\n[rename]\nnoise_tokens = ["two words"]\n',
         "version = 1\n[video_duplicates]\ndecode_timeout_seconds = 0\n",
         "version = 1\n[video_duplicates]\ndecode_timeout_seconds = true\n",
+        "version = 1\n[performance]\nscan_workers = 0\n",
+        "version = 1\n[performance]\nscan_workers = true\n",
         "version = 1\n[image_duplicates]\nunknown = []\n",
         "version = 1\n[ignore]\nfiles = [\n",
     ],

@@ -35,7 +35,6 @@ from pymo.action_log import (
     ActionLogError,
     NoUndoableRun,
     ToolId,
-    warn_if_legacy_action_log,
 )
 from pymo.collection import CollectionLayout
 from pymo.config import (
@@ -758,7 +757,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="perform moves and update the derived cache",
+        help="perform duplicate moves after reporting them",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="do not read or update the disposable fingerprint cache",
     )
     parser.add_argument(
         "--undo",
@@ -793,7 +797,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not root.is_dir():
         print(f"Not a directory: {root}", file=sys.stderr)
         return 2
-    warn_if_legacy_action_log(root)
     if args.decode_timeout is not None and args.decode_timeout <= 0:
         print("--decode-timeout must be a positive number", file=sys.stderr)
         return 2
@@ -874,7 +877,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         for record in candidate_records
     }
     database = layout.video_cache
-    cached = load_cached_fingerprints(database, ffmpeg_release)
+    if not args.no_cache and (
+        database.is_symlink() or (database.exists() and not database.is_file())
+    ):
+        print(f"Unsafe SQLite cache path: {database}", file=sys.stderr)
+        return 1
+    cached = (
+        {} if args.no_cache else load_cached_fingerprints(database, ffmpeg_release)
+    )
+    cache_hits = sum(file_hash in cached for file_hash in unique_hashes)
+    cache_misses = len(unique_hashes) - cache_hits
+    print(
+        f"Fingerprint cache: {cache_hits} hit(s), {cache_misses} miss(es); "
+        + (
+            "disabled by --no-cache."
+            if args.no_cache
+            else "incremental updates enabled."
+        )
+    )
     derived: dict[str, DerivedFingerprint] = {}
     for number, (file_hash, representative) in enumerate(
         sorted(unique_hashes.items(), key=lambda item: str(item[1].path).casefold()),
@@ -884,7 +904,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             derived[file_hash] = cached[file_hash]
         else:
             try:
-                derived[file_hash] = derive_fingerprint(
+                fingerprint = derive_fingerprint(
                     representative.path,
                     representative.probe,
                     ffmpeg,
@@ -892,17 +912,29 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             except VideoInspectionError as error:
                 same_bytes = [
-                    record for record in candidate_records if record.byte_sha256 == file_hash
+                    record
+                    for record in candidate_records
+                    if record.byte_sha256 == file_hash
                 ]
                 skipped.extend((record.path, str(error)) for record in same_bytes)
-        print(f"  decoded {number}/{len(unique_hashes)} candidate content file(s)")
-
-    if args.apply:
-        try:
-            save_cached_fingerprints(database, ffmpeg_release, derived)
-        except VideoInspectionError as error:
-            print(f"Fingerprint cache update failed safely: {error}", file=sys.stderr)
-            return 1
+            else:
+                derived[file_hash] = fingerprint
+                try:
+                    if not args.no_cache:
+                        save_cached_fingerprints(
+                            database,
+                            ffmpeg_release,
+                            {file_hash: fingerprint},
+                        )
+                except VideoInspectionError as error:
+                    print(
+                        f"Fingerprint cache update failed safely: {error}",
+                        file=sys.stderr,
+                    )
+                    return 1
+        print(
+            f"  fingerprinted {number}/{len(unique_hashes)} candidate content file(s)"
+        )
 
     fingerprint_groups: dict[str, list[VideoRecord]] = defaultdict(list)
     for record in candidate_records:
