@@ -78,12 +78,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         command_arguments[0:0] = ["--config", str(args.config)]
     if args.show_ignored:
         command_arguments[0:0] = ["--show-ignored"]
-    return_code = commands[args.command](command_arguments)
-    if not structured_json:
-        logging.getLogger("pymo").info(
-            "Completed %s in %s (exit %s).",
-            args.command,
-            format_duration(time.monotonic() - started_at),
-            return_code,
-        )
-    return return_code
+    return_code: int | None = None
+    interrupted = False
+    try:
+        return_code = commands[args.command](command_arguments)
+        return return_code
+    except KeyboardInterrupt:
+        interrupted = True
+        return_code = 130
+        if not structured_json:
+            logging.getLogger("pymo").error("Interrupted by user.")
+        return return_code
+    finally:
+        if not structured_json:
+            outcome = (
+                "Interrupted"
+                if interrupted
+                else "Completed" if return_code is not None else "Stopped"
+            )
+            logging.getLogger("pymo").info(
+                "%s %s in %s%s.",
+                outcome,
+                args.command,
+                format_duration(time.monotonic() - started_at),
+                f" (exit {return_code})" if return_code is not None else "",
+            )

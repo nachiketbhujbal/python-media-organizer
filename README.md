@@ -157,6 +157,11 @@ total elapsed time. Long processing stages also report completed files, bytes
 where meaningful, observed rates, and an ETA once enough work has completed to
 calculate one honestly.
 
+Ctrl-C reports the interruption, observed runtime, and conventional exit status
+130 without claiming success. An unexpected error emits a stopped-runtime line
+before its diagnostic propagates. Quiet output and `scan --json` remain free of
+these human-facing records.
+
 ### Scan a collection
 
 ```bash
@@ -181,6 +186,12 @@ complete stable schema without the collection name, root path, or filenames;
 ignored relative paths appear only with the explicit `--show-ignored` opt-in.
 The default four classification workers can improve scans on mixed collections
 without launching concurrent FFmpeg decodes.
+
+Discovery, classification, and checksumming use stable regular-file snapshots.
+If a file changes during the run, it is omitted instead of combining old and
+new facts. Text and JSON reports include an aggregate `changed_entries` count
+and path-private warning; rerun after other writers become idle for a complete
+snapshot.
 
 ### Organize a collection
 

@@ -8,6 +8,10 @@ import sys
 from importlib.metadata import version
 from pathlib import Path
 
+import pytest
+
+from pymo import cli
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
 
@@ -165,3 +169,31 @@ def test_scan_json_stays_machine_readable_with_global_output_flags(
 
         assert result.returncode == 0, result.stdout + result.stderr
         assert json.loads(result.stdout)["schema_version"] == 1
+
+
+def test_cli_returns_130_and_reports_runtime_after_keyboard_interrupt(
+    monkeypatch, capsys
+) -> None:
+    def interrupt(_arguments) -> int:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "_commands", lambda: {"scan": interrupt})
+
+    assert cli.main(["scan"]) == 130
+    captured = capsys.readouterr()
+    assert "Interrupted by user" in captured.err
+    assert "Interrupted scan in " in captured.out
+    assert "exit 130" in captured.out
+
+
+def test_cli_reports_runtime_before_propagating_unexpected_errors(
+    monkeypatch, capsys
+) -> None:
+    def fail(_arguments) -> int:
+        raise RuntimeError("synthetic failure")
+
+    monkeypatch.setattr(cli, "_commands", lambda: {"scan": fail})
+
+    with pytest.raises(RuntimeError, match="synthetic failure"):
+        cli.main(["scan"])
+    assert "Stopped scan in " in capsys.readouterr().out

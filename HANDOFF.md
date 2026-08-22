@@ -13,11 +13,13 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.2.4` stable-analysis release. It is a
+`pymo` command, and has a `v0.2.5` scan-consistency release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
+Version 0.2.5 omits files detected changing during scan classification or
+checksumming and guarantees final runtime/status reporting for interruption.
 Version 0.2.4 binds exact image/video conclusions to stable file state,
 revalidates duplicate groups through apply, handles malformed media
 conservatively, rejects invalid derived-cache data before decoding, and only
@@ -61,6 +63,10 @@ Hard requirements:
     state is unchanged; retained originals stay checked through commit.
 18. Invalid derived cache data stops early and is never automatically deleted
     or replaced.
+19. Scan facts must come from stable file state; changed files are omitted and
+    counted without revealing paths.
+20. Ctrl-C returns status 130 and human-readable commands report their observed
+    runtime even when interrupted or stopped unexpectedly.
 
 `{collection-name}-actions-log.jsonl` remains the authoritative portable
 journal because it moves naturally with a media-collection on external storage.
@@ -338,6 +344,10 @@ is configurable through `performance.scan_workers`, and can be overridden with
 `--workers 1..32`. Checksumming is deliberately opt-in; FFmpeg decoding is not
 part of scan.
 
+File state is captured at discovery and checked around classification and
+checksumming. Detected changes are omitted from inventory and duplicate facts
+and reported as an aggregate `changed_entries` count without revealing paths.
+
 ## Logging
 
 `src/pymo/logging_config.py` routes all command output through the standard
@@ -448,7 +458,7 @@ local indexing, keeper scoring, similarity levels, and local-AI rules.
 
 Near-term roadmap:
 
-1. Resolve scan, interruption, and orchestration findings targeted for 0.2.5.
+1. Resolve orchestration and duplicated-utility findings targeted for 0.2.6.
 2. Add report-only media validation in 0.3.0 and review it adversarially.
 3. Add metadata inspection/export and confidence-based date provenance.
 4. Add read-only collection/backup comparison.

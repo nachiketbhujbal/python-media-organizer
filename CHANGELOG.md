@@ -2,6 +2,19 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.2.5 - 2026-08-22
+
+- Carry stable regular-file state through scan discovery, classification, and
+  optional checksumming so reports never combine old sizes with changed bytes.
+- Omit files detected changing during a scan, distinguish them from unreadable
+  entries, and report a path-private changed count in text and JSON output.
+- Return conventional exit status 130 for Ctrl-C while reporting the observed
+  elapsed runtime and interruption status.
+- Emit a stopped-runtime line before propagating an unexpected command error,
+  while preserving quiet and structured-JSON output contracts.
+- Add direct regression coverage for concurrent scan changes and command-level
+  interruption/failure paths that subprocess-only coverage could not observe.
+
 ## 0.2.4 - 2026-08-22
 
 - Bind exact image and video analysis to stable regular-file identity and state,

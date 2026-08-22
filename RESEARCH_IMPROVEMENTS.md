@@ -589,6 +589,12 @@ queried read-only and validated before decoding; invalid cache data stops early
 and is preserved for explicit recovery rather than silently discarded or
 automatically overwritten.
 
+Read-only scan applies the same stable-state principle to discovery,
+classification, and checksumming. Detected changes are omitted and counted so
+aggregate reports cannot combine an old size with newly read content. This is a
+snapshot guarantee, not a filesystem lock; active collections should be
+rescanned after writers become idle.
+
 Applied file moves follow ADR 0021: descriptor-relative atomic no-replace
 renames are preferred over a cross-filesystem copy fallback. This keeps the
 action journal's completed boundary aligned with one atomic filesystem event.

@@ -6,8 +6,10 @@ from pathlib import Path
 
 from PIL import Image
 
+from pymo import scan
 from pymo.action_log import action_log_path
 from pymo.collection import CollectionLayout
+from pymo.config import load_config
 
 
 def make_collection(root: Path) -> None:
@@ -90,3 +92,56 @@ def test_scan_rejects_unsafe_worker_counts(tmp_path: Path, run_script) -> None:
 
         assert result.returncode == 2
         assert "--workers must be between 1 and 32" in result.stderr
+
+
+def test_scan_omits_a_file_changed_during_classification(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    path = root / "changing.png"
+    Image.new("RGB", (2, 2), "green").save(path)
+    original_classify = scan.Classifier.classify
+
+    def classify_then_change(classifier, target: Path) -> tuple[str, str]:
+        result = original_classify(classifier, target)
+        target.write_bytes(target.read_bytes() + b"changed")
+        return result
+
+    monkeypatch.setattr(scan.Classifier, "classify", classify_then_change)
+
+    report = scan.build_report(root, load_config(root), 1, False, False, False)
+
+    assert report["inventory"]["files"] == 0
+    assert report["inventory"]["changed_entries"] == 1
+    assert "changed during the scan and were omitted" in report["warnings"][0]
+
+
+def test_checksum_scan_excludes_a_file_changed_while_hashing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    first = root / "first.png"
+    second = root / "second.png"
+    Image.new("RGB", (2, 2), "blue").save(first)
+    shutil.copyfile(first, second)
+    original_sha256 = scan._sha256
+
+    def hash_then_change(path: Path) -> str:
+        digest = original_sha256(path)
+        if path == first:
+            path.write_bytes(path.read_bytes() + b"changed")
+        return digest
+
+    monkeypatch.setattr(scan, "_sha256", hash_then_change)
+
+    report = scan.build_report(root, load_config(root), 1, True, False, False)
+    exact = report["duplicate_potential"]["exact_bytes"]
+
+    assert report["inventory"]["files"] == 1
+    assert report["inventory"]["changed_entries"] == 1
+    assert exact["groups"] == 0
+    assert exact["hashed_files"] == 1
+    assert exact["changed_files"] == 1
+    assert report["duplicate_potential"]["pictures"]["candidate_files"] == 0

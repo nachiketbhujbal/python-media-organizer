@@ -23,6 +23,7 @@ from pymo.config import (
     add_show_ignored_argument,
     load_config,
 )
+from pymo.file_safety import FileChangedError, FileState
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier, desired_directory
 from pymo.progress import ProgressMeter
@@ -35,17 +36,25 @@ SCAN_REPORT_SCHEMA_VERSION = 1
 @dataclass(frozen=True)
 class RawEntry:
     path: Path
-    size: int
+    state: FileState
     in_review: bool
+
+    @property
+    def size(self) -> int:
+        return self.state.size
 
 
 @dataclass(frozen=True)
 class ScanEntry:
     path: Path
-    size: int
+    state: FileState
     in_review: bool
     kind: str
     mime_type: str
+
+    @property
+    def size(self) -> int:
+        return self.state.size
 
 
 @dataclass(frozen=True)
@@ -105,14 +114,14 @@ def _collect_entries(root: Path, config: PymoConfig) -> WalkResult:
                 if not path.is_file():
                     unreadable_count += 1
                     continue
-                size = path.stat().st_size
-            except OSError:
+                state = FileState.capture(path)
+            except (FileChangedError, OSError):
                 unreadable_count += 1
                 continue
             entries.append(
                 RawEntry(
                     path=path.absolute(),
-                    size=size,
+                    state=state,
                     in_review=layout.is_in_duplicates(path),
                 )
             )
@@ -126,15 +135,23 @@ def _collect_entries(root: Path, config: PymoConfig) -> WalkResult:
     )
 
 
-def _classify_entry(raw: RawEntry, classifier: Classifier) -> ScanEntry:
+def _classify_entry(raw: RawEntry, classifier: Classifier) -> ScanEntry | None:
+    try:
+        raw.state.require_unchanged(raw.path, "collection classification")
+    except FileChangedError:
+        return None
     kind, mime_type = classifier.classify(raw.path)
+    try:
+        raw.state.require_unchanged(raw.path, "collection classification")
+    except FileChangedError:
+        return None
     if mime_type.startswith("audio/"):
         kind = "audio"
     elif kind == "other" and mime_type == "unknown":
         kind = "unknown"
     return ScanEntry(
         path=raw.path,
-        size=raw.size,
+        state=raw.state,
         in_review=raw.in_review,
         kind=kind,
         mime_type=mime_type,
@@ -147,19 +164,23 @@ def _classify_entries(
     workers: int,
     progress_interval_seconds: int,
     show_progress: bool,
-) -> tuple[ScanEntry, ...]:
+) -> tuple[tuple[ScanEntry, ...], int]:
     results: list[ScanEntry] = []
+    changed_count = 0
     progress = ProgressMeter(len(entries), None, progress_interval_seconds)
     with ThreadPoolExecutor(max_workers=workers) as executor:
         classified = executor.map(
             lambda entry: _classify_entry(entry, classifier), entries
         )
         for entry in classified:
-            results.append(entry)
+            if entry is None:
+                changed_count += 1
+            else:
+                results.append(entry)
             progress_message = progress.advance("classified")
             if show_progress and progress_message:
                 print(f"  {progress_message}")
-    return tuple(results)
+    return tuple(results), changed_count
 
 
 def _folder_status(path: Path) -> str:
@@ -180,12 +201,19 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _stable_sha256(entry: ScanEntry) -> str:
+    entry.state.require_unchanged(entry.path, "collection checksum")
+    digest = _sha256(entry.path)
+    entry.state.require_unchanged(entry.path, "collection checksum")
+    return digest
+
+
 def _duplicate_statistics(
     entries: tuple[ScanEntry, ...],
     checksums: bool,
     progress_interval_seconds: int,
     show_progress: bool,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], frozenset[Path]]:
     by_kind_size: dict[tuple[str, int], list[ScanEntry]] = defaultdict(list)
     for entry in entries:
         if not entry.in_review and entry.kind in {"picture", "video"}:
@@ -193,6 +221,48 @@ def _duplicate_statistics(
     candidates = {
         key: values for key, values in by_kind_size.items() if len(values) > 1
     }
+    exact_groups: dict[str, list[ScanEntry]] = defaultdict(list)
+    hashed_files = 0
+    hashed_bytes = 0
+    unreadable = 0
+    changed_paths: set[Path] = set()
+    candidate_entries = [entry for values in candidates.values() for entry in values]
+    if checksums:
+        progress = ProgressMeter(
+            len(candidate_entries),
+            sum(entry.size for entry in candidate_entries),
+            progress_interval_seconds,
+        )
+        for values in candidates.values():
+            for entry in values:
+                try:
+                    digest = _stable_sha256(entry)
+                except FileChangedError:
+                    changed_paths.add(entry.path)
+                except OSError:
+                    unreadable += 1
+                else:
+                    exact_groups[f"{entry.kind}:{digest}"].append(entry)
+                    hashed_files += 1
+                    hashed_bytes += entry.size
+                progress_message = progress.advance(
+                    "checksum progress", byte_count=entry.size
+                )
+                if show_progress and progress_message:
+                    print(f"  {progress_message}")
+
+    if changed_paths:
+        by_kind_size = defaultdict(list)
+        for entry in entries:
+            if (
+                entry.path not in changed_paths
+                and not entry.in_review
+                and entry.kind in {"picture", "video"}
+            ):
+                by_kind_size[(entry.kind, entry.size)].append(entry)
+        candidates = {
+            key: values for key, values in by_kind_size.items() if len(values) > 1
+        }
 
     by_kind: dict[str, dict[str, int]] = {}
     for kind in ("picture", "video"):
@@ -217,33 +287,8 @@ def _duplicate_statistics(
         "exact_bytes": None,
     }
     if not checksums:
-        return result
+        return result, frozenset()
 
-    exact_groups: dict[str, list[ScanEntry]] = defaultdict(list)
-    hashed_files = 0
-    hashed_bytes = 0
-    unreadable = 0
-    candidate_entries = [entry for values in candidates.values() for entry in values]
-    progress = ProgressMeter(
-        len(candidate_entries),
-        sum(entry.size for entry in candidate_entries),
-        progress_interval_seconds,
-    )
-    for values in candidates.values():
-        for entry in values:
-            try:
-                digest = _sha256(entry.path)
-            except OSError:
-                unreadable += 1
-            else:
-                exact_groups[f"{entry.kind}:{digest}"].append(entry)
-                hashed_files += 1
-                hashed_bytes += entry.size
-            progress_message = progress.advance(
-                "checksum progress", byte_count=entry.size
-            )
-            if show_progress and progress_message:
-                print(f"  {progress_message}")
     matches = [group for group in exact_groups.values() if len(group) > 1]
     result["exact_bytes"] = {
         "groups": len(matches),
@@ -252,8 +297,9 @@ def _duplicate_statistics(
         "hashed_files": hashed_files,
         "hashed_bytes": hashed_bytes,
         "unreadable_files": unreadable,
+        "changed_files": len(changed_paths),
     }
-    return result
+    return result, frozenset(changed_paths)
 
 
 def _counter_report(
@@ -289,13 +335,35 @@ def build_report(
     layout = CollectionLayout(root)
     walk = _collect_entries(root, config)
     classifier = Classifier(config.classification)
-    entries = _classify_entries(
+    entries, changed_count = _classify_entries(
         walk.entries,
         classifier,
         workers,
         config.performance.progress_interval_seconds,
         show_progress,
     )
+
+    stable_entries: list[ScanEntry] = []
+    for entry in entries:
+        try:
+            entry.state.require_unchanged(entry.path, "collection scan")
+        except FileChangedError:
+            changed_count += 1
+        else:
+            stable_entries.append(entry)
+    entries = tuple(stable_entries)
+
+    duplicate_report, checksum_changes = _duplicate_statistics(
+        entries,
+        checksums,
+        config.performance.progress_interval_seconds,
+        show_progress,
+    )
+    if checksum_changes:
+        entries = tuple(
+            entry for entry in entries if entry.path not in checksum_changes
+        )
+        changed_count += len(checksum_changes)
 
     kind_counts: Counter[str] = Counter()
     kind_sizes: Counter[str] = Counter()
@@ -369,12 +437,6 @@ def build_report(
         "canonical_media_names": canonical_names,
         "proposed_renames": rename_candidates,
     }
-    duplicate_report = _duplicate_statistics(
-        entries,
-        checksums,
-        config.performance.progress_interval_seconds,
-        show_progress,
-    )
     source_videos = [
         entry for entry in entries if entry.kind == "video" and not entry.in_review
     ]
@@ -410,6 +472,10 @@ def build_report(
         warnings.append(
             f"{walk.unreadable_count} entry or entries could not be read safely."
         )
+    if changed_count:
+        warnings.append(
+            f"{changed_count} file or files changed during the scan and were omitted."
+        )
 
     return {
         "schema_version": SCAN_REPORT_SCHEMA_VERSION,
@@ -422,6 +488,7 @@ def build_report(
             "ignored_entry_points": len(walk.ignored),
             "symbolic_links": walk.symlink_count,
             "unreadable_entries": walk.unreadable_count,
+            "changed_entries": changed_count,
             "kinds": kinds,
             "extensions": extensions,
             "mime_types": _counter_report(entries, "mime_type"),
@@ -495,6 +562,7 @@ def print_report(report: dict[str, Any], show_ignored: bool) -> None:
         _print_count_and_size(label, inventory["kinds"][kind])
     print(f"  Symbolic links skipped: {inventory['symbolic_links']}")
     print(f"  Unreadable entries: {inventory['unreadable_entries']}")
+    print(f"  Changed during scan: {inventory['changed_entries']}")
     print(
         "  Ignored by configuration: " f"{inventory['ignored_entry_points']} path(s)."
     )

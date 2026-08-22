@@ -30,3 +30,5 @@ old one rather than rewriting why the earlier choice was made.
 | [0022](0022-bind-analysis-to-file-state.md) | Stable file state for exact analysis |
 | [0023](0023-fail-closed-on-invalid-derived-cache.md) | Fail closed on invalid derived cache |
 | [0024](0024-resolve-native-tools-only-when-needed.md) | Lazy native-tool resolution |
+| [0025](0025-omit-changing-files-from-scan.md) | Omit changing files from scan reports |
+| [0026](0026-interruption-exit-and-runtime.md) | Interruption exit and runtime reporting |

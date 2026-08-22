@@ -49,6 +49,8 @@ never duplicate the version in source or static project metadata.
 - `scan` must never alter media, collection layout, or action history. Exact
   video dry runs may update the documented disposable fingerprint cache by
   default; `--no-cache` restores a zero-cache-read/write run.
+- Scan inventory, classification, and checksum facts must come from stable file
+  state. Omit detected changes and report only their aggregate count by default.
 
 ## Package layout and tools
 
@@ -118,6 +120,8 @@ report-only future work and must never silently enter the exact move path.
 - Base performance rates and ETAs on observed work only. Keep aggregate timing
   path-private, preserve stable ordering, and never publish guessed universal
   decode speeds as if they were measurements.
+- Preserve exit status 130 for Ctrl-C and final observed runtime reporting for
+  interrupted or unexpectedly stopped human-readable commands.
 - Keep `README.md`, `HANDOFF.md`, and `RESEARCH_IMPROVEMENTS.md` current when a
   decision changes their claims.
 - Record each durable architecture or product decision in one numbered file
