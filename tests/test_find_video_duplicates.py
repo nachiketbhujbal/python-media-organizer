@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from pymo import cache as cache_service
 from pymo.action_log import action_log_path
 from pymo.collection import CollectionLayout
 from pymo.config import load_config
@@ -588,6 +589,58 @@ def test_video_cache_rejects_malformed_rows(tmp_path: Path) -> None:
         video_duplicates.load_cached_fingerprints(tmp_path, database, "test")
 
 
+def test_video_cache_reads_legacy_without_writing_and_upgrades_on_next_write(
+    tmp_path: Path,
+) -> None:
+    database = CollectionLayout(tmp_path).video_cache
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "CREATE TABLE video_fingerprints ("
+        "file_sha256 TEXT NOT NULL, algorithm TEXT NOT NULL, "
+        "ffmpeg_version TEXT NOT NULL, fingerprint TEXT NOT NULL, "
+        "video_frames INTEGER NOT NULL, audio_bytes INTEGER NOT NULL, "
+        "PRIMARY KEY (file_sha256, algorithm, ffmpeg_version))"
+    )
+    first = video_duplicates.DerivedFingerprint("1" * 64, 1, 0)
+    second = video_duplicates.DerivedFingerprint("2" * 64, 2, 4)
+    connection.execute(
+        "INSERT INTO video_fingerprints VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            "a" * 64,
+            video_duplicates.FINGERPRINT_ALGORITHM,
+            "test-ffmpeg",
+            first.digest,
+            first.video_frames,
+            first.audio_bytes,
+        ),
+    )
+    connection.commit()
+    connection.close()
+    legacy_bytes = database.read_bytes()
+
+    assert video_duplicates.load_cached_fingerprints(
+        tmp_path, database, "test-ffmpeg"
+    ) == {"a" * 64: first}
+    assert database.read_bytes() == legacy_bytes
+
+    video_duplicates.save_cached_fingerprints(
+        tmp_path, database, "test-ffmpeg", {"b" * 64: second}
+    )
+
+    assert video_duplicates.load_cached_fingerprints(
+        tmp_path, database, "test-ffmpeg"
+    ) == {"a" * 64: first, "b" * 64: second}
+    connection = sqlite3.connect(database)
+    assert cache_service.detect_schema(connection) == "current"
+    assert (
+        connection.execute(
+            "SELECT name FROM sqlite_schema WHERE name = 'video_fingerprints'"
+        ).fetchone()
+        is None
+    )
+    connection.close()
+
+
 def test_video_cache_read_pins_original_database_during_path_swap(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -614,11 +667,9 @@ def test_video_cache_read_pins_original_database_during_path_swap(
         cache.rename(displaced)
         cache.symlink_to(outside)
         connection = real_connect(*args, **kwargs)
-        row = connection.execute(
-            "SELECT fingerprint FROM video_fingerprints"
-        ).fetchone()
+        row = connection.execute("SELECT payload_json FROM derived_evidence").fetchone()
         assert row is not None
-        observed.append(row[0])
+        observed.append(json.loads(row[0])["digest"])
         return connection
 
     monkeypatch.setattr(video_duplicates.sqlite3, "connect", swap_before_sqlite_read)
@@ -655,7 +706,7 @@ def test_video_cache_writers_serialize_and_merge_completed_updates(
         finally:
             finished[number].set()
 
-    with video_duplicates._locked_cache_directory(
+    with cache_service.locked_cache_directory(
         tmp_path, layout.video_cache_lock, exclusive=True
     ):
         threads = [
@@ -708,7 +759,7 @@ def test_video_cache_interruption_preserves_public_cache_and_complete_stage(
     assert len(stages) == 1 and stages[0].is_file()
     connection = sqlite3.connect(stages[0])
     staged_rows = connection.execute(
-        "SELECT file_sha256 FROM video_fingerprints ORDER BY file_sha256"
+        "SELECT file_sha256 FROM derived_evidence ORDER BY file_sha256"
     ).fetchall()
     connection.close()
     assert staged_rows == [("a" * 64,), ("b" * 64,)]
@@ -737,7 +788,7 @@ def test_video_cache_publication_never_writes_through_substituted_path(
     )
     outside_bytes = outside_layout.video_cache.read_bytes()
     displaced = root / "displaced.sqlite3"
-    real_rename = video_duplicates._atomic_cache_rename
+    real_rename = cache_service.atomic_cache_rename
     swapped = False
 
     def substitute_before_publication(*args, **kwargs) -> None:
@@ -749,7 +800,7 @@ def test_video_cache_publication_never_writes_through_substituted_path(
         real_rename(*args, **kwargs)
 
     monkeypatch.setattr(
-        video_duplicates, "_atomic_cache_rename", substitute_before_publication
+        cache_service, "atomic_cache_rename", substitute_before_publication
     )
 
     with pytest.raises(video_duplicates.VideoInspectionError, match="cache path"):

@@ -2,6 +2,23 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.3 - 2026-08-22
+
+- Extract descriptor-pinned cache access, process locking, private staging, and
+  atomic publication into a reusable cache service whose writable directory is
+  independent of the media root being analyzed.
+- Add schema version 1 with generic algorithm/runtime-keyed derived evidence
+  and stable file-identity observations for future hash, probe, image, and
+  validation records.
+- Continue reading valid legacy exact-video caches without modifying them, then
+  migrate their completed fingerprints only inside the next successful atomic
+  cache update.
+- Preserve fail-closed handling for corrupt, malformed, substituted, or
+  unsupported cache data without deleting or rewriting the unexpected file.
+- Keep legacy migration fully transactional, reject non-standard JSON and
+  non-canonical observation paths, and retain only persisted compatibility
+  identifiers as cache module constants.
+
 ## 0.4.2 - 2026-08-22
 
 - Require explicit no-follow metadata inspection for every name returned by
