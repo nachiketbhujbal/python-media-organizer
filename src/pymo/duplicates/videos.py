@@ -1358,10 +1358,16 @@ def derive_candidate_fingerprints(
 
     cache_hits = sum(file_hash in cached for file_hash in unique_hashes)
     cache_misses = len(unique_hashes) - cache_hits
-    print(
-        f"Fingerprint cache: {cache_hits} hit(s), {cache_misses} miss(es); "
-        + ("disabled by --no-cache." if no_cache else "incremental updates enabled.")
-    )
+    if no_cache:
+        print(
+            "Fingerprint cache disabled by --no-cache: no records read or written; "
+            f"{cache_misses} fingerprint(s) required."
+        )
+    else:
+        print(
+            f"Fingerprint cache lookup: {cache_hits} reusable record(s); "
+            f"{cache_misses} fingerprint(s) required."
+        )
     ordered_hashes = sorted(
         unique_hashes.items(), key=lambda item: str(item[1].path).casefold()
     )
@@ -1382,11 +1388,12 @@ def derive_candidate_fingerprints(
     )
     if decode_items:
         print(
-            f"Fingerprinting {len(decode_items)} uncached candidate content "
+            f"Fingerprinting {len(decode_items)} candidate content "
             f"file(s), {format_bytes(progress.total_bytes or 0)} total."
         )
 
     skipped: list[tuple[Path, str]] = []
+    persisted_records = 0
     for number, (file_hash, representative) in enumerate(decode_items, start=1):
         print(
             f"  starting fingerprint {number}/{len(decode_items)} "
@@ -1425,6 +1432,7 @@ def derive_candidate_fingerprints(
                     save_cached_fingerprints(
                         root, database, ffmpeg_release, {file_hash: fingerprint}
                     )
+                    persisted_records += 1
             except VideoInspectionError as error:
                 raise VideoCacheError(
                     f"Fingerprint cache update failed safely: {error}"
@@ -1435,6 +1443,12 @@ def derive_candidate_fingerprints(
         )
         if progress_message:
             print(f"  {progress_message}")
+    if not no_cache:
+        print(
+            f"Fingerprint cache update: {persisted_records} new record(s) persisted; "
+            f"{cache_misses - persisted_records} required fingerprint(s) not "
+            "persisted."
+        )
     return derived, skipped
 
 

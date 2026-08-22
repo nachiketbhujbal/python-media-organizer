@@ -57,7 +57,7 @@ media-collection/
   media-collection-actions-log.jsonl
                         portable append-only action history, after an apply
   .pymo.toml            optional collection-specific configuration
-  .pymo.sqlite3         disposable video fingerprint cache, after a cache miss
+  .pymo.sqlite3         disposable video fingerprint cache, after a persisted fingerprint
   .pymo.sqlite3.lock    persistent cache reader/writer coordination
   other files           non-media files at the collection root
 ```
@@ -328,9 +328,11 @@ Preview and applied runs use `.pymo.sqlite3`, a disposable collection-local
 cache keyed by content, fingerprint algorithm, and FFmpeg version. Each newly
 decoded fingerprint is saved immediately, so an interrupted preview can resume
 and the later `--apply` usually reuses the reviewed work. The command reports
-cache hits and misses. Add `--no-cache` for a run that neither reads nor writes
-the cache. Cache writes are derived local state only: they never move media or
-write action history.
+candidate-relevant reusable records, fingerprints still required, and the
+number of new records durably persisted. Add `--no-cache` for a run that
+neither reads nor writes the cache; that mode emits no lookup or update claim.
+Cache writes are derived local state only: they never move media or write
+action history.
 
 An existing cache is opened read-only through a stable no-follow descriptor
 anchored beneath the collection root, then its exact schema, integrity, and
@@ -353,7 +355,7 @@ FFmpeg and ffprobe are resolved only when at least two eligible videos exist;
 smaller collections do not need a decoder to report that no comparison is
 possible.
 
-Before uncached video decoding begins, the finder reports the number and total
+Before candidate fingerprinting begins, the finder reports the number and total
 size of fingerprints it must calculate. It reports observed progress and data
 rate at stable count milestones or when the configured interval is due,
 estimates remaining time from completed work, and emits a periodic heartbeat

@@ -73,6 +73,7 @@ The same adversarial method was repeated after the first validation release.
 | --- | --- | --- | --- | --- |
 | CACHE-001 | High | Cache reads checked and resolved the public pathname before giving it to SQLite, so a concurrent link substitution could redirect a transient read outside the collection. | 0.3.11 | Resolved in ADR 0048 |
 | CACHE-002 | High | Cache writes use check-then-open pathname access without a dedicated inter-process lock or atomic publication, allowing path substitution, racing updates, and an interrupted update to affect the public cache directly. | 0.3.12 | Resolved in ADR 0049 |
+| CACHE-003 | Low | Video-cache output calls every absent record a miss and promises incremental updates without saying how many fingerprints were successfully persisted; `--no-cache` is mixed into the same hit/miss sentence. | 0.3.16 | Resolved in ADR 0053 |
 
 ## Progress and timing review findings
 
@@ -122,6 +123,8 @@ The same adversarial method was repeated after the first validation release.
   and require three completed observations before projecting an ETA.
 - `0.3.15`: retain total runtime while reporting each executed exact-video
   pipeline stage independently with path-private monotonic timing.
+- `0.3.16`: distinguish reusable cache records, required fingerprints, durable
+  new records, and the complete no-read/no-write cache opt-out.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 

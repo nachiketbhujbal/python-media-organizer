@@ -92,9 +92,16 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert "Would move 2 duplicate(s) from 1 group(s)" in dry_run.stdout
     assert "Potentially reclaimable if extra copies were deleted" in dry_run.stdout
     assert "No files are deleted by this tool" in dry_run.stdout
-    assert "Fingerprint cache: 0 hit(s), 2 miss(es)" in dry_run.stdout
+    assert (
+        "Fingerprint cache lookup: 0 reusable record(s); 2 fingerprint(s) required."
+        in dry_run.stdout
+    )
+    assert (
+        "Fingerprint cache update: 2 new record(s) persisted; "
+        "0 required fingerprint(s) not persisted." in dry_run.stdout
+    )
     assert "inspected 3/3 (100.0%)" in dry_run.stdout
-    assert "Fingerprinting 2 uncached candidate content file(s)" in dry_run.stdout
+    assert "Fingerprinting 2 candidate content file(s)" in dry_run.stdout
     assert "fingerprint progress 2/2 (100.0%)" in dry_run.stdout
     for stage in ("discovery", "probing", "fingerprinting", "planning"):
         assert f"Stage timing: {stage} " in dry_run.stdout
@@ -108,7 +115,14 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     applied = run_script("find_video_duplicates.py", tmp_path, "--apply")
 
     assert applied.returncode == 0, applied.stdout + applied.stderr
-    assert "Fingerprint cache: 2 hit(s), 0 miss(es)" in applied.stdout
+    assert (
+        "Fingerprint cache lookup: 2 reusable record(s); 0 fingerprint(s) required."
+        in applied.stdout
+    )
+    assert (
+        "Fingerprint cache update: 0 new record(s) persisted; "
+        "0 required fingerprint(s) not persisted." in applied.stdout
+    )
     for stage in (
         "discovery",
         "probing",
@@ -156,7 +170,12 @@ def test_video_finder_can_disable_all_cache_reads_and_writes(
     result = run_script("find_video_duplicates.py", tmp_path, "--no-cache")
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "Fingerprint cache: 0 hit(s), 1 miss(es); disabled" in result.stdout
+    assert (
+        "Fingerprint cache disabled by --no-cache: no records read or written; "
+        "1 fingerprint(s) required." in result.stdout
+    )
+    assert "Fingerprint cache lookup:" not in result.stdout
+    assert "Fingerprint cache update:" not in result.stdout
     assert not CollectionLayout(tmp_path).video_cache.exists()
     assert not action_log_path(tmp_path).exists()
 
