@@ -51,3 +51,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0043](0043-portable-descriptor-classification.md) | Portable descriptor-backed classification |
 | [0044](0044-private-repository-actions-budget.md) | Private-repository Actions budget |
 | [0045](0045-descriptor-pinned-video-duplicate-reads.md) | Descriptor-pinned video duplicate reads |
+| [0046](0046-private-free-main-protection-prerequisite.md) | Private-Free main-protection prerequisite |

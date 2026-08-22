@@ -131,8 +131,11 @@ report-only future work and must never silently enter the exact move path.
 - Run the complete suite before handoff.
 - Make ordinary changes on a short-lived branch based on `main`; do not place a
   feature or fix commit directly on `main`. Push the branch, open a pull
-  request, and require its CI `quality` results before merge once the repository
-  ruleset is active. Ordinary branch pushes and tags do not run CI
+  request, and require its CI `quality` results before merge. GitHub Free does
+  not provide server-side branch protection for this private repository, so
+  that boundary is procedural until the account gains Pro or the repository
+  becomes public. Never claim the planned `main` ruleset is active before the
+  GitHub API confirms it. Ordinary branch pushes and tags do not run CI
   automatically while the repository is private; use the manual workflow only
   when pre-PR platform evidence is worth the additional Actions usage.
 - Run subprocess-aware coverage for release review with

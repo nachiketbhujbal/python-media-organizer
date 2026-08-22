@@ -41,12 +41,28 @@ pull request or for an exceptional tag investigation. Each platform job has a
 ten-minute ceiling. Version tags do not rerun the matrix automatically while
 the repository is private.
 
-For a sole-maintainer GitHub ruleset, require a pull request, all platform
-`quality` status checks, and resolved conversations; block force pushes and
-branch deletion. Do not require approval from another person unless another
-active maintainer exists, because that would prevent legitimate self-merges.
-Repository rules are configured in GitHub settings and are not stored by this
-workflow.
+GitHub Free exposes protected branches and rulesets only for public
+repositories. Its APIs return HTTP 403 for this private repository, so the
+following boundary is currently procedural: never force-push or delete `main`,
+never merge without a pull request and all three `quality` checks, and resolve
+every review conversation first.
+
+After GitHub Pro is enabled or the repository deliberately becomes public,
+activate one ruleset targeting only `refs/heads/main`, with no bypass actors:
+
+- block force pushes and branch deletion;
+- require a pull request and resolved review conversations;
+- require `quality (ubuntu-latest)`, `quality (macos-latest)`, and
+  `quality (fedora-42)` with the branch current before merge; and
+- require zero approvals while there is only one maintainer, because a required
+  approval would make legitimate self-merges impossible.
+
+Do not require linear history because intentional merge commits preserve
+release boundaries. Do not require signed commits until commit signing is
+adopted separately. Once the no-bypass ruleset is active, merge through GitHub
+instead of pushing a locally created merge commit to `main`. Verify the active
+rules through the API before describing `main` as protected. ADR 0046 is the
+durable decision.
 
 ## Release classification
 

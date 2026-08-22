@@ -58,13 +58,14 @@ The same adversarial method was repeated after the first validation release.
 | CI-003 | Low | Container checkout marked the worktree safe only in the action's temporary home, so Fedora pre-commit could not invoke Git afterward. | 0.3.6 | Resolved by persisting the isolated worktree trust entry |
 | CI-004 | Medium | Real-media tests generated H.264 with `libx264`, an encoder intentionally absent from Fedora's official free FFmpeg build even though the product only requires decoding. | 0.3.6 | Resolved by generating synthetic fixtures with FFmpeg's native `mpeg4` encoder |
 | CI-005 | Low | Branch, pull-request, mainline, and tag triggers repeated the complete three-platform matrix for the same private-repository release. | 0.3.7 | Resolved in ADR 0044 |
+| CI-006 | Medium | GitHub Free does not expose branch protection or rulesets for a private repository, so `main` cannot yet reject force pushes, deletion, unchecked direct pushes, or unresolved pull-request conversations at the server boundary. | 0.3.9 | Accepted with an explicit activation prerequisite in ADR 0046 |
 
 ## Exact-media review findings
 
 | ID | Severity | Finding | Resolution target | Status |
 | --- | --- | --- | --- | --- |
 | DUP-001 | High | The exact-video finder checked file state around pathname-based classifier, hash, ffprobe, and FFmpeg opens, but a concurrent link swap could still redirect a transient content read outside the collection. | 0.3.8 | Resolved in ADR 0045 |
-| DUP-002 | High | The exact-image finder checks state around pathname-based classification and Pillow opens, leaving the equivalent transient path-redirection window. | 0.3.9 | Open |
+| DUP-002 | High | The exact-image finder checks state around pathname-based classification and Pillow opens, leaving the equivalent transient path-redirection window. | 0.3.10 | Open |
 
 ## Release groups
 
@@ -94,6 +95,8 @@ The same adversarial method was repeated after the first validation release.
 - `0.3.7`: retain pre-merge and post-merge platform evidence while eliminating
   redundant private-repository branch and tag runs.
 - `0.3.8`: pin all exact-video content reads to stable no-follow descriptors.
+- `0.3.9`: record the unavailable private-Free protection boundary and the
+  exact `main` ruleset to activate when the repository becomes eligible.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 
