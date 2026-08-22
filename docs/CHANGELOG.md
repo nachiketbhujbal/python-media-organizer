@@ -2,6 +2,19 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.13 - 2026-08-22
+
+- Replace per-item forced progress output with at most ten evenly spaced
+  completed-item milestones, genuinely due time-interval reports, and one final
+  completed-work row.
+- Apply the same deterministic count cadence across organizing, renaming,
+  scanning, validation, and both duplicate finders while preserving aggregate,
+  path-private rates and totals.
+- Prevent a heartbeat followed by a quick non-milestone completion from
+  immediately printing a redundant completion row.
+- Add deterministic-clock tests for stable milestone counts and heartbeat
+  cadence without changing heartbeat wording or ETA policy.
+
 ## 0.3.12 - 2026-08-22
 
 - Coordinate cache readers and writers through a private collection-local lock,

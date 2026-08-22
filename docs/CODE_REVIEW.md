@@ -74,6 +74,12 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-001 | High | Cache reads checked and resolved the public pathname before giving it to SQLite, so a concurrent link substitution could redirect a transient read outside the collection. | 0.3.11 | Resolved in ADR 0048 |
 | CACHE-002 | High | Cache writes use check-then-open pathname access without a dedicated inter-process lock or atomic publication, allowing path substitution, racing updates, and an interrupted update to affect the public cache directly. | 0.3.12 | Resolved in ADR 0049 |
 
+## Progress and timing review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| PROG-001 | Low | Exact-video fingerprinting forces a completed-work progress row after every candidate, producing hundreds of rows on large collections and an immediate extra row after a heartbeat even when the configured interval is not due. | 0.3.13 | Resolved in ADR 0050 |
+
 ## Release groups
 
 - `0.2.2`: establish ADRs and the locked Ruff, Black, mypy, pre-commit, and
@@ -108,6 +114,8 @@ The same adversarial method was repeated after the first validation release.
 - `0.3.11`: pin SQLite cache reads to a stable no-follow collection descriptor.
 - `0.3.12`: serialize cache access and atomically publish complete, validated,
   durable cache replacements without writing through the public pathname.
+- `0.3.13`: replace forced per-item completion rows with stable count milestones,
+  due interval reports, and one final completed-work row.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 
@@ -120,7 +128,7 @@ The same adversarial method was repeated after the first validation release.
 - Independent typing found unsafe object narrowing in action-log deserialization
   and an imprecise selector file-object type.
 - A first parent-only coverage run reported a misleading 42 percent. After
-  subprocess instrumentation and direct adversarial tests, the current 157
+  subprocess instrumentation and direct adversarial tests, the current 159
   tests pass and the same suite reports 86 percent across real CLI child
   processes.
 

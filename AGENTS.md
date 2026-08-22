@@ -152,6 +152,10 @@ report-only future work and must never silently enter the exact move path.
 - Base performance rates and ETAs on observed work only. Keep aggregate timing
   path-private, preserve stable ordering, and never publish guessed universal
   decode speeds as if they were measurements.
+- Use shared progress milestones for completed work: at most ten evenly spaced
+  count checkpoints plus genuinely due time reports and one final row. Do not
+  force a row after every item; long active-item output belongs to heartbeat
+  reporting.
 - Preserve exit status 130 for Ctrl-C and final observed runtime reporting for
   interrupted or unexpectedly stopped human-readable commands.
 - Keep `README.md`, `HANDOFF.md`, `docs/ROADMAP.md`, `docs/RESEARCH.md`, and
