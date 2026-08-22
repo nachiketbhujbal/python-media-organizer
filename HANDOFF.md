@@ -13,12 +13,16 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.14` heartbeat-and-ETA release. It is a
+`pymo` command, and has a `v0.3.15` stage-timing release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.14 separates active-item heartbeats from completed-work status and
+Version 0.3.15 adds independent, path-private monotonic durations for the
+exact-video discovery, probing, fingerprinting, planning, apply, and
+verification stages. Only stages that actually execute are reported, while the
+CLI retains its whole-command runtime. Version 0.3.14 separates active-item
+heartbeats from completed-work status and
 withholds ETA projections until three items have completed. Heartbeats report
 only the active item, completed count, and elapsed time, so a long decode never
 repeats stale throughput or ETA. Version 0.3.13 replaces per-item forced
@@ -411,6 +415,12 @@ row rather than forcing output for every candidate. These reports do not include
 filenames. The default interval is 15 seconds through
 `performance.progress_interval_seconds`; accepted values are 1..3600.
 
+The exact-video pipeline reports independent `Stage timing` records for
+discovery, probing, fingerprinting, and planning. Applied runs also report
+apply and verification when duplicate moves actually execute. These monotonic
+records contain a fixed stage label and duration only; they do not disclose a
+collection path or filename and do not replace the final command runtime.
+
 ## Collection scan
 
 `src/pymo/scan.py` provides the read-only first-run `pymo scan COLLECTION`
@@ -554,7 +564,8 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;
 - command runtime summaries, optional ISO console timestamps, timestamped
-  multi-line file logs, deterministic duration/rate/ETA formatting, stable
+  multi-line file logs, deterministic duration/rate/ETA formatting, exact-video
+  stage timing, stable
   ten-milestone completed-work cadence, no forced per-item rows, early-ETA
   suppression, and distinct path-private long-FFmpeg heartbeat behavior;
 - typed configuration parsing, immutable/additive defaults, validated media

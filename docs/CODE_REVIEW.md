@@ -80,6 +80,7 @@ The same adversarial method was repeated after the first validation release.
 | --- | --- | --- | --- | --- |
 | PROG-001 | Low | Exact-video fingerprinting forces a completed-work progress row after every candidate, producing hundreds of rows on large collections and an immediate extra row after a heartbeat even when the configured interval is not due. | 0.3.13 | Resolved in ADR 0050 |
 | PROG-002 | Low | A long-item heartbeat reuses the completed-work formatter, so it repeats stale throughput and a volatile ETA while no additional work has completed; ETA also appears after only one observation. | 0.3.14 | Resolved in ADR 0051 |
+| PROG-003 | Low | The CLI reports only whole-command runtime, so an expensive exact-video run does not reveal whether discovery, probing, fingerprinting, planning, mutation, or verification consumed the time. | 0.3.15 | Resolved in ADR 0052 |
 
 ## Release groups
 
@@ -119,6 +120,8 @@ The same adversarial method was repeated after the first validation release.
   due interval reports, and one final completed-work row.
 - `0.3.14`: separate active-item heartbeat facts from completed-work estimates
   and require three completed observations before projecting an ETA.
+- `0.3.15`: retain total runtime while reporting each executed exact-video
+  pipeline stage independently with path-private monotonic timing.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 
@@ -131,7 +134,7 @@ The same adversarial method was repeated after the first validation release.
 - Independent typing found unsafe object narrowing in action-log deserialization
   and an imprecise selector file-object type.
 - A first parent-only coverage run reported a misleading 42 percent. After
-  subprocess instrumentation and direct adversarial tests, the current 160
+  subprocess instrumentation and direct adversarial tests, the current 161
   tests pass and the same suite reports 86 percent across real CLI child
   processes.
 

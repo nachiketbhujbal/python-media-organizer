@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 
 
@@ -36,6 +37,23 @@ def format_bytes(size: float) -> str:
             return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
         value /= 1024
     raise AssertionError("unreachable")
+
+
+@dataclass
+class StageTimer:
+    """Measure named stages and report path-private elapsed durations."""
+
+    reporter: Callable[[str], None]
+    clock: Callable[[], float] = field(default=time.monotonic, repr=False)
+
+    @contextmanager
+    def measure(self, label: str) -> Iterator[None]:
+        started_at = self.clock()
+        try:
+            yield
+        finally:
+            elapsed = max(0.0, self.clock() - started_at)
+            self.reporter(f"Stage timing: {label} {format_duration(elapsed)}")
 
 
 @dataclass

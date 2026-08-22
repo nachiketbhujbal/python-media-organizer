@@ -96,6 +96,10 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert "inspected 3/3 (100.0%)" in dry_run.stdout
     assert "Fingerprinting 2 uncached candidate content file(s)" in dry_run.stdout
     assert "fingerprint progress 2/2 (100.0%)" in dry_run.stdout
+    for stage in ("discovery", "probing", "fingerprinting", "planning"):
+        assert f"Stage timing: {stage} " in dry_run.stdout
+    assert "Stage timing: apply " not in dry_run.stdout
+    assert "Stage timing: verification " not in dry_run.stdout
     assert "/s" in dry_run.stdout
     assert not (tmp_path / "dups").exists()
     assert cache.is_file()
@@ -105,6 +109,15 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
 
     assert applied.returncode == 0, applied.stdout + applied.stderr
     assert "Fingerprint cache: 2 hit(s), 0 miss(es)" in applied.stdout
+    for stage in (
+        "discovery",
+        "probing",
+        "fingerprinting",
+        "planning",
+        "apply",
+        "verification",
+    ):
+        assert f"Stage timing: {stage} " in applied.stdout
     assert not base.exists()
     assert not byte_copy.exists()
     assert metadata_copy.exists()
