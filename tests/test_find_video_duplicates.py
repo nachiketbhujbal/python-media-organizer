@@ -8,8 +8,9 @@ from pathlib import Path
 import pytest
 
 from pymo.duplicates import videos as video_duplicates
-from pymo.duplicates.videos import DATABASE_FILENAME, ProbeInfo
+from pymo.duplicates.videos import ProbeInfo
 from pymo.action_log import action_log_path
+from pymo.collection import CollectionLayout
 
 
 FFMPEG = shutil.which("ffmpeg")
@@ -61,6 +62,7 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
 ) -> None:
     vids = tmp_path / "vids"
     vids.mkdir()
+    cache = CollectionLayout(tmp_path).video_cache
     base = vids / "base.mp4"
     byte_copy = vids / "byte-copy.mp4"
     remux = vids / "remux.mkv"
@@ -75,7 +77,7 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert "Potentially reclaimable if extra copies were deleted" in dry_run.stdout
     assert "No files are deleted by this tool" in dry_run.stdout
     assert not (tmp_path / "dups").exists()
-    assert not (tmp_path / DATABASE_FILENAME).exists()
+    assert not cache.exists()
     assert not action_log_path(tmp_path).exists()
 
     applied = run_script("find_video_duplicates.py", tmp_path, "--apply")
@@ -87,9 +89,9 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert (tmp_path / "dups" / "vids" / "base_copy(1).mp4").exists()
     assert (tmp_path / "dups" / "vids" / "base_copy(2).mkv").exists()
     assert not (tmp_path / "dups" / "pics").exists()
-    assert (tmp_path / DATABASE_FILENAME).is_file()
-    assert not (tmp_path / f"{DATABASE_FILENAME}-wal").exists()
-    assert not (tmp_path / f"{DATABASE_FILENAME}-shm").exists()
+    assert cache.is_file()
+    assert not cache.with_name(f"{cache.name}-wal").exists()
+    assert not cache.with_name(f"{cache.name}-shm").exists()
     assert action_log_path(tmp_path).is_file()
 
     undone = run_script("find_video_duplicates.py", tmp_path, "--undo", "--apply")
@@ -99,7 +101,7 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert byte_copy.exists()
     assert remux.exists()
     assert not (tmp_path / "dups").exists()
-    assert (tmp_path / DATABASE_FILENAME).is_file()
+    assert cache.is_file()
     assert action_log_path(tmp_path).is_file()
 
 

@@ -614,11 +614,12 @@ always better; it may merely contain more metadata or inefficient compression.
 Borrow the good parts of rule-based organizers without arbitrary code
 execution:
 
-Version 0.1.2 establishes the safe base layer: schema-versioned TOML, immutable
-packaged ignore defaults, collection-local extensions, explicit alternate
-config selection, and one shared interpretation across all forward commands.
-It intentionally supports only ignore patterns so broader profiles cannot
-silently introduce destructive or executable behavior.
+Version 0.1.2 established schema-versioned ignore configuration. Version 0.1.3
+extends that safe base with typed classification, renaming, image-inspection,
+and video-timeout policy. Custom arrays are additive, values are strictly
+validated, and configuration remains constrained data rather than executable
+rules. Fixed collection paths and journal/cache protocol identifiers remain
+code invariants because making them adjustable would weaken compatibility.
 
 - named TOML profiles;
 - validated fields and constrained actions;

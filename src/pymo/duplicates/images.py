@@ -26,7 +26,9 @@ from pymo.action_log import (
     ActionLog,
     ActionLogError,
     NoUndoableRun,
+    ToolId,
 )
+from pymo.collection import CollectionLayout
 from pymo.config import (
     ConfigError,
     PymoConfig,
@@ -46,22 +48,6 @@ except ImportError:
         file=sys.stderr,
     )
     raise SystemExit(2)
-
-
-IMAGE_EXTENSIONS = {
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".webp",
-    ".bmp",
-    ".tif",
-    ".tiff",
-    ".gif",
-}
-
-TOOL_NAME = "find_image_duplicates"
-PICS_NAME = "pics"
-DUPS_NAME = "dups"
 
 
 @dataclass(frozen=True)
@@ -121,7 +107,7 @@ def discover_images(
             continue
         if (
             not path.is_file()
-            or path.suffix.lower() not in IMAGE_EXTENSIONS
+            or path.suffix.lower() not in config.image_duplicates.extensions
         ):
             continue
         result.append(path.resolve())
@@ -133,7 +119,8 @@ def discover_images(
 
 def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
     """Validate only the image finder's owned source and review locations."""
-    pics = root / PICS_NAME
+    layout = CollectionLayout(root)
+    pics = layout.pics
     problems: list[str] = []
     if pics.is_symlink():
         problems.append(f"required folder is a symbolic link: {pics}")
@@ -142,13 +129,13 @@ def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
     elif not pics.is_dir():
         problems.append(f"required folder is not a directory: {pics}")
 
-    dups = root / DUPS_NAME
+    dups = layout.dups
     if dups.is_symlink():
         problems.append(f"reserved folder is a symbolic link: {dups}")
     elif dups.exists() and not dups.is_dir():
         problems.append(f"reserved path is not a directory: {dups}")
     elif dups.is_dir():
-        duplicate_pics = dups / PICS_NAME
+        duplicate_pics = layout.duplicate_pics
         if duplicate_pics.is_symlink():
             problems.append(f"reserved media path is a symbolic link: {duplicate_pics}")
         elif duplicate_pics.exists() and not duplicate_pics.is_dir():
@@ -157,7 +144,7 @@ def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
     if problems:
         return problems
 
-    classifier = Classifier()
+    classifier = Classifier(config.classification)
     for path in pics.iterdir():
         if path.is_symlink():
             problems.append(f"symbolic link cannot be verified: {path}")
@@ -177,8 +164,8 @@ def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
 
 
 def review_directories(root: Path) -> tuple[Path, Path]:
-    dups = root / DUPS_NAME
-    return dups, dups / PICS_NAME
+    layout = CollectionLayout(root)
+    return layout.dups, layout.duplicate_pics
 
 
 def format_size(size: int) -> str:
@@ -324,7 +311,7 @@ def reorganize_existing(
                 for _, source, target in plan
             ]
             log = ActionLog(root)
-            with log.transaction(TOOL_NAME) as transaction:
+            with log.transaction(ToolId.IMAGE_DUPLICATES) as transaction:
                 for directory in review_directories(root):
                     if not directory.exists():
                         transaction.perform(Action.create_directory(root, directory))
@@ -366,7 +353,7 @@ def describe_undo_action(root: Path, action: Action, apply: bool) -> None:
 def undo_duplicate_run(root: Path, apply: bool) -> int:
     log = ActionLog(root)
     try:
-        plan = log.plan_undo(TOOL_NAME)
+        plan = log.plan_undo(ToolId.IMAGE_DUPLICATES)
     except NoUndoableRun as error:
         print(str(error), file=sys.stderr)
         return 2
@@ -385,7 +372,7 @@ def undo_duplicate_run(root: Path, apply: bool) -> int:
         return 0
 
     try:
-        result = log.apply_undo(TOOL_NAME)
+        result = log.apply_undo(ToolId.IMAGE_DUPLICATES)
     except (ActionConflict, ActionLogError, OSError) as error:
         print(f"Duplicate undo failed safely: {error}", file=sys.stderr)
         return 1
@@ -497,7 +484,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
-    pics = root / PICS_NAME
+    pics = CollectionLayout(root).pics
     paths, ignored = discover_images(pics, root, config)
     print(f"Scanning {len(paths)} image(s) in {pics}")
     summary = ignored_summary(ignored)
@@ -555,7 +542,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for _, _, duplicate, target in move_plan
             ]
             log = ActionLog(root)
-            with log.transaction(TOOL_NAME) as transaction:
+            with log.transaction(ToolId.IMAGE_DUPLICATES) as transaction:
                 for directory in review_directories(root):
                     if not directory.exists():
                         transaction.perform(Action.create_directory(root, directory))

@@ -12,15 +12,38 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Iterator, TextIO
 
+from pymo.collection import CollectionLayout
 
-ACTION_LOG_SUFFIX = "-actions-log.jsonl"
-LEGACY_LOG_FILENAME = "media_actions.jsonl"
-SCHEMA_VERSION = 1
-FILE_OPERATIONS = {"MOVE", "RENAME"}
-DIRECTORY_OPERATIONS = {"CREATE_DIR", "REMOVE_DIR"}
+
+# This constant identifies the existing on-disk journal schema. It must stay
+# stable so current and legacy collection histories remain readable.
+ACTION_LOG_SCHEMA_VERSION = 1
+
+
+class ActionOperation(StrEnum):
+    """Stable operation identifiers persisted in action records."""
+
+    MOVE = "MOVE"
+    RENAME = "RENAME"
+    CREATE_DIRECTORY = "CREATE_DIR"
+    REMOVE_DIRECTORY = "REMOVE_DIR"
+
+    @property
+    def is_file(self) -> bool:
+        return self in (self.MOVE, self.RENAME)
+
+
+class ToolId(StrEnum):
+    """Stable tool identifiers persisted in the append-only action log."""
+
+    ORGANIZE = "organize_media"
+    RENAME = "rename_media"
+    IMAGE_DUPLICATES = "find_image_duplicates"
+    VIDEO_DUPLICATES = "find_video_duplicates"
 
 
 class ActionLogError(RuntimeError):
@@ -38,12 +61,12 @@ class NoUndoableRun(ActionLogError):
 def action_log_path(root: Path) -> Path:
     """Return the canonical action-log path for a media-collection root."""
     root = root.expanduser().resolve()
-    collection_name = root.name or "media-collection"
-    return root / f"{collection_name}{ACTION_LOG_SUFFIX}"
+    return CollectionLayout(root).action_log
 
 
 def legacy_action_log_path(root: Path) -> Path:
-    return root.expanduser().resolve() / LEGACY_LOG_FILENAME
+    root = root.expanduser().resolve()
+    return CollectionLayout(root).legacy_action_log
 
 
 def action_log_exists(root: Path) -> bool:
@@ -110,18 +133,28 @@ class Action:
     identity: dict[str, int | str] | None = None
 
     def __post_init__(self) -> None:
-        if self.operation not in FILE_OPERATIONS | DIRECTORY_OPERATIONS:
+        try:
+            operation = ActionOperation(self.operation)
+        except ValueError as error:
             raise ActionLogError(f"unsupported operation: {self.operation}")
-        if self.operation in FILE_OPERATIONS:
+        if operation.is_file:
             if not self.before or not self.after or self.entry_type != "file":
                 raise ActionLogError("file actions require before and after paths")
             if not self.identity:
                 raise ActionLogError("file actions require identity information")
-        elif self.operation == "CREATE_DIR":
-            if self.before is not None or not self.after or self.entry_type != "directory":
+        elif operation is ActionOperation.CREATE_DIRECTORY:
+            if (
+                self.before is not None
+                or not self.after
+                or self.entry_type != "directory"
+            ):
                 raise ActionLogError("CREATE_DIR requires only an after path")
-        elif self.operation == "REMOVE_DIR":
-            if not self.before or self.after is not None or self.entry_type != "directory":
+        elif operation is ActionOperation.REMOVE_DIRECTORY:
+            if (
+                not self.before
+                or self.after is not None
+                or self.entry_type != "directory"
+            ):
                 raise ActionLogError("REMOVE_DIR requires only a before path")
 
     @classmethod
@@ -133,7 +166,11 @@ class Action:
         operation: str,
     ) -> Action:
         operation = operation.upper()
-        if operation not in FILE_OPERATIONS:
+        try:
+            parsed_operation = ActionOperation(operation)
+        except ValueError as error:
+            raise ActionLogError(f"not a file operation: {operation}") from error
+        if not parsed_operation.is_file:
             raise ActionLogError(f"not a file operation: {operation}")
         return cls(
             operation=operation,
@@ -162,7 +199,7 @@ class Action:
         )
 
     def reversed(self) -> Action:
-        if self.operation in FILE_OPERATIONS:
+        if ActionOperation(self.operation).is_file:
             return Action(
                 operation=self.operation,
                 before=self.after,
@@ -170,7 +207,7 @@ class Action:
                 entry_type=self.entry_type,
                 identity=self.identity,
             )
-        if self.operation == "CREATE_DIR":
+        if self.operation == ActionOperation.CREATE_DIRECTORY:
             return Action(
                 operation="REMOVE_DIR",
                 before=self.after,
@@ -346,7 +383,7 @@ class ActionLog:
 
     def _append(self, handle: TextIO, event: dict[str, object]) -> None:
         value = {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": ACTION_LOG_SCHEMA_VERSION,
             "timestamp": _timestamp(),
             **event,
         }
@@ -367,7 +404,10 @@ class ActionLog:
                 raise ActionLogError(
                     f"invalid JSON on line {line_number} of {self.path}"
                 ) from error
-            if not isinstance(event, dict) or event.get("schema_version") != SCHEMA_VERSION:
+            if (
+                not isinstance(event, dict)
+                or event.get("schema_version") != ACTION_LOG_SCHEMA_VERSION
+            ):
                 raise ActionLogError(
                     f"unsupported action-log record on line {line_number}"
                 )
@@ -495,7 +535,7 @@ class ActionLog:
     def _execute_action(self, action: Action) -> None:
         before = _absolute_path(self.root, action.before) if action.before else None
         after = _absolute_path(self.root, action.after) if action.after else None
-        if action.operation in FILE_OPERATIONS:
+        if ActionOperation(action.operation).is_file:
             assert before is not None and after is not None and action.identity is not None
             if not self._identity_matches(before, action.identity):
                 raise ActionConflict(f"source file is missing or changed: {action.before}")
@@ -507,7 +547,7 @@ class ActionLog:
                 )
             shutil.move(str(before), str(after))
             return
-        if action.operation == "CREATE_DIR":
+        if action.operation == ActionOperation.CREATE_DIRECTORY:
             assert after is not None
             if os.path.lexists(after):
                 raise ActionConflict(f"directory destination is occupied: {action.after}")
@@ -528,7 +568,7 @@ class ActionLog:
     def _forward_state(self, action: Action) -> str:
         before = _absolute_path(self.root, action.before) if action.before else None
         after = _absolute_path(self.root, action.after) if action.after else None
-        if action.operation in FILE_OPERATIONS:
+        if ActionOperation(action.operation).is_file:
             assert before is not None and after is not None and action.identity is not None
             before_matches = self._identity_matches(before, action.identity)
             after_matches = self._identity_matches(after, action.identity)
@@ -539,7 +579,7 @@ class ActionLog:
             if not before_exists and after_matches:
                 return "applied"
             return "conflict"
-        if action.operation == "CREATE_DIR":
+        if action.operation == ActionOperation.CREATE_DIRECTORY:
             assert after is not None
             if after.is_dir() and not after.is_symlink():
                 return "applied"
@@ -590,7 +630,7 @@ class ActionLog:
     def _simulate(self, actions: list[Action]) -> None:
         entries = self._snapshot()
         for action in actions:
-            if action.operation in FILE_OPERATIONS:
+            if ActionOperation(action.operation).is_file:
                 assert action.before and action.after and action.identity
                 if entries.get(action.before) != "file":
                     raise ActionConflict(f"expected file is missing: {action.before}")
@@ -604,7 +644,7 @@ class ActionLog:
                     raise ActionConflict(f"destination parent is missing: {parent}")
                 del entries[action.before]
                 entries[action.after] = "file"
-            elif action.operation == "CREATE_DIR":
+            elif action.operation == ActionOperation.CREATE_DIRECTORY:
                 assert action.after
                 if action.after in entries:
                     raise ActionConflict(f"directory destination is occupied: {action.after}")

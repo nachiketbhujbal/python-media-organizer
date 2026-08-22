@@ -27,10 +27,13 @@ from pymo.action_log import (
     ActionLog,
     ActionLogError,
     NoUndoableRun,
+    ToolId,
     action_log_exists,
     is_action_log_path,
 )
+from pymo.collection import CollectionLayout
 from pymo.config import (
+    ClassificationConfig,
     ConfigError,
     PymoConfig,
     add_config_argument,
@@ -38,68 +41,6 @@ from pymo.config import (
     load_config,
 )
 from pymo.logging_config import emit as print
-
-
-IMAGE_EXTENSIONS = {
-    ".avif",
-    ".bmp",
-    ".cr2",
-    ".cr3",
-    ".dng",
-    ".gif",
-    ".heic",
-    ".heif",
-    ".jfif",
-    ".jpe",
-    ".jpeg",
-    ".jpg",
-    ".nef",
-    ".orf",
-    ".png",
-    ".raf",
-    ".raw",
-    ".rw2",
-    ".svg",
-    ".tif",
-    ".tiff",
-    ".webp",
-}
-
-VIDEO_EXTENSIONS = {
-    ".3g2",
-    ".3gp",
-    ".asf",
-    ".avi",
-    ".divx",
-    ".flv",
-    ".m2ts",
-    ".m4v",
-    ".mkv",
-    ".mov",
-    ".mp4",
-    ".mpe",
-    ".mpeg",
-    ".mpg",
-    ".mts",
-    ".ogv",
-    ".rm",
-    ".rmvb",
-    ".ts",
-    ".vob",
-    ".webm",
-    ".wmv",
-}
-
-VIDEO_APPLICATION_MIMES = {
-    "application/mp4",
-    "application/ogg",
-    "application/vnd.rn-realmedia",
-}
-
-GENERIC_MIMES = {
-    "application/octet-stream",
-    "inode/x-empty",
-}
 
 
 @dataclass(frozen=True)
@@ -126,7 +67,8 @@ class UndoRecord:
 
 
 class Classifier:
-    def __init__(self) -> None:
+    def __init__(self, policy: ClassificationConfig) -> None:
+        self.policy = policy
         self.file_command = shutil.which("file")
         self.warning: str | None = None
         if not self.file_command:
@@ -158,14 +100,17 @@ class Classifier:
         mime_type = self.detect_mime(path)
         if mime_type.startswith("image/"):
             return "picture", mime_type
-        if mime_type.startswith("video/") or mime_type in VIDEO_APPLICATION_MIMES:
+        if (
+            mime_type.startswith("video/")
+            or mime_type in self.policy.video_application_mime_types
+        ):
             return "video", mime_type
 
         extension = path.suffix.lower()
-        if mime_type in GENERIC_MIMES or mime_type == "unknown":
-            if extension in IMAGE_EXTENSIONS:
+        if mime_type in self.policy.generic_mime_types or mime_type == "unknown":
+            if extension in self.policy.image_extensions:
                 return "picture", mime_type
-            if extension in VIDEO_EXTENSIONS:
+            if extension in self.policy.video_extensions:
                 return "video", mime_type
 
         # A meaningful non-media content signature takes precedence over a
@@ -184,11 +129,7 @@ def path_exists(path: Path) -> bool:
 
 def is_in_dups(path: Path, root: Path) -> bool:
     """Return whether path is the reserved dups tree or one of its children."""
-    try:
-        relative = path.relative_to(root)
-    except ValueError:
-        return False
-    return bool(relative.parts) and relative.parts[0] == "dups"
+    return CollectionLayout(root).is_in_duplicates(path)
 
 
 def available_target(
@@ -341,8 +282,14 @@ def _contains_only_ignored_entries(
 def remaining_directories(
     root: Path, pics: Path, vids: Path, config: PymoConfig
 ) -> list[Path]:
-    dups = root / "dups"
-    allowed = {pics, vids, dups, dups / "pics", dups / "vids"}
+    layout = CollectionLayout(root)
+    allowed = {
+        pics,
+        vids,
+        layout.dups,
+        layout.duplicate_pics,
+        layout.duplicate_vids,
+    }
     directories: list[Path] = []
     for current, directory_names, _ in os.walk(root, topdown=True):
         current_path = Path(current)
@@ -597,7 +544,8 @@ def undo_organization(
             )
             return 1
         print(f"Removed consumed organization manifest: {manifest_path}")
-        for destination in (root / "pics", root / "vids"):
+        layout = CollectionLayout(root)
+        for destination in (layout.pics, layout.vids):
             if destination.is_dir() and not any(destination.iterdir()):
                 print(
                     f"Empty directory retained for safety: {destination} "
@@ -626,7 +574,7 @@ def describe_logged_action(root: Path, action: Action, apply: bool) -> None:
 def undo_logged_organization(root: Path, apply: bool) -> int:
     log = ActionLog(root)
     try:
-        plan = log.plan_undo("organize_media")
+        plan = log.plan_undo(ToolId.ORGANIZE)
     except NoUndoableRun as error:
         print(str(error), file=sys.stderr)
         return 2
@@ -646,7 +594,7 @@ def undo_logged_organization(root: Path, apply: bool) -> int:
         return 0
 
     try:
-        result = log.apply_undo("organize_media")
+        result = log.apply_undo(ToolId.ORGANIZE)
     except (ActionConflict, ActionLogError, OSError) as error:
         print(f"Undo failed safely: {error}", file=sys.stderr)
         return 1
@@ -727,8 +675,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Cannot use configuration: {error}", file=sys.stderr)
         return 2
 
-    pics = root / "pics"
-    vids = root / "vids"
+    layout = CollectionLayout(root)
+    pics = layout.pics
+    vids = layout.vids
     for destination in (pics, vids):
         if destination.is_symlink():
             print(f"Refusing to use a symbolic link as a destination: {destination}")
@@ -737,7 +686,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"A file is blocking the required directory: {destination}")
             return 2
 
-    dups = root / "dups"
+    dups = layout.dups
     if dups.is_symlink():
         print(f"Refusing to use a symbolic link as the reserved directory: {dups}")
         return 2
@@ -745,7 +694,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"A file is blocking the reserved directory: {dups}")
         return 2
 
-    classifier = Classifier()
+    classifier = Classifier(config.classification)
     if classifier.warning:
         print(f"Warning: {classifier.warning}")
 
@@ -774,7 +723,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for move in plan
             ]
             log = ActionLog(root)
-            with log.transaction("organize_media") as transaction:
+            with log.transaction(ToolId.ORGANIZE) as transaction:
                 for destination in missing_destinations:
                     transaction.perform(Action.create_directory(root, destination))
                 for file_action in file_actions:

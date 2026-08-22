@@ -8,9 +8,11 @@ from pathlib import Path
 from typing import TextIO
 
 
-LOGGER_NAME = "pymo"
-logger = logging.getLogger(LOGGER_NAME)
-logger.propagate = False
+def _logger() -> logging.Logger:
+    """Return logging's process-wide named singleton without mirroring it."""
+    value = logging.getLogger("pymo")
+    value.propagate = False
+    return value
 
 
 class _MaximumLevel(logging.Filter):
@@ -26,6 +28,7 @@ def configure_logging(
     *, verbose: bool = False, quiet: bool = False, log_file: Path | None = None
 ) -> None:
     """Configure console logging and an optional explicitly requested file."""
+    logger = _logger()
     logger.handlers.clear()
     level = logging.WARNING if quiet else logging.DEBUG if verbose else logging.INFO
     logger.setLevel(level)
@@ -56,6 +59,7 @@ def configure_logging(
 
 
 def ensure_logging() -> None:
+    logger = _logger()
     if not logger.handlers:
         configure_logging()
 
@@ -74,6 +78,7 @@ def emit(
     """
     del flush
     ensure_logging()
+    logger = _logger()
     message = sep.join(str(value) for value in values)
     if end and end != "\n":
         message += end
@@ -81,4 +86,3 @@ def emit(
         logger.error(message)
     else:
         logger.info(message)
-

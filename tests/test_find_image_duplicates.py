@@ -84,6 +84,30 @@ def test_duplicate_finder_honors_custom_file_rules(
     assert not action_log_path(tmp_path).exists()
 
 
+def test_duplicate_finder_uses_custom_inspection_extensions(
+    tmp_path: Path, run_script
+) -> None:
+    pics, _ = make_organized_collection(tmp_path)
+    first = pics / "first.flower"
+    second = pics / "second.flower"
+    Image.new("RGB", (2, 2), "green").save(first, format="PNG")
+    Image.new("RGB", (2, 2), "green").save(second, format="PNG")
+    (tmp_path / ".pymo.toml").write_text(
+        "version = 1\n"
+        "[image_duplicates]\n"
+        'extensions = [".flower"]\n',
+        encoding="utf-8",
+    )
+
+    result = run_script("find_image_duplicates.py", tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Scanning 2 image(s)" in result.stdout
+    assert "Would move 1 duplicate" in result.stdout
+    assert first.exists()
+    assert second.exists()
+
+
 def test_duplicate_finder_requires_organized_collection_root(
     tmp_path: Path, run_script
 ) -> None:

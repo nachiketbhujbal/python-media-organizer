@@ -29,8 +29,9 @@ never duplicate the version in source or static project metadata.
 - Keep packaged ignore defaults active for every forward command. Ignored paths
   are never moved, renamed, fingerprinted, deleted, or action-logged.
 - A collection `.pymo.toml` or explicit `--config` may only extend packaged
-  defaults. Reject malformed or unsafe configuration before mutation. Undo is
-  driven by recorded actions and remains independent of current ignore rules.
+  list defaults; the validated video timeout may override its packaged value.
+  Reject malformed or unsafe configuration before mutation. Undo is driven by
+  recorded actions and remains independent of current configuration.
 - Treat `.pymo.sqlite3` as derived, disposable cache data, never as the
   authoritative action history.
 
@@ -46,6 +47,7 @@ never duplicate the version in source or static project metadata.
   duplicate detection using FFmpeg/ffprobe. It owns only `vids` and `dups/vids`.
 - `src/pymo/action_log.py`: shared append-only mutation journal and guarded
   dependency-aware undo.
+- `src/pymo/collection.py`: immutable canonical paths for one collection.
 - `src/pymo/logging_config.py`: console logging plus explicitly requested local
   log files.
 - `src/pymo/config.py` and `src/pymo/default_config.toml`: validated shared
@@ -55,6 +57,13 @@ never duplicate the version in source or static project metadata.
 Preserve the four-character collection folder convention: `pics`, `vids`, and
 `dups`. Do not blur image/video duplicate ownership. Image behavior must not
 depend on video folders, and video behavior must not depend on picture folders.
+
+Avoid mutable module-level state. User-adjustable policy belongs in validated
+packaged TOML defaults; fixed collection paths belong in `CollectionLayout`.
+Module constants are reserved for explicit on-disk compatibility identifiers
+such as schema and fingerprint algorithm versions, with an adjacent
+justification. Do not replace clear constants with hidden environment-variable
+configuration.
 
 The image finder's exact-pixel matching, keeper selection, readable duplicate
 naming, conservative skips, shared-log integration, and undo are approved. Do

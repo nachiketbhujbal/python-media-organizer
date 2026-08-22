@@ -34,7 +34,9 @@ from pymo.action_log import (
     ActionLog,
     ActionLogError,
     NoUndoableRun,
+    ToolId,
 )
+from pymo.collection import CollectionLayout
 from pymo.config import (
     ConfigError,
     PymoConfig,
@@ -46,14 +48,9 @@ from pymo.logging_config import emit as print
 from pymo.organize import Classifier
 
 
-TOOL_NAME = "find_video_duplicates"
-VIDS_NAME = "vids"
-DUPS_NAME = "dups"
-DATABASE_FILENAME = ".pymo.sqlite3"
+# This value is persisted with derived fingerprints. Changing the algorithm
+# without changing this identifier could reuse incompatible cached results.
 FINGERPRINT_ALGORITHM = "exact-playback-v2"
-DEFAULT_DECODE_TIMEOUT = 60 * 60
-HIGH_BIT_DEPTH_PATTERN = re.compile(r"(?:10|12|14|16|48|64)(?:le|be)?$")
-HDR_TRANSFERS = {"arib-std-b67", "smpte2084"}
 
 
 class VideoInspectionError(RuntimeError):
@@ -221,9 +218,10 @@ def probe_video(path: Path, ffprobe: str) -> ProbeInfo:
     bit_depth = video.get("bits_per_raw_sample")
     if (
         not pixel_format
-        or HIGH_BIT_DEPTH_PATTERN.search(pixel_format)
+        or re.search(r"(?:10|12|14|16|48|64)(?:le|be)?$", pixel_format)
         or (str(bit_depth).isdigit() and int(str(bit_depth)) > 8)
-        or str(video.get("color_transfer") or "").lower() in HDR_TRANSFERS
+        or str(video.get("color_transfer") or "").lower()
+        in ("arib-std-b67", "smpte2084")
     ):
         raise VideoInspectionError(
             f"HDR or high-bit-depth pixel format is not yet supported: {pixel_format or 'unknown'}"
@@ -303,7 +301,8 @@ def discover_videos(
 
 def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
     """Validate only the video finder's owned source and review locations."""
-    vids = root / VIDS_NAME
+    layout = CollectionLayout(root)
+    vids = layout.vids
     problems: list[str] = []
     if vids.is_symlink():
         problems.append(f"required folder is a symbolic link: {vids}")
@@ -312,13 +311,13 @@ def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
     elif not vids.is_dir():
         problems.append(f"required folder is not a directory: {vids}")
 
-    dups = root / DUPS_NAME
+    dups = layout.dups
     if dups.is_symlink():
         problems.append(f"reserved folder is a symbolic link: {dups}")
     elif dups.exists() and not dups.is_dir():
         problems.append(f"reserved path is not a directory: {dups}")
     elif dups.is_dir():
-        duplicate_vids = dups / VIDS_NAME
+        duplicate_vids = layout.duplicate_vids
         if duplicate_vids.is_symlink():
             problems.append(f"reserved media path is a symbolic link: {duplicate_vids}")
         elif duplicate_vids.exists() and not duplicate_vids.is_dir():
@@ -326,7 +325,7 @@ def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
 
     if problems:
         return problems
-    classifier = Classifier()
+    classifier = Classifier(config.classification)
     for path in vids.iterdir():
         if path.is_symlink():
             problems.append(f"symbolic link cannot be verified: {path}")
@@ -346,8 +345,8 @@ def collection_layout_problems(root: Path, config: PymoConfig) -> list[str]:
 
 
 def review_directories(root: Path) -> tuple[Path, Path]:
-    dups = root / DUPS_NAME
-    return dups, dups / VIDS_NAME
+    layout = CollectionLayout(root)
+    return layout.dups, layout.duplicate_vids
 
 
 def resolve_executable(value: Path | None, name: str) -> str:
@@ -718,7 +717,7 @@ def describe_undo_action(root: Path, action: Action, apply: bool) -> None:
 def undo_duplicate_run(root: Path, apply: bool) -> int:
     log = ActionLog(root)
     try:
-        plan = log.plan_undo(TOOL_NAME)
+        plan = log.plan_undo(ToolId.VIDEO_DUPLICATES)
     except NoUndoableRun as error:
         print(str(error), file=sys.stderr)
         return 2
@@ -735,7 +734,7 @@ def undo_duplicate_run(root: Path, apply: bool) -> int:
             print("Dry run only. Add --apply after reviewing this list.")
         return 0
     try:
-        result = log.apply_undo(TOOL_NAME)
+        result = log.apply_undo(ToolId.VIDEO_DUPLICATES)
     except (ActionConflict, ActionLogError, OSError) as error:
         print(f"Video duplicate undo failed safely: {error}", file=sys.stderr)
         return 1
@@ -776,8 +775,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--decode-timeout",
         type=int,
-        default=DEFAULT_DECODE_TIMEOUT,
-        help="maximum seconds allowed for each FFmpeg decode",
+        help=(
+            "maximum seconds allowed for each FFmpeg decode "
+            "(default: configured video_duplicates.decode_timeout_seconds)"
+        ),
     )
     add_config_argument(parser)
     return parser.parse_args(argv)
@@ -789,7 +790,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not root.is_dir():
         print(f"Not a directory: {root}", file=sys.stderr)
         return 2
-    if args.decode_timeout <= 0:
+    if args.decode_timeout is not None and args.decode_timeout <= 0:
         print("--decode-timeout must be a positive number", file=sys.stderr)
         return 2
     if args.undo:
@@ -800,6 +801,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ConfigError as error:
         print(f"Cannot use configuration: {error}", file=sys.stderr)
         return 2
+    decode_timeout = (
+        args.decode_timeout
+        if args.decode_timeout is not None
+        else config.video_duplicates.decode_timeout_seconds
+    )
 
     problems = collection_layout_problems(root, config)
     if problems:
@@ -820,9 +826,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(str(error), file=sys.stderr)
         return 2
 
-    vids = root / VIDS_NAME
+    layout = CollectionLayout(root)
+    vids = layout.vids
     _, destination = review_directories(root)
-    classifier = Classifier()
+    classifier = Classifier(config.classification)
     paths, ignored = discover_videos(vids, root, classifier, config)
     print(f"Scanning {len(paths)} video(s) in {vids}")
     summary = ignored_summary(ignored)
@@ -863,7 +870,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         record.byte_sha256: record
         for record in candidate_records
     }
-    database = root / DATABASE_FILENAME
+    database = layout.video_cache
     cached = load_cached_fingerprints(database, ffmpeg_release)
     derived: dict[str, DerivedFingerprint] = {}
     for number, (file_hash, representative) in enumerate(
@@ -878,7 +885,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     representative.path,
                     representative.probe,
                     ffmpeg,
-                    args.decode_timeout,
+                    decode_timeout,
                 )
             except VideoInspectionError as error:
                 same_bytes = [
@@ -933,7 +940,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for _, duplicate, target in move_plan
             ]
             log = ActionLog(root)
-            with log.transaction(TOOL_NAME) as transaction:
+            with log.transaction(ToolId.VIDEO_DUPLICATES) as transaction:
                 for directory in review_directories(root):
                     if not directory.exists():
                         transaction.perform(Action.create_directory(root, directory))

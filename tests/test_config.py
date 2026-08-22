@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from pymo.config import CONFIG_FILENAME, ConfigError, load_config
+from pymo.collection import CollectionLayout
+from pymo.config import ConfigError, load_config
 
 
 def write_config(path: Path, body: str) -> None:
@@ -22,12 +23,18 @@ def test_packaged_defaults_cover_common_local_system_metadata(
     assert config.ignores_directory(tmp_path / ".Spotlight-V100", tmp_path)
     assert config.ignores_directory(tmp_path / ".git" / "objects", tmp_path)
     assert not config.ignores_file(tmp_path / "photo.jpg", tmp_path)
+    assert ".jpg" in config.classification.image_extensions
+    assert ".mp4" in config.classification.video_extensions
+    assert "application/octet-stream" in config.classification.generic_mime_types
+    assert "photo" in config.rename.noise_tokens
+    assert ".png" in config.image_duplicates.extensions
+    assert config.video_duplicates.decode_timeout_seconds == 3600
 
 
 def test_collection_config_extends_defaults_and_protects_itself(
     tmp_path: Path,
 ) -> None:
-    config_path = tmp_path / CONFIG_FILENAME
+    config_path = CollectionLayout(tmp_path).config
     write_config(
         config_path,
         'files = ["notes.tmp"]\ndirectories = ["archive"]\n',
@@ -44,7 +51,7 @@ def test_collection_config_extends_defaults_and_protects_itself(
 def test_explicit_config_selects_one_custom_file_and_keeps_defaults(
     tmp_path: Path,
 ) -> None:
-    write_config(tmp_path / CONFIG_FILENAME, 'files = ["local.tmp"]\n')
+    write_config(CollectionLayout(tmp_path).config, 'files = ["local.tmp"]\n')
     explicit = tmp_path / "settings.toml"
     write_config(explicit, 'files = ["selected.tmp"]\n')
 
@@ -56,22 +63,71 @@ def test_explicit_config_selects_one_custom_file_and_keeps_defaults(
     assert not config.ignores_file(tmp_path / "local.tmp", tmp_path)
 
 
+def test_collection_policy_extends_defaults_and_timeout_overrides(
+    tmp_path: Path,
+) -> None:
+    CollectionLayout(tmp_path).config.write_text(
+        "version = 1\n"
+        "[classification]\n"
+        'image_extensions = [".garden"]\n'
+        'video_extensions = [".city"]\n'
+        'video_application_mime_types = ["application/x-city"]\n'
+        'generic_mime_types = ["application/x-generic"]\n'
+        "[rename]\n"
+        'noise_tokens = ["planter"]\n'
+        "[image_duplicates]\n"
+        'extensions = [".flower"]\n'
+        "[video_duplicates]\n"
+        "decode_timeout_seconds = 45\n",
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert {".jpg", ".garden"}.issubset(
+        config.classification.image_extensions
+    )
+    assert {".mp4", ".city"}.issubset(config.classification.video_extensions)
+    assert "application/x-city" in config.classification.video_application_mime_types
+    assert "application/x-generic" in config.classification.generic_mime_types
+    assert {"photo", "planter"}.issubset(config.rename.noise_tokens)
+    assert {".png", ".flower"}.issubset(config.image_duplicates.extensions)
+    assert config.video_duplicates.decode_timeout_seconds == 45
+
+
 @pytest.mark.parametrize(
     "document",
     [
         "version = 2\n",
+        "version = true\n",
         "version = 1\nunknown = true\n",
         'version = 1\n[ignore]\nfiles = "*.tmp"\n',
         'version = 1\n[ignore]\ndirectories = ["../outside"]\n',
         'version = 1\n[ignore]\ndirectories = ["C:\\\\outside"]\n',
+        'version = 1\n[classification]\nimage_extensions = ["jpg"]\n',
+        'version = 1\n[classification]\ngeneric_mime_types = ["invalid"]\n',
+        'version = 1\n[rename]\nnoise_tokens = ["two words"]\n',
+        "version = 1\n[video_duplicates]\ndecode_timeout_seconds = 0\n",
+        "version = 1\n[video_duplicates]\ndecode_timeout_seconds = true\n",
+        "version = 1\n[image_duplicates]\nunknown = []\n",
         "version = 1\n[ignore]\nfiles = [\n",
     ],
 )
 def test_invalid_configuration_is_rejected(
     tmp_path: Path, document: str
 ) -> None:
-    path = tmp_path / CONFIG_FILENAME
+    path = CollectionLayout(tmp_path).config
     path.write_text(document, encoding="utf-8")
 
     with pytest.raises(ConfigError):
         load_config(tmp_path)
+
+
+def test_symbolic_link_configuration_is_rejected(tmp_path: Path) -> None:
+    target = tmp_path / "settings.toml"
+    target.write_text("version = 1\n", encoding="utf-8")
+    link = tmp_path / "settings-link.toml"
+    link.symlink_to(target)
+
+    with pytest.raises(ConfigError, match="not a regular file"):
+        load_config(tmp_path, link)

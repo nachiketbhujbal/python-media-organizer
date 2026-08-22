@@ -13,12 +13,14 @@ from pymo.duplicates import images, videos
 from pymo.logging_config import configure_logging
 
 
-COMMANDS = {
-    "organize": organize.main,
-    "rename": rename.main,
-    "find-image-duplicates": images.main,
-    "find-video-duplicates": videos.main,
-}
+def _commands():
+    """Build the small dispatch table without mutable module-level state."""
+    return {
+        "organize": organize.main,
+        "rename": rename.main,
+        "find-image-duplicates": images.main,
+        "find-video-duplicates": videos.main,
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="use an alternate TOML configuration for this command",
     )
-    parser.add_argument("command", choices=tuple(COMMANDS))
+    parser.add_argument("command", choices=tuple(_commands()))
     parser.add_argument("arguments", nargs=argparse.REMAINDER)
     return parser
 
@@ -57,7 +59,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         log_file=args.log_file,
     )
     logging.getLogger("pymo").debug("Dispatching pymo command: %s", args.command)
+    commands = _commands()
     command_arguments = list(args.arguments)
     if args.config is not None:
         command_arguments[0:0] = ["--config", str(args.config)]
-    return COMMANDS[args.command](command_arguments)
+    return commands[args.command](command_arguments)

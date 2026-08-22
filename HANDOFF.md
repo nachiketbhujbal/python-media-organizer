@@ -13,9 +13,10 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.1.2` configuration release. It is a deliberately
-local-first tool for personal media collections. Git tags are the authoritative
-version source; package code and `[project]` do not contain a static version.
+`pymo` command, and has a `v0.1.3` configuration-architecture release. It is a
+deliberately local-first tool for personal media collections. Git tags are the
+authoritative version source; package code and `[project]` do not contain a
+static version.
 
 Hard requirements:
 
@@ -35,9 +36,9 @@ Hard requirements:
 9. Collection folders follow the four-character `pics`, `vids`, and `dups`
    convention.
 10. Repository text and tests use generic synthetic collections only.
-11. Shared packaged ignore defaults protect operating-system metadata and pymo
-    state during every forward command; custom rules may extend but not disable
-    them.
+11. Shared packaged policy provides ignore, classification, renaming,
+    image-inspection, and video-timeout defaults. Custom arrays may extend but
+    not disable packaged lists.
 
 `{collection-name}-actions-log.jsonl` remains the authoritative portable
 journal because it moves naturally with a media-collection on external storage.
@@ -56,6 +57,7 @@ python-media-organizer/
     __init__.py
     __main__.py
     cli.py
+    collection.py
     config.py
     default_config.toml
     logging_config.py
@@ -81,20 +83,26 @@ Each supports dry-run/apply behavior; all four support `--undo`, which is also
 a preview unless combined with `--apply`. Global `--verbose`, `--quiet`,
 `--log-file PATH`, and `--config PATH` options go before the subcommand.
 
-## Shared configuration and ignore rules
+## Shared configuration and collection layout
 
 `src/pymo/default_config.toml` is packaged read-only data, loaded for every
-forward command. It protects common macOS, Windows, Linux/KDE, Synology,
-archive, version-control, and pymo-generated metadata. In particular,
-`.DS_Store`, AppleDouble `._*`, `Thumbs.db`, `desktop.ini`, `.git`, the optional
-config, and `.pymo.sqlite3` artifacts are ignored by default.
+forward command. It contains the default ignore patterns, classification
+extensions and MIME policies, rename noise tokens, image-inspection
+extensions, and video decode timeout. Collection or explicit custom arrays
+extend packaged arrays; they cannot remove safety defaults. A custom video
+timeout overrides the packaged value, while `--decode-timeout` has final
+command-line precedence.
 
-`src/pymo/config.py` validates schema version 1. A collection-root
-`.pymo.toml` extends the packaged file and directory patterns automatically.
-`--config PATH` selects a different custom extension file for that command;
-it does not disable or replace packaged defaults. Patterns match
-case-insensitive basenames or collection-relative paths, and an ignored
-directory protects all descendants.
+`src/pymo/config.py` validates schema version 1 into frozen, typed policy
+objects. A collection-root `.pymo.toml` extends packaged policy automatically.
+`--config PATH` selects a different custom extension file for that command.
+Ignore patterns match case-insensitive basenames or collection-relative paths,
+and an ignored directory protects all descendants.
+
+`src/pymo/collection.py` owns the invariant paths for `pics`, `vids`, `dups`,
+the optional config, disposable video cache, and canonical/legacy action logs.
+These names are intentionally not configurable because cross-tool ownership,
+portable undo, and compatibility require one interpretation.
 
 Ignored paths are excluded from moving, renaming, media classification,
 fingerprinting, deletion, and action history. Symbolic links remain a separate
@@ -104,6 +112,12 @@ verification treats such a metadata-only tree as intentionally preserved.
 Malformed, unknown, absolute, or parent-traversing configuration stops before
 mutation. Undo and legacy manifest reorganization remain action-driven and do
 not reinterpret historical operations through current ignore settings.
+
+The source contains only three assigned module constants: the config schema,
+action-log schema, and video fingerprint algorithm versions. Each is an
+on-disk compatibility boundary and has an adjacent justification. Dispatch,
+logging, collection paths, tool identifiers, operation identifiers, timestamp
+patterns, and policy collections no longer use scattered mutable globals.
 
 ## Shared action log
 
@@ -288,23 +302,27 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - organizer dry run, apply, verification, collisions, nested layouts, content
   classification, symbolic-link safety, empty-directory restoration, reruns,
   legacy CSV undo, `dups` protection, default OS-metadata ignores,
-  custom-directory protection, and ignored-only source trees;
+  custom-directory protection, custom classification extensions, and
+  ignored-only source trees;
 - renamer parsing and cleanup across varied filename structures, deterministic
-  names, collisions, apply/undo, and `dups` protection;
+  names, configurable additive noise tokens, collisions, apply/undo, and
+  `dups` protection;
 - action journal ordering, locking model, interrupted run recovery, identity
   changes, conflict refusal, cross-tool dependencies, and ordered undo;
 - image exact-pixel equivalence across metadata/format differences, strict
   folder ownership, storage accounting, collisions, legacy output migration,
-  dry run/apply/undo, and review-tree restoration;
+  configurable inspection extensions, dry run/apply/undo, and review-tree
+  restoration;
 - real FFmpeg byte-copy/remux matches, different-audio and different-timing
   non-matches, corrupt and multi-audio skips, strict ownership, collisions,
   cache/sidecar behavior, cross-tool undo dependencies, missing runtime errors,
   and local-file-only/no-capture command construction;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, and global config forwarding;
-- configuration parsing, immutable defaults, case-insensitive matching,
-  alternate-config selection, invalid-schema refusal, and config self-
-  protection;
+- typed configuration parsing, immutable/additive defaults, validated media
+  extensions, MIME types, noise tokens and timeout, alternate-config
+  selection, invalid-schema refusal, and config self-protection;
+- centralized collection-path derivation and duplicate-tree recognition;
 - dynamic package metadata, packaged TOML data, runtime/distribution version
   agreement, and the selected Hatchling plus hatch-vcs configuration.
 

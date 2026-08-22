@@ -27,6 +27,7 @@ from pymo.action_log import (
     ActionLog,
     ActionLogError,
     NoUndoableRun,
+    ToolId,
     action_log_path,
 )
 from pymo.config import (
@@ -38,60 +39,6 @@ from pymo.config import (
 )
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier, discover_files, path_key
-
-
-TOOL_NAME = "rename_media"
-
-COMPACT_TIMESTAMP = re.compile(
-    r"(?i)(?:IMG|VID)_(?P<date>\d{8})_(?P<time>\d{6})"
-    r"(?:_(?P<millis>\d{3}))?(?:_\d+)?"
-)
-LABELED_TIMESTAMP = re.compile(
-    r"(?i)(?:photo|video)_(?P<date>\d{4}-\d{2}-\d{2})_"
-    r"(?P<time>\d{2}-\d{2}-\d{2})"
-)
-SPACED_TIMESTAMP = re.compile(
-    r"(?P<date>\d{4}-\d{2}-\d{2})[ _]"
-    r"(?P<hour>\d{2})[.:-](?P<minute>\d{2})[.:-](?P<second>\d{2})"
-    r"(?:[_-](?P<millis>\d{3}))?"
-)
-UNDERSCORE_TIMESTAMP = re.compile(
-    r"(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})_"
-    r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})"
-)
-DATE_ONLY = re.compile(
-    r"(?<!\d)(?P<date>\d{4}-\d{2}-\d{2})(?![-\d])"
-)
-
-GENERIC_TOKENS = {
-    "copy",
-    "com",
-    "download",
-    "full",
-    "hd",
-    "image",
-    "img",
-    "jb",
-    "join",
-    "leak",
-    "leaks",
-    "min",
-    "nsfw",
-    "photo",
-    "pic",
-    "picture",
-    "promo",
-    "channel",
-    "site",
-    "source",
-    "telegram",
-    "tg",
-    "tp",
-    "thumb",
-    "us",
-    "vid",
-    "video",
-}
 
 
 @dataclass(frozen=True)
@@ -112,28 +59,45 @@ def _valid_timestamp(value: str, milliseconds: str | None = None) -> str | None:
     return f"{result}-{milliseconds}" if milliseconds else result
 
 
+def _timestamp_patterns() -> tuple[str, ...]:
+    """Return implementation-owned parsing rules without mutable globals."""
+    return (
+        r"(?i)(?:IMG|VID)_(?P<date>\d{8})_(?P<time>\d{6})"
+        r"(?:_(?P<millis>\d{3}))?(?:_\d+)?",
+        r"(?i)(?:photo|video)_(?P<date>\d{4}-\d{2}-\d{2})_"
+        r"(?P<time>\d{2}-\d{2}-\d{2})",
+        r"(?P<date>\d{4}-\d{2}-\d{2})[ _]"
+        r"(?P<hour>\d{2})[.:-](?P<minute>\d{2})[.:-](?P<second>\d{2})"
+        r"(?:[_-](?P<millis>\d{3}))?",
+        r"(?P<year>\d{4})_(?P<month>\d{2})_(?P<day>\d{2})_"
+        r"(?P<hour>\d{2})_(?P<minute>\d{2})_(?P<second>\d{2})",
+        r"(?<!\d)(?P<date>\d{4}-\d{2}-\d{2})(?![-\d])",
+    )
+
+
 def timestamp_from_name(name: str) -> str | None:
-    match = COMPACT_TIMESTAMP.search(name)
+    compact, labeled, spaced, underscore, date_only = _timestamp_patterns()
+    match = re.search(compact, name)
     if match:
         return _valid_timestamp(
             match.group("date") + match.group("time"), match.group("millis")
         )
 
-    match = LABELED_TIMESTAMP.search(name)
+    match = re.search(labeled, name)
     if match:
         value = match.group("date").replace("-", "") + match.group("time").replace(
             "-", ""
         )
         return _valid_timestamp(value)
 
-    match = SPACED_TIMESTAMP.search(name)
+    match = re.search(spaced, name)
     if match:
         value = match.group("date").replace("-", "") + "".join(
             match.group(part) for part in ("hour", "minute", "second")
         )
         return _valid_timestamp(value, match.group("millis"))
 
-    match = UNDERSCORE_TIMESTAMP.search(name)
+    match = re.search(underscore, name)
     if match:
         value = "".join(
             match.group(part)
@@ -141,7 +105,7 @@ def timestamp_from_name(name: str) -> str | None:
         )
         return _valid_timestamp(value)
 
-    match = DATE_ONLY.search(name)
+    match = re.search(date_only, name)
     if match:
         try:
             return datetime.strptime(match.group("date"), "%Y-%m-%d").strftime(
@@ -174,16 +138,12 @@ def collection_slug(name: str) -> str:
     return slug or "collection"
 
 
-def clean_descriptor(stem: str, collection: str) -> str | None:
+def clean_descriptor(
+    stem: str, collection: str, noise_tokens: frozenset[str]
+) -> str | None:
     cleaned = stem
-    for pattern in (
-        COMPACT_TIMESTAMP,
-        LABELED_TIMESTAMP,
-        SPACED_TIMESTAMP,
-        UNDERSCORE_TIMESTAMP,
-        DATE_ONLY,
-    ):
-        cleaned = pattern.sub(" ", cleaned)
+    for pattern in _timestamp_patterns():
+        cleaned = re.sub(pattern, " ", cleaned)
     cleaned = unicodedata.normalize("NFKD", cleaned).encode("ascii", "ignore").decode()
     tokens = re.findall(r"[a-z0-9]+", cleaned.lower())
     collection_tokens = set(collection_slug(collection).split("_"))
@@ -196,7 +156,7 @@ def clean_descriptor(stem: str, collection: str) -> str | None:
             if token.startswith(collection_token) and len(token) > len(collection_token) + 2:
                 token = token[len(collection_token) :]
                 break
-        if not token or token in collection_tokens or token in GENERIC_TOKENS:
+        if not token or token in collection_tokens or token in noise_tokens:
             continue
         if re.fullmatch(r"\d+", token) or re.fullmatch(r"\d+x\d+", token):
             continue
@@ -252,7 +212,9 @@ def build_rename_plan(
         timestamp = (
             embedded_image_timestamp(path) if output_kind == "image" else None
         ) or timestamp_from_name(path.name)
-        descriptor = clean_descriptor(path.stem, collection)
+        descriptor = clean_descriptor(
+            path.stem, collection, config.rename.noise_tokens
+        )
         candidates[output_kind].append((path, timestamp, descriptor))
         if number % 200 == 0:
             print(f"  classified {number}/{len(paths)}")
@@ -306,7 +268,7 @@ def describe_action(root: Path, action: Action, apply: bool) -> None:
 def undo_renames(root: Path, apply: bool) -> int:
     log = ActionLog(root)
     try:
-        plan = log.plan_undo(TOOL_NAME)
+        plan = log.plan_undo(ToolId.RENAME)
     except NoUndoableRun as error:
         print(str(error), file=sys.stderr)
         return 2
@@ -325,7 +287,7 @@ def undo_renames(root: Path, apply: bool) -> int:
         return 0
 
     try:
-        result = log.apply_undo(TOOL_NAME)
+        result = log.apply_undo(ToolId.RENAME)
     except (ActionConflict, ActionLogError, OSError) as error:
         print(f"Rename undo failed safely: {error}", file=sys.stderr)
         return 1
@@ -371,7 +333,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Cannot use configuration: {error}", file=sys.stderr)
         return 2
 
-    classifier = Classifier()
+    classifier = Classifier(config.classification)
     if classifier.warning:
         print(f"Warning: {classifier.warning}")
     plan, already_named, skipped_links, ignored = build_rename_plan(
@@ -411,7 +373,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             for record in plan
         ]
         log = ActionLog(root)
-        with log.transaction(TOOL_NAME) as transaction:
+        with log.transaction(ToolId.RENAME) as transaction:
             for action in actions:
                 transaction.perform(action)
             transaction.commit()

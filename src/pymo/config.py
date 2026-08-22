@@ -1,18 +1,23 @@
-"""Structured, local-only configuration and shared ignore rules."""
+"""Validated, local-only configuration for pymo policy."""
 
 from __future__ import annotations
 
 import argparse
 import fnmatch
+import os
+import re
 import tomllib
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+
+from pymo.collection import CollectionLayout
 
 
-CONFIG_FILENAME = ".pymo.toml"
-CONFIG_VERSION = 1
+# This bootstraps validation before any configuration can be trusted. It is an
+# on-disk compatibility identifier, not a user-configurable preference.
+CONFIG_SCHEMA_VERSION = 1
 
 
 class ConfigError(ValueError):
@@ -20,9 +25,41 @@ class ConfigError(ValueError):
 
 
 @dataclass(frozen=True)
+class IgnoreConfig:
+    files: tuple[str, ...]
+    directories: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ClassificationConfig:
+    image_extensions: frozenset[str]
+    video_extensions: frozenset[str]
+    video_application_mime_types: frozenset[str]
+    generic_mime_types: frozenset[str]
+
+
+@dataclass(frozen=True)
+class RenameConfig:
+    noise_tokens: frozenset[str]
+
+
+@dataclass(frozen=True)
+class ImageDuplicateConfig:
+    extensions: frozenset[str]
+
+
+@dataclass(frozen=True)
+class VideoDuplicateConfig:
+    decode_timeout_seconds: int
+
+
+@dataclass(frozen=True)
 class PymoConfig:
-    file_patterns: tuple[str, ...]
-    directory_patterns: tuple[str, ...]
+    ignore: IgnoreConfig
+    classification: ClassificationConfig
+    rename: RenameConfig
+    image_duplicates: ImageDuplicateConfig
+    video_duplicates: VideoDuplicateConfig
     custom_path: Path | None = None
 
     @staticmethod
@@ -41,7 +78,7 @@ class PymoConfig:
     def ignores_directory(self, path: Path, root: Path) -> bool:
         current = path
         while current != root:
-            if self._matches(current, root, self.directory_patterns):
+            if self._matches(current, root, self.ignore.directories):
                 return True
             if root not in current.parents:
                 return False
@@ -51,71 +88,214 @@ class PymoConfig:
     def ignores_file(self, path: Path, root: Path) -> bool:
         if self.custom_path is not None and path.absolute() == self.custom_path:
             return True
-        if self._matches(path, root, self.file_patterns):
+        if self._matches(path, root, self.ignore.files):
             return True
         return self.ignores_directory(path.parent, root)
+
+
+@dataclass(frozen=True)
+class _ConfigLayer:
+    ignore_files: tuple[str, ...] = ()
+    ignore_directories: tuple[str, ...] = ()
+    image_extensions: tuple[str, ...] = ()
+    video_extensions: tuple[str, ...] = ()
+    video_application_mime_types: tuple[str, ...] = ()
+    generic_mime_types: tuple[str, ...] = ()
+    rename_noise_tokens: tuple[str, ...] = ()
+    image_duplicate_extensions: tuple[str, ...] = ()
+    decode_timeout_seconds: int | None = None
 
 
 def add_config_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--config",
         type=Path,
-        help=(
-            f"alternate TOML configuration (default: COLLECTION/{CONFIG_FILENAME})"
-        ),
+        help="alternate TOML configuration (default: COLLECTION/.pymo.toml)",
     )
 
 
-def _patterns(value: Any, key: str, source: str) -> tuple[str, ...]:
+def _table(
+    document: dict[str, Any],
+    name: str,
+    allowed_keys: frozenset[str],
+    source: str,
+) -> dict[str, Any]:
+    value = document.get(name, {})
+    if not isinstance(value, dict):
+        raise ConfigError(f"{source}: {name} must be a TOML table")
+    unknown = set(value).difference(allowed_keys)
+    if unknown:
+        names = ", ".join(sorted(unknown))
+        raise ConfigError(f"{source}: unknown {name} key(s): {names}")
+    return value
+
+
+def _strings(
+    value: Any,
+    qualified_key: str,
+    source: str,
+    normalize: Callable[[str], str],
+) -> tuple[str, ...]:
     if value is None:
         return ()
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise ConfigError(f"{source}: ignore.{key} must be an array of strings")
-
+        raise ConfigError(f"{source}: {qualified_key} must be an array of strings")
     result: list[str] = []
     for original in value:
-        pattern = original.strip().replace("\\", "/")
-        if not pattern:
-            raise ConfigError(f"{source}: ignore.{key} contains an empty pattern")
-        has_drive = (
-            len(pattern) >= 2
-            and pattern[0].isalpha()
-            and pattern[1] == ":"
-        )
-        if pattern.startswith("/") or has_drive or ".." in pattern.split("/"):
+        try:
+            normalized = normalize(original)
+        except ConfigError as error:
             raise ConfigError(
-                f"{source}: ignore.{key} patterns must stay collection-relative: "
-                f"{original!r}"
-            )
-        result.append(pattern)
+                f"{source}: {qualified_key}: {error}"
+            ) from error
+        if not normalized:
+            raise ConfigError(f"{source}: {qualified_key} contains an empty value")
+        result.append(normalized)
     return tuple(result)
 
 
-def _parse(
-    document: dict[str, Any], source: str
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    unknown = set(document).difference({"version", "ignore"})
+def _ignore_pattern(value: str) -> str:
+    pattern = value.strip().replace("\\", "/")
+    has_drive = (
+        len(pattern) >= 2 and pattern[0].isalpha() and pattern[1] == ":"
+    )
+    if pattern.startswith("/") or has_drive or ".." in pattern.split("/"):
+        raise ConfigError(
+            f"ignore patterns must stay collection-relative: {value!r}"
+        )
+    return pattern
+
+
+def _extension(value: str) -> str:
+    extension = value.strip().casefold()
+    if not re.fullmatch(r"\.[a-z0-9][a-z0-9.+-]*", extension):
+        raise ConfigError(f"invalid media extension: {value!r}")
+    return extension
+
+
+def _mime_type(value: str) -> str:
+    mime_type = value.strip().casefold()
+    if not re.fullmatch(
+        r"[a-z0-9][a-z0-9.+-]*/[a-z0-9][a-z0-9.+-]*", mime_type
+    ):
+        raise ConfigError(f"invalid MIME type: {value!r}")
+    return mime_type
+
+
+def _noise_token(value: str) -> str:
+    token = value.strip().casefold()
+    if not re.fullmatch(r"[a-z0-9]+", token):
+        raise ConfigError(f"invalid rename noise token: {value!r}")
+    return token
+
+
+def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
+    sections = frozenset(
+        {
+            "version",
+            "ignore",
+            "classification",
+            "rename",
+            "image_duplicates",
+            "video_duplicates",
+        }
+    )
+    unknown = set(document).difference(sections)
     if unknown:
         names = ", ".join(sorted(unknown))
         raise ConfigError(f"{source}: unknown top-level key(s): {names}")
-    if document.get("version") != CONFIG_VERSION:
-        raise ConfigError(f"{source}: version must be {CONFIG_VERSION}")
+    version = document.get("version")
+    if isinstance(version, bool) or version != CONFIG_SCHEMA_VERSION:
+        raise ConfigError(f"{source}: version must be {CONFIG_SCHEMA_VERSION}")
 
-    ignore = document.get("ignore", {})
-    if not isinstance(ignore, dict):
-        raise ConfigError(f"{source}: ignore must be a TOML table")
-    unknown_ignore = set(ignore).difference({"files", "directories"})
-    if unknown_ignore:
-        raise ConfigError(
-            f"{source}: unknown ignore key(s): {', '.join(sorted(unknown_ignore))}"
-        )
-    return (
-        _patterns(ignore.get("files"), "files", source),
-        _patterns(ignore.get("directories"), "directories", source),
+    ignore = _table(document, "ignore", frozenset({"files", "directories"}), source)
+    classification = _table(
+        document,
+        "classification",
+        frozenset(
+            {
+                "image_extensions",
+                "video_extensions",
+                "video_application_mime_types",
+                "generic_mime_types",
+            }
+        ),
+        source,
+    )
+    rename = _table(document, "rename", frozenset({"noise_tokens"}), source)
+    image_duplicates = _table(
+        document, "image_duplicates", frozenset({"extensions"}), source
+    )
+    video_duplicates = _table(
+        document,
+        "video_duplicates",
+        frozenset({"decode_timeout_seconds"}),
+        source,
+    )
+
+    timeout = video_duplicates.get("decode_timeout_seconds")
+    if timeout is not None:
+        if isinstance(timeout, bool) or not isinstance(timeout, int):
+            raise ConfigError(
+                f"{source}: video_duplicates.decode_timeout_seconds must be an integer"
+            )
+        if not 1 <= timeout <= 86_400:
+            raise ConfigError(
+                f"{source}: video_duplicates.decode_timeout_seconds must be "
+                "between 1 and 86400"
+            )
+
+    return _ConfigLayer(
+        ignore_files=_strings(
+            ignore.get("files"), "ignore.files", source, _ignore_pattern
+        ),
+        ignore_directories=_strings(
+            ignore.get("directories"),
+            "ignore.directories",
+            source,
+            _ignore_pattern,
+        ),
+        image_extensions=_strings(
+            classification.get("image_extensions"),
+            "classification.image_extensions",
+            source,
+            _extension,
+        ),
+        video_extensions=_strings(
+            classification.get("video_extensions"),
+            "classification.video_extensions",
+            source,
+            _extension,
+        ),
+        video_application_mime_types=_strings(
+            classification.get("video_application_mime_types"),
+            "classification.video_application_mime_types",
+            source,
+            _mime_type,
+        ),
+        generic_mime_types=_strings(
+            classification.get("generic_mime_types"),
+            "classification.generic_mime_types",
+            source,
+            _mime_type,
+        ),
+        rename_noise_tokens=_strings(
+            rename.get("noise_tokens"),
+            "rename.noise_tokens",
+            source,
+            _noise_token,
+        ),
+        image_duplicate_extensions=_strings(
+            image_duplicates.get("extensions"),
+            "image_duplicates.extensions",
+            source,
+            _extension,
+        ),
+        decode_timeout_seconds=timeout,
     )
 
 
-def _read_file(path: Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
+def _read_file(path: Path) -> _ConfigLayer:
     if path.is_symlink() or not path.is_file():
         raise ConfigError(f"configuration is not a regular file: {path}")
     try:
@@ -126,43 +306,114 @@ def _read_file(path: Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
     return _parse(document, str(path))
 
 
-def _deduplicate(patterns: tuple[str, ...]) -> tuple[str, ...]:
+def _deduplicate(*groups: tuple[str, ...]) -> tuple[str, ...]:
     result: list[str] = []
     seen: set[str] = set()
-    for pattern in patterns:
-        key = pattern.casefold()
+    for value in (item for group in groups for item in group):
+        key = value.casefold()
         if key not in seen:
             seen.add(key)
-            result.append(pattern)
+            result.append(value)
     return tuple(result)
 
 
-def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
+def _packaged_defaults() -> _ConfigLayer:
     try:
-        default_resource = resources.files("pymo").joinpath("default_config.toml")
-        with default_resource.open("rb") as handle:
-            defaults = tomllib.load(handle)
+        resource = resources.files("pymo").joinpath("default_config.toml")
+        with resource.open("rb") as handle:
+            document = tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError) as error:
         raise ConfigError(f"cannot read packaged defaults: {error}") from error
-    default_files, default_directories = _parse(defaults, "packaged defaults")
+    defaults = _parse(document, "packaged defaults")
+    required_arrays = {
+        "ignore.files": defaults.ignore_files,
+        "ignore.directories": defaults.ignore_directories,
+        "classification.image_extensions": defaults.image_extensions,
+        "classification.video_extensions": defaults.video_extensions,
+        "classification.video_application_mime_types": (
+            defaults.video_application_mime_types
+        ),
+        "classification.generic_mime_types": defaults.generic_mime_types,
+        "rename.noise_tokens": defaults.rename_noise_tokens,
+        "image_duplicates.extensions": defaults.image_duplicate_extensions,
+    }
+    missing = [name for name, values in required_arrays.items() if not values]
+    if missing:
+        raise ConfigError(
+            "packaged defaults: required array(s) are empty: "
+            + ", ".join(missing)
+        )
+    if defaults.decode_timeout_seconds is None:
+        raise ConfigError(
+            "packaged defaults: video_duplicates.decode_timeout_seconds is required"
+        )
+    return defaults
 
-    custom_path: Path | None
+
+def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
+    defaults = _packaged_defaults()
+    layout = CollectionLayout(root)
     if explicit_path is not None:
-        custom_path = explicit_path.expanduser().resolve()
+        custom_path = Path(os.path.abspath(explicit_path.expanduser()))
     else:
-        candidate = root / CONFIG_FILENAME
+        candidate = layout.config
         custom_path = (
             candidate if candidate.exists() or candidate.is_symlink() else None
         )
+    custom = _read_file(custom_path) if custom_path is not None else _ConfigLayer()
 
-    custom_files: tuple[str, ...] = ()
-    custom_directories: tuple[str, ...] = ()
-    if custom_path is not None:
-        custom_files, custom_directories = _read_file(custom_path)
+    timeout = (
+        custom.decode_timeout_seconds
+        if custom.decode_timeout_seconds is not None
+        else defaults.decode_timeout_seconds
+    )
+    if timeout is None:
+        raise ConfigError(
+            "packaged defaults: video_duplicates.decode_timeout_seconds is required"
+        )
 
     return PymoConfig(
-        file_patterns=_deduplicate(default_files + custom_files),
-        directory_patterns=_deduplicate(default_directories + custom_directories),
+        ignore=IgnoreConfig(
+            files=_deduplicate(defaults.ignore_files, custom.ignore_files),
+            directories=_deduplicate(
+                defaults.ignore_directories, custom.ignore_directories
+            ),
+        ),
+        classification=ClassificationConfig(
+            image_extensions=frozenset(
+                _deduplicate(defaults.image_extensions, custom.image_extensions)
+            ),
+            video_extensions=frozenset(
+                _deduplicate(defaults.video_extensions, custom.video_extensions)
+            ),
+            video_application_mime_types=frozenset(
+                _deduplicate(
+                    defaults.video_application_mime_types,
+                    custom.video_application_mime_types,
+                )
+            ),
+            generic_mime_types=frozenset(
+                _deduplicate(
+                    defaults.generic_mime_types, custom.generic_mime_types
+                )
+            ),
+        ),
+        rename=RenameConfig(
+            noise_tokens=frozenset(
+                _deduplicate(
+                    defaults.rename_noise_tokens, custom.rename_noise_tokens
+                )
+            )
+        ),
+        image_duplicates=ImageDuplicateConfig(
+            extensions=frozenset(
+                _deduplicate(
+                    defaults.image_duplicate_extensions,
+                    custom.image_duplicate_extensions,
+                )
+            )
+        ),
+        video_duplicates=VideoDuplicateConfig(decode_timeout_seconds=timeout),
         custom_path=custom_path,
     )
 

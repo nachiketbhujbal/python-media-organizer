@@ -2,6 +2,19 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.1.3 - 2026-08-22
+
+- Move media classification lists, rename noise tokens, image-inspection
+  extensions, and the default video decode timeout into packaged TOML policy.
+- Add frozen typed configuration sections with strict validation, additive
+  custom arrays, and command-line timeout precedence.
+- Centralize fixed collection paths in an immutable `CollectionLayout` rather
+  than exposing structural names as scattered configuration or globals.
+- Replace tool and action strings with stable enums, remove mutable command and
+  logger globals, and retain only justified on-disk version constants.
+- Preserve existing organization, rename, exact duplicate, action-log, undo,
+  privacy, and dry-run behavior with expanded synthetic coverage.
+
 ## 0.1.2 - 2026-08-21
 
 - Add validated, packaged TOML defaults shared by organization, renaming, and

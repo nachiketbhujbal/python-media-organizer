@@ -35,3 +35,108 @@ directories = [
     ".svn",
     "System Volume Information",
 ]
+
+[classification]
+image_extensions = [
+    ".avif",
+    ".bmp",
+    ".cr2",
+    ".cr3",
+    ".dng",
+    ".gif",
+    ".heic",
+    ".heif",
+    ".jfif",
+    ".jpe",
+    ".jpeg",
+    ".jpg",
+    ".nef",
+    ".orf",
+    ".png",
+    ".raf",
+    ".raw",
+    ".rw2",
+    ".svg",
+    ".tif",
+    ".tiff",
+    ".webp",
+]
+video_extensions = [
+    ".3g2",
+    ".3gp",
+    ".asf",
+    ".avi",
+    ".divx",
+    ".flv",
+    ".m2ts",
+    ".m4v",
+    ".mkv",
+    ".mov",
+    ".mp4",
+    ".mpe",
+    ".mpeg",
+    ".mpg",
+    ".mts",
+    ".ogv",
+    ".rm",
+    ".rmvb",
+    ".ts",
+    ".vob",
+    ".webm",
+    ".wmv",
+]
+video_application_mime_types = [
+    "application/mp4",
+    "application/ogg",
+    "application/vnd.rn-realmedia",
+]
+generic_mime_types = [
+    "application/octet-stream",
+    "inode/x-empty",
+]
+
+[rename]
+noise_tokens = [
+    "copy",
+    "com",
+    "download",
+    "full",
+    "hd",
+    "image",
+    "img",
+    "jb",
+    "join",
+    "leak",
+    "leaks",
+    "min",
+    "nsfw",
+    "photo",
+    "pic",
+    "picture",
+    "promo",
+    "channel",
+    "site",
+    "source",
+    "telegram",
+    "tg",
+    "tp",
+    "thumb",
+    "us",
+    "vid",
+    "video",
+]
+
+[image_duplicates]
+extensions = [
+    ".bmp",
+    ".gif",
+    ".jpeg",
+    ".jpg",
+    ".png",
+    ".tif",
+    ".tiff",
+    ".webp",
+]
+
+[video_duplicates]
+decode_timeout_seconds = 3600

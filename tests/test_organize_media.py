@@ -219,3 +219,24 @@ def test_organizer_rejects_invalid_config_before_mutating(
     assert not (tmp_path / "pics").exists()
     assert not (tmp_path / "vids").exists()
     assert not action_log_path(tmp_path).exists()
+
+
+def test_organizer_uses_custom_classification_extensions(
+    tmp_path: Path, run_script
+) -> None:
+    nested = tmp_path / "incoming"
+    nested.mkdir()
+    source = nested / "specimen.garden"
+    source.write_bytes(b"")
+    (tmp_path / ".pymo.toml").write_text(
+        "version = 1\n"
+        "[classification]\n"
+        'image_extensions = [".garden"]\n',
+        encoding="utf-8",
+    )
+
+    result = run_script("organize_media.py", tmp_path, "--apply")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / "pics" / "specimen.garden").is_file()
+    assert not source.exists()

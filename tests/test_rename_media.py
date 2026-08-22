@@ -6,6 +6,7 @@ import pytest
 from PIL import Image
 
 from pymo.action_log import action_log_path
+from pymo.config import load_config
 from pymo.rename import clean_descriptor, timestamp_from_name
 
 
@@ -51,9 +52,10 @@ def test_timestamp_patterns(name: str, expected: str | None) -> None:
     ],
 )
 def test_descriptor_cleanup(
-    stem: str, collection: str, expected: str | None
+    tmp_path: Path, stem: str, collection: str, expected: str | None
 ) -> None:
-    assert clean_descriptor(stem, collection) == expected
+    noise_tokens = load_config(tmp_path).rename.noise_tokens
+    assert clean_descriptor(stem, collection, noise_tokens) == expected
 
 
 def make_rename_fixture(root: Path) -> None:
@@ -183,3 +185,24 @@ def test_renamer_honors_custom_file_rules(tmp_path: Path, run_script) -> None:
     assert "keep-original.png" not in action_log_path(root).read_text(
         encoding="utf-8"
     )
+
+
+def test_renamer_uses_custom_noise_tokens(tmp_path: Path, run_script) -> None:
+    root = tmp_path / "collection"
+    pics = root / "pics"
+    (root / "vids").mkdir(parents=True)
+    pics.mkdir()
+    source = pics / "Garden Fern.png"
+    Image.new("RGB", (2, 2), "green").save(source)
+    (root / ".pymo.toml").write_text(
+        "version = 1\n"
+        "[rename]\n"
+        'noise_tokens = ["garden"]\n',
+        encoding="utf-8",
+    )
+
+    result = run_script("rename_media.py", root)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "__undated__fern.png" in result.stdout
+    assert "__undated__garden_fern.png" not in result.stdout

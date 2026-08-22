@@ -83,12 +83,34 @@ version = 1
 [ignore]
 files = ["*.tmp", "incoming/*.sidecar"]
 directories = ["archive", "exports"]
+
+[classification]
+image_extensions = [".garden"]
+video_extensions = [".city"]
+video_application_mime_types = ["application/x-city"]
+generic_mime_types = ["application/x-generic"]
+
+[rename]
+noise_tokens = ["planter"]
+
+[image_duplicates]
+extensions = [".flower"]
+
+[video_duplicates]
+decode_timeout_seconds = 3600
 ```
 
 Patterns are case-insensitive and match either a basename or a path relative
 to the collection. An ignored directory protects its whole subtree. pymo
 reports how many file or directory entry points it ignored without listing
 private names by default.
+
+Custom arrays extend rather than replace packaged defaults. Classification
+extensions are conservative filename fallbacks when content detection is
+generic or unknown. Image-duplicate extensions select files for Pillow to
+inspect; unreadable formats are still skipped. Rename noise tokens remove
+additional unhelpful filename words. A command-line `--decode-timeout` takes
+precedence over the configured video timeout.
 
 An alternate extension file can be selected for one command:
 
@@ -101,6 +123,11 @@ both choices extend the packaged safety defaults rather than disabling them.
 Invalid or unsafe configuration stops the command before mutation. Undo uses
 the recorded action history and does not reinterpret older actions through the
 current ignore rules.
+
+The fixed `pics`, `vids`, and `dups` ownership structure, action-log naming,
+config filename, and cache filename are deliberately not configurable. They
+are centralized package invariants so every command and existing action log
+agrees on the same collection layout.
 
 ## Commands
 
@@ -247,14 +274,15 @@ The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,
 content changes, strict folder ownership, exact image and video matching,
 different audio and timing, corrupt/ambiguous media, derived cache behavior,
-shared built-in and custom ignore rules, malformed-config refusal, logging
-privacy, and the guarantee that video decoding never invokes capture devices.
-Private collections and their names are not fixtures or repository content.
+shared built-in and custom policy, malformed-config refusal, centralized
+collection paths, logging privacy, and the guarantee that video decoding never
+invokes capture devices. Private collections and their names are not fixtures
+or repository content.
 
 ## Versions and releases
 
 Git tags are the authoritative release version. Hatchling builds the package,
-and hatch-vcs derives the Python package version from tags such as `v0.1.2`;
+and hatch-vcs derives the Python package version from tags such as `v0.1.3`;
 there is no second version string to update by hand. Untagged development
 commits receive a PEP 440 development version containing their Git revision.
 uv manages the environment and `uv.lock`, while ordinary standards-compatible
