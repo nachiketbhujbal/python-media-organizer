@@ -13,19 +13,20 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.9` repository-governance release. It is a
+`pymo` command, and has a `v0.3.10` image-read-safety release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.9 records that GitHub Free cannot enforce branch protection on this
-private repository and specifies the no-bypass `main` ruleset to activate after
-a Pro upgrade or public transition. Version 0.3.8 pins video classification,
-hashing, ffprobe, and frame/audio fingerprinting to stable collection-anchored
-descriptors. Version 0.3.7 limits automatic GitHub Actions runs to pull requests
-targeting `main` and pushes to `main`, retains deliberate manual dispatch, and
-caps each platform job at ten minutes while the repository is private. Version
-0.3.6 adds a pinned GitHub
+Version 0.3.10 pins Pillow image decoding to stable collection-anchored
+descriptors. Version 0.3.9 records that GitHub Free cannot enforce branch
+protection on this private repository and specifies the no-bypass `main`
+ruleset to activate after a Pro upgrade or public transition. Version 0.3.8
+pins video classification, hashing, ffprobe, and frame/audio fingerprinting to
+stable collection-anchored descriptors. Version 0.3.7 limits automatic GitHub
+Actions runs to pull requests targeting `main` and pushes to `main`, retains
+deliberate manual dispatch, and caps each platform job at ten minutes while the
+repository is private. Version 0.3.6 adds a pinned GitHub
 Actions quality gate, adopts short-lived branches with CI-verified merge
 boundaries, and streams descriptor-backed classification through portable
 `file` standard input rather than asking the utility to classify `/dev/fd`.
@@ -295,6 +296,11 @@ require, inspect, create, validate, or modify `vids` or `dups/vids`.
 It uses Pillow to apply EXIF orientation, convert to RGBA, and SHA-256 hash
 dimensions plus decoded displayed pixels. Filenames and metadata do not affect
 equivalence. Animated, multi-page, unreadable, and unsafe inputs are skipped.
+Every candidate is opened through a no-follow descriptor relative to the
+collection root. Pillow receives a non-owning binary stream over that pinned
+descriptor, and both the descriptor and pathname are revalidated after pixel
+decoding. A concurrent pathname or parent-directory swap therefore cannot
+redirect Pillow to unrelated local content.
 
 Within an exact group it keeps the largest file, then oldest on a size tie,
 then stable filename order. Extra copies move to flat readable names such as
@@ -343,10 +349,9 @@ Every inspected video carries a stable device/inode/size/time snapshot.
 Classification, whole-file hashing, ffprobe, and both FFmpeg decode passes use
 one no-follow descriptor opened relative to the collection root; native tools
 receive an inherited `/dev/fd` input. The finder rechecks the descriptor and
-pathname before grouping and during applied moves. The image finder currently
-uses stable before/after state checks; descriptor pinning is the next isolated
-safety release. A changed file is skipped or stops an apply rather than reusing
-a stale exact-match conclusion.
+pathname before grouping and during applied moves. Both exact-media finders
+reject a changed file or stop an apply rather than reuse a stale exact-match
+conclusion.
 
 FFmpeg input protocols are restricted to `file,pipe`, and tests assert that
 decode commands contain no macOS, Windows, or X11 capture input. The tool does
@@ -501,6 +506,8 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   folder ownership, storage accounting, collisions, removed compatibility-
   option refusal, configurable inspection extensions, dry run/apply/undo, and
   review-tree restoration;
+- adversarial image decode path swaps that prove Pillow reads the pinned
+  collection descriptor rather than unrelated replacement content;
 - real FFmpeg byte-copy/remux matches, different-audio and different-timing
   non-matches, corrupt and multi-audio skips, strict ownership, collisions,
   incremental preview cache, interruption recovery, cache opt-out, sidecar

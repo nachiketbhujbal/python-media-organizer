@@ -279,7 +279,10 @@ The image finder applies EXIF orientation, decodes to RGBA, and matches exact
 displayed pixels while ignoring filenames and metadata. It keeps one original
 using deterministic rules and moves extra copies into flat `dups/pics` names
 such as `original_copy(1).jpg`. Animated, multi-page, unreadable, and unsafe
-inputs are skipped conservatively.
+inputs are skipped conservatively. Pillow reads each candidate through a stable
+no-follow descriptor anchored beneath the collection root, so a concurrent
+pathname or parent-directory swap cannot redirect pixel decoding to unrelated
+local content. Changed paths are reported and skipped.
 
 ### Find exact video duplicates
 
