@@ -20,11 +20,18 @@ that source content is accounted for.
 
 ## Product decisions
 
-The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.19` documentation-alignment release. It is a
-deliberately local-first tool for personal media collections. Git tags are the
-authoritative version source; package code and `[project]` do not contain a
-static version.
+The package is named `python-media-organizer`, imports as `pymo`, and exposes
+the `pymo` command. The latest tagged release is `v0.3.19`; the local v0.4.0
+release candidate adds corruption-tolerant scan evidence and validation-first
+guidance. It is a deliberately local-first tool for personal media
+collections. Git tags are the authoritative version source; package code and
+`[project]` do not contain a static version.
+
+Version 0.4.0 makes directory traversal failures visible in scan reports and
+places report-only validation first in every scan recommendation plan. Existing
+validation behavior continues after known per-file decoder failures, and direct
+regression coverage proves a damaged video does not prevent a healthy neighbor
+from being checked. No health finding is converted into ignore configuration.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -122,9 +129,11 @@ Hard requirements:
     explicit `--show-ignored` may list deterministic collection-relative paths.
 13. Supported behavior is not removed in a patch release. The compatibility
     interfaces deprecated throughout v0.1 were removed at the v0.2 boundary.
-14. `scan` never writes media, action history, or cache state. Exact-video
-    previews may persist disposable fingerprints by default so later preview
-    or apply runs resume; `--no-cache` disables both cache reads and writes.
+14. `scan` never writes media, action history, or cache state, reports directory
+    traversal failures, and recommends report-only validation before mutation.
+    Exact-video previews may persist disposable fingerprints by default so
+    later preview or apply runs resume; `--no-cache` disables both cache reads
+    and writes.
 15. Every durable decision has one numbered ADR. Ruff, Black, mypy, pre-commit,
     the complete pytest suite, and a package build are release gates.
 16. File moves are descriptor-relative and atomically refuse occupied targets.
@@ -476,6 +485,9 @@ part of scan.
 File state is captured at discovery and checked around classification and
 checksumming. Detected changes are omitted from inventory and duplicate facts
 and reported as an aggregate `changed_entries` count without revealing paths.
+Directory traversal failures are counted and warned about instead of silently
+omitted. Recommendations begin with report-only validation before organization,
+renaming, or duplicate isolation.
 
 ## Media validation
 
@@ -498,8 +510,10 @@ command could not run safely. Animated or multi-page images are counted, not
 classified as corrupt. Unsupported recognized formats remain warnings rather
 than unverified claims of corruption. Unreadable subtrees are health errors,
 native-tool diagnostics are discarded, and concurrent changes supersede
-decoder conclusions. Pillow and native tools read inherited stable descriptors,
-not a pathname that can be redirected after preflight.
+decoder conclusions. Known decoder failures become per-file findings and do not
+abort inspection of healthy neighboring media. Pillow and native tools read
+inherited stable descriptors, not a pathname that can be redirected after
+preflight. Health evidence remains distinct from user-authored ignore policy.
 
 ## Logging
 

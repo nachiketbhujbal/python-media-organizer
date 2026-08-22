@@ -2,6 +2,19 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## Unreleased - target 0.4.0
+
+- Report recursive directory traversal failures in `pymo scan` instead of
+  silently omitting an inaccessible subtree from an apparently complete
+  inventory.
+- Make report-only `pymo validate` the first ordered scan recommendation before
+  organization, renaming, or duplicate isolation.
+- Prove that invalid image and video files remain per-file validation findings
+  while healthy neighboring media continues to be checked, with no collection
+  state writes.
+- Keep corrupt, unreadable, changing, unsupported, and mismatched media visible
+  as evidence rather than adding them to ignore configuration.
+
 ## 0.3.19 - 2026-08-22
 
 - Correct the roadmap introduction to describe its deliberately retained

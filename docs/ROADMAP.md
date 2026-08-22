@@ -81,19 +81,19 @@ an explicitly writable cache location. This separation is a prerequisite for
 migration verification: pymo must never create a cache, lock, configuration
 file, or action log on a source being preserved.
 
-| Version | Primary purpose | Intended result |
-| --- | --- | --- |
-| 0.4.0 | Corruption-tolerant evidence | Make scan report directory traversal failures instead of silently omitting them, keep per-file decode failures as validation findings without aborting the collection, recommend validation before mutation, and prove through synthetic plus local acceptance tests that corrupt, unreadable, changing, unsupported, and mismatched media remain visible rather than becoming automatic ignore rules. |
-| 0.4.1 | Shared cache core | Versioned schema, file identity, algorithm/runtime keys, migrations, and reusable service interfaces. |
-| 0.4.2 | Cache status | Read-only cache health, coverage, version, and stale-record reporting. |
-| 0.4.3 | Video cache warm | Explicitly precompute exact-video fingerprints without running duplicate planning. |
-| 0.4.4 | Stable hashes | Reuse carefully keyed whole-file SHA records while rechecking content before an exact move. |
-| 0.4.5 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. |
-| 0.4.6 | Image fingerprint cache | Persist deterministic displayed-pixel image fingerprints for safe rescans. |
-| 0.4.7 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. |
-| 0.4.8 | Validation evidence | Record validation profile, result, file identity, runtime/tool versions, and completion time as disposable history without allowing an old healthy result to satisfy a fresh full validation. |
-| 0.4.9 | Explicit cached validation | Offer an explicitly named cache-assisted validation mode for unchanged files while retaining fresh reads as the default contract of `validate --full`. |
-| 0.4.10 | Targeted cache refresh | Recompute selected validation or fingerprint records without deleting unrelated cache evidence; reserve `--no-cache` for disabling both cache reads and writes. |
+| Version | Primary purpose | Intended result | Status |
+| --- | --- | --- | --- |
+| 0.4.0 | Corruption-tolerant evidence | Make scan report directory traversal failures instead of silently omitting them, keep per-file decode failures as validation findings without aborting the collection, recommend validation before mutation, and prove through synthetic plus local acceptance tests that corrupt, unreadable, changing, unsupported, and mismatched media remain visible rather than becoming automatic ignore rules. | Release candidate |
+| 0.4.1 | Shared cache core | Versioned schema, file identity, algorithm/runtime keys, migrations, and reusable service interfaces. | Planned |
+| 0.4.2 | Cache status | Read-only cache health, coverage, version, and stale-record reporting. | Planned |
+| 0.4.3 | Video cache warm | Explicitly precompute exact-video fingerprints without running duplicate planning. | Planned |
+| 0.4.4 | Stable hashes | Reuse carefully keyed whole-file SHA records while rechecking content before an exact move. | Planned |
+| 0.4.5 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. | Planned |
+| 0.4.6 | Image fingerprint cache | Persist deterministic displayed-pixel image fingerprints for safe rescans. | Planned |
+| 0.4.7 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. | Planned |
+| 0.4.8 | Validation evidence | Record validation profile, result, file identity, runtime/tool versions, and completion time as disposable history without allowing an old healthy result to satisfy a fresh full validation. | Planned |
+| 0.4.9 | Explicit cached validation | Offer an explicitly named cache-assisted validation mode for unchanged files while retaining fresh reads as the default contract of `validate --full`. | Planned |
+| 0.4.10 | Targeted cache refresh | Recompute selected validation or fingerprint records without deleting unrelated cache evidence; reserve `--no-cache` for disabling both cache reads and writes. | Planned |
 
 Cache reuse is incremental: new or changed files add or replace only their own
 derived records. Unchanged records survive collection growth. No scan command
