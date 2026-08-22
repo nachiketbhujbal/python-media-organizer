@@ -6,6 +6,7 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -111,6 +112,8 @@ def test_video_finder_dry_run_apply_and_undo_exact_playback(
     assert (tmp_path / "dups" / "vids" / "metadata-copy_copy(2).mp4").exists()
     assert not (tmp_path / "dups" / "pics").exists()
     assert cache.is_file()
+    assert CollectionLayout(tmp_path).video_cache_lock.is_file()
+    assert not list(tmp_path.glob(".pymo.sqlite3.new.*"))
     assert not cache.with_name(f"{cache.name}-wal").exists()
     assert not cache.with_name(f"{cache.name}-shm").exists()
     assert action_log_path(tmp_path).is_file()
@@ -475,12 +478,14 @@ def test_video_finder_rejects_a_corrupt_cache_before_decoding(
 
 
 def test_video_cache_rejects_malformed_rows(tmp_path: Path) -> None:
-    database = tmp_path / "cache.sqlite3"
+    database = CollectionLayout(tmp_path).video_cache
     connection = sqlite3.connect(database)
     connection.execute(
         "CREATE TABLE video_fingerprints ("
-        "file_sha256 TEXT, algorithm TEXT, ffmpeg_version TEXT, "
-        "fingerprint TEXT, video_frames INTEGER, audio_bytes INTEGER)"
+        "file_sha256 TEXT NOT NULL, algorithm TEXT NOT NULL, "
+        "ffmpeg_version TEXT NOT NULL, fingerprint TEXT NOT NULL, "
+        "video_frames INTEGER NOT NULL, audio_bytes INTEGER NOT NULL, "
+        "PRIMARY KEY (file_sha256, algorithm, ffmpeg_version))"
     )
     connection.execute(
         "INSERT INTO video_fingerprints VALUES (?, ?, ?, ?, ?, ?)",
@@ -499,16 +504,18 @@ def test_video_cache_read_pins_original_database_during_path_swap(
     root = tmp_path / "collection"
     root.mkdir()
     cache = CollectionLayout(root).video_cache
-    outside = tmp_path / "outside.sqlite3"
+    outside_root = tmp_path / "outside"
+    outside_root.mkdir()
+    outside = CollectionLayout(outside_root).video_cache
     displaced = root / "displaced.sqlite3"
     original = video_duplicates.DerivedFingerprint("1" * 64, 1, 0)
     unrelated = video_duplicates.DerivedFingerprint("2" * 64, 2, 0)
     file_hash = "a" * 64
     video_duplicates.save_cached_fingerprints(
-        cache, "test-ffmpeg", {file_hash: original}
+        root, cache, "test-ffmpeg", {file_hash: original}
     )
     video_duplicates.save_cached_fingerprints(
-        outside, "test-ffmpeg", {file_hash: unrelated}
+        outside_root, outside, "test-ffmpeg", {file_hash: unrelated}
     )
     real_connect = sqlite3.connect
     observed: list[str] = []
@@ -532,6 +539,202 @@ def test_video_cache_read_pins_original_database_during_path_swap(
         video_duplicates.load_cached_fingerprints(root, cache, "test-ffmpeg")
 
     assert observed == [original.digest]
+
+
+def test_video_cache_writers_serialize_and_merge_completed_updates(
+    tmp_path: Path,
+) -> None:
+    layout = CollectionLayout(tmp_path)
+    first = video_duplicates.DerivedFingerprint("1" * 64, 1, 0)
+    second = video_duplicates.DerivedFingerprint("2" * 64, 2, 0)
+    started = [threading.Event(), threading.Event()]
+    finished = [threading.Event(), threading.Event()]
+    errors: list[BaseException] = []
+
+    def save(number: int, file_hash: str, value) -> None:
+        started[number].set()
+        try:
+            video_duplicates.save_cached_fingerprints(
+                tmp_path,
+                layout.video_cache,
+                "test-ffmpeg",
+                {file_hash: value},
+            )
+        except BaseException as error:
+            errors.append(error)
+        finally:
+            finished[number].set()
+
+    with video_duplicates._locked_cache_directory(
+        tmp_path, layout.video_cache_lock, exclusive=True
+    ):
+        threads = [
+            threading.Thread(target=save, args=(0, "a" * 64, first)),
+            threading.Thread(target=save, args=(1, "b" * 64, second)),
+        ]
+        for thread in threads:
+            thread.start()
+        assert all(event.wait(1) for event in started)
+        assert not any(event.wait(0.05) for event in finished)
+    for thread in threads:
+        thread.join(timeout=5)
+
+    assert not errors
+    assert all(event.is_set() for event in finished)
+    assert video_duplicates.load_cached_fingerprints(
+        tmp_path, layout.video_cache, "test-ffmpeg"
+    ) == {"a" * 64: first, "b" * 64: second}
+    assert not list(tmp_path.glob(".pymo.sqlite3.new.*"))
+
+
+def test_video_cache_interruption_preserves_public_cache_and_complete_stage(
+    tmp_path: Path, monkeypatch
+) -> None:
+    layout = CollectionLayout(tmp_path)
+    first = video_duplicates.DerivedFingerprint("1" * 64, 1, 0)
+    second = video_duplicates.DerivedFingerprint("2" * 64, 2, 0)
+    video_duplicates.save_cached_fingerprints(
+        tmp_path, layout.video_cache, "test-ffmpeg", {"a" * 64: first}
+    )
+    original_bytes = layout.video_cache.read_bytes()
+
+    def interrupt_before_publication(*_args, **_kwargs) -> None:
+        raise video_duplicates.VideoInspectionError("simulated interruption")
+
+    monkeypatch.setattr(
+        video_duplicates, "_publish_staged_cache", interrupt_before_publication
+    )
+
+    with pytest.raises(video_duplicates.VideoInspectionError, match="interruption"):
+        video_duplicates.save_cached_fingerprints(
+            tmp_path,
+            layout.video_cache,
+            "test-ffmpeg",
+            {"b" * 64: second},
+        )
+
+    assert layout.video_cache.read_bytes() == original_bytes
+    stages = list(tmp_path.glob(".pymo.sqlite3.new.*"))
+    assert len(stages) == 1 and stages[0].is_file()
+    connection = sqlite3.connect(stages[0])
+    staged_rows = connection.execute(
+        "SELECT file_sha256 FROM video_fingerprints ORDER BY file_sha256"
+    ).fetchall()
+    connection.close()
+    assert staged_rows == [("a" * 64,), ("b" * 64,)]
+
+
+def test_video_cache_publication_never_writes_through_substituted_path(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "collection"
+    outside_root = tmp_path / "outside"
+    root.mkdir()
+    outside_root.mkdir()
+    layout = CollectionLayout(root)
+    outside_layout = CollectionLayout(outside_root)
+    original = video_duplicates.DerivedFingerprint("1" * 64, 1, 0)
+    unrelated = video_duplicates.DerivedFingerprint("9" * 64, 9, 0)
+    update = video_duplicates.DerivedFingerprint("2" * 64, 2, 0)
+    video_duplicates.save_cached_fingerprints(
+        root, layout.video_cache, "test-ffmpeg", {"a" * 64: original}
+    )
+    video_duplicates.save_cached_fingerprints(
+        outside_root,
+        outside_layout.video_cache,
+        "test-ffmpeg",
+        {"f" * 64: unrelated},
+    )
+    outside_bytes = outside_layout.video_cache.read_bytes()
+    displaced = root / "displaced.sqlite3"
+    real_rename = video_duplicates._atomic_cache_rename
+    swapped = False
+
+    def substitute_before_publication(*args, **kwargs) -> None:
+        nonlocal swapped
+        if kwargs.get("exchange") and not swapped:
+            swapped = True
+            layout.video_cache.rename(displaced)
+            layout.video_cache.symlink_to(outside_layout.video_cache)
+        real_rename(*args, **kwargs)
+
+    monkeypatch.setattr(
+        video_duplicates, "_atomic_cache_rename", substitute_before_publication
+    )
+
+    with pytest.raises(video_duplicates.VideoInspectionError, match="cache path"):
+        video_duplicates.save_cached_fingerprints(
+            root,
+            layout.video_cache,
+            "test-ffmpeg",
+            {"b" * 64: update},
+        )
+
+    assert swapped
+    assert layout.video_cache.is_symlink()
+    assert displaced.is_file()
+    assert outside_layout.video_cache.read_bytes() == outside_bytes
+    assert len(list(root.glob(".pymo.sqlite3.new.*"))) == 1
+
+
+def test_video_cache_rejects_substituted_lock_without_touching_target(
+    tmp_path: Path,
+) -> None:
+    layout = CollectionLayout(tmp_path)
+    outside = tmp_path / "outside.lock"
+    outside.write_bytes(b"unrelated lock target")
+    layout.video_cache_lock.symlink_to(outside)
+
+    with pytest.raises(video_duplicates.VideoInspectionError, match="lock safely"):
+        video_duplicates.save_cached_fingerprints(
+            tmp_path,
+            layout.video_cache,
+            "test-ffmpeg",
+            {"a" * 64: video_duplicates.DerivedFingerprint("1" * 64, 1, 0)},
+        )
+
+    assert outside.read_bytes() == b"unrelated lock target"
+    assert not layout.video_cache.exists()
+    assert not list(tmp_path.glob(".pymo.sqlite3.new.*"))
+
+
+def test_video_cache_rechecks_lock_before_publication(
+    tmp_path: Path, monkeypatch
+) -> None:
+    layout = CollectionLayout(tmp_path)
+    original = video_duplicates.DerivedFingerprint("1" * 64, 1, 0)
+    update = video_duplicates.DerivedFingerprint("2" * 64, 2, 0)
+    video_duplicates.save_cached_fingerprints(
+        tmp_path, layout.video_cache, "test-ffmpeg", {"a" * 64: original}
+    )
+    original_cache = layout.video_cache.read_bytes()
+    outside = tmp_path / "outside.lock"
+    outside.write_bytes(b"unrelated lock target")
+    displaced_lock = tmp_path / "displaced.lock"
+    real_build = video_duplicates._build_staged_cache
+
+    def substitute_lock_after_staging(*args, **kwargs):
+        result = real_build(*args, **kwargs)
+        layout.video_cache_lock.rename(displaced_lock)
+        layout.video_cache_lock.symlink_to(outside)
+        return result
+
+    monkeypatch.setattr(
+        video_duplicates, "_build_staged_cache", substitute_lock_after_staging
+    )
+
+    with pytest.raises(video_duplicates.VideoInspectionError, match="cache lock"):
+        video_duplicates.save_cached_fingerprints(
+            tmp_path,
+            layout.video_cache,
+            "test-ffmpeg",
+            {"b" * 64: update},
+        )
+
+    assert layout.video_cache.read_bytes() == original_cache
+    assert outside.read_bytes() == b"unrelated lock target"
+    assert displaced_lock.is_file()
+    assert len(list(tmp_path.glob(".pymo.sqlite3.new.*"))) == 1
 
 
 def test_video_inspection_rejects_a_file_changed_during_probe(

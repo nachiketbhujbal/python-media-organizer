@@ -54,3 +54,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0046](0046-private-free-main-protection-prerequisite.md) | Private-Free main-protection prerequisite |
 | [0047](0047-descriptor-pinned-image-duplicate-reads.md) | Descriptor-pinned image duplicate reads |
 | [0048](0048-descriptor-pinned-sqlite-cache-reads.md) | Descriptor-pinned SQLite cache reads |
+| [0049](0049-locked-atomic-sqlite-cache-writes.md) | Locked atomic SQLite cache writes |

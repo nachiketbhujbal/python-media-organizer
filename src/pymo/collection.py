@@ -46,6 +46,10 @@ class CollectionLayout:
         return self.root / ".pymo.sqlite3"
 
     @property
+    def video_cache_lock(self) -> Path:
+        return self.root / ".pymo.sqlite3.lock"
+
+    @property
     def action_log(self) -> Path:
         collection_name = self.root.name or "media-collection"
         return self.root / f"{collection_name}-actions-log.jsonl"

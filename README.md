@@ -58,6 +58,7 @@ media-collection/
                         portable append-only action history, after an apply
   .pymo.toml            optional collection-specific configuration
   .pymo.sqlite3         disposable video fingerprint cache, after a cache miss
+  .pymo.sqlite3.lock    persistent cache reader/writer coordination
   other files           non-media files at the collection root
 ```
 
@@ -73,8 +74,9 @@ Packaged defaults automatically ignore common operating-system and tool state,
 including macOS `.DS_Store` and AppleDouble files, Windows thumbnail and
 desktop metadata, recycle/index directories, Synology and archive metadata,
 version-control directories, the optional pymo config, and pymo's disposable
-SQLite cache. These paths are left exactly where they are: they are not moved,
-renamed, fingerprinted, deleted, or written to the action log.
+SQLite cache, lock, and private staging artifacts. These paths are left exactly
+where they are: they are not moved, renamed, fingerprinted, deleted, or written
+to the action log.
 
 The built-in rules are always active and require no file in a collection. To
 extend them for one collection, add `.pymo.toml` at its root:
@@ -328,13 +330,25 @@ the cache. Cache writes are derived local state only: they never move media or
 write action history.
 
 An existing cache is opened read-only through a stable no-follow descriptor
-anchored beneath the collection root, then its expected schema and every
-selected row are validated before expensive decoding. A concurrent pathname
-swap cannot redirect SQLite to unrelated local data and instead stops the run.
-If the cache is corrupt or incompatible, pymo leaves it untouched and stops
-with instructions to move it aside or rerun with `--no-cache`. FFmpeg and
-ffprobe are resolved only when at least two eligible videos exist; smaller
-collections do not need a decoder to report that no comparison is possible.
+anchored beneath the collection root, then its exact schema, integrity, and
+every row are validated before expensive decoding. A concurrent pathname swap
+cannot redirect SQLite to unrelated local data and instead stops the run. If
+the cache is corrupt or incompatible, pymo leaves it untouched and stops with
+instructions to move it aside or rerun with `--no-cache`.
+
+Readers share `.pymo.sqlite3.lock`; writers take it exclusively and merge the
+latest completed records. A write is first built in memory, serialized to a
+private collection-anchored staging descriptor, synced, reopened read-only, and
+validated. Only then does pymo publish it with an atomic no-replace rename or a
+verified atomic exchange and sync the collection directory. The public cache
+is never modified in place. An interruption therefore leaves either the prior
+cache or the complete replacement public; an unpublished `.pymo.sqlite3.new.*`
+artifact may remain for inspection and is ignored by every forward command.
+These cache-state operations never delete media or write action history.
+
+FFmpeg and ffprobe are resolved only when at least two eligible videos exist;
+smaller collections do not need a decoder to report that no comparison is
+possible.
 
 Before uncached video decoding begins, the finder reports the number and total
 size of fingerprints it must calculate. It reports observed progress and data

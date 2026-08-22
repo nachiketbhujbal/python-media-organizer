@@ -72,7 +72,7 @@ The same adversarial method was repeated after the first validation release.
 | ID | Severity | Finding | Resolution target | Status |
 | --- | --- | --- | --- | --- |
 | CACHE-001 | High | Cache reads checked and resolved the public pathname before giving it to SQLite, so a concurrent link substitution could redirect a transient read outside the collection. | 0.3.11 | Resolved in ADR 0048 |
-| CACHE-002 | High | Cache writes use check-then-open pathname access without a dedicated inter-process lock or atomic publication, allowing path substitution, racing updates, and an interrupted update to affect the public cache directly. | 0.3.12 | Open |
+| CACHE-002 | High | Cache writes use check-then-open pathname access without a dedicated inter-process lock or atomic publication, allowing path substitution, racing updates, and an interrupted update to affect the public cache directly. | 0.3.12 | Resolved in ADR 0049 |
 
 ## Release groups
 
@@ -106,6 +106,8 @@ The same adversarial method was repeated after the first validation release.
   exact `main` ruleset to activate when the repository becomes eligible.
 - `0.3.10`: pin exact-image pixel decoding to stable no-follow descriptors.
 - `0.3.11`: pin SQLite cache reads to a stable no-follow collection descriptor.
+- `0.3.12`: serialize cache access and atomically publish complete, validated,
+  durable cache replacements without writing through the public pathname.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 
@@ -118,7 +120,7 @@ The same adversarial method was repeated after the first validation release.
 - Independent typing found unsafe object narrowing in action-log deserialization
   and an imprecise selector file-object type.
 - A first parent-only coverage run reported a misleading 42 percent. After
-  subprocess instrumentation and direct adversarial tests, the current 152
+  subprocess instrumentation and direct adversarial tests, the current 157
   tests pass and the same suite reports 86 percent across real CLI child
   processes.
 

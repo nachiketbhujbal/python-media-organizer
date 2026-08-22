@@ -2,6 +2,23 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.12 - 2026-08-22
+
+- Coordinate cache readers and writers through a private collection-local lock,
+  and merge each completed fingerprint into the latest locked database so
+  concurrent runs do not lose one another's records.
+- Build updates away from the public pathname, serialize them to a private
+  descriptor, sync and reopen them read-only, and verify schema, rows, and
+  integrity before atomic publication.
+- Use atomic no-replace publication for a new cache and a verified atomic
+  exchange for an existing cache, syncing the collection directory and never
+  writing through a substituted path.
+- Preserve the prior cache across pre-publication interruption, leave any
+  unpublished staging database ignored and inspectable, and continue to leave
+  no SQLite journal, WAL, or shared-memory sidecars.
+- Add concurrent-writer and adversarial tests for interruption, public-path
+  substitution, lock substitution, merged records, and staging cleanup.
+
 ## 0.3.11 - 2026-08-22
 
 - Open an existing video fingerprint cache read-only through a stable no-follow
