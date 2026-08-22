@@ -318,6 +318,59 @@ def migrate_legacy_video_schema(connection: sqlite3.Connection) -> None:
     validate_current_schema(connection)
 
 
+def read_legacy_video_evidence(
+    connection: sqlite3.Connection,
+) -> list[DerivedEvidence]:
+    """Read a validated legacy cache without modifying it."""
+
+    if detect_schema(connection) != "legacy-video":
+        raise CacheError("SQLite cache is not a legacy video cache")
+    return [
+        DerivedEvidence(
+            file_sha256=file_hash,
+            evidence_type=LEGACY_VIDEO_EVIDENCE_TYPE,
+            algorithm=algorithm,
+            runtime=runtime,
+            payload_json=json.dumps(
+                {
+                    "audio_bytes": audio_bytes,
+                    "digest": fingerprint,
+                    "video_frames": video_frames,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
+        for (
+            file_hash,
+            algorithm,
+            runtime,
+            fingerprint,
+            video_frames,
+            audio_bytes,
+        ) in _validated_legacy_video_rows(connection)
+    ]
+
+
+def read_derived_evidence(
+    connection: sqlite3.Connection,
+    *,
+    evidence_type: str,
+    algorithm: str,
+    runtime: str,
+) -> list[DerivedEvidence]:
+    """Read one exact evidence namespace from a validated current cache."""
+
+    validate_current_schema(connection)
+    rows = connection.execute(
+        "SELECT file_sha256, evidence_type, algorithm, runtime, payload_json "
+        "FROM derived_evidence WHERE evidence_type = ? AND algorithm = ? "
+        "AND runtime = ? ORDER BY file_sha256",
+        (evidence_type, algorithm, runtime),
+    ).fetchall()
+    return [DerivedEvidence(*row) for row in rows]
+
+
 def upsert_derived_evidence(
     connection: sqlite3.Connection, records: Iterable[DerivedEvidence]
 ) -> None:

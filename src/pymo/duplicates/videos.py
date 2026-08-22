@@ -610,55 +610,31 @@ def derive_fingerprint(
     )
 
 
-def _validated_cache_rows(
-    connection: sqlite3.Connection,
-) -> list[tuple[str, str, str, DerivedFingerprint]]:
-    if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
-        raise VideoInspectionError("SQLite fingerprint cache failed integrity check")
-    objects = connection.execute(
-        "SELECT type, name FROM sqlite_schema "
-        "WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
-    ).fetchall()
-    if objects != [("table", "video_fingerprints")]:
-        raise VideoInspectionError(
-            "SQLite fingerprint cache has an incompatible schema"
-        )
-    schema = connection.execute("PRAGMA table_info(video_fingerprints)").fetchall()
-    signature = [(row[1], str(row[2]).upper(), row[3], row[5]) for row in schema]
-    expected_signature = [
-        ("file_sha256", "TEXT", 1, 1),
-        ("algorithm", "TEXT", 1, 2),
-        ("ffmpeg_version", "TEXT", 1, 3),
-        ("fingerprint", "TEXT", 1, 0),
-        ("video_frames", "INTEGER", 1, 0),
-        ("audio_bytes", "INTEGER", 1, 0),
-    ]
-    if signature != expected_signature:
-        raise VideoInspectionError(
-            "SQLite fingerprint cache has an incompatible schema"
-        )
-    rows = connection.execute(
-        "SELECT file_sha256, algorithm, ffmpeg_version, fingerprint, "
-        "video_frames, audio_bytes FROM video_fingerprints"
-    ).fetchall()
-    validated: list[tuple[str, str, str, DerivedFingerprint]] = []
-    for (
-        file_hash,
-        algorithm,
-        ffmpeg_release,
-        fingerprint,
-        video_frames,
-        audio_bytes,
-    ) in rows:
+def _decode_video_evidence(
+    records: list[cache_service.DerivedEvidence],
+) -> dict[str, DerivedFingerprint]:
+    decoded: dict[str, DerivedFingerprint] = {}
+    for record in records:
+        try:
+            payload = json.loads(record.payload_json)
+        except json.JSONDecodeError as error:
+            raise VideoInspectionError(
+                "SQLite fingerprint cache contains invalid video evidence"
+            ) from error
+        if not isinstance(payload, dict) or set(payload) != {
+            "digest",
+            "video_frames",
+            "audio_bytes",
+        }:
+            raise VideoInspectionError(
+                "SQLite fingerprint cache contains invalid video evidence"
+            )
+        digest = payload["digest"]
+        video_frames = payload["video_frames"]
+        audio_bytes = payload["audio_bytes"]
         if (
-            not isinstance(file_hash, str)
-            or re.fullmatch(r"[0-9a-f]{64}", file_hash) is None
-            or not isinstance(algorithm, str)
-            or not algorithm
-            or not isinstance(ffmpeg_release, str)
-            or not ffmpeg_release
-            or not isinstance(fingerprint, str)
-            or re.fullmatch(r"[0-9a-f]{64}", fingerprint) is None
+            not isinstance(digest, str)
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
             or isinstance(video_frames, bool)
             or not isinstance(video_frames, int)
             or video_frames <= 0
@@ -667,21 +643,37 @@ def _validated_cache_rows(
             or audio_bytes < 0
         ):
             raise VideoInspectionError(
-                "SQLite fingerprint cache contains an invalid row"
+                "SQLite fingerprint cache contains invalid video evidence"
             )
-        validated.append(
-            (
-                file_hash,
-                algorithm,
-                ffmpeg_release,
-                DerivedFingerprint(
-                    digest=fingerprint,
-                    video_frames=video_frames,
-                    audio_bytes=audio_bytes,
-                ),
-            )
+        decoded[record.file_sha256] = DerivedFingerprint(
+            digest=digest,
+            video_frames=video_frames,
+            audio_bytes=audio_bytes,
         )
-    return validated
+    return decoded
+
+
+def _load_video_evidence(
+    connection: sqlite3.Connection, ffmpeg_release: str
+) -> dict[str, DerivedFingerprint]:
+    schema = cache_service.detect_schema(connection)
+    if schema == "legacy-video":
+        records = [
+            record
+            for record in cache_service.read_legacy_video_evidence(connection)
+            if record.algorithm == FINGERPRINT_ALGORITHM
+            and record.runtime == ffmpeg_release
+        ]
+    elif schema == "current":
+        records = cache_service.read_derived_evidence(
+            connection,
+            evidence_type=cache_service.LEGACY_VIDEO_EVIDENCE_TYPE,
+            algorithm=FINGERPRINT_ALGORITHM,
+            runtime=ffmpeg_release,
+        )
+    else:
+        raise VideoInspectionError("SQLite fingerprint cache has no schema")
+    return _decode_video_evidence(records)
 
 
 def load_cached_fingerprints(
@@ -716,7 +708,7 @@ def load_cached_fingerprints(
                     descriptor, read_only=True
                 )
                 connection.execute("PRAGMA query_only=ON")
-                rows = _validated_cache_rows(connection)
+                cached = _load_video_evidence(connection, ffmpeg_release)
                 connection.close()
                 connection = None
     except FileChangedError as error:
@@ -736,11 +728,7 @@ def load_cached_fingerprints(
     finally:
         if connection is not None:
             connection.close()
-    return {
-        file_hash: fingerprint
-        for file_hash, algorithm, release, fingerprint in rows
-        if algorithm == FINGERPRINT_ALGORITHM and release == ffmpeg_release
-    }
+    return cached
 
 
 def _build_staged_cache(
@@ -765,37 +753,39 @@ def _build_staged_cache(
                 source_descriptor, read_only=True
             )
             source.execute("PRAGMA query_only=ON")
-            _validated_cache_rows(source)
+            if cache_service.detect_schema(source) == "empty":
+                raise VideoInspectionError("SQLite fingerprint cache has no schema")
 
         destination = sqlite3.connect(":memory:")
         if source is not None:
             source.backup(destination)
+            if cache_service.detect_schema(destination) == "legacy-video":
+                cache_service.migrate_legacy_video_schema(destination)
         else:
-            destination.execute(
-                "CREATE TABLE video_fingerprints ("
-                "file_sha256 TEXT NOT NULL, algorithm TEXT NOT NULL, "
-                "ffmpeg_version TEXT NOT NULL, fingerprint TEXT NOT NULL, "
-                "video_frames INTEGER NOT NULL, audio_bytes INTEGER NOT NULL, "
-                "PRIMARY KEY (file_sha256, algorithm, ffmpeg_version))"
-            )
-        destination.executemany(
-            "INSERT OR REPLACE INTO video_fingerprints "
-            "(file_sha256, algorithm, ffmpeg_version, fingerprint, "
-            "video_frames, audio_bytes) VALUES (?, ?, ?, ?, ?, ?)",
+            cache_service.initialize_schema(destination)
+        cache_service.upsert_derived_evidence(
+            destination,
             [
-                (
-                    file_hash,
-                    FINGERPRINT_ALGORITHM,
-                    ffmpeg_release,
-                    value.digest,
-                    value.video_frames,
-                    value.audio_bytes,
+                cache_service.DerivedEvidence(
+                    file_sha256=file_hash,
+                    evidence_type=cache_service.LEGACY_VIDEO_EVIDENCE_TYPE,
+                    algorithm=FINGERPRINT_ALGORITHM,
+                    runtime=ffmpeg_release,
+                    payload_json=json.dumps(
+                        {
+                            "audio_bytes": value.audio_bytes,
+                            "digest": value.digest,
+                            "video_frames": value.video_frames,
+                        },
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
                 )
                 for file_hash, value in sorted(values.items())
             ],
         )
         destination.commit()
-        _validated_cache_rows(destination)
+        cache_service.validate_current_schema(destination)
         payload = destination.serialize()
         destination.close()
         destination = None
@@ -818,7 +808,7 @@ def _build_staged_cache(
             destination_descriptor, read_only=True
         )
         verification.execute("PRAGMA query_only=ON")
-        _validated_cache_rows(verification)
+        cache_service.validate_current_schema(verification)
         verification.close()
         verification = None
         stage_state = cache_service.CacheEntryState.capture_descriptor(
