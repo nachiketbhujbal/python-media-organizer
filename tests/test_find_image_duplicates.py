@@ -163,60 +163,6 @@ def test_duplicate_finder_never_overwrites_review_files(
     assert (duplicate_dir / "first_copy(2).png").exists()
 
 
-def test_legacy_group_reorganization_is_logged_and_reversible(
-    tmp_path: Path, run_script
-) -> None:
-    kept = tmp_path / "original.png"
-    Image.new("RGB", (2, 2), "blue").save(kept)
-    group = tmp_path / "duplicates" / "group_0001"
-    group.mkdir(parents=True)
-    legacy_copy = group / "copy.png"
-    Image.new("RGB", (2, 2), "blue").save(legacy_copy)
-    legacy_manifest = tmp_path / "duplicates" / "move_manifest.csv"
-    legacy_manifest.write_text(
-        "group,pixel_sha256,kept_file,moved_from,moved_to,file_size_bytes\n"
-        f"set_0001,unused,{kept},{tmp_path / 'copy.png'},{legacy_copy},1\n",
-        encoding="utf-8",
-    )
-
-    applied = run_script(
-        "find_image_duplicates.py", tmp_path, "--reorganize-existing", "--apply"
-    )
-
-    assert applied.returncode == 0, applied.stdout + applied.stderr
-    assert "DEPRECATION: grouped-image migration" in applied.stderr
-    assert "removed in pymo 0.2.0" in applied.stderr
-    flattened = tmp_path / "dups" / "pics" / "original_copy(1).png"
-    assert flattened.exists()
-    assert not (tmp_path / "dups" / "vids").exists()
-    assert not group.exists()
-    assert action_log_path(tmp_path).exists()
-    assert not (tmp_path / "duplicates" / "reorganization_manifest.csv").exists()
-
-    undone = run_script("find_image_duplicates.py", tmp_path, "--undo", "--apply")
-
-    assert undone.returncode == 0, undone.stdout + undone.stderr
-    assert legacy_copy.exists()
-    assert not flattened.exists()
-    assert not (tmp_path / "dups").exists()
-    assert legacy_manifest.exists()
-
-
-def test_recursive_compatibility_option_warns_and_remains_a_no_op(
-    tmp_path: Path, run_script
-) -> None:
-    pics = tmp_path / "pics"
-    pics.mkdir()
-    Image.new("RGB", (2, 2), "green").save(pics / "plant.png")
-
-    result = run_script("find_image_duplicates.py", tmp_path, "--recursive")
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "DEPRECATION: --recursive" in result.stderr
-    assert "removed in pymo 0.2.0" in result.stderr
-    assert "Scanning 1 image(s)" in result.stdout
-
-
 def test_full_workflow_must_be_undone_in_reverse_order(
     tmp_path: Path, run_script
 ) -> None:

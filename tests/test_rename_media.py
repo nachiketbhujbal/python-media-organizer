@@ -191,22 +191,6 @@ def test_renamer_honors_custom_file_rules(tmp_path: Path, run_script) -> None:
     )
 
 
-def test_renamer_warns_about_legacy_fixed_action_log(
-    tmp_path: Path, run_script
-) -> None:
-    root = tmp_path / "media-collection"
-    (root / "pics").mkdir(parents=True)
-    (root / "vids").mkdir()
-    (root / "media_actions.jsonl").write_text("", encoding="utf-8")
-
-    result = run_script("rename_media.py", root)
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "DEPRECATION: the fixed media_actions.jsonl" in result.stderr
-    assert "removed in pymo 0.2.0" in result.stderr
-    assert "Would rename 0 media file(s)" in result.stdout
-
-
 def test_renamer_uses_custom_noise_tokens(tmp_path: Path, run_script) -> None:
     root = tmp_path / "collection"
     pics = root / "pics"

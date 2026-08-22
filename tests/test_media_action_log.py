@@ -11,7 +11,6 @@ from pymo.action_log import (
     ActionLog,
     NoUndoableRun,
     action_log_path,
-    legacy_action_log_path,
 )
 
 
@@ -126,41 +125,6 @@ def test_action_log_name_comes_from_media_collection_root(tmp_path: Path) -> Non
     root.mkdir()
 
     assert action_log_path(root).name == "media-collection-actions-log.jsonl"
-
-
-def test_legacy_log_is_read_without_mutation_then_migrated_on_apply(
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "photo.jpg"
-    destination = tmp_path / "pics" / "photo.jpg"
-    source.write_bytes(b"portable history")
-    destination.parent.mkdir()
-    initial_log = ActionLog(tmp_path)
-    with initial_log.transaction("organize_media") as transaction:
-        transaction.perform(Action.for_file(tmp_path, source, destination, "MOVE"))
-        transaction.commit()
-
-    canonical = action_log_path(tmp_path)
-    legacy = legacy_action_log_path(tmp_path)
-    canonical.rename(legacy)
-    existing = ActionLog(tmp_path)
-
-    existing.plan_undo("organize_media")
-    assert legacy.is_file()
-    assert not canonical.exists()
-
-    existing.apply_undo("organize_media")
-    assert canonical.is_file()
-    assert not legacy.exists()
-    assert source.read_bytes() == b"portable history"
-
-
-def test_canonical_and_legacy_logs_together_are_rejected(tmp_path: Path) -> None:
-    action_log_path(tmp_path).write_text("", encoding="utf-8")
-    legacy_action_log_path(tmp_path).write_text("", encoding="utf-8")
-
-    with pytest.raises(ActionConflict, match="both the canonical and legacy"):
-        ActionLog(tmp_path)
 
 
 def test_symbolic_link_action_log_is_rejected(tmp_path: Path) -> None:

@@ -11,7 +11,6 @@ The reserved dups review tree is left untouched.
 from __future__ import annotations
 
 import argparse
-import csv
 import mimetypes
 import os
 import shutil
@@ -28,9 +27,7 @@ from pymo.action_log import (
     ActionLogError,
     NoUndoableRun,
     ToolId,
-    action_log_exists,
     is_action_log_path,
-    warn_if_legacy_action_log,
 )
 from pymo.collection import CollectionLayout
 from pymo.config import (
@@ -43,7 +40,6 @@ from pymo.config import (
     load_config,
 )
 from pymo.logging_config import emit as print
-from pymo.logging_config import warn_deprecated
 
 
 @dataclass(frozen=True)
@@ -57,14 +53,6 @@ class FileRecord:
 class MoveRecord:
     source: Path
     target: Path
-    kind: str
-    mime_type: str
-
-
-@dataclass(frozen=True)
-class UndoRecord:
-    current: Path
-    original: Path
     kind: str
     mime_type: str
 
@@ -319,249 +307,6 @@ def remaining_directories(
     )
 
 
-def manifest_path_within_root(value: str, root: Path) -> Path:
-    """Resolve a path from a manifest and require it to stay within ROOT."""
-    path = Path(value).expanduser()
-    if not path.is_absolute():
-        path = root / path
-    resolved = path.resolve(strict=False)
-    try:
-        resolved.relative_to(root)
-    except ValueError as error:
-        raise ValueError(f"path is outside the selected folder: {path}") from error
-    return resolved
-
-
-def latest_organization_manifest(root: Path) -> Path | None:
-    manifests = [
-        path
-        for path in root.glob("organization_manifest*.csv")
-        if path.is_file() and not path.is_symlink()
-    ]
-    if not manifests:
-        return None
-    return max(
-        manifests,
-        key=lambda path: (path.stat().st_mtime_ns, str(path).casefold()),
-    )
-
-
-def read_undo_records(manifest_path: Path, root: Path) -> list[UndoRecord]:
-    required = {"kind", "mime_type", "moved_from", "moved_to"}
-    records: list[UndoRecord] = []
-    with manifest_path.open(newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames is None or not required.issubset(reader.fieldnames):
-            missing = sorted(required.difference(reader.fieldnames or []))
-            raise ValueError(
-                "manifest is missing required column(s): " + ", ".join(missing)
-            )
-
-        for row_number, row in enumerate(reader, start=2):
-            if not row["moved_from"] or not row["moved_to"]:
-                raise ValueError(f"manifest row {row_number} has an empty path")
-            original = manifest_path_within_root(row["moved_from"], root)
-            current = manifest_path_within_root(row["moved_to"], root)
-            if original == current:
-                raise ValueError(
-                    f"manifest row {row_number} uses the same source and target"
-                )
-            records.append(
-                UndoRecord(
-                    current=current,
-                    original=original,
-                    kind=row["kind"],
-                    mime_type=row["mime_type"],
-                )
-            )
-
-    if not records:
-        raise ValueError("manifest contains no completed moves")
-
-    current_keys = [path_key(record.current) for record in records]
-    original_keys = [path_key(record.original) for record in records]
-    if len(current_keys) != len(set(current_keys)):
-        raise ValueError("manifest contains a duplicate organized path")
-    if len(original_keys) != len(set(original_keys)):
-        raise ValueError("manifest contains a duplicate original path")
-    if set(current_keys).intersection(original_keys):
-        raise ValueError("manifest contains overlapping move paths")
-    return records
-
-
-def has_symlink_parent(path: Path, root: Path) -> bool:
-    """Return whether an existing parent between PATH and ROOT is a symlink."""
-    current = path.parent
-    while current != root:
-        if current.is_symlink():
-            return True
-        current = current.parent
-    return False
-
-
-def undo_organization(
-    root: Path, requested_manifest: Path | None, apply: bool
-) -> int:
-    if requested_manifest is None:
-        manifest_path = latest_organization_manifest(root)
-        if manifest_path is None:
-            print(f"No organization manifest found in {root}", file=sys.stderr)
-            return 2
-    else:
-        candidate = requested_manifest.expanduser()
-        if not candidate.is_absolute():
-            candidate = root / candidate
-        manifest_path = candidate.resolve()
-        try:
-            manifest_path.relative_to(root)
-        except ValueError:
-            print(
-                f"The organization manifest must be inside {root}: {manifest_path}",
-                file=sys.stderr,
-            )
-            return 2
-        if manifest_path.is_symlink() or not manifest_path.is_file():
-            print(f"Not a regular manifest file: {manifest_path}", file=sys.stderr)
-            return 2
-
-    warn_deprecated(
-        "CSV organization-manifest undo and --manifest",
-        "Undo current organization runs through the collection action log.",
-    )
-
-    try:
-        manifest_stat = manifest_path.stat()
-        records = read_undo_records(manifest_path, root)
-    except (OSError, csv.Error, ValueError) as error:
-        print(f"Cannot use organization manifest {manifest_path}: {error}", file=sys.stderr)
-        return 2
-
-    # Reverse the completed moves so the last organization move is undone first.
-    records.reverse()
-    plan: list[UndoRecord] = []
-    already_restored: list[UndoRecord] = []
-    preflight_failures: list[tuple[UndoRecord, str]] = []
-    for record in records:
-        current_exists = path_exists(record.current)
-        original_exists = path_exists(record.original)
-        if current_exists and original_exists:
-            preflight_failures.append(
-                (record, "both the organized and original paths already exist")
-            )
-        elif current_exists:
-            if record.current.is_symlink() or not record.current.is_file():
-                preflight_failures.append(
-                    (record, "organized path is not a regular file")
-                )
-            elif has_symlink_parent(record.original, root):
-                preflight_failures.append(
-                    (record, "an original parent directory is a symbolic link")
-                )
-            else:
-                plan.append(record)
-        elif original_exists:
-            if record.original.is_symlink() or not record.original.is_file():
-                preflight_failures.append(
-                    (record, "original path is not a regular file")
-                )
-            else:
-                already_restored.append(record)
-        else:
-            preflight_failures.append(
-                (record, "organized file is missing and original path is empty")
-            )
-
-    print(f"Using organization manifest: {manifest_path}")
-    for record in plan:
-        print(
-            f"\n{record.kind.upper()} ({record.mime_type})\n"
-            f"  {'restore' if apply else 'would restore'}: {record.current}\n"
-            f"  to: {record.original}"
-        )
-
-    if already_restored:
-        print(f"\nAlready restored: {len(already_restored)} file(s).")
-
-    if preflight_failures:
-        print(f"\nCannot safely restore {len(preflight_failures)} file(s):")
-        for record, reason in preflight_failures:
-            print(f"  {record.current}: {reason}")
-        if apply:
-            print("No files were moved because the undo preflight did not pass.")
-        return 1
-
-    if not apply:
-        print(f"\nWould restore {len(plan)} file(s).")
-        if plan:
-            print("Dry run only. Add --apply after reviewing this list.")
-        return 0
-
-    failures: list[tuple[UndoRecord, str]] = []
-    for record in plan:
-        if (
-            not record.current.is_file()
-            or record.current.is_symlink()
-            or path_exists(record.original)
-            or has_symlink_parent(record.original, root)
-        ):
-            failures.append((record, "paths changed after the undo preflight"))
-            continue
-        try:
-            record.original.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(record.current), str(record.original))
-        except OSError as error:
-            failures.append((record, str(error)))
-
-    verification_failures: list[tuple[UndoRecord, str]] = []
-    for record in records:
-        if not record.original.is_file() or record.original.is_symlink():
-            verification_failures.append((record, "original file was not restored"))
-        if path_exists(record.current):
-            verification_failures.append((record, "organized copy still exists"))
-
-    print(f"\nRestored {len(plan) - len(failures)} file(s).")
-    if failures:
-        print(f"\nFailed to restore {len(failures)} file(s):")
-        for record, reason in failures:
-            print(f"  {record.current}: {reason}")
-
-    if not failures and not verification_failures:
-        print(
-            "\nVerification passed: every file in the organization manifest "
-            "is back at its original path."
-        )
-        try:
-            current_manifest_stat = manifest_path.lstat()
-            if (
-                current_manifest_stat.st_dev != manifest_stat.st_dev
-                or current_manifest_stat.st_ino != manifest_stat.st_ino
-                or manifest_path.is_symlink()
-            ):
-                raise OSError("manifest changed during the undo run")
-            manifest_path.unlink()
-        except OSError as error:
-            print(
-                f"Could not remove the consumed organization manifest "
-                f"{manifest_path}: {error}"
-            )
-            return 1
-        print(f"Removed consumed organization manifest: {manifest_path}")
-        layout = CollectionLayout(root)
-        for destination in (layout.pics, layout.vids):
-            if destination.is_dir() and not any(destination.iterdir()):
-                print(
-                    f"Empty directory retained for safety: {destination} "
-                    "(the old manifest does not say whether it existed before)."
-                )
-        return 0
-
-    if verification_failures:
-        print("\nUndo verification needs attention:")
-        for record, reason in verification_failures:
-            print(f"  {record.original}: {reason}")
-    return 1
-
-
 def describe_logged_action(root: Path, action: Action, apply: bool) -> None:
     verb = action.operation.lower().replace("_", " ")
     prefix = verb if apply else f"would {verb}"
@@ -647,14 +392,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "this is also a dry run unless --apply is supplied"
         ),
     )
-    parser.add_argument(
-        "--manifest",
-        type=Path,
-        help=(
-            "deprecated: select a legacy CSV organization manifest for --undo; "
-            "removed in v0.2.0"
-        ),
-    )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
     return parser.parse_args(argv)
@@ -667,15 +404,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Not a directory: {root}", file=sys.stderr)
         return 2
 
-    warn_if_legacy_action_log(root)
-
-    if args.manifest and not args.undo:
-        print("--manifest can only be used with --undo", file=sys.stderr)
-        return 2
     if args.undo:
-        if not args.manifest and action_log_exists(root):
-            return undo_logged_organization(root, args.apply)
-        return undo_organization(root, args.manifest, args.apply)
+        return undo_logged_organization(root, args.apply)
 
     try:
         config = load_config(root, args.config)

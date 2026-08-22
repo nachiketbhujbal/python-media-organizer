@@ -55,7 +55,7 @@ media-collection/
   media-collection-actions-log.jsonl
                         portable append-only action history, after an apply
   .pymo.toml            optional collection-specific configuration
-  .pymo.sqlite3         disposable video fingerprint cache, after an apply
+  .pymo.sqlite3         disposable video fingerprint cache, after a cache miss
   other files           non-media files at the collection root
 ```
 
@@ -98,6 +98,9 @@ extensions = [".flower"]
 
 [video_duplicates]
 decode_timeout_seconds = 3600
+
+[performance]
+scan_workers = 4
 ```
 
 Patterns are case-insensitive and match either a basename or a path relative
@@ -122,7 +125,9 @@ extensions are conservative filename fallbacks when content detection is
 generic or unknown. Image-duplicate extensions select files for Pillow to
 inspect; unreadable formats are still skipped. Rename noise tokens remove
 additional unhelpful filename words. A command-line `--decode-timeout` takes
-precedence over the configured video timeout.
+precedence over the configured video timeout. `scan_workers` controls bounded
+parallel content classification for `pymo scan`; it must be between 1 and 32,
+and `--workers` overrides it for one scan.
 
 An alternate extension file can be selected for one command:
 
@@ -146,6 +151,31 @@ agrees on the same collection layout.
 Every mutating command is a dry run unless `--apply` is present. Review the
 preview before applying the same command.
 
+### Scan a collection
+
+```bash
+pymo scan "/path/to/media-collection"
+pymo scan "/path/to/media-collection" --checksums
+pymo scan "/path/to/media-collection" --json
+pymo scan "/path/to/media-collection" --workers 1
+```
+
+`scan` is the recommended first command. It is read-only: it never moves or
+renames media, creates an action log, or writes the fingerprint cache. The fast
+profile reports aggregate inventory and storage by kind, extension, and
+detected content type; layout and naming readiness; review-copy storage;
+same-size duplicate candidates; estimated expensive work; existing local pymo
+state; and recommended next steps.
+
+Same-size candidates are only an upper bound, not duplicate proof.
+`--checksums` additionally hashes those candidates to report exact-byte copies
+without performing displayed-pixel or decoded-playback comparison. Use the two
+dedicated duplicate finders for those stronger definitions. `--json` emits the
+complete stable schema without the collection name, root path, or filenames;
+ignored relative paths appear only with the explicit `--show-ignored` opt-in.
+The default four classification workers can improve scans on mixed collections
+without launching concurrent FFmpeg decodes.
+
 ### Organize a collection
 
 ```bash
@@ -160,11 +190,6 @@ other files into the collection root. It detects supported content signatures,
 fixes media already in the wrong destination, resolves name collisions, removes
 only source directories that became empty, protects the entire `dups` review
 tree, and verifies the resulting layout.
-
-Legacy `organization_manifest*.csv` files remain usable through `--manifest`
-in v0.1, but using this path emits a deprecation warning. It will be removed in
-v0.2.0. New operations use the shared action history instead of creating new
-CSV manifests.
 
 ### Rename media predictably
 
@@ -198,11 +223,6 @@ using deterministic rules and moves extra copies into flat `dups/pics` names
 such as `original_copy(1).jpg`. Animated, multi-page, unreadable, and unsafe
 inputs are skipped conservatively.
 
-Legacy `group_*` duplicate output can be previewed and migrated with
-`--reorganize-existing`; `--duplicates-dir` selects that legacy source only.
-Both options, the old `duplicates/` tree, and its `move_manifest*.csv` inputs
-are deprecated and will be removed in v0.2.0.
-
 ### Find exact video duplicates
 
 ```bash
@@ -225,9 +245,13 @@ subtitles/data streams, and HDR or high-bit-depth video. Decode commands are
 restricted to local file inputs and streamed output; they do not request a
 camera, screen, microphone, or network source.
 
-Applied scans may update `.pymo.sqlite3`, a disposable collection-local cache
-keyed by content, fingerprint algorithm, and FFmpeg version. Dry runs may read
-an existing cache but never create or change it.
+Preview and applied runs use `.pymo.sqlite3`, a disposable collection-local
+cache keyed by content, fingerprint algorithm, and FFmpeg version. Each newly
+decoded fingerprint is saved immediately, so an interrupted preview can resume
+and the later `--apply` usually reuses the reviewed work. The command reports
+cache hits and misses. Add `--no-cache` for a run that neither reads nor writes
+the cache. Cache writes are derived local state only: they never move media or
+write action history.
 
 Both duplicate finders report retained storage, extra-copy storage, and the
 space potentially reclaimable if the isolated copies are later deleted
@@ -238,6 +262,7 @@ manually. `pymo` itself never deletes them.
 For a mixed collection, preview and then apply:
 
 ```bash
+pymo scan "/path/to/media-collection"
 pymo organize "/path/to/media-collection" --apply
 pymo rename "/path/to/media-collection" --apply
 pymo find-image-duplicates "/path/to/media-collection" --apply
@@ -252,10 +277,7 @@ when a later active operation touched the same files or paths.
 
 Each media-collection owns one append-only
 `{collection-name}-actions-log.jsonl`. Records use paths relative to the
-media-collection so it and its history can move together. A legacy
-`media_actions.jsonl` is read without modification during previews and migrated
-to the collection-named form before the next applied journal write. Its fixed
-filename is deprecated and will no longer be detected in v0.2.0.
+media-collection so it and its history can move together.
 Applied operations record planned and completed actions, file identities, run
 boundaries, and successful undos. Undo appends new history; it never erases the
 audit trail.
@@ -265,23 +287,16 @@ missing, changed, renamed, or occupied path stops the operation safely. This is
 why a rename must be undone before undoing an earlier organizer run that moved
 the same files.
 
-## Deprecated compatibility
+## Version 0.2 compatibility boundary
 
-Version 0.1.5 warns when any compatibility-only interface is used. Warnings go
-to stderr and remain visible under `--quiet`; the operation still behaves as it
-did before. No compatibility was removed in this patch release.
-
-| Deprecated v0.1 surface | Current architecture | v0.2.0 transition |
-| --- | --- | --- |
-| `organization_manifest*.csv` undo and `--manifest` | Collection-named JSONL action history | Perform any needed CSV-based undo before upgrading. |
-| `duplicates/group_*`, `move_manifest*.csv`, `--reorganize-existing`, and `--duplicates-dir` | Flat `dups/pics` plus JSONL actions | Run the legacy reorganization on v0.1.5 if those results need migration. |
-| Image finder `--recursive` | The finder always scans files directly inside `pics` | Stop passing the option; it is already a no-op. |
-| Fixed `media_actions.jsonl` | `{collection-name}-actions-log.jsonl` | Allow an applied journal operation on v0.1.5 to migrate it before upgrading. |
-
-Current collection-named action logs, their schema, and persisted tool/action
-identifiers are not deprecated. Duplicate reports may still label matching
-sets as “Group”; that display term is unrelated to the removed `group_*`
-directory structure.
+Version 0.2 removes the interfaces deprecated in v0.1.5: CSV organization
+manifest undo, grouped image-output migration, the image finder's no-op
+`--recursive` option, and automatic detection of fixed-name
+`media_actions.jsonl`. A collection that still depends on one of those old
+artifacts should use version 0.1.5 to complete the relevant undo or migration
+before upgrading. Current collection-named action logs, their schema, and
+persisted tool/action identifiers remain supported. Duplicate reports may
+still label matching sets as “Group”; that is only a report label.
 
 ## Logging
 
@@ -311,6 +326,8 @@ The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,
 content changes, strict folder ownership, exact image and video matching,
 different audio and timing, corrupt/ambiguous media, derived cache behavior,
+incremental cache recovery, cache opt-out, scan reports and JSON stability,
+bounded scan workers, removed v0.1 interfaces,
 shared built-in and custom policy, malformed-config refusal, centralized
 collection paths, default ignored-name privacy, explicit relative ignored-path
 output, logging privacy, and the guarantee that video decoding never invokes
@@ -320,7 +337,7 @@ repository content.
 ## Versions and releases
 
 Git tags are the authoritative release version. Hatchling builds the package,
-and hatch-vcs derives the Python package version from tags such as `v0.1.4`;
+and hatch-vcs derives the Python package version from tags such as `v0.2.0`;
 there is no second version string to update by hand. Untagged development
 commits receive a PEP 440 development version containing their Git revision.
 uv manages the environment and `uv.lock`, while ordinary standards-compatible
@@ -328,9 +345,11 @@ installers can still build and install the package.
 
 ## Roadmap and research
 
-The next major feature is a read-only `pymo scan COLLECTION` report combining
-file counts, media types, storage, layout readiness, validation warnings,
-duplicate potential, and estimated work. It is not implemented yet.
+`pymo scan COLLECTION` now provides the fast local overview. The next major
+feature is report-only media validation, followed by richer metadata and
+comparison tooling. Full video decoding remains sequential until representative
+benchmarks show that bounded process concurrency improves real external-drive
+workloads without increasing contention or reducing safety.
 
 See `RESEARCH_IMPROVEMENTS.md` for the product research, privacy analysis,
 feature ideas, local-AI guardrails, metadata and validation plans, comparison

@@ -37,11 +37,16 @@ never duplicate the version in source or static project metadata.
   recorded actions and remains independent of current configuration.
 - Treat `.pymo.sqlite3` as derived, disposable cache data, never as the
   authoritative action history.
+- `scan` must never alter media, collection layout, or action history. Exact
+  video dry runs may update the documented disposable fingerprint cache by
+  default; `--no-cache` restores a zero-cache-read/write run.
 
 ## Package layout and tools
 
 - `src/pymo/organize.py`: recursive collection organization into `pics`,
   `vids`, and root-level non-media files. It protects `dups`.
+- `src/pymo/scan.py`: path-private inventory, layout/naming readiness,
+  duplicate potential, estimated work, and stable JSON output.
 - `src/pymo/rename.py`: deterministic timestamp/descriptor-based media names.
   It protects `dups` and does not claim visual recognition.
 - `src/pymo/duplicates/images.py`: exact displayed-pixel duplicate detection.
@@ -92,9 +97,7 @@ report-only future work and must never silently enter the exact move path.
 - Add or update pytest coverage with every behavior change. Use temporary,
   synthetic, collection-neutral fixtures.
 - Follow semantic versioning for compatibility removal. The v0.1 line warns
-  when deprecated compatibility is used; remove it only in v0.2.0 or later.
-- Keep v0.1 deprecation warnings user-visible on stderr through standard
-  logging, including under `--quiet`. Do not silently reinterpret legacy data.
+  before compatibility is removed at a minor-version boundary.
 - Real FFmpeg integration tests are required for video behavior; controlled
   unit tests remain useful for safety properties and error paths.
 - Run the complete suite before handoff.
@@ -106,12 +109,12 @@ report-only future work and must never silently enter the exact move path.
 
 ## Current roadmap
 
-Version 0.2.0 will remove CSV organization-manifest undo, grouped image-output
-migration, the no-op image-finder `--recursive` option, and automatic support
-for the fixed `media_actions.jsonl` filename. Current collection-named action
-logs and their schema/tool identifiers remain supported.
+Version 0.2.0 provides `pymo scan`, bounded scan classification workers,
+incremental video fingerprints during dry runs, and only collection-named
+action logs. Full FFmpeg decoding remains sequential until benchmarks justify
+bounded multi-process decoding; FFmpeg already uses internal threads and
+unmeasured concurrency can regress external-drive performance.
 
-The next major planned command is read-only `pymo scan COLLECTION`, combining
-inventory, storage, layout readiness, validation warnings, and exact duplicate
-potential. Follow the privacy and dry-run/cache boundaries documented in
-`RESEARCH_IMPROVEMENTS.md`. Local AI naming remains optional future work only.
+The next major planned feature is report-only media validation. Follow the
+privacy and cache boundaries documented in `RESEARCH_IMPROVEMENTS.md`. Local AI
+naming remains optional future work only.

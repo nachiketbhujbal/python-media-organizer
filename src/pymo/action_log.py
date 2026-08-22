@@ -17,11 +17,10 @@ from pathlib import Path, PurePosixPath
 from typing import Iterator, TextIO
 
 from pymo.collection import CollectionLayout
-from pymo.logging_config import warn_deprecated
 
 
-# This constant identifies the existing on-disk journal schema. It must stay
-# stable so current and legacy collection histories remain readable.
+# This constant identifies the current on-disk journal schema and must remain
+# stable while collection-named action histories use it.
 ACTION_LOG_SCHEMA_VERSION = 1
 
 
@@ -65,28 +64,9 @@ def action_log_path(root: Path) -> Path:
     return CollectionLayout(root).action_log
 
 
-def legacy_action_log_path(root: Path) -> Path:
-    root = root.expanduser().resolve()
-    return CollectionLayout(root).legacy_action_log
-
-
-def warn_if_legacy_action_log(root: Path) -> None:
-    legacy_path = legacy_action_log_path(root)
-    if legacy_path.is_file() or legacy_path.is_symlink():
-        warn_deprecated(
-            "the fixed media_actions.jsonl action-log filename",
-            "Use the collection-named action log; the next applied journal "
-            "operation migrates this file automatically.",
-        )
-
-
-def action_log_exists(root: Path) -> bool:
-    return action_log_path(root).is_file() or legacy_action_log_path(root).is_file()
-
-
 def is_action_log_path(root: Path, path: Path) -> bool:
     candidate = path.expanduser().resolve(strict=False)
-    return candidate in {action_log_path(root), legacy_action_log_path(root)}
+    return candidate == action_log_path(root)
 
 
 def _timestamp() -> str:
@@ -361,16 +341,11 @@ class ActionLog:
         if not self.root.is_dir():
             raise ActionLogError(f"not a directory: {self.root}")
         self.canonical_path = action_log_path(self.root)
-        self.legacy_path = legacy_action_log_path(self.root)
-        for candidate in (self.canonical_path, self.legacy_path):
-            if candidate.is_symlink():
-                raise ActionConflict(f"action log cannot be a symbolic link: {candidate}")
-        if self.canonical_path.exists() and self.legacy_path.exists():
+        if self.canonical_path.is_symlink():
             raise ActionConflict(
-                "both the canonical and legacy action logs exist; reconcile them "
-                "before running another operation"
+                f"action log cannot be a symbolic link: {self.canonical_path}"
             )
-        self.path = self.legacy_path if self.legacy_path.exists() else self.canonical_path
+        self.path = self.canonical_path
 
     @contextmanager
     def _locked(self, create: bool) -> Iterator[TextIO]:
@@ -380,14 +355,6 @@ class ActionLog:
         with self.path.open(mode, encoding="utf-8", newline="") as handle:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             try:
-                if create and self.path == self.legacy_path:
-                    if self.canonical_path.exists():
-                        raise ActionConflict(
-                            "the canonical action log appeared while opening the "
-                            "legacy log; no changes were made"
-                        )
-                    os.replace(self.legacy_path, self.canonical_path)
-                    self.path = self.canonical_path
                 yield handle
             finally:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_UN)

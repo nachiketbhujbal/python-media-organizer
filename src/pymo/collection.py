@@ -50,10 +50,6 @@ class CollectionLayout:
         collection_name = self.root.name or "media-collection"
         return self.root / f"{collection_name}-actions-log.jsonl"
 
-    @property
-    def legacy_action_log(self) -> Path:
-        return self.root / "media_actions.jsonl"
-
     def is_in_duplicates(self, path: Path) -> bool:
         try:
             relative = path.relative_to(self.root)

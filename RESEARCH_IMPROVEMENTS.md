@@ -401,15 +401,19 @@ marketing setting.
 
 ### 1. Collection scan and statistics
 
-Add a completely read-only command, likely:
+Version 0.2.0 implements the completely read-only command:
 
 ```text
 pymo scan COLLECTION
 ```
 
-This should answer whether a collection is worth organizing before any action
-is applied. It can reuse the planners and scanners behind every dry-run tool to
-produce one combined report.
+It answers whether a collection is worth organizing before any action is
+applied. The fast profile reports aggregate inventory, layout and naming
+readiness, review storage, same-size duplicate potential, estimated expensive
+work, existing pymo state, warnings, and recommended next steps. Stable JSON
+schema version 1 omits collection names, root paths, and filenames by default.
+`--checksums` hashes only same-size picture and video candidates to report
+exact-byte copies.
 
 Suggested inventory:
 
@@ -430,10 +434,15 @@ Suggested inventory:
 - a recommendation such as organize first, validate first, or review
   duplicates first.
 
-Output formats should include friendly terminal text and stable JSON. CSV may
-be added for flat summaries. Scanning must not create an action log or modify
-media. A disposable derived cache may be read if present; creation or update
-must be explicit or tied to an authorized apply operation.
+Friendly terminal text and stable JSON are implemented. CSV may be added for
+flat summaries. Scanning does not create an action log, write the disposable
+cache, or modify media. It only reports whether local state exists.
+
+Content classification uses a bounded thread pool, with four workers by
+default and a validated 1..32 configuration/CLI range. This parallelizes
+independent content-type probes without introducing concurrent FFmpeg decodes.
+The remaining richer metadata, validation, and historical statistics below are
+future extensions.
 
 Possible later statistics:
 
@@ -539,10 +548,9 @@ source.
 Maintain a clear separation:
 
 - `{collection-name}-actions-log.jsonl` is authoritative, append-only mutation
-  history. Legacy `media_actions.jsonl` journals are migration inputs only.
-  Version 0.1.5 warns whenever the fixed filename is detected; v0.2.0 removes
-  automatic detection after giving v0.1 users an applied-operation migration
-  window.
+  history. Version 0.2 no longer detects the fixed v0.1
+  `media_actions.jsonl` filename; users needing that migration must use 0.1.5
+  first.
 - A SQLite index/cache is derived, disposable, and rebuildable.
 
 This is the selected `0.1.0` design. SQLite is excellent for fingerprints,
@@ -572,9 +580,56 @@ version, and external-tool version. Renames should reuse content-derived
 records. Content changes, fingerprint algorithm changes, and FFmpeg upgrades
 must invalidate the affected values.
 
-Dry-run semantics require care: a normal dry run must not silently create a
-database in the collection. It may read an existing cache. Cache writes should
-be explicitly authorized or occur during an already authorized apply run.
+Dry-run semantics require care and must be command-specific. `pymo scan` never
+creates or updates a database. Exact-video analysis persists each successfully
+decoded fingerprint during preview as documented derived state, because the
+work is expensive and a later apply must be able to reuse it; `--no-cache`
+provides a zero-read/write cache mode. Cache writes never imply media mutation
+or action-history creation.
+
+### Performance engineering policy
+
+Improve measured bottlenecks in stages while preserving exactness and local-
+only behavior:
+
+1. Cache deterministic expensive results with explicit algorithm and runtime
+   version keys. Incremental exact-video fingerprints are the first example.
+2. Reduce work before adding concurrency: filter candidates by cheap facts,
+   stream data, avoid decoded temporary media, and hash only candidates when a
+   report does not require every file's digest.
+3. Use bounded threads for independent subprocess or filesystem-latency work.
+   `scan` classification currently follows this approach.
+4. Use processes only for measured CPU-heavy work. A future exact-video worker
+   count should default to one until benchmarks across internal SSDs and
+   external drives prove a safe gain.
+5. Prefer deterministic worker limits and stable output ordering. Never let
+   concurrency alter keeper selection, action order, collision handling, or
+   failure semantics.
+
+Async I/O is not a natural fit for the current hot paths: local filesystem
+reads, hashing, Pillow decoding, and FFmpeg subprocesses are blocking work, and
+the subprocess output is already streamed. Threads can help latency-bound
+classification; CPU-bound Python work needs processes, while FFmpeg already
+uses native threads internally.
+
+Useful future benchmarks and low-risk optimizations:
+
+- record per-stage time for discovery, classification, hashing, ffprobe,
+  fingerprint decoding, planning, and verification without recording private
+  filenames;
+- cache validated ffprobe structure and content hashes using carefully defined
+  file identity, while retaining a full-content check before any exact move;
+- compare sequential and small bounded pools for hashing and ffprobe on both
+  SSD and external-media workloads;
+- benchmark one versus a small number of FFmpeg processes, including thermal,
+  memory, and disk-throughput effects;
+- reuse cached work after logged moves and renames through content identity;
+- keep compression-heavy fuzzy decode and similarity analysis outside the
+  exact automatic-move path.
+
+Every performance option needs synthetic correctness tests, deterministic
+results across worker counts, interruption tests where state is persisted, and
+representative benchmarks before its default changes.
 
 ### 6. Duplicate-detection levels
 
@@ -672,6 +727,8 @@ The `pymo find-video-duplicates` implementation is deliberately conservative:
 - report retained and duplicate storage plus potentially reclaimable bytes;
 - move copies into flat `dups/vids` using readable names;
 - participate in the shared action log with its own tool identity;
+- persist each completed fingerprint incrementally during preview or apply and
+  report cache hits/misses, with `--no-cache` as a complete opt-out;
 - support dry-run/apply/undo and post-apply verification.
 
 FFmpeg and ffprobe are external runtime requirements, not hidden Python wrapper
@@ -769,8 +826,11 @@ system installation and record its version in derived fingerprint-cache keys.
   metadata, provenance, and successful validation?
 - Which report schema can power both terminal summaries and a future local GUI
   without coupling the core to one interface?
-- How can `pymo scan` estimate expensive scan time accurately without decoding the
-  entire collection first?
+- How can `pymo scan` improve its current byte/work estimates into reliable
+  elapsed-time ranges without decoding the entire collection first?
+- Do representative internal-drive and external-drive benchmarks justify a
+  bounded process pool for full FFmpeg fingerprints, despite FFmpeg's own
+  threading and likely disk contention?
 - What is the safest metadata-undo representation for formats where ExifTool
   may rewrite container structures even when logical tags are restored?
 - Which local visual-language model is appropriately licensed, compact, and
@@ -779,14 +839,14 @@ system installation and record its version in derived fingerprint-cache keys.
 ## Near-term implementation order
 
 Strict duplicate-finder ownership, deterministic exact video duplicate
-detection, and the version `0.1.1` uv/Hatchling package structure are now
-implemented and covered by tests. The remaining order is:
+detection, the uv/Hatchling package structure, resumable video fingerprints,
+and the version 0.2 collection scan are implemented and covered by tests. The
+remaining order is:
 
-1. Add `pymo scan` and local collection statistics.
-2. Add report-only media validation.
-3. Add metadata inspection/export and confidence-based date resolution.
-4. Add collection/backup comparison.
-5. Mature the derived SQLite index/cache.
-6. Add perceptual matching only as an explicitly non-deterministic,
+1. Add report-only media validation.
+2. Add metadata inspection/export and confidence-based date resolution.
+3. Add collection/backup comparison.
+4. Mature the derived SQLite index/cache.
+5. Add perceptual matching only as an explicitly non-deterministic,
    report-first feature.
-7. Revisit optional local AI naming after the deterministic toolkit is mature.
+6. Revisit optional local AI naming after the deterministic toolkit is mature.

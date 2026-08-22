@@ -17,7 +17,6 @@ def test_collection_layout_centralizes_owned_paths(tmp_path: Path) -> None:
     assert layout.config == root / ".pymo.toml"
     assert layout.video_cache == root / ".pymo.sqlite3"
     assert layout.action_log == root / "media-collection-actions-log.jsonl"
-    assert layout.legacy_action_log == root / "media_actions.jsonl"
 
 
 def test_collection_layout_recognizes_only_its_duplicates_tree(

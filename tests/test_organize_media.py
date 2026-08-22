@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import csv
 import json
 from pathlib import Path
 
@@ -81,39 +80,6 @@ def test_organizer_undo_dry_run_preserves_organized_state(
     assert (tmp_path / "pics" / "photo.png").exists()
     assert not (tmp_path / "album").exists()
     assert action_log_path(tmp_path).read_bytes() == before
-
-
-def test_legacy_csv_manifest_can_still_be_undone(tmp_path: Path, run_script) -> None:
-    pics = tmp_path / "pics"
-    pics.mkdir()
-    organized = pics / "photo.jpg"
-    organized.write_bytes(b"legacy photo")
-    original = tmp_path / "old" / "photo.jpg"
-    manifest = tmp_path / "organization_manifest.csv"
-    with manifest.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(
-            handle,
-            fieldnames=["kind", "mime_type", "moved_from", "moved_to"],
-        )
-        writer.writeheader()
-        writer.writerow(
-            {
-                "kind": "picture",
-                "mime_type": "image/jpeg",
-                "moved_from": str(original),
-                "moved_to": str(organized),
-            }
-        )
-
-    result = run_script("organize_media.py", tmp_path, "--undo", "--apply")
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "DEPRECATION: CSV organization-manifest undo and --manifest" in result.stderr
-    assert "removed in pymo 0.2.0" in result.stderr
-    assert original.read_bytes() == b"legacy photo"
-    assert not organized.exists()
-    assert not manifest.exists()
-    assert not action_log_path(tmp_path).exists()
 
 
 def test_organizer_preserves_reserved_dups_tree(tmp_path: Path, run_script) -> None:

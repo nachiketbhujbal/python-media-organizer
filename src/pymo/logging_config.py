@@ -64,16 +64,6 @@ def ensure_logging() -> None:
         configure_logging()
 
 
-def warn_deprecated(feature: str, replacement: str) -> None:
-    """Emit a user-visible warning for compatibility removed in v0.2.0."""
-    ensure_logging()
-    _logger().warning(
-        "DEPRECATION: %s is deprecated and will be removed in pymo 0.2.0. %s",
-        feature,
-        replacement,
-    )
-
-
 def emit(
     *values: object,
     sep: str = " ",
@@ -81,7 +71,7 @@ def emit(
     file: TextIO | None = None,
     flush: bool = False,
 ) -> None:
-    """Route legacy human-facing output through the logging system.
+    """Route existing human-facing output through the logging system.
 
     The signature intentionally mirrors ``print`` so existing, carefully
     tested command output can migrate without changing its text.

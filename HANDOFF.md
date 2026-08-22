@@ -13,7 +13,7 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.1.5` legacy-deprecation release. It is a
+`pymo` command, and has a `v0.2.0` collection-scanning release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
@@ -41,8 +41,11 @@ Hard requirements:
     not disable packaged lists.
 12. Ignored path names remain private by default and under `--verbose`. Only
     explicit `--show-ignored` may list deterministic collection-relative paths.
-13. Supported behavior is not removed in a patch release. Compatibility-only
-    paths warn throughout v0.1 and are scheduled for removal in v0.2.0.
+13. Supported behavior is not removed in a patch release. The compatibility
+    interfaces deprecated throughout v0.1 were removed at the v0.2 boundary.
+14. `scan` never writes media, action history, or cache state. Exact-video
+    previews may persist disposable fingerprints by default so later preview
+    or apply runs resume; `--no-cache` disables both cache reads and writes.
 
 `{collection-name}-actions-log.jsonl` remains the authoritative portable
 journal because it moves naturally with a media-collection on external storage.
@@ -68,6 +71,7 @@ python-media-organizer/
     action_log.py
     organize.py
     rename.py
+    scan.py
     duplicates/
       images.py
       videos.py
@@ -79,12 +83,14 @@ The CLI subcommands are:
 ```text
 pymo organize COLLECTION
 pymo rename COLLECTION
+pymo scan COLLECTION
 pymo find-image-duplicates COLLECTION
 pymo find-video-duplicates COLLECTION
 ```
 
-Each supports dry-run/apply behavior; all four support `--undo`, which is also
-a preview unless combined with `--apply`. Global `--verbose`, `--quiet`,
+The four mutating tools support dry-run/apply behavior and `--undo`, which is
+also a preview unless combined with `--apply`. `scan` is read-only. Global
+`--verbose`, `--quiet`,
 `--log-file PATH`, `--config PATH`, and `--show-ignored` options go before the
 subcommand. `--show-ignored` and command-specific options are also accepted by
 the selected command after its collection argument.
@@ -94,7 +100,8 @@ the selected command after its collection argument.
 `src/pymo/default_config.toml` is packaged read-only data, loaded for every
 forward command. It contains the default ignore patterns, classification
 extensions and MIME policies, rename noise tokens, image-inspection
-extensions, and video decode timeout. Collection or explicit custom arrays
+extensions, video decode timeout, and the default scan worker count. Collection
+or explicit custom arrays
 extend packaged arrays; they cannot remove safety defaults. A custom video
 timeout overrides the packaged value, while `--decode-timeout` has final
 command-line precedence.
@@ -106,7 +113,7 @@ Ignore patterns match case-insensitive basenames or collection-relative paths,
 and an ignored directory protects all descendants.
 
 `src/pymo/collection.py` owns the invariant paths for `pics`, `vids`, `dups`,
-the optional config, disposable video cache, and canonical/legacy action logs.
+the optional config, disposable video cache, and collection-named action log.
 These names are intentionally not configurable because cross-tool ownership,
 portable undo, and compatibility require one interpretation.
 
@@ -116,8 +123,8 @@ safety condition and are never made acceptable by an ignore rule. The
 organizer may leave a source directory that still contains ignored metadata;
 verification treats such a metadata-only tree as intentionally preserved.
 Malformed, unknown, absolute, or parent-traversing configuration stops before
-mutation. Undo and legacy manifest reorganization remain action-driven and do
-not reinterpret historical operations through current ignore settings.
+mutation. Undo remains action-driven and does not reinterpret historical
+operations through current ignore settings.
 
 All forward commands report the number of ignored entry points without naming
 them. `--verbose` does not relax that privacy default. Explicit
@@ -125,8 +132,9 @@ them. `--verbose` does not relax that privacy default. Explicit
 absolute collection root. If the user also requests `--log-file`, those listed
 paths are deliberately included in that log.
 
-The source contains only three assigned module constants: the config schema,
-action-log schema, and video fingerprint algorithm versions. Each is an
+The source contains only four assigned module constants: the config schema,
+action-log schema, video fingerprint algorithm, and scan-report schema
+versions. Each is an
 on-disk compatibility boundary and has an adjacent justification. Dispatch,
 logging, collection paths, tool identifiers, operation identifiers, timestamp
 patterns, and policy collections no longer use scattered mutable globals.
@@ -134,8 +142,7 @@ patterns, and policy collections no longer use scattered mutable globals.
 ## Shared action log
 
 `src/pymo/action_log.py` stores one `{collection-name}-actions-log.jsonl` in
-each media-collection. An existing legacy `media_actions.jsonl` remains readable
-during previews and is safely renamed before the next applied journal write.
+each media-collection.
 
 - Paths are relative to the collection, preserving portability.
 - Runs and actions have UUIDs.
@@ -153,23 +160,12 @@ This ordering is intentional. For example, if organization is followed by
 renaming, organization cannot be undone until renaming is undone. The same rule
 applies when a duplicate finder later moves a renamed file.
 
-Deprecated compatibility remains functional in v0.1.5 and emits user-visible
-stderr warnings even under `--quiet`:
-
-- `organize` can undo an old `organization_manifest*.csv`, including an
-  explicitly selected `--manifest`; both are removed in v0.2.0.
-- `find-image-duplicates --reorganize-existing` can read old
-  `move_manifest*.csv` files and flatten legacy `duplicates/group_*` output;
-  that option and `--duplicates-dir` are removed in v0.2.0.
-- The image finder accepts the no-op `--recursive`; it is removed in v0.2.0
-  because the current tool always scans the flat `pics` directory.
-- A fixed `media_actions.jsonl` is detected and migrated before the next
-  applied journal operation; fixed-name detection is removed in v0.2.0.
-
-New applied work uses collection-named JSONL and creates none of the legacy
-CSV/grouped artifacts. Before upgrading to v0.2.0, users with old artifacts
-should run any desired CSV undo/group migration and let an applied journal
-operation migrate a fixed-name action log.
+Version 0.2.0 removed CSV organizer undo and `--manifest`, grouped image-output
+migration and its options, the image finder's no-op `--recursive` option, and
+fixed-name `media_actions.jsonl` detection. Users needing one of those v0.1
+interfaces must use version 0.1.5 to finish the migration or undo before
+upgrading. New work uses collection-named JSONL and creates none of the removed
+CSV or grouped artifacts.
 
 Do not treat current action-log schema version 1, persisted tool/action IDs, or
 the human-readable “Group” report label as legacy. Current logs depend on those
@@ -269,15 +265,42 @@ FFmpeg input protocols are restricted to `file,pipe`, and tests assert that
 decode commands contain no macOS, Windows, or X11 capture input. The tool does
 not need Screen & System Audio Recording, Camera, or Microphone permission.
 
-Applied scans can update collection-root `.pymo.sqlite3`. It is a derived cache
-keyed by content SHA-256, fingerprint algorithm version, and actual FFmpeg
-version. Dry runs may read an existing cache but do not create or mutate it.
+Preview and applied runs use collection-root `.pymo.sqlite3`. It is a derived
+cache keyed by content SHA-256, fingerprint algorithm version, and actual
+FFmpeg version. Each successful cache miss is persisted immediately so an
+interrupted preview retains completed work and a later `--apply` reuses it.
+`--no-cache` disables all cache reads and writes.
 SQLite uses a non-persistent journaling mode and connections close explicitly,
 so `-wal`/`-shm` sidecars are not left behind.
 
 The finder mirrors image behavior for deterministic keeper choice, readable
 `copy(n)` destinations, no overwrite/delete, action-log undo, post-operation
 verification, and retained/duplicate/reclaimable storage reporting.
+
+Full FFmpeg fingerprint decoding remains sequential. FFmpeg already performs
+internal threading, and parallel decode processes can contend for disk and CPU,
+especially on external media. Add bounded process-level decoding only after
+representative benchmarks demonstrate a reliable benefit.
+
+## Collection scan
+
+`src/pymo/scan.py` provides the read-only first-run `pymo scan COLLECTION`
+report. Its fast profile inventories files, storage, extensions and detected
+content types; reports layout and canonical-name readiness; summarizes review
+storage and same-size duplicate potential; estimates checksum and exact-video
+work; reports existing local pymo state; and recommends next commands.
+
+`--checksums` hashes only same-size picture and video candidates and reports
+exact-byte copies. It does not substitute for displayed-pixel image or decoded-
+playback video matching. `--json` emits stable schema version 1 without the
+collection name, root path, or filenames. Relative ignored paths remain opt-in
+through `--show-ignored`.
+
+The scan does not create an action log, cache, or other collection state.
+Content classification uses a bounded thread pool, defaults to four workers,
+is configurable through `performance.scan_workers`, and can be overridden with
+`--workers 1..32`. Checksumming is deliberately opt-in; FFmpeg decoding is not
+part of scan.
 
 ## Logging
 
@@ -295,7 +318,8 @@ behavioral tests.
 - No persistent log is created by default.
 
 Do not put media bytes or unrelated metadata into exceptions or diagnostics.
-Machine-readable result output is separate future work.
+Scan JSON is the first machine-readable result contract; human command output
+continues to use logging.
 
 ## Dependencies and environment
 
@@ -329,8 +353,7 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 
 - organizer dry run, apply, verification, collisions, nested layouts, content
   classification, symbolic-link safety, empty-directory restoration, reruns,
-  deprecated CSV undo and its warning, `dups` protection, default OS-metadata
-  ignores,
+  removed CSV option refusal, `dups` protection, default OS-metadata ignores,
   custom-directory protection, custom classification extensions, and
   ignored-only source trees;
 - renamer parsing and cleanup across varied filename structures, deterministic
@@ -339,13 +362,14 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - action journal ordering, locking model, interrupted run recovery, identity
   changes, conflict refusal, cross-tool dependencies, and ordered undo;
 - image exact-pixel equivalence across metadata/format differences, strict
-  folder ownership, storage accounting, collisions, deprecated output migration
-  and no-op option warnings, configurable inspection extensions, dry
-  run/apply/undo, and review-tree restoration;
+  folder ownership, storage accounting, collisions, removed compatibility-
+  option refusal, configurable inspection extensions, dry run/apply/undo, and
+  review-tree restoration;
 - real FFmpeg byte-copy/remux matches, different-audio and different-timing
   non-matches, corrupt and multi-audio skips, strict ownership, collisions,
-  cache/sidecar behavior, cross-tool undo dependencies, missing runtime errors,
-  and local-file-only/no-capture command construction;
+  incremental preview cache, interruption recovery, cache opt-out, sidecar
+  behavior, cross-tool undo dependencies, missing runtime errors, and local-
+  file-only/no-capture command construction;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;
@@ -353,7 +377,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   extensions, MIME types, noise tokens and timeout, alternate-config
   selection, invalid-schema refusal, and config self-protection;
 - centralized collection-path derivation and duplicate-tree recognition;
-- fixed-name action-log deprecation reporting and automatic applied migration;
+- fixed-name action-log non-detection and removed v0.1 interface refusal;
+- path-private fast and checksum scan reports, stable JSON, bounded worker
+  validation, readiness recommendations, and no-write guarantees;
 - dynamic package metadata, packaged TOML data, runtime/distribution version
   agreement, and the selected Hatchling plus hatch-vcs configuration.
 
@@ -370,16 +396,14 @@ local indexing, keeper scoring, similarity levels, and local-AI rules.
 
 Near-term roadmap:
 
-1. Add read-only `pymo scan COLLECTION` with counts, types, storage, layout
-   readiness, validation warnings, duplicate potential, and estimated cost.
-2. Add report-only media validation.
-3. Add metadata inspection/export and confidence-based date provenance.
-4. Add read-only collection/backup comparison.
-5. Expand the disposable SQLite index for local statistics and fingerprints.
-6. Add perceptual similarity as report-only functionality.
-7. Revisit optional local AI suggestions after deterministic tooling matures.
+1. Add report-only media validation.
+2. Add metadata inspection/export and confidence-based date provenance.
+3. Add read-only collection/backup comparison.
+4. Expand the disposable SQLite index for local statistics and fingerprints.
+5. Add perceptual similarity as report-only functionality.
+6. Revisit optional local AI suggestions after deterministic tooling matures.
 
-`scan` is the selected name; do not call this future feature `inspect`.
+`scan` is implemented; do not rename it to `inspect`.
 
 ## Git policy
 

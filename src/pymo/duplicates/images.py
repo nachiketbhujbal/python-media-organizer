@@ -11,7 +11,6 @@ path is always the collection root, which also owns the shared action log.
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 import os
 import sys
@@ -27,7 +26,6 @@ from pymo.action_log import (
     ActionLogError,
     NoUndoableRun,
     ToolId,
-    warn_if_legacy_action_log,
 )
 from pymo.collection import CollectionLayout
 from pymo.config import (
@@ -39,7 +37,6 @@ from pymo.config import (
     load_config,
 )
 from pymo.logging_config import emit as print
-from pymo.logging_config import warn_deprecated
 from pymo.organize import Classifier
 
 try:
@@ -80,14 +77,6 @@ def displayed_pixel_hash(path: Path) -> str:
         digest.update(rgba.height.to_bytes(8, "big"))
         digest.update(rgba.tobytes())
         return digest.hexdigest()
-
-
-def is_within(path: Path, directory: Path) -> bool:
-    try:
-        path.relative_to(directory)
-        return True
-    except ValueError:
-        return False
 
 
 def discover_images(
@@ -235,113 +224,6 @@ def copy_target(
         number += 1
 
 
-def reorganize_existing(
-    root: Path, legacy_source: Path, destination: Path, apply: bool
-) -> int:
-    """Flatten group_* results created by older versions using their manifests."""
-    if not legacy_source.is_dir():
-        print(f"No legacy duplicates directory found: {legacy_source}", file=sys.stderr)
-        return 2
-
-    manifest_paths = sorted(legacy_source.glob("move_manifest*.csv"))
-    if not manifest_paths:
-        print(f"No move manifests found in {legacy_source}", file=sys.stderr)
-        return 2
-
-    source_rows: list[tuple[Path, Path]] = []
-    seen_sources: set[str] = set()
-    skipped: list[tuple[str, str]] = []
-    for manifest_path in manifest_paths:
-        try:
-            with manifest_path.open(newline="", encoding="utf-8") as handle:
-                for row in csv.DictReader(handle):
-                    if not row.get("moved_to") or not row.get("kept_file"):
-                        continue
-                    source = Path(row["moved_to"]).expanduser()
-                    kept = Path(row["kept_file"]).expanduser()
-                    key = str(source).casefold()
-                    if key in seen_sources:
-                        continue
-                    seen_sources.add(key)
-
-                    if not source.exists():
-                        continue
-                    if source.is_symlink() or not source.is_file():
-                        skipped.append((str(source), "not a regular file"))
-                        continue
-                    source = source.resolve()
-                    if not is_within(source, legacy_source):
-                        skipped.append((str(source), "outside the duplicates directory"))
-                        continue
-                    relative = source.relative_to(legacy_source)
-                    if len(relative.parts) < 2 or not relative.parts[0].startswith(
-                        "group_"
-                    ):
-                        # Already flat, or not an old group layout.
-                        continue
-                    source_rows.append((source, kept))
-        except (OSError, csv.Error) as error:
-            skipped.append((str(manifest_path), str(error)))
-
-    reserved: set[str] = set()
-    next_numbers: dict[str, int] = defaultdict(lambda: 1)
-    plan: list[tuple[Path, Path, Path]] = []
-    for source, kept in sorted(source_rows, key=lambda item: str(item[0]).casefold()):
-        kept_key = str(kept).casefold()
-        target, used_number = copy_target(
-            destination,
-            kept,
-            source,
-            next_numbers[kept_key],
-            reserved,
-        )
-        next_numbers[kept_key] = used_number + 1
-        plan.append((kept, source, target))
-        print(f"Kept original: {kept}")
-        print(f"  {'move' if apply else 'would move'}: {source}")
-        print(f"  to: {target}\n")
-
-    if apply and plan:
-        directories = {
-            directory
-            for _, source, _ in plan
-            for directory in source.parents
-            if directory != legacy_source and is_within(directory, legacy_source)
-        }
-        try:
-            actions = [
-                Action.for_file(root, source, target, "MOVE")
-                for _, source, target in plan
-            ]
-            log = ActionLog(root)
-            with log.transaction(ToolId.IMAGE_DUPLICATES) as transaction:
-                for directory in review_directories(root):
-                    if not directory.exists():
-                        transaction.perform(Action.create_directory(root, directory))
-                for action in actions:
-                    transaction.perform(action)
-                for directory in sorted(
-                    directories, key=lambda path: len(path.parts), reverse=True
-                ):
-                    if directory.is_dir() and not any(directory.iterdir()):
-                        transaction.perform(Action.remove_directory(root, directory))
-                transaction.commit()
-            print(f"Action log: {log.path}")
-        except (ActionConflict, ActionLogError, OSError) as error:
-            print(f"Reorganization stopped safely: {error}", file=sys.stderr)
-            return 1
-
-    verb = "Reorganized" if apply else "Would reorganize"
-    print(f"{verb} {len(plan)} duplicate file(s) into {destination}")
-    if not apply and plan:
-        print("Dry run only. Add --apply after reviewing this list.")
-    if skipped:
-        print(f"\nSkipped {len(skipped)} item(s):")
-        for path, reason in skipped:
-            print(f"  {path}: {reason}")
-    return 0
-
-
 def describe_undo_action(root: Path, action: Action, apply: bool) -> None:
     verb = action.operation.lower().replace("_", " ")
     prefix = verb if apply else f"would {verb}"
@@ -401,33 +283,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "folder", type=Path, help="organized collection root containing pics"
     )
     parser.add_argument(
-        "--recursive",
-        action="store_true",
-        help=(
-            "deprecated no-op; organized pics are always scanned; removed in "
-            "v0.2.0"
-        ),
-    )
-    parser.add_argument(
         "--apply",
         action="store_true",
         help="perform the moves (without this option, the script is a dry run)",
-    )
-    parser.add_argument(
-        "--duplicates-dir",
-        type=Path,
-        help=(
-            "legacy duplicates source used only with --reorganize-existing "
-            "(default: COLLECTION/duplicates); removed in v0.2.0"
-        ),
-    )
-    parser.add_argument(
-        "--reorganize-existing",
-        action="store_true",
-        help=(
-            "flatten legacy group_* directories using prior move manifests; "
-            "this is also a dry run unless --apply is supplied; removed in v0.2.0"
-        ),
     )
     parser.add_argument(
         "--undo",
@@ -448,23 +306,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not root.is_dir():
         print(f"Not a directory: {root}", file=sys.stderr)
         return 2
-    warn_if_legacy_action_log(root)
-
-    if args.recursive:
-        warn_deprecated(
-            "--recursive",
-            "Image duplicate scans always read the flat pics directory.",
-        )
-    if args.reorganize_existing or args.duplicates_dir:
-        warn_deprecated(
-            "grouped-image migration (--reorganize-existing, --duplicates-dir, "
-            "duplicates/group_*, and move_manifest*.csv)",
-            "New duplicate scans use pics, dups/pics, and the collection action log.",
-        )
-
-    if args.undo and args.reorganize_existing:
-        print("--undo cannot be combined with --reorganize-existing", file=sys.stderr)
-        return 2
     if args.undo:
         return undo_duplicate_run(root, args.apply)
 
@@ -476,20 +317,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     _, destination = review_directories(root)
 
-    if args.reorganize_existing:
-        legacy_source = (
-            args.duplicates_dir.expanduser().resolve()
-            if args.duplicates_dir
-            else root / "duplicates"
-        )
-        if not is_within(legacy_source, root):
-            print("The legacy duplicates source must be inside the collection.", file=sys.stderr)
-            return 2
-        return reorganize_existing(root, legacy_source, destination, args.apply)
-
-    if args.duplicates_dir:
-        print("--duplicates-dir can only be used with --reorganize-existing", file=sys.stderr)
-        return 2
     problems = collection_layout_problems(root, config)
     if problems:
         print("Collection is not ready for duplicate scanning:", file=sys.stderr)

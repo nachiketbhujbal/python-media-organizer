@@ -13,7 +13,7 @@ media_actions.jsonl
 *-actions-log.jsonl
 .DS_Store
 
-# Local media-collection layouts and legacy generated manifests
+# Local collection layouts and obsolete-artifact safeguards
 /collections/
 /media-collections/
 /collection-data/

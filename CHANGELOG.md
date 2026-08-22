@@ -2,6 +2,28 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.2.0 - 2026-08-22
+
+- Add read-only `pymo scan` reports for inventory, storage, content types,
+  layout and naming readiness, review storage, duplicate potential, estimated
+  expensive work, local pymo state, warnings, and recommended next steps.
+- Add stable, path-private JSON scan output and an opt-in `--checksums` profile
+  that hashes only same-size picture and video candidates.
+- Add bounded parallel media classification for scans, configurable through
+  `performance.scan_workers` or `--workers` and defaulting to four workers.
+- Make exact-video fingerprints resumable across preview and apply runs:
+  successful cache misses are persisted immediately, cache hits and misses are
+  reported, and `--no-cache` disables both reads and writes.
+- Keep full FFmpeg decoding sequential pending representative benchmarks;
+  avoid speculative parallel decodes and any fuzzy or compression-heavy match
+  path.
+- Remove the compatibility interfaces deprecated in v0.1.5: CSV organizer
+  undo and `--manifest`, grouped image-output migration and its options, the
+  no-op image `--recursive` option, and fixed-name `media_actions.jsonl`
+  detection.
+- Preserve collection-named JSONL action history, exact matching definitions,
+  dry-run-first media changes, collision refusal, and reversible operations.
+
 ## 0.1.5 - 2026-08-22
 
 - Add user-visible deprecation warnings for CSV organization-manifest undo,
