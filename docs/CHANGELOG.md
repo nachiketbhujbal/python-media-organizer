@@ -2,6 +2,15 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.11 - 2026-08-22
+
+- Open an existing video fingerprint cache read-only through a stable no-follow
+  descriptor anchored beneath the collection root.
+- Stop safely when the cache pathname is replaced during a read instead of
+  allowing SQLite to follow a substituted path outside the collection.
+- Add an adversarial cache-swap test proving SQLite reads the pinned original
+  database and the changed public pathname is rejected.
+
 ## 0.3.10 - 2026-08-22
 
 - Open each exact-image candidate through a stable no-follow descriptor anchored

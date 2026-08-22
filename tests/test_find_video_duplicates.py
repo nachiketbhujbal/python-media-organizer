@@ -424,6 +424,7 @@ def test_video_cache_keeps_completed_fingerprints_after_interruption(
         video_duplicates.main([str(tmp_path)])
 
     cached = video_duplicates.load_cached_fingerprints(
+        tmp_path,
         CollectionLayout(tmp_path).video_cache,
         "test-ffmpeg",
     )
@@ -489,7 +490,48 @@ def test_video_cache_rejects_malformed_rows(tmp_path: Path) -> None:
     connection.close()
 
     with pytest.raises(video_duplicates.VideoInspectionError, match="invalid row"):
-        video_duplicates.load_cached_fingerprints(database, "test")
+        video_duplicates.load_cached_fingerprints(tmp_path, database, "test")
+
+
+def test_video_cache_read_pins_original_database_during_path_swap(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "collection"
+    root.mkdir()
+    cache = CollectionLayout(root).video_cache
+    outside = tmp_path / "outside.sqlite3"
+    displaced = root / "displaced.sqlite3"
+    original = video_duplicates.DerivedFingerprint("1" * 64, 1, 0)
+    unrelated = video_duplicates.DerivedFingerprint("2" * 64, 2, 0)
+    file_hash = "a" * 64
+    video_duplicates.save_cached_fingerprints(
+        cache, "test-ffmpeg", {file_hash: original}
+    )
+    video_duplicates.save_cached_fingerprints(
+        outside, "test-ffmpeg", {file_hash: unrelated}
+    )
+    real_connect = sqlite3.connect
+    observed: list[str] = []
+
+    def swap_before_sqlite_read(*args, **kwargs):
+        cache.rename(displaced)
+        cache.symlink_to(outside)
+        connection = real_connect(*args, **kwargs)
+        row = connection.execute(
+            "SELECT fingerprint FROM video_fingerprints"
+        ).fetchone()
+        assert row is not None
+        observed.append(row[0])
+        return connection
+
+    monkeypatch.setattr(video_duplicates.sqlite3, "connect", swap_before_sqlite_read)
+
+    with pytest.raises(
+        video_duplicates.VideoInspectionError, match="changed or is not a safe"
+    ):
+        video_duplicates.load_cached_fingerprints(root, cache, "test-ffmpeg")
+
+    assert observed == [original.digest]
 
 
 def test_video_inspection_rejects_a_file_changed_during_probe(
