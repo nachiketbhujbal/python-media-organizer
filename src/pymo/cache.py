@@ -10,19 +10,367 @@ from __future__ import annotations
 import ctypes
 import errno
 import fcntl
+import json
 import os
+import re
 import secrets
 import sqlite3
 import stat
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from typing import Literal
+
+SCHEMA_VERSION = 1
+LEGACY_VIDEO_EVIDENCE_TYPE = "exact-video-playback"
+CacheSchemaKind = Literal["empty", "legacy-video", "current"]
 
 
 class CacheError(RuntimeError):
     """A derived cache cannot be accessed or published safely."""
+
+
+@dataclass(frozen=True)
+class DerivedEvidence:
+    """One algorithm/runtime-specific result keyed by whole-file content."""
+
+    file_sha256: str
+    evidence_type: str
+    algorithm: str
+    runtime: str
+    payload_json: str
+
+
+@dataclass(frozen=True)
+class FileObservation:
+    """Stable file identity and an optional verified whole-file digest."""
+
+    scope: str
+    relative_path: str
+    device: int
+    inode: int
+    size: int
+    modified_ns: int
+    changed_ns: int
+    byte_sha256: str | None
+
+
+def _schema_objects(connection: sqlite3.Connection) -> list[tuple[str, str]]:
+    return connection.execute(
+        "SELECT type, name FROM sqlite_schema "
+        "WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
+    ).fetchall()
+
+
+def _table_signature(
+    connection: sqlite3.Connection, table: str
+) -> list[tuple[str, str, int, int]]:
+    rows = connection.execute(f"PRAGMA table_info({table})").fetchall()
+    return [(row[1], str(row[2]).upper(), row[3], row[5]) for row in rows]
+
+
+_CURRENT_OBJECTS = [
+    ("table", "cache_schema"),
+    ("table", "derived_evidence"),
+    ("table", "file_observations"),
+]
+_LEGACY_OBJECTS = [("table", "video_fingerprints")]
+_CURRENT_SIGNATURES = {
+    "cache_schema": [
+        ("singleton", "INTEGER", 1, 1),
+        ("schema_version", "INTEGER", 1, 0),
+    ],
+    "derived_evidence": [
+        ("file_sha256", "TEXT", 1, 1),
+        ("evidence_type", "TEXT", 1, 2),
+        ("algorithm", "TEXT", 1, 3),
+        ("runtime", "TEXT", 1, 4),
+        ("payload_json", "TEXT", 1, 0),
+    ],
+    "file_observations": [
+        ("scope", "TEXT", 1, 1),
+        ("relative_path", "TEXT", 1, 2),
+        ("device", "INTEGER", 1, 0),
+        ("inode", "INTEGER", 1, 0),
+        ("size", "INTEGER", 1, 0),
+        ("modified_ns", "INTEGER", 1, 0),
+        ("changed_ns", "INTEGER", 1, 0),
+        ("byte_sha256", "TEXT", 0, 0),
+    ],
+}
+_LEGACY_VIDEO_SIGNATURE = [
+    ("file_sha256", "TEXT", 1, 1),
+    ("algorithm", "TEXT", 1, 2),
+    ("ffmpeg_version", "TEXT", 1, 3),
+    ("fingerprint", "TEXT", 1, 0),
+    ("video_frames", "INTEGER", 1, 0),
+    ("audio_bytes", "INTEGER", 1, 0),
+]
+
+
+def _require_integrity(connection: sqlite3.Connection) -> None:
+    if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
+        raise CacheError("SQLite cache failed integrity check")
+
+
+def detect_schema(connection: sqlite3.Connection) -> CacheSchemaKind:
+    """Identify only the empty, legacy-video, or exact current cache schema."""
+
+    _require_integrity(connection)
+    objects = _schema_objects(connection)
+    if not objects:
+        return "empty"
+    if objects == _LEGACY_OBJECTS:
+        if _table_signature(connection, "video_fingerprints") != (
+            _LEGACY_VIDEO_SIGNATURE
+        ):
+            raise CacheError("SQLite cache has an incompatible legacy schema")
+        _validated_legacy_video_rows(connection)
+        return "legacy-video"
+    if objects != _CURRENT_OBJECTS:
+        raise CacheError("SQLite cache has an incompatible schema")
+    validate_current_schema(connection)
+    return "current"
+
+
+def _create_current_tables(connection: sqlite3.Connection) -> None:
+    connection.executescript(
+        "CREATE TABLE cache_schema ("
+        "singleton INTEGER NOT NULL PRIMARY KEY CHECK (singleton = 1), "
+        "schema_version INTEGER NOT NULL);"
+        "CREATE TABLE derived_evidence ("
+        "file_sha256 TEXT NOT NULL, evidence_type TEXT NOT NULL, "
+        "algorithm TEXT NOT NULL, runtime TEXT NOT NULL, payload_json TEXT NOT NULL, "
+        "PRIMARY KEY (file_sha256, evidence_type, algorithm, runtime));"
+        "CREATE TABLE file_observations ("
+        "scope TEXT NOT NULL, relative_path TEXT NOT NULL, device INTEGER NOT NULL, "
+        "inode INTEGER NOT NULL, size INTEGER NOT NULL, modified_ns INTEGER NOT NULL, "
+        "changed_ns INTEGER NOT NULL, byte_sha256 TEXT, "
+        "PRIMARY KEY (scope, relative_path));"
+    )
+    connection.execute(
+        "INSERT INTO cache_schema (singleton, schema_version) VALUES (1, ?)",
+        (SCHEMA_VERSION,),
+    )
+
+
+def initialize_schema(connection: sqlite3.Connection) -> None:
+    """Create the current schema in an otherwise empty SQLite database."""
+
+    if detect_schema(connection) != "empty":
+        raise CacheError("SQLite cache schema is already initialized")
+    _create_current_tables(connection)
+    connection.commit()
+    validate_current_schema(connection)
+
+
+def _is_sha256(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+
+def _validate_derived_evidence(record: DerivedEvidence) -> None:
+    try:
+        payload = json.loads(record.payload_json)
+    except (TypeError, json.JSONDecodeError) as error:
+        raise CacheError("SQLite cache contains invalid derived evidence") from error
+    if (
+        not _is_sha256(record.file_sha256)
+        or not isinstance(record.evidence_type, str)
+        or not record.evidence_type
+        or not isinstance(record.algorithm, str)
+        or not record.algorithm
+        or not isinstance(record.runtime, str)
+        or not record.runtime
+        or any(
+            "\0" in value
+            for value in (record.evidence_type, record.algorithm, record.runtime)
+        )
+        or not isinstance(payload, dict)
+    ):
+        raise CacheError("SQLite cache contains invalid derived evidence")
+
+
+def _validate_file_observation(record: FileObservation) -> None:
+    if not isinstance(record.scope, str) or not isinstance(record.relative_path, str):
+        raise CacheError("SQLite cache contains an invalid file observation")
+    relative = PurePosixPath(record.relative_path)
+    integers = (
+        record.device,
+        record.inode,
+        record.size,
+        record.modified_ns,
+        record.changed_ns,
+    )
+    if (
+        not record.scope
+        or not record.relative_path
+        or "\0" in record.scope
+        or "\0" in record.relative_path
+        or relative.is_absolute()
+        or any(part in {"", ".", ".."} for part in relative.parts)
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) for value in integers
+        )
+        or record.device < 0
+        or record.inode < 0
+        or record.size < 0
+        or (record.byte_sha256 is not None and not _is_sha256(record.byte_sha256))
+    ):
+        raise CacheError("SQLite cache contains an invalid file observation")
+
+
+def validate_current_schema(connection: sqlite3.Connection) -> None:
+    """Validate the exact current schema, version row, and every stored record."""
+
+    _require_integrity(connection)
+    if _schema_objects(connection) != _CURRENT_OBJECTS:
+        raise CacheError("SQLite cache has an incompatible schema")
+    for table, expected in _CURRENT_SIGNATURES.items():
+        if _table_signature(connection, table) != expected:
+            raise CacheError("SQLite cache has an incompatible schema")
+    versions = connection.execute(
+        "SELECT singleton, schema_version FROM cache_schema"
+    ).fetchall()
+    if versions != [(1, SCHEMA_VERSION)]:
+        raise CacheError("SQLite cache has an unsupported schema version")
+    for row in connection.execute(
+        "SELECT file_sha256, evidence_type, algorithm, runtime, payload_json "
+        "FROM derived_evidence"
+    ):
+        _validate_derived_evidence(DerivedEvidence(*row))
+    for row in connection.execute(
+        "SELECT scope, relative_path, device, inode, size, modified_ns, "
+        "changed_ns, byte_sha256 FROM file_observations"
+    ):
+        _validate_file_observation(FileObservation(*row))
+
+
+def _validated_legacy_video_rows(
+    connection: sqlite3.Connection,
+) -> list[tuple[str, str, str, str, int, int]]:
+    rows = connection.execute(
+        "SELECT file_sha256, algorithm, ffmpeg_version, fingerprint, "
+        "video_frames, audio_bytes FROM video_fingerprints"
+    ).fetchall()
+    for file_hash, algorithm, runtime, fingerprint, video_frames, audio_bytes in rows:
+        if (
+            not _is_sha256(file_hash)
+            or not isinstance(algorithm, str)
+            or not algorithm
+            or not isinstance(runtime, str)
+            or not runtime
+            or not _is_sha256(fingerprint)
+            or isinstance(video_frames, bool)
+            or not isinstance(video_frames, int)
+            or video_frames <= 0
+            or isinstance(audio_bytes, bool)
+            or not isinstance(audio_bytes, int)
+            or audio_bytes < 0
+        ):
+            raise CacheError("SQLite legacy video cache contains an invalid row")
+    return rows
+
+
+def migrate_legacy_video_schema(connection: sqlite3.Connection) -> None:
+    """Upgrade a validated legacy video schema inside a private working database."""
+
+    if detect_schema(connection) != "legacy-video":
+        raise CacheError("SQLite cache is not a legacy video cache")
+    rows = _validated_legacy_video_rows(connection)
+    with connection:
+        connection.execute(
+            "ALTER TABLE video_fingerprints RENAME TO legacy_video_fingerprints"
+        )
+        _create_current_tables(connection)
+        connection.executemany(
+            "INSERT INTO derived_evidence "
+            "(file_sha256, evidence_type, algorithm, runtime, payload_json) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [
+                (
+                    file_hash,
+                    LEGACY_VIDEO_EVIDENCE_TYPE,
+                    algorithm,
+                    runtime,
+                    json.dumps(
+                        {
+                            "audio_bytes": audio_bytes,
+                            "digest": fingerprint,
+                            "video_frames": video_frames,
+                        },
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                )
+                for (
+                    file_hash,
+                    algorithm,
+                    runtime,
+                    fingerprint,
+                    video_frames,
+                    audio_bytes,
+                ) in rows
+            ],
+        )
+        connection.execute("DROP TABLE legacy_video_fingerprints")
+    validate_current_schema(connection)
+
+
+def upsert_derived_evidence(
+    connection: sqlite3.Connection, records: Iterable[DerivedEvidence]
+) -> None:
+    """Validate and merge generic derived evidence into a current cache."""
+
+    validate_current_schema(connection)
+    materialized = list(records)
+    for record in materialized:
+        _validate_derived_evidence(record)
+    connection.executemany(
+        "INSERT OR REPLACE INTO derived_evidence "
+        "(file_sha256, evidence_type, algorithm, runtime, payload_json) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [
+            (
+                record.file_sha256,
+                record.evidence_type,
+                record.algorithm,
+                record.runtime,
+                record.payload_json,
+            )
+            for record in materialized
+        ],
+    )
+
+
+def upsert_file_observations(
+    connection: sqlite3.Connection, records: Iterable[FileObservation]
+) -> None:
+    """Validate and merge stable file identities into a current cache."""
+
+    validate_current_schema(connection)
+    materialized = list(records)
+    for record in materialized:
+        _validate_file_observation(record)
+    connection.executemany(
+        "INSERT OR REPLACE INTO file_observations "
+        "(scope, relative_path, device, inode, size, modified_ns, changed_ns, "
+        "byte_sha256) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+            (
+                record.scope,
+                record.relative_path,
+                record.device,
+                record.inode,
+                record.size,
+                record.modified_ns,
+                record.changed_ns,
+                record.byte_sha256,
+            )
+            for record in materialized
+        ],
+    )
 
 
 @dataclass(frozen=True)
