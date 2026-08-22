@@ -26,15 +26,16 @@ behavior is captured in the changelog and handoff.
 | 0.3.4 | Documentation map | Separate research from scheduled work, centralize durable engineering docs, and record the small-release policy. | Released |
 | 0.3.5 | Complete scan advice | Recommend rename whenever non-canonical source media exists, while retaining the safe organize-before-rename order. | Released |
 | 0.3.6 | Continuous integration | Run the locked quality and test gates on branches, pull requests, `main`, and release tags; document the branch and release workflow. | Released |
-| 0.3.7 | Video read safety | Descriptor-pin exact-video discovery, probing, hashing, and fingerprint inputs without changing duplicate semantics. | Planned |
-| 0.3.8 | Image read safety | Descriptor-pin exact-image classification and pixel reads without changing duplicate semantics. | Planned |
-| 0.3.9 | Cache access safety | Harden the derived SQLite cache path, locking, replacement, corruption, and interruption boundaries. | Planned |
-| 0.3.10 | Progress cadence | Eliminate repeated forced progress rows and make count-based output stable across fast and slow work. | Planned |
-| 0.3.11 | Heartbeat and ETA | Distinguish active-item heartbeats from completed-work progress and suppress unstable ETA until enough observations exist. | Planned |
-| 0.3.12 | Stage timing | Report discovery, probing, fingerprinting, planning, apply, and verification durations independently. | Planned |
-| 0.3.13 | Cache wording | Make hits, misses, newly persisted records, and no-cache behavior unambiguous. | Planned |
-| 0.3.14 | Concise summaries | Add `--summary` for aggregate, path-private command results without verbose group listings. | Planned |
-| 0.3.15 | Timestamp default | Timestamp human-readable console lines by default; add an explicit opt-out while preserving clean JSON and compatibility with `--timestamps`. | Planned |
+| 0.3.7 | Actions cost control | Run the complete platform matrix automatically for pull requests and `main`, retain manual dispatch, remove redundant branch/tag runs, and cap job duration. | Released |
+| 0.3.8 | Video read safety | Descriptor-pin exact-video discovery, probing, hashing, and fingerprint inputs without changing duplicate semantics. | Planned |
+| 0.3.9 | Image read safety | Descriptor-pin exact-image classification and pixel reads without changing duplicate semantics. | Planned |
+| 0.3.10 | Cache access safety | Harden the derived SQLite cache path, locking, replacement, corruption, and interruption boundaries. | Planned |
+| 0.3.11 | Progress cadence | Eliminate repeated forced progress rows and make count-based output stable across fast and slow work. | Planned |
+| 0.3.12 | Heartbeat and ETA | Distinguish active-item heartbeats from completed-work progress and suppress unstable ETA until enough observations exist. | Planned |
+| 0.3.13 | Stage timing | Report discovery, probing, fingerprinting, planning, apply, and verification durations independently. | Planned |
+| 0.3.14 | Cache wording | Make hits, misses, newly persisted records, and no-cache behavior unambiguous. | Planned |
+| 0.3.15 | Concise summaries | Add `--summary` for aggregate, path-private command results without verbose group listings. | Planned |
+| 0.3.16 | Timestamp default | Timestamp human-readable console lines by default; add an explicit opt-out while preserving clean JSON and compatibility with `--timestamps`. | Planned |
 
 The order may change when a safety dependency is found, but unrelated primary
 purposes are not folded together merely to reduce tag count.

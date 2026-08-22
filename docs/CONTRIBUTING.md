@@ -29,9 +29,17 @@ tests. They are intentionally not bundled through a Python wrapper.
    uv build
    ```
 
-5. Push the branch and require all GitHub `quality` platform checks to pass
-   before a no-fast-forward merge or pull-request merge into `main`.
-6. Do not place an ordinary feature or fix commit directly on `main`.
+5. Push the branch and open a pull request targeting `main`. Ordinary branch
+   pushes do not run CI automatically while the repository is private.
+6. Require all pull-request `quality` platform checks to pass before a
+   no-fast-forward or GitHub pull-request merge into `main`.
+7. Confirm the automatic `main` checks pass on the resulting merge commit.
+8. Do not place an ordinary feature or fix commit directly on `main`.
+
+Use manual workflow dispatch when platform evidence is needed before opening a
+pull request or for an exceptional tag investigation. Each platform job has a
+ten-minute ceiling. Version tags do not rerun the matrix automatically while
+the repository is private.
 
 For a sole-maintainer GitHub ruleset, require a pull request, all platform
 `quality` status checks, and resolved conversations; block force pushes and
@@ -55,18 +63,25 @@ the tag count small.
 
 1. Ensure the roadmap target, changelog entry, handoff, tests, and any ADR are
    complete on the release branch.
-2. Pass the local gate and the branch `quality` check.
-3. Merge the branch into `main` and verify the same check on the merge commit.
+2. Pass the local gate, open the pull request, and pass its `quality` checks.
+3. Merge the branch into `main` and verify the automatic checks on the merge
+   commit.
 4. Create an annotated `vX.Y.Z` tag on the verified merge commit.
-5. Push the tag and verify its `quality` run. The tag is the authoritative
-   package version through hatch-vcs.
-6. Force-refresh the local editable installation when checking a newly created
-   tag:
+5. Push the tag. The tag is the authoritative package version through
+   hatch-vcs; it does not rerun CI automatically while the repository is
+   private.
+6. Force-refresh the local editable installation and verify the exact CLI
+   version after creating the tag:
 
    ```bash
    uv sync --locked --reinstall-package python-media-organizer
    uv run --locked pymo --version
+   uv build
    ```
+
+The CLI version must equal the tag without a development suffix, and both
+distributions must build from the tagged commit. A manual workflow dispatch on
+the tag is available when remote tag verification is specifically warranted.
 
 The package is not currently published to PyPI. A release means a verified Git
 tag plus locally buildable source and wheel artifacts.

@@ -57,6 +57,7 @@ The same adversarial method was repeated after the first validation release.
 | CI-002 | Medium | The exact-video integration fixture assumed an MP4-to-Matroska stream copy preserves canonical playback across FFmpeg releases, but container timestamp behavior can legitimately differ. | 0.3.6 | Resolved with a metadata-only, non-byte-identical stream-copy fixture |
 | CI-003 | Low | Container checkout marked the worktree safe only in the action's temporary home, so Fedora pre-commit could not invoke Git afterward. | 0.3.6 | Resolved by persisting the isolated worktree trust entry |
 | CI-004 | Medium | Real-media tests generated H.264 with `libx264`, an encoder intentionally absent from Fedora's official free FFmpeg build even though the product only requires decoding. | 0.3.6 | Resolved by generating synthetic fixtures with FFmpeg's native `mpeg4` encoder |
+| CI-005 | Low | Branch, pull-request, mainline, and tag triggers repeated the complete three-platform matrix for the same private-repository release. | 0.3.7 | Resolved in ADR 0044 |
 
 ## Release groups
 
@@ -83,6 +84,8 @@ The same adversarial method was repeated after the first validation release.
   and deterministic renaming are applicable.
 - `0.3.6`: reproduce the locked release gate in CI, use short-lived branches,
   and make descriptor-backed content classification portable to GNU `file`.
+- `0.3.7`: retain pre-merge and post-merge platform evidence while eliminating
+  redundant private-repository branch and tag runs.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 

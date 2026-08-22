@@ -13,7 +13,5 @@ needed by coding agents. Durable engineering documentation lives here:
   release procedure.
 - [Architecture decisions](adr/README.md) — one durable decision per record.
 
-A future `CONTRIBUTING.md` will document the branch, review, and release
-workflow once the continuous-integration gate is established. A future license
-file will remain at the repository root so hosting sites and package consumers
-can discover it reliably.
+A future license file will remain at the repository root so hosting sites and
+package consumers can discover it reliably.
