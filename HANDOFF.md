@@ -21,9 +21,9 @@ static version.
 Version 0.3.6 adds a pinned GitHub Actions quality gate, adopts short-lived
 branches with CI-verified merge boundaries, and streams descriptor-backed
 classification through portable `file` standard input rather than asking the
-utility to classify `/dev/fd`. The gate verifies both Ubuntu and macOS; WSL
-uses the supported Linux execution model, while native Windows remains outside
-the current platform boundary. Version 0.3.5 makes scan
+utility to classify `/dev/fd`. The gate verifies Ubuntu, Fedora, and macOS
+representatives; WSL uses the supported Linux execution model, while native
+Windows remains outside the current platform boundary. Version 0.3.5 makes scan
 recommendations list every applicable action in safe
 workflow order instead of suppressing rename advice when organization is also
 needed. Version 0.3.4 separates evaluated research, promoted release plans, shipped

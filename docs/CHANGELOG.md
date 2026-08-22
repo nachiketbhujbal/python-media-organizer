@@ -12,8 +12,9 @@ All notable changes to `python-media-organizer` will be recorded here.
   the installed CLI version.
 - Stream descriptor-pinned classification bytes to the `file` utility through
   standard input, avoiding platform-specific `/dev/fd` type detection on Linux.
-- Run the complete quality gate on both Ubuntu and macOS; Linux-based WSL
-  follows the Linux execution model, while native Windows remains out of scope.
+- Run the complete quality gate on Ubuntu, Fedora, and macOS representatives;
+  Linux-based WSL follows the Linux execution model, while native Windows
+  remains out of scope.
 - Document the short-lived branch, sole-maintainer protection, and release
   workflow in `docs/CONTRIBUTING.md` and separate ADRs.
 

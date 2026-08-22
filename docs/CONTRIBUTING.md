@@ -29,11 +29,11 @@ tests. They are intentionally not bundled through a Python wrapper.
    uv build
    ```
 
-5. Push the branch and require both GitHub `quality` platform checks to pass
+5. Push the branch and require all GitHub `quality` platform checks to pass
    before a no-fast-forward merge or pull-request merge into `main`.
 6. Do not place an ordinary feature or fix commit directly on `main`.
 
-For a sole-maintainer GitHub ruleset, require a pull request, both platform
+For a sole-maintainer GitHub ruleset, require a pull request, all platform
 `quality` status checks, and resolved conversations; block force pushes and
 branch deletion. Do not require approval from another person unless another
 active maintainer exists, because that would prevent legitimate self-merges.

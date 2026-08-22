@@ -11,8 +11,8 @@ it belongs to.
 ## Requirements and installation
 
 - Python 3.11 or newer
-- macOS, Linux, or Linux running under WSL; the current append-only journal
-  uses POSIX file locking
+- macOS, Debian-family or Red Hat-family Linux, or Linux running under WSL;
+  the current append-only journal uses POSIX file locking
 - uv 0.12 or newer for the reproducible development workflow
 - Pillow, installed from `pyproject.toml`
 - FFmpeg and ffprobe for exact video duplicate detection

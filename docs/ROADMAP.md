@@ -78,8 +78,9 @@ These have an accepted product direction but no release number yet:
 - explainable keeper-quality recommendations;
 - reversible metadata or quarantine actions only after dedicated safety ADRs;
 - benchmark-driven bounded native-process concurrency;
-- broader POSIX portability beyond the tested Linux, macOS, and Linux-based WSL
-  execution models, including safe atomic no-replace mutation primitives;
+- broader POSIX portability beyond the tested Debian-family Linux, Red
+  Hat-family Linux, macOS, and Linux-based WSL execution models, including safe
+  atomic no-replace mutation primitives;
 - dependency inventory, release SBOM, and outbound-network-denied tests;
 - a local interface over the same command engine.
 
