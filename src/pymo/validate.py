@@ -39,6 +39,9 @@ VALIDATION_REPORT_SCHEMA_VERSION = 1
 
 Severity = Literal["error", "warning", "info"]
 MediaKind = Literal["picture", "video"]
+DiscoveryDisposition = Literal[
+    "candidate", "ignored", "symlink", "unreadable", "changed", "other", "reserved"
+]
 
 
 @dataclass(frozen=True)
@@ -80,6 +83,25 @@ class DiscoveryResult:
     changed_paths: tuple[Path, ...]
 
 
+@dataclass(frozen=True)
+class ValidationOptions:
+    workers: int
+    full: bool
+    ffprobe: str | None
+    ffmpeg: str | None
+    timeout: int
+    progress_interval_seconds: int
+    show_progress: bool
+
+
+@dataclass(frozen=True)
+class ReportOptions:
+    full: bool
+    workers: int
+    show_files: bool
+    show_ignored: bool
+
+
 def _extension_kind(path: Path, config: PymoConfig) -> MediaKind | None:
     extension = path.suffix.casefold()
     if extension in config.classification.image_extensions:
@@ -89,88 +111,112 @@ def _extension_kind(path: Path, config: PymoConfig) -> MediaKind | None:
     return None
 
 
+def _retain_directories(
+    current: Path,
+    names: list[str],
+    root: Path,
+    config: PymoConfig,
+) -> tuple[list[str], list[Path], list[Path]]:
+    retained: list[str] = []
+    ignored: list[Path] = []
+    symlinks: list[Path] = []
+    for name in sorted(names, key=str.casefold):
+        path = current / name
+        if path.is_symlink():
+            symlinks.append(path)
+        elif config.ignores_directory(path, root):
+            ignored.append(path)
+        else:
+            retained.append(name)
+    return retained, ignored, symlinks
+
+
+def _discover_file(
+    path: Path,
+    root: Path,
+    config: PymoConfig,
+    classifier: Classifier,
+) -> tuple[DiscoveryDisposition, MediaCandidate | None]:
+    if path.is_symlink():
+        return "symlink", None
+    if config.ignores_file(path, root):
+        return "ignored", None
+    if is_action_log_path(root, path):
+        return "reserved", None
+    try:
+        state = FileState.capture(path)
+    except FileChangedError:
+        return "unreadable", None
+    detected_kind, _ = classifier.classify(path)
+    try:
+        state.require_unchanged(path, "media discovery")
+    except FileChangedError:
+        return "changed", None
+    extension_kind = _extension_kind(path, config)
+    if detected_kind in {"picture", "video"}:
+        kind: MediaKind = detected_kind  # type: ignore[assignment]
+    elif extension_kind is not None:
+        kind = extension_kind
+    else:
+        return "other", None
+    return (
+        "candidate",
+        MediaCandidate(
+            path=path.absolute(),
+            state=state,
+            kind=kind,
+            extension_kind=extension_kind,
+            detected_kind=detected_kind,
+        ),
+    )
+
+
 def discover_candidates(root: Path, config: PymoConfig) -> DiscoveryResult:
     classifier = Classifier(config.classification)
     candidates: list[MediaCandidate] = []
     ignored: list[Path] = []
-    symlink_count = 0
-    unreadable_count = 0
-    changed_count = 0
     other_count = 0
     symlink_paths: list[Path] = []
     unreadable_paths: list[Path] = []
     changed_paths: list[Path] = []
 
     def record_walk_error(error: OSError) -> None:
-        nonlocal unreadable_count
-        unreadable_count += 1
         unreadable_paths.append(Path(error.filename) if error.filename else root)
 
     for current, directory_names, file_names in os.walk(
         root, topdown=True, onerror=record_walk_error
     ):
         current_path = Path(current)
-        retained: list[str] = []
-        for name in sorted(directory_names, key=str.casefold):
-            path = current_path / name
-            if path.is_symlink():
-                symlink_count += 1
-                symlink_paths.append(path)
-            elif config.ignores_directory(path, root):
-                ignored.append(path)
-            else:
-                retained.append(name)
+        retained, ignored_directories, symlink_directories = _retain_directories(
+            current_path, directory_names, root, config
+        )
         directory_names[:] = retained
+        ignored.extend(ignored_directories)
+        symlink_paths.extend(symlink_directories)
 
         for name in sorted(file_names, key=str.casefold):
             path = current_path / name
-            if path.is_symlink():
-                symlink_count += 1
+            disposition, candidate = _discover_file(path, root, config, classifier)
+            if candidate is not None:
+                candidates.append(candidate)
+            elif disposition == "symlink":
                 symlink_paths.append(path)
-                continue
-            if config.ignores_file(path, root):
+            elif disposition == "ignored":
                 ignored.append(path)
-                continue
-            if is_action_log_path(root, path):
-                continue
-            try:
-                state = FileState.capture(path)
-            except FileChangedError:
-                unreadable_count += 1
+            elif disposition == "unreadable":
                 unreadable_paths.append(path)
-                continue
-            detected_kind, _ = classifier.classify(path)
-            try:
-                state.require_unchanged(path, "media discovery")
-            except FileChangedError:
-                changed_count += 1
+            elif disposition == "changed":
                 changed_paths.append(path)
-                continue
-            extension_kind = _extension_kind(path, config)
-            if detected_kind in {"picture", "video"}:
-                kind: MediaKind = detected_kind  # type: ignore[assignment]
-            elif extension_kind is not None:
-                kind = extension_kind
-            else:
+            elif disposition == "other":
                 other_count += 1
-                continue
-            candidates.append(
-                MediaCandidate(
-                    path=path.absolute(),
-                    state=state,
-                    kind=kind,
-                    extension_kind=extension_kind,
-                    detected_kind=detected_kind,
-                )
-            )
     return DiscoveryResult(
         candidates=tuple(
             sorted(candidates, key=lambda item: str(item.path).casefold())
         ),
         ignored=tuple(sorted(ignored, key=lambda item: str(item).casefold())),
-        symlink_count=symlink_count,
-        unreadable_count=unreadable_count,
-        changed_count=changed_count,
+        symlink_count=len(symlink_paths),
+        unreadable_count=len(unreadable_paths),
+        changed_count=len(changed_paths),
         other_count=other_count,
         classifier_warning=classifier.warning,
         symlink_paths=tuple(symlink_paths),
@@ -360,6 +406,129 @@ def _full_video_decode(path: Path, ffmpeg: str, timeout: int) -> None:
         raise VideoInspectionError("FFmpeg could not completely decode the file")
 
 
+def _partition_streams(
+    payload: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    streams = payload.get("streams")
+    if not isinstance(streams, list) or not all(
+        isinstance(stream, dict) for stream in streams
+    ):
+        raise VideoInspectionError("ffprobe returned an invalid stream list")
+    typed_streams = [stream for stream in streams if isinstance(stream, dict)]
+    videos = [stream for stream in typed_streams if stream.get("codec_type") == "video"]
+    audios = [stream for stream in typed_streams if stream.get("codec_type") == "audio"]
+    others = [
+        stream
+        for stream in typed_streams
+        if stream.get("codec_type") not in {"video", "audio"}
+    ]
+    return videos, audios, others
+
+
+def _has_positive_dimensions(stream: dict[str, Any]) -> bool:
+    try:
+        return int(str(stream.get("width"))) > 0 and int(str(stream.get("height"))) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _stream_findings(
+    candidate: MediaCandidate,
+    videos: list[dict[str, Any]],
+    audios: list[dict[str, Any]],
+    others: list[dict[str, Any]],
+) -> list[Finding]:
+    findings: list[Finding] = []
+    if not videos:
+        findings.append(
+            _finding(candidate, "error", "missing_video_stream", "no video stream")
+        )
+    for stream in videos:
+        if not stream.get("codec_name"):
+            findings.append(
+                _finding(
+                    candidate,
+                    "warning",
+                    "missing_video_codec",
+                    "video codec name is missing",
+                )
+            )
+        if not _has_positive_dimensions(stream):
+            findings.append(
+                _finding(
+                    candidate,
+                    "error",
+                    "invalid_video_dimensions",
+                    "video dimensions are missing or invalid",
+                )
+            )
+    if len(videos) > 1:
+        findings.append(
+            _finding(
+                candidate,
+                "warning",
+                "multiple_video_streams",
+                "file contains multiple video streams",
+            )
+        )
+    if len(audios) > 1:
+        findings.append(
+            _finding(
+                candidate,
+                "warning",
+                "multiple_audio_streams",
+                "file contains multiple audio streams",
+            )
+        )
+    if others:
+        findings.append(
+            _finding(
+                candidate,
+                "info",
+                "additional_streams",
+                "file contains subtitle, data, or attachment streams",
+            )
+        )
+    return findings
+
+
+def _duration_finding(
+    candidate: MediaCandidate, payload: dict[str, Any]
+) -> Finding | None:
+    format_data = payload.get("format")
+    duration = format_data.get("duration") if isinstance(format_data, dict) else None
+    try:
+        numeric_duration = float(str(duration))
+        valid_duration = math.isfinite(numeric_duration) and numeric_duration > 0
+    except (TypeError, ValueError):
+        valid_duration = False
+    if valid_duration:
+        return None
+    return _finding(
+        candidate,
+        "warning",
+        "missing_or_invalid_duration",
+        "playback duration is missing or invalid",
+    )
+
+
+def _inspect_video(
+    candidate: MediaCandidate,
+    ffprobe: str,
+    ffmpeg: str | None,
+    timeout: int,
+) -> list[Finding]:
+    payload = _probe_video(candidate.path, ffprobe)
+    videos, audios, others = _partition_streams(payload)
+    findings = _stream_findings(candidate, videos, audios, others)
+    duration_finding = _duration_finding(candidate, payload)
+    if duration_finding is not None:
+        findings.append(duration_finding)
+    if ffmpeg is not None and videos:
+        _full_video_decode(candidate.path, ffmpeg, timeout)
+    return findings
+
+
 def validate_video(
     candidate: MediaCandidate,
     ffprobe: str | None,
@@ -373,96 +542,7 @@ def validate_video(
         raise VideoInspectionError("ffprobe is required for non-empty video")
     try:
         candidate.state.require_unchanged(candidate.path, "video validation")
-        payload = _probe_video(candidate.path, ffprobe)
-        streams = payload.get("streams")
-        if not isinstance(streams, list) or not all(
-            isinstance(stream, dict) for stream in streams
-        ):
-            raise VideoInspectionError("ffprobe returned an invalid stream list")
-        videos = [stream for stream in streams if stream.get("codec_type") == "video"]
-        audios = [stream for stream in streams if stream.get("codec_type") == "audio"]
-        others = [
-            stream
-            for stream in streams
-            if stream.get("codec_type") not in {"video", "audio"}
-        ]
-        if not videos:
-            findings.append(
-                _finding(candidate, "error", "missing_video_stream", "no video stream")
-            )
-        for stream in videos:
-            if not stream.get("codec_name"):
-                findings.append(
-                    _finding(
-                        candidate,
-                        "warning",
-                        "missing_video_codec",
-                        "video codec name is missing",
-                    )
-                )
-            try:
-                dimensions_valid = (
-                    int(str(stream.get("width"))) > 0
-                    and int(str(stream.get("height"))) > 0
-                )
-            except (TypeError, ValueError):
-                dimensions_valid = False
-            if not dimensions_valid:
-                findings.append(
-                    _finding(
-                        candidate,
-                        "error",
-                        "invalid_video_dimensions",
-                        "video dimensions are missing or invalid",
-                    )
-                )
-        if len(videos) > 1:
-            findings.append(
-                _finding(
-                    candidate,
-                    "warning",
-                    "multiple_video_streams",
-                    "file contains multiple video streams",
-                )
-            )
-        if len(audios) > 1:
-            findings.append(
-                _finding(
-                    candidate,
-                    "warning",
-                    "multiple_audio_streams",
-                    "file contains multiple audio streams",
-                )
-            )
-        if others:
-            findings.append(
-                _finding(
-                    candidate,
-                    "info",
-                    "additional_streams",
-                    "file contains subtitle, data, or attachment streams",
-                )
-            )
-        format_data = payload.get("format")
-        duration = (
-            format_data.get("duration") if isinstance(format_data, dict) else None
-        )
-        try:
-            numeric_duration = float(str(duration))
-            valid_duration = math.isfinite(numeric_duration) and numeric_duration > 0
-        except (TypeError, ValueError):
-            valid_duration = False
-        if not valid_duration:
-            findings.append(
-                _finding(
-                    candidate,
-                    "warning",
-                    "missing_or_invalid_duration",
-                    "playback duration is missing or invalid",
-                )
-            )
-        if ffmpeg is not None and videos:
-            _full_video_decode(candidate.path, ffmpeg, timeout)
+        findings.extend(_inspect_video(candidate, ffprobe, ffmpeg, timeout))
         candidate.state.require_unchanged(candidate.path, "video validation")
     except FileChangedError:
         findings = [_changed_finding(candidate)]
@@ -485,36 +565,32 @@ def validate_video(
 
 def validate_candidates(
     candidates: tuple[MediaCandidate, ...],
-    workers: int,
-    full: bool,
-    ffprobe: str | None,
-    ffmpeg: str | None,
-    timeout: int,
-    progress_interval_seconds: int,
-    show_progress: bool,
+    options: ValidationOptions,
 ) -> tuple[ValidationResult, ...]:
     progress = ProgressMeter(
         len(candidates),
         sum(candidate.state.size for candidate in candidates),
-        progress_interval_seconds,
+        options.progress_interval_seconds,
     )
 
     def validate_one(candidate: MediaCandidate) -> ValidationResult:
         if candidate.kind == "picture":
-            return validate_image(candidate, full)
-        return validate_video(candidate, ffprobe, ffmpeg, timeout)
+            return validate_image(candidate, options.full)
+        return validate_video(
+            candidate, options.ffprobe, options.ffmpeg, options.timeout
+        )
 
     results: list[ValidationResult] = []
     Image.init()
     with warnings.catch_warnings():
         warnings.simplefilter("error", Image.DecompressionBombWarning)
-        with ThreadPoolExecutor(max_workers=workers) as executor:
+        with ThreadPoolExecutor(max_workers=options.workers) as executor:
             for candidate, result in zip(
                 candidates, executor.map(validate_one, candidates), strict=True
             ):
                 results.append(result)
                 message = progress.advance("validated", byte_count=candidate.state.size)
-                if show_progress and message:
+                if options.show_progress and message:
                     print(f"  {message}")
     return tuple(results)
 
@@ -523,10 +599,7 @@ def build_report(
     root: Path,
     discovery: DiscoveryResult,
     results: tuple[ValidationResult, ...],
-    full: bool,
-    workers: int,
-    show_files: bool,
-    show_ignored: bool,
+    options: ReportOptions,
 ) -> dict[str, Any]:
     findings = [finding for result in results for finding in result.findings]
     by_code: dict[tuple[str, str, str], int] = Counter(
@@ -571,10 +644,10 @@ def build_report(
             }
             for finding in findings
         ]
-        if show_files
+        if options.show_files
         else []
     )
-    if show_files:
+    if options.show_files:
         for paths, severity, code, description in (
             (
                 discovery.unreadable_paths,
@@ -608,8 +681,8 @@ def build_report(
         finding_files.sort(key=lambda item: (item["path"], item["code"]))
     return {
         "schema_version": VALIDATION_REPORT_SCHEMA_VERSION,
-        "profile": "full" if full else "standard",
-        "workers": workers,
+        "profile": "full" if options.full else "standard",
+        "workers": options.workers,
         "inventory": {
             "media_files": len(results),
             "media_bytes": sum(result.candidate.state.size for result in results),
@@ -651,7 +724,7 @@ def build_report(
         "finding_files": finding_files,
         "ignored_paths": (
             [path.relative_to(root).as_posix() for path in discovery.ignored]
-            if show_ignored
+            if options.show_ignored
             else []
         ),
     }
@@ -768,22 +841,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     validation_workers = 1 if args.full and videos else workers
     results = validate_candidates(
         discovery.candidates,
-        validation_workers,
-        args.full,
-        ffprobe,
-        ffmpeg,
-        config.video_duplicates.decode_timeout_seconds,
-        config.performance.progress_interval_seconds,
-        not args.json,
+        ValidationOptions(
+            workers=validation_workers,
+            full=args.full,
+            ffprobe=ffprobe,
+            ffmpeg=ffmpeg,
+            timeout=config.video_duplicates.decode_timeout_seconds,
+            progress_interval_seconds=config.performance.progress_interval_seconds,
+            show_progress=not args.json,
+        ),
     )
     report = build_report(
         root,
         discovery,
         results,
-        args.full,
-        validation_workers,
-        args.show_files,
-        args.show_ignored,
+        ReportOptions(
+            full=args.full,
+            workers=validation_workers,
+            show_files=args.show_files,
+            show_ignored=args.show_ignored,
+        ),
     )
     if args.json:
         print(json.dumps(report, sort_keys=True, separators=(",", ":")))

@@ -41,3 +41,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0033](0033-minimize-native-validation-output.md) | Minimized native validation output |
 | [0034](0034-changing-input-precedes-corruption.md) | Changing input precedes corruption findings |
 | [0035](0035-report-discovery-failures.md) | Validation discovery failures are health findings |
+| [0036](0036-staged-validation-orchestration.md) | Staged validation orchestration |

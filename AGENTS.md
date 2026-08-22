@@ -142,6 +142,9 @@ report-only future work and must never silently enter the exact move path.
 - Keep command entry points as coordinators around explicit discovery,
   analysis, planning, apply, and verification stages. Treat complexity output
   as focused review evidence rather than a blanket commit failure.
+- Keep validation traversal, media-specific inspection, execution policy, and
+  report construction as separate typed stages; do not reintroduce long
+  positional orchestration interfaces.
 - Maintain local Git history with concise one-line commits. Do not configure a
   new remote or push a release without explicit user approval. The approved
   `origin` is the personal GitHub repository recorded in `HANDOFF.md`.

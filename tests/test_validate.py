@@ -192,7 +192,14 @@ def test_discovery_records_directory_walk_errors(tmp_path: Path, monkeypatch) ->
     monkeypatch.setattr(validate.os, "walk", inaccessible_walk)
 
     discovery = validate.discover_candidates(root, load_config(root))
-    report = validate.build_report(root, discovery, (), False, 1, True, False)
+    report = validate.build_report(
+        root,
+        discovery,
+        (),
+        validate.ReportOptions(
+            full=False, workers=1, show_files=True, show_ignored=False
+        ),
+    )
 
     assert discovery.unreadable_count == 1
     assert discovery.unreadable_paths == (blocked,)

@@ -13,12 +13,14 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.1` report-only validation release. It is a
+`pymo` command, and has a `v0.3.2` report-only validation release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.1 hardens validation path privacy, reports unreadable traversal,
+Version 0.3.2 separates validation discovery, video stream policy, execution,
+and report options into typed stages without changing behavior. Version 0.3.1
+hardens validation path privacy, reports unreadable traversal,
 minimizes native-tool output, validates basic video stream fields, and ensures
 changing inputs are never mislabeled corrupt. Version 0.3.0 adds standard and
 full-decode collection health reports with

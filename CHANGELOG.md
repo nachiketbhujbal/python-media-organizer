@@ -2,6 +2,15 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.2 - 2026-08-22
+
+- Split validation directory filtering, file discovery, video stream policy,
+  duration checks, and native inspection into focused typed stages.
+- Replace long positional validation/report interfaces with immutable option
+  objects while preserving CLI behavior and schema 1 output.
+- Record the maintainability finding and orchestration decision in the durable
+  adversarial review and ADR ledgers.
+
 ## 0.3.1 - 2026-08-22
 
 - Remove the absolute collection root from default validation text.
