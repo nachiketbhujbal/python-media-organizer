@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "python-media-organizer"
+version = "0.1.0"
+description = "Safe, local-first, reversible media collection tools"
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = ["media", "organizer", "duplicates", "privacy", "local-first"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Multimedia",
+]
+dependencies = [
+    "Pillow>=9",
+]
+
+[project.scripts]
+pymo = "pymo.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["src"]

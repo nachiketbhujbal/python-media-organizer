@@ -1,0 +1,942 @@
+#!/usr/bin/env python3
+"""Find deterministic, exact-playback video duplicates in ``vids``.
+
+The default is a dry run. Nothing is moved unless ``--apply`` is supplied.
+Whole-file SHA-256 is the fast path; non-identical files are compared using a
+strict FFmpeg-derived fingerprint of displayed frames, normalized timing, and
+decoded audio. Similar-looking, recompressed, cropped, or watermarked media is
+not considered an exact duplicate.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import selectors
+import shutil
+import sqlite3
+import subprocess
+import sys
+import time
+from collections import defaultdict, deque
+from collections.abc import Sequence
+from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from pathlib import Path
+from typing import Callable
+
+from pymo.action_log import (
+    Action,
+    ActionConflict,
+    ActionLog,
+    ActionLogError,
+    NoUndoableRun,
+)
+from pymo.logging_config import emit as print
+from pymo.organize import Classifier
+
+
+TOOL_NAME = "find_video_duplicates"
+VIDS_NAME = "vids"
+DUPS_NAME = "dups"
+DATABASE_FILENAME = ".pymo.sqlite3"
+FINGERPRINT_ALGORITHM = "exact-playback-v2"
+DEFAULT_DECODE_TIMEOUT = 60 * 60
+HIGH_BIT_DEPTH_PATTERN = re.compile(r"(?:10|12|14|16|48|64)(?:le|be)?$")
+HDR_TRANSFERS = {"arib-std-b67", "smpte2084"}
+
+
+class VideoInspectionError(RuntimeError):
+    """A video cannot be safely included in exact duplicate matching."""
+
+
+@dataclass(frozen=True)
+class ProbeInfo:
+    display_width: int
+    display_height: int
+    duration_us: int
+    video_start_us: int
+    audio_start_us: int | None
+    audio_sample_rate: int | None
+    audio_channels: int | None
+    audio_layout: str | None
+    has_audio: bool
+
+    @property
+    def candidate_key(self) -> tuple[object, ...]:
+        # This intentionally omits codecs, containers, and source pixel format.
+        # Files in different basic buckets cannot produce the same canonical
+        # playback, while files in the same bucket still require full decoding.
+        return (
+            self.display_width,
+            self.display_height,
+            self.has_audio,
+            self.audio_sample_rate,
+            self.audio_channels,
+            self.audio_layout,
+        )
+
+
+@dataclass(frozen=True)
+class VideoRecord:
+    path: Path
+    byte_sha256: str
+    file_size: int
+    modified_ns: int
+    probe: ProbeInfo
+
+
+@dataclass(frozen=True)
+class DerivedFingerprint:
+    digest: str
+    video_frames: int
+    audio_bytes: int
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def decimal_microseconds(value: object, *, default: int | None = None) -> int | None:
+    if value in (None, "", "N/A"):
+        return default
+    try:
+        decimal = Decimal(str(value)) * Decimal(1_000_000)
+    except (InvalidOperation, ValueError):
+        return default
+    return int(decimal.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def stream_rotation(stream: dict[str, object]) -> int:
+    values: list[object] = []
+    tags = stream.get("tags")
+    if isinstance(tags, dict):
+        values.append(tags.get("rotate"))
+    side_data = stream.get("side_data_list")
+    if isinstance(side_data, list):
+        for item in side_data:
+            if isinstance(item, dict):
+                values.append(item.get("rotation"))
+    for value in values:
+        if value in (None, ""):
+            continue
+        try:
+            rotation = int(round(float(str(value)))) % 360
+        except ValueError:
+            raise VideoInspectionError(f"invalid rotation metadata: {value!r}")
+        if rotation not in {0, 90, 180, 270}:
+            raise VideoInspectionError(f"unsupported rotation: {rotation} degrees")
+        return rotation
+    return 0
+
+
+def _positive_int(value: object, description: str) -> int:
+    try:
+        result = int(str(value))
+    except (TypeError, ValueError) as error:
+        raise VideoInspectionError(f"missing or invalid {description}") from error
+    if result <= 0:
+        raise VideoInspectionError(f"missing or invalid {description}")
+    return result
+
+
+def probe_video(path: Path, ffprobe: str) -> ProbeInfo:
+    command = [
+        ffprobe,
+        "-v",
+        "error",
+        "-protocol_whitelist",
+        "file,pipe",
+        "-show_streams",
+        "-show_format",
+        "-of",
+        "json",
+        str(path),
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise VideoInspectionError(f"ffprobe failed: {error}") from error
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "unrecognized or unreadable media"
+        raise VideoInspectionError(f"ffprobe rejected the file: {detail}")
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise VideoInspectionError("ffprobe returned invalid JSON") from error
+
+    streams = payload.get("streams")
+    if not isinstance(streams, list):
+        raise VideoInspectionError("ffprobe returned no stream list")
+    videos = [item for item in streams if item.get("codec_type") == "video"]
+    audios = [item for item in streams if item.get("codec_type") == "audio"]
+    others = [
+        item
+        for item in streams
+        if item.get("codec_type") not in {"video", "audio"}
+    ]
+    if len(videos) != 1:
+        raise VideoInspectionError(
+            f"requires exactly one video stream; found {len(videos)}"
+        )
+    if len(audios) > 1:
+        raise VideoInspectionError(
+            f"multiple audio streams are not yet supported; found {len(audios)}"
+        )
+    if others:
+        kinds = sorted({str(item.get("codec_type", "unknown")) for item in others})
+        raise VideoInspectionError(
+            "subtitle, data, or attachment streams are not yet supported: "
+            + ", ".join(kinds)
+        )
+
+    video = videos[0]
+    disposition = video.get("disposition")
+    if isinstance(disposition, dict) and disposition.get("attached_pic"):
+        raise VideoInspectionError("attached-picture video streams are not supported")
+
+    width = _positive_int(video.get("width"), "video width")
+    height = _positive_int(video.get("height"), "video height")
+    pixel_format = str(video.get("pix_fmt") or "").lower()
+    bit_depth = video.get("bits_per_raw_sample")
+    if (
+        not pixel_format
+        or HIGH_BIT_DEPTH_PATTERN.search(pixel_format)
+        or (str(bit_depth).isdigit() and int(str(bit_depth)) > 8)
+        or str(video.get("color_transfer") or "").lower() in HDR_TRANSFERS
+    ):
+        raise VideoInspectionError(
+            f"HDR or high-bit-depth pixel format is not yet supported: {pixel_format or 'unknown'}"
+        )
+
+    rotation = stream_rotation(video)
+    display_width, display_height = (
+        (height, width) if rotation in {90, 270} else (width, height)
+    )
+    format_data = payload.get("format")
+    if not isinstance(format_data, dict):
+        format_data = {}
+    duration_us = decimal_microseconds(
+        video.get("duration"),
+        default=decimal_microseconds(format_data.get("duration"), default=None),
+    )
+    if duration_us is None or duration_us <= 0:
+        raise VideoInspectionError("missing or invalid playback duration")
+
+    video_start_us = decimal_microseconds(video.get("start_time"), default=0) or 0
+    if not audios:
+        return ProbeInfo(
+            display_width=display_width,
+            display_height=display_height,
+            duration_us=duration_us,
+            video_start_us=video_start_us,
+            audio_start_us=None,
+            audio_sample_rate=None,
+            audio_channels=None,
+            audio_layout=None,
+            has_audio=False,
+        )
+
+    audio = audios[0]
+    sample_rate = _positive_int(audio.get("sample_rate"), "audio sample rate")
+    channels = _positive_int(audio.get("channels"), "audio channel count")
+    layout = str(audio.get("channel_layout") or f"{channels}ch")
+    audio_start_us = decimal_microseconds(audio.get("start_time"), default=0) or 0
+    return ProbeInfo(
+        display_width=display_width,
+        display_height=display_height,
+        duration_us=duration_us,
+        video_start_us=video_start_us,
+        audio_start_us=audio_start_us,
+        audio_sample_rate=sample_rate,
+        audio_channels=channels,
+        audio_layout=layout,
+        has_audio=True,
+    )
+
+
+def discover_videos(vids: Path, classifier: Classifier) -> list[Path]:
+    videos: list[Path] = []
+    for path in vids.iterdir():
+        if path.is_symlink() or not path.is_file():
+            continue
+        kind, _ = classifier.classify(path)
+        if kind == "video":
+            videos.append(path.resolve())
+    return sorted(videos, key=lambda item: str(item).casefold())
+
+
+def collection_layout_problems(root: Path) -> list[str]:
+    """Validate only the video finder's owned source and review locations."""
+    vids = root / VIDS_NAME
+    problems: list[str] = []
+    if vids.is_symlink():
+        problems.append(f"required folder is a symbolic link: {vids}")
+    elif not vids.exists():
+        problems.append(f"missing required folder: {vids}")
+    elif not vids.is_dir():
+        problems.append(f"required folder is not a directory: {vids}")
+
+    dups = root / DUPS_NAME
+    if dups.is_symlink():
+        problems.append(f"reserved folder is a symbolic link: {dups}")
+    elif dups.exists() and not dups.is_dir():
+        problems.append(f"reserved path is not a directory: {dups}")
+    elif dups.is_dir():
+        duplicate_vids = dups / VIDS_NAME
+        if duplicate_vids.is_symlink():
+            problems.append(f"reserved media path is a symbolic link: {duplicate_vids}")
+        elif duplicate_vids.exists() and not duplicate_vids.is_dir():
+            problems.append(f"reserved media path is not a directory: {duplicate_vids}")
+
+    if problems:
+        return problems
+    classifier = Classifier()
+    for path in vids.iterdir():
+        if path.is_symlink():
+            problems.append(f"symbolic link cannot be verified: {path}")
+        elif path.is_dir():
+            problems.append(f"unexpected directory in vids: {path}")
+        elif path.is_file():
+            kind, _ = classifier.classify(path)
+            if kind == "picture":
+                problems.append(
+                    f"misplaced picture: {path} "
+                    "(expected outside the video finder's vids folder)"
+                )
+    return problems
+
+
+def review_directories(root: Path) -> tuple[Path, Path]:
+    dups = root / DUPS_NAME
+    return dups, dups / VIDS_NAME
+
+
+def resolve_executable(value: Path | None, name: str) -> str:
+    candidate = str(value.expanduser()) if value else shutil.which(name)
+    if not candidate:
+        raise VideoInspectionError(
+            f"{name} was not found. Install FFmpeg and ensure both ffmpeg and "
+            "ffprobe are available on PATH."
+        )
+    resolved = Path(candidate).resolve()
+    if not resolved.is_file() or not os.access(resolved, os.X_OK):
+        raise VideoInspectionError(f"not an executable {name} path: {resolved}")
+    return str(resolved)
+
+
+def ffmpeg_version(ffmpeg: str) -> str:
+    try:
+        result = subprocess.run(
+            [ffmpeg, "-version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise VideoInspectionError(f"cannot query FFmpeg version: {error}") from error
+    if result.returncode != 0 or not result.stdout.strip():
+        raise VideoInspectionError("cannot query FFmpeg version")
+    return result.stdout.splitlines()[0].strip()
+
+
+def _stream_command(
+    command: list[str],
+    consume_stdout: Callable[[bytes], None],
+    timeout: int,
+) -> None:
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as error:
+        raise VideoInspectionError(f"cannot start FFmpeg: {error}") from error
+    assert process.stdout is not None and process.stderr is not None
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ, "stdout")
+    selector.register(process.stderr, selectors.EVENT_READ, "stderr")
+    errors: deque[bytes] = deque(maxlen=32)
+    deadline = time.monotonic() + timeout
+    try:
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                process.kill()
+                process.wait()
+                raise VideoInspectionError(
+                    f"FFmpeg decoding exceeded the {timeout}-second safety limit"
+                )
+            for key, _ in selector.select(timeout=min(1.0, remaining)):
+                chunk = os.read(key.fileobj.fileno(), 1024 * 1024)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                elif key.data == "stdout":
+                    consume_stdout(chunk)
+                else:
+                    errors.append(chunk)
+        return_code = process.wait(timeout=10)
+    except BaseException:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        raise
+    finally:
+        selector.close()
+        process.stdout.close()
+        process.stderr.close()
+    if return_code != 0:
+        detail = b"".join(errors).decode("utf-8", "replace").strip()
+        raise VideoInspectionError(
+            "FFmpeg could not completely decode the file"
+            + (f": {detail}" if detail else "")
+        )
+
+
+def video_frame_signature(path: Path, ffmpeg: str, timeout: int) -> tuple[str, int]:
+    digest = hashlib.sha256()
+    line_buffer = bytearray()
+    frame_count = 0
+
+    def consume(chunk: bytes) -> None:
+        nonlocal frame_count
+        line_buffer.extend(chunk)
+        while b"\n" in line_buffer:
+            raw_line, _, remainder = line_buffer.partition(b"\n")
+            line_buffer[:] = remainder
+            line = raw_line.decode("ascii", "replace").strip()
+            if not line or line.startswith("#"):
+                continue
+            fields = [field.strip() for field in line.split(",", 5)]
+            if len(fields) != 6:
+                raise VideoInspectionError(f"unexpected FFmpeg framehash output: {line}")
+            _, _dts, pts, duration, size, frame_hash = fields
+            digest.update(f"{pts},{duration},{size},{frame_hash}\n".encode("ascii"))
+            frame_count += 1
+
+    command = [
+        ffmpeg,
+        "-v",
+        "error",
+        "-nostdin",
+        "-protocol_whitelist",
+        "file,pipe",
+        "-i",
+        str(path),
+        "-map",
+        "0:v:0",
+        "-an",
+        "-sn",
+        "-dn",
+        "-vf",
+        "settb=AVTB,setpts=PTS-STARTPTS,format=rgba",
+        "-fps_mode",
+        "passthrough",
+        "-enc_time_base:v",
+        "filter",
+        "-f",
+        "framehash",
+        "-hash",
+        "sha256",
+        "pipe:1",
+    ]
+    _stream_command(command, consume, timeout)
+    if line_buffer.strip():
+        consume(b"\n")
+    if frame_count == 0:
+        raise VideoInspectionError("FFmpeg decoded no video frames")
+    return digest.hexdigest(), frame_count
+
+
+def audio_pcm_signature(
+    path: Path, ffmpeg: str, probe: ProbeInfo, timeout: int
+) -> tuple[str, int]:
+    if not probe.has_audio:
+        return "none", 0
+    digest = hashlib.sha256()
+    byte_count = 0
+
+    def consume(chunk: bytes) -> None:
+        nonlocal byte_count
+        digest.update(chunk)
+        byte_count += len(chunk)
+
+    command = [
+        ffmpeg,
+        "-v",
+        "error",
+        "-nostdin",
+        "-protocol_whitelist",
+        "file,pipe",
+        "-i",
+        str(path),
+        "-map",
+        "0:a:0",
+        "-vn",
+        "-sn",
+        "-dn",
+        "-af",
+        "asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0",
+        "-acodec",
+        "pcm_s32le",
+        "-f",
+        "s32le",
+        "pipe:1",
+    ]
+    _stream_command(command, consume, timeout)
+    if byte_count == 0:
+        raise VideoInspectionError("FFmpeg decoded no audio samples")
+    return digest.hexdigest(), byte_count
+
+
+def derive_fingerprint(
+    path: Path, probe: ProbeInfo, ffmpeg: str, timeout: int
+) -> DerivedFingerprint:
+    video_hash, frame_count = video_frame_signature(path, ffmpeg, timeout)
+    audio_hash, audio_bytes = audio_pcm_signature(path, ffmpeg, probe, timeout)
+    starts = [probe.video_start_us]
+    if probe.audio_start_us is not None:
+        starts.append(probe.audio_start_us)
+    earliest_start = min(starts)
+    canonical = {
+        "algorithm": FINGERPRINT_ALGORITHM,
+        "display_width": probe.display_width,
+        "display_height": probe.display_height,
+        "video_start_us": probe.video_start_us - earliest_start,
+        "audio_start_us": (
+            probe.audio_start_us - earliest_start
+            if probe.audio_start_us is not None
+            else None
+        ),
+        "audio_sample_rate": probe.audio_sample_rate,
+        "audio_channels": probe.audio_channels,
+        "audio_layout": probe.audio_layout,
+        "video_frames": frame_count,
+        "video_sha256": video_hash,
+        "audio_bytes": audio_bytes,
+        "audio_sha256": audio_hash,
+    }
+    encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
+    return DerivedFingerprint(
+        digest=hashlib.sha256(encoded).hexdigest(),
+        video_frames=frame_count,
+        audio_bytes=audio_bytes,
+    )
+
+
+def load_cached_fingerprints(
+    database: Path, ffmpeg_release: str
+) -> dict[str, DerivedFingerprint]:
+    if database.is_symlink() or not database.is_file():
+        return {}
+    uri = f"file:{database.as_posix()}?mode=ro"
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = sqlite3.connect(uri, uri=True)
+        rows = connection.execute(
+            "SELECT file_sha256, fingerprint, video_frames, audio_bytes "
+            "FROM video_fingerprints WHERE algorithm = ? AND ffmpeg_version = ?",
+            (FINGERPRINT_ALGORITHM, ffmpeg_release),
+        ).fetchall()
+    except sqlite3.Error:
+        return {}
+    finally:
+        if connection is not None:
+            connection.close()
+    return {
+        str(file_hash): DerivedFingerprint(
+            digest=str(fingerprint),
+            video_frames=int(video_frames),
+            audio_bytes=int(audio_bytes),
+        )
+        for file_hash, fingerprint, video_frames, audio_bytes in rows
+    }
+
+
+def save_cached_fingerprints(
+    database: Path,
+    ffmpeg_release: str,
+    values: dict[str, DerivedFingerprint],
+) -> None:
+    if not values:
+        return
+    if database.is_symlink() or (database.exists() and not database.is_file()):
+        raise VideoInspectionError(f"unsafe SQLite cache path: {database}")
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = sqlite3.connect(database)
+        connection.execute("PRAGMA journal_mode=DELETE")
+        connection.execute("PRAGMA synchronous=FULL")
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS video_fingerprints ("
+            "file_sha256 TEXT NOT NULL, algorithm TEXT NOT NULL, "
+            "ffmpeg_version TEXT NOT NULL, fingerprint TEXT NOT NULL, "
+            "video_frames INTEGER NOT NULL, audio_bytes INTEGER NOT NULL, "
+            "PRIMARY KEY (file_sha256, algorithm, ffmpeg_version))"
+        )
+        connection.executemany(
+            "INSERT OR REPLACE INTO video_fingerprints "
+            "(file_sha256, algorithm, ffmpeg_version, fingerprint, "
+            "video_frames, audio_bytes) VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (
+                    file_hash,
+                    FINGERPRINT_ALGORITHM,
+                    ffmpeg_release,
+                    value.digest,
+                    value.video_frames,
+                    value.audio_bytes,
+                )
+                for file_hash, value in values.items()
+            ],
+        )
+        connection.commit()
+    except sqlite3.Error as error:
+        raise VideoInspectionError(f"cannot update SQLite fingerprint cache: {error}") from error
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+def keep_sort_key(record: VideoRecord) -> tuple[int, int, str]:
+    return (-record.file_size, record.modified_ns, str(record.path).casefold())
+
+
+def format_size(size: int) -> str:
+    value = float(size)
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            return f"{int(value)} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    raise AssertionError("unreachable")
+
+
+def print_storage_summary(
+    duplicate_groups: list[list[VideoRecord]], scanned_bytes: int
+) -> None:
+    retained_bytes = 0
+    duplicate_bytes = 0
+    duplicate_count = 0
+    for records in duplicate_groups:
+        ordered = sorted(records, key=keep_sort_key)
+        retained_bytes += ordered[0].file_size
+        duplicate_bytes += sum(record.file_size for record in ordered[1:])
+        duplicate_count += len(ordered) - 1
+    duplicate_set_bytes = retained_bytes + duplicate_bytes
+    set_percentage = (
+        duplicate_bytes / duplicate_set_bytes * 100 if duplicate_set_bytes else 0.0
+    )
+    scan_percentage = duplicate_bytes / scanned_bytes * 100 if scanned_bytes else 0.0
+    print("\nDuplicate storage summary:")
+    print(
+        f"  Retained originals: {len(duplicate_groups)} file(s), "
+        f"{format_size(retained_bytes)}"
+    )
+    print(
+        f"  Extra duplicate copies: {duplicate_count} file(s), "
+        f"{format_size(duplicate_bytes)}"
+    )
+    print(f"  Duplicate sets combined: {format_size(duplicate_set_bytes)}")
+    print(
+        "  Potentially reclaimable if extra copies were deleted: "
+        f"{format_size(duplicate_bytes)} ({set_percentage:.1f}% of duplicate-set "
+        f"storage; {scan_percentage:.1f}% of scanned video storage)"
+    )
+    print("  No files are deleted by this tool.")
+
+
+def copy_target(
+    destination: Path,
+    kept_path: Path,
+    duplicate_path: Path,
+    starting_number: int,
+    reserved: set[str],
+) -> tuple[Path, int]:
+    number = starting_number
+    suffix = duplicate_path.suffix or kept_path.suffix
+    while True:
+        target = destination / f"{kept_path.stem}_copy({number}){suffix}"
+        key = str(target).casefold()
+        if key not in reserved and not os.path.lexists(target):
+            reserved.add(key)
+            return target, number
+        number += 1
+
+
+def describe_undo_action(root: Path, action: Action, apply: bool) -> None:
+    verb = action.operation.lower().replace("_", " ")
+    prefix = verb if apply else f"would {verb}"
+    if action.before and action.after:
+        print(f"\n{prefix}: {root / action.before}\n  to: {root / action.after}")
+    elif action.after:
+        print(f"\n{prefix}: {root / action.after}")
+    elif action.before:
+        print(f"\n{prefix}: {root / action.before}")
+
+
+def undo_duplicate_run(root: Path, apply: bool) -> int:
+    log = ActionLog(root)
+    try:
+        plan = log.plan_undo(TOOL_NAME)
+    except NoUndoableRun as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    except (ActionConflict, ActionLogError, OSError) as error:
+        print(f"Cannot safely undo duplicate moves: {error}", file=sys.stderr)
+        return 1
+    print(f"Using action log: {log.path}")
+    print(f"Video duplicate-finder run: {plan.target.run_id}")
+    for action in plan.actions:
+        describe_undo_action(root, action, apply)
+    if not apply:
+        print(f"\nWould reverse {len(plan.actions)} recorded action(s).")
+        if plan.actions:
+            print("Dry run only. Add --apply after reviewing this list.")
+        return 0
+    try:
+        result = log.apply_undo(TOOL_NAME)
+    except (ActionConflict, ActionLogError, OSError) as error:
+        print(f"Video duplicate undo failed safely: {error}", file=sys.stderr)
+        return 1
+    print(f"\nReversed {result.action_count} recorded action(s).")
+    print("Verification passed: every recorded duplicate-video action was reversed.")
+    return 0
+
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Find videos with exactly the same supported decoded playback. "
+            "By default, only report what would happen."
+        )
+    )
+    parser.add_argument(
+        "folder", type=Path, help="organized collection root containing vids"
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="perform moves and update the derived cache",
+    )
+    parser.add_argument(
+        "--undo",
+        action="store_true",
+        help=(
+            "reverse the newest active video duplicate-finder run; this is also "
+            "a dry run unless --apply is supplied"
+        ),
+    )
+    parser.add_argument(
+        "--ffmpeg", type=Path, help="explicit ffmpeg executable path"
+    )
+    parser.add_argument(
+        "--ffprobe", type=Path, help="explicit ffprobe executable path"
+    )
+    parser.add_argument(
+        "--decode-timeout",
+        type=int,
+        default=DEFAULT_DECODE_TIMEOUT,
+        help="maximum seconds allowed for each FFmpeg decode",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    root = args.folder.expanduser().resolve()
+    if not root.is_dir():
+        print(f"Not a directory: {root}", file=sys.stderr)
+        return 2
+    if args.decode_timeout <= 0:
+        print("--decode-timeout must be a positive number", file=sys.stderr)
+        return 2
+    if args.undo:
+        return undo_duplicate_run(root, args.apply)
+
+    problems = collection_layout_problems(root)
+    if problems:
+        print("Collection is not ready for video duplicate scanning:", file=sys.stderr)
+        for problem in problems:
+            print(f"  {problem}", file=sys.stderr)
+        print(
+            f'Run pymo organize "{root}" first so videos are directly in vids.',
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        ffmpeg = resolve_executable(args.ffmpeg, "ffmpeg")
+        ffprobe = resolve_executable(args.ffprobe, "ffprobe")
+        ffmpeg_release = ffmpeg_version(ffmpeg)
+    except VideoInspectionError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+
+    vids = root / VIDS_NAME
+    _, destination = review_directories(root)
+    classifier = Classifier()
+    paths = discover_videos(vids, classifier)
+    print(f"Scanning {len(paths)} video(s) in {vids}")
+    print(f"FFmpeg runtime: {ffmpeg_release}")
+
+    records: list[VideoRecord] = []
+    scanned_bytes = 0
+    skipped: list[tuple[Path, str]] = []
+    for number, path in enumerate(paths, start=1):
+        try:
+            stat = path.stat()
+            record = VideoRecord(
+                path=path,
+                byte_sha256=sha256_file(path),
+                file_size=stat.st_size,
+                modified_ns=stat.st_mtime_ns,
+                probe=probe_video(path, ffprobe),
+            )
+            records.append(record)
+            scanned_bytes += record.file_size
+        except (OSError, VideoInspectionError) as error:
+            skipped.append((path, str(error)))
+        if number % 25 == 0:
+            print(f"  inspected {number}/{len(paths)}")
+
+    candidates: dict[tuple[object, ...], list[VideoRecord]] = defaultdict(list)
+    for record in records:
+        candidates[record.probe.candidate_key].append(record)
+    candidate_records = [
+        record
+        for bucket in candidates.values()
+        if len(bucket) > 1
+        for record in bucket
+    ]
+    unique_hashes = {
+        record.byte_sha256: record
+        for record in candidate_records
+    }
+    database = root / DATABASE_FILENAME
+    cached = load_cached_fingerprints(database, ffmpeg_release)
+    derived: dict[str, DerivedFingerprint] = {}
+    for number, (file_hash, representative) in enumerate(
+        sorted(unique_hashes.items(), key=lambda item: str(item[1].path).casefold()),
+        start=1,
+    ):
+        if file_hash in cached:
+            derived[file_hash] = cached[file_hash]
+        else:
+            try:
+                derived[file_hash] = derive_fingerprint(
+                    representative.path,
+                    representative.probe,
+                    ffmpeg,
+                    args.decode_timeout,
+                )
+            except VideoInspectionError as error:
+                same_bytes = [
+                    record for record in candidate_records if record.byte_sha256 == file_hash
+                ]
+                skipped.extend((record.path, str(error)) for record in same_bytes)
+        print(f"  decoded {number}/{len(unique_hashes)} candidate content file(s)")
+
+    if args.apply:
+        try:
+            save_cached_fingerprints(database, ffmpeg_release, derived)
+        except VideoInspectionError as error:
+            print(f"Fingerprint cache update failed safely: {error}", file=sys.stderr)
+            return 1
+
+    fingerprint_groups: dict[str, list[VideoRecord]] = defaultdict(list)
+    for record in candidate_records:
+        fingerprint = derived.get(record.byte_sha256)
+        if fingerprint is not None:
+            fingerprint_groups[fingerprint.digest].append(record)
+    duplicate_groups = [
+        group for group in fingerprint_groups.values() if len(group) > 1
+    ]
+    duplicate_groups.sort(
+        key=lambda items: str(min(record.path for record in items)).casefold()
+    )
+
+    move_plan: list[tuple[VideoRecord, VideoRecord, Path]] = []
+    reserved_targets: set[str] = set()
+    for group_number, group in enumerate(duplicate_groups, start=1):
+        ordered = sorted(group, key=keep_sort_key)
+        kept = ordered[0]
+        print(f"\nGroup {group_number}: keep {kept.path}")
+        next_number = 1
+        for duplicate in ordered[1:]:
+            target, used_number = copy_target(
+                destination,
+                kept.path,
+                duplicate.path,
+                next_number,
+                reserved_targets,
+            )
+            next_number = used_number + 1
+            move_plan.append((kept, duplicate, target))
+            print(f"  duplicate: {duplicate.path}")
+            print(f"  {'move to' if args.apply else 'would move to'}: {target}")
+
+    if args.apply and move_plan:
+        try:
+            actions = [
+                Action.for_file(root, duplicate.path, target, "MOVE")
+                for _, duplicate, target in move_plan
+            ]
+            log = ActionLog(root)
+            with log.transaction(TOOL_NAME) as transaction:
+                for directory in review_directories(root):
+                    if not directory.exists():
+                        transaction.perform(Action.create_directory(root, directory))
+                for action in actions:
+                    transaction.perform(action)
+                transaction.commit()
+            print(f"\nAction log: {log.path}")
+        except (ActionConflict, ActionLogError, OSError) as error:
+            print(f"Duplicate moves stopped safely: {error}", file=sys.stderr)
+            return 1
+        verification_failures = [
+            (duplicate.path, target)
+            for _, duplicate, target in move_plan
+            if os.path.lexists(duplicate.path)
+            or target.is_symlink()
+            or not target.is_file()
+        ]
+        if verification_failures:
+            print("\nVerification needs attention:", file=sys.stderr)
+            for source, target in verification_failures:
+                print(f"  {source} -> {target}", file=sys.stderr)
+            return 1
+
+    duplicate_count = len(move_plan)
+    verb = "Moved" if args.apply else "Would move"
+    print(
+        f"\n{verb} {duplicate_count} duplicate(s) from "
+        f"{len(duplicate_groups)} group(s)."
+    )
+    print_storage_summary(duplicate_groups, scanned_bytes)
+    if not args.apply and duplicate_count:
+        print("Dry run only. Add --apply after reviewing this list.")
+    if skipped:
+        print(f"\nSkipped {len(skipped)} file(s):")
+        for path, reason in skipped:
+            print(f"  {path}: {reason}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
