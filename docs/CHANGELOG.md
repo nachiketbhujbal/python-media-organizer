@@ -2,6 +2,16 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.10 - 2026-08-22
+
+- Open each exact-image candidate through a stable no-follow descriptor anchored
+  beneath the collection root and give Pillow a non-owning binary stream over
+  that descriptor.
+- Avoid resolving candidate paths through a transient symbolic link, and
+  revalidate both the descriptor and pathname after displayed-pixel decoding.
+- Add an adversarial pathname-swap test proving unrelated replacement pixels
+  are never read, without changing exact-pixel matching or keeper semantics.
+
 ## 0.3.9 - 2026-08-22
 
 - Record the verified GitHub Free limitation that prevents branch protection

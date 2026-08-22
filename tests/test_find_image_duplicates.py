@@ -198,9 +198,9 @@ def test_image_inspection_rejects_a_file_changed_during_decode(
     Image.new("RGB", (2, 2), "green").save(path)
     original_hash = image_duplicates.displayed_pixel_hash
 
-    def mutate_after_hash(target: Path) -> str:
-        result = original_hash(target)
-        Image.new("RGB", (3, 2), "blue").save(target)
+    def mutate_after_hash(descriptor: int) -> str:
+        result = original_hash(descriptor)
+        Image.new("RGB", (3, 2), "blue").save(path)
         return result
 
     monkeypatch.setattr(image_duplicates, "displayed_pixel_hash", mutate_after_hash)
@@ -208,7 +208,46 @@ def test_image_inspection_rejects_a_file_changed_during_decode(
     with pytest.raises(
         image_duplicates.FileChangedError, match="changed during image analysis"
     ):
-        image_duplicates.inspect_image(path)
+        image_duplicates.inspect_image(tmp_path, path)
+
+
+def test_image_inspection_pins_decode_during_path_swap(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "collection"
+    pics = root / "pics"
+    pics.mkdir(parents=True)
+    candidate = pics / "candidate.png"
+    Image.new("RGB", (2, 2), "green").save(candidate)
+    expected_source = tmp_path / "expected.png"
+    Image.new("RGB", (2, 2), "green").save(expected_source)
+    replacement = tmp_path / "replacement.png"
+    Image.new("RGB", (3, 2), "blue").save(replacement)
+    displaced = pics / "displaced.png"
+    original_hash = image_duplicates.displayed_pixel_hash
+    observed = ""
+
+    descriptor = os.open(expected_source, os.O_RDONLY)
+    try:
+        expected = original_hash(descriptor)
+    finally:
+        os.close(descriptor)
+
+    def swap_before_decode(descriptor: int) -> str:
+        nonlocal observed
+        candidate.rename(displaced)
+        candidate.symlink_to(replacement)
+        observed = original_hash(descriptor)
+        return observed
+
+    monkeypatch.setattr(image_duplicates, "displayed_pixel_hash", swap_before_decode)
+
+    with pytest.raises(
+        image_duplicates.FileChangedError, match="changed during image analysis"
+    ):
+        image_duplicates.inspect_image(root, candidate)
+
+    assert observed == expected
 
 
 def test_image_hash_promotes_decompression_bomb_warnings(
@@ -218,8 +257,12 @@ def test_image_hash_promotes_decompression_bomb_warnings(
     Image.new("RGB", (4, 4), "green").save(path)
     monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 4)
 
-    with pytest.raises(Image.DecompressionBombError):
-        image_duplicates.displayed_pixel_hash(path)
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        with pytest.raises(Image.DecompressionBombError):
+            image_duplicates.displayed_pixel_hash(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def test_image_apply_aborts_if_the_keeper_changes_after_planning(

@@ -65,7 +65,7 @@ The same adversarial method was repeated after the first validation release.
 | ID | Severity | Finding | Resolution target | Status |
 | --- | --- | --- | --- | --- |
 | DUP-001 | High | The exact-video finder checked file state around pathname-based classifier, hash, ffprobe, and FFmpeg opens, but a concurrent link swap could still redirect a transient content read outside the collection. | 0.3.8 | Resolved in ADR 0045 |
-| DUP-002 | High | The exact-image finder checks state around pathname-based classification and Pillow opens, leaving the equivalent transient path-redirection window. | 0.3.10 | Open |
+| DUP-002 | High | The exact-image finder checked state around a pathname-based Pillow open, leaving the equivalent transient path-redirection window. | 0.3.10 | Resolved in ADR 0047 |
 
 ## Release groups
 
@@ -97,6 +97,7 @@ The same adversarial method was repeated after the first validation release.
 - `0.3.8`: pin all exact-video content reads to stable no-follow descriptors.
 - `0.3.9`: record the unavailable private-Free protection boundary and the
   exact `main` ruleset to activate when the repository becomes eligible.
+- `0.3.10`: pin exact-image pixel decoding to stable no-follow descriptors.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 

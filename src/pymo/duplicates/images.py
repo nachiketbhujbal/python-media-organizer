@@ -42,7 +42,7 @@ from pymo.duplicates.common import (
     duplicate_layout,
     layout_problems,
 )
-from pymo.file_safety import FileChangedError, FileState
+from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
 from pymo.progress import ProgressMeter, format_bytes
 
@@ -75,34 +75,36 @@ class ImageRecord:
 ImageMove = tuple[str, ImageRecord, ImageRecord, Path]
 
 
-def displayed_pixel_hash(path: Path) -> str:
+def displayed_pixel_hash(descriptor: int) -> str:
     """Hash the pixels as displayed, after applying EXIF orientation.
 
     RGBA conversion makes equivalent RGB/palette/grayscale still images
     comparable. Animated images are skipped because comparing only their first
     frame could incorrectly classify two different animations as duplicates.
     """
+    os.lseek(descriptor, 0, os.SEEK_SET)
     with warnings.catch_warnings():
         warnings.simplefilter("error", Image.DecompressionBombWarning)
-        with Image.open(path) as opened:
-            if getattr(opened, "n_frames", 1) != 1:
-                raise ValueError("animated or multi-page image")
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            with Image.open(stream) as opened:
+                if getattr(opened, "n_frames", 1) != 1:
+                    raise ValueError("animated or multi-page image")
 
-            image = ImageOps.exif_transpose(opened)
-            rgba = image.convert("RGBA")
+                image = ImageOps.exif_transpose(opened)
+                rgba = image.convert("RGBA")
 
-            digest = hashlib.sha256()
-            digest.update(rgba.width.to_bytes(8, "big"))
-            digest.update(rgba.height.to_bytes(8, "big"))
-            digest.update(rgba.tobytes())
-            return digest.hexdigest()
+                digest = hashlib.sha256()
+                digest.update(rgba.width.to_bytes(8, "big"))
+                digest.update(rgba.height.to_bytes(8, "big"))
+                digest.update(rgba.tobytes())
+                return digest.hexdigest()
 
 
-def inspect_image(path: Path) -> ImageRecord:
-    before = FileState.capture(path)
-    pixel_hash = displayed_pixel_hash(path)
-    before.require_unchanged(path, "image analysis")
-    return ImageRecord(path=path, pixel_hash=pixel_hash, state=before)
+def inspect_image(root: Path, path: Path) -> ImageRecord:
+    state = FileState.capture(path)
+    with open_stable_file(root, path, state, "image analysis") as descriptor:
+        pixel_hash = displayed_pixel_hash(descriptor)
+    return ImageRecord(path=path, pixel_hash=pixel_hash, state=state)
 
 
 def require_current_image(record: ImageRecord) -> None:
@@ -129,7 +131,7 @@ def discover_images(
             or path.suffix.lower() not in config.image_duplicates.extensions
         ):
             continue
-        result.append(path.resolve())
+        result.append(path.absolute())
     return (
         sorted(result, key=lambda item: str(item).casefold()),
         sorted(ignored, key=lambda item: str(item).casefold()),
@@ -209,7 +211,7 @@ def keep_sort_key(record: ImageRecord) -> tuple[int, int, str]:
 
 
 def analyze_images(
-    paths: list[Path], progress_interval_seconds: int
+    root: Path, paths: list[Path], progress_interval_seconds: int
 ) -> tuple[list[list[ImageRecord]], int, list[tuple[Path, str]]]:
     groups: dict[str, list[ImageRecord]] = defaultdict(list)
     scanned_bytes = 0
@@ -217,15 +219,15 @@ def analyze_images(
     path_sizes: dict[Path, int] = {}
     for path in paths:
         try:
-            path_sizes[path] = path.stat().st_size
-        except OSError:
+            path_sizes[path] = FileState.capture(path).size
+        except FileChangedError:
             path_sizes[path] = 0
     progress = ProgressMeter(
         len(paths), sum(path_sizes.values()), progress_interval_seconds
     )
     for path in paths:
         try:
-            record = inspect_image(path)
+            record = inspect_image(root, path)
             groups[record.pixel_hash].append(record)
             scanned_bytes += record.file_size
         except (
@@ -382,6 +384,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(message)
 
     duplicate_groups, scanned_bytes, skipped = analyze_images(
+        root,
         paths,
         config.performance.progress_interval_seconds,
     )
