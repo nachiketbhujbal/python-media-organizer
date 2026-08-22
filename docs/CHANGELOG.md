@@ -2,6 +2,17 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.3.18 - 2026-08-22
+
+- Prefix every physical line of normal human-readable command logging with a
+  timezone-aware ISO timestamp by default.
+- Add `--no-timestamps` as the explicit console opt-out while retaining
+  `--timestamps` for backward compatibility and explicit callers.
+- Keep `scan --json` and `validate --json` machine-readable regardless of the
+  timestamp option, and leave help, version, and argument-parser output plain.
+- Keep explicitly requested log files timestamped independently of the console
+  choice.
+
 ## 0.3.17 - 2026-08-22
 
 - Add command-specific `--summary` output to both exact-media duplicate finders

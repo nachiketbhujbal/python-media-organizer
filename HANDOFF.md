@@ -13,15 +13,20 @@ logs, or Git history.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.3.17` concise-summary release. It is a
+`pymo` command, and has a `v0.3.18` timestamp-default release. It is a
 deliberately local-first tool for personal media collections. Git tags are the
 authoritative version source; package code and `[project]` do not contain a
 static version.
 
-Version 0.3.17 adds `--summary` to both duplicate finders for aggregate,
-path-private scans, applies, and undo previews without changing dry-run,
-matching, cache, action-log, or verification semantics. Version 0.3.16 reports
-reusable fingerprint-cache records, fingerprints
+Version 0.3.18 prefixes every physical line of normal human-readable command
+logging with an ISO timestamp by default, retains `--timestamps` as an
+explicit compatible spelling, and adds `--no-timestamps` as the console
+opt-out. Structured JSON, help, version, and argument-parser output remain
+unprefixed, while explicitly requested log files remain timestamped regardless
+of the console choice. Version 0.3.17 adds `--summary` to both duplicate finders
+for aggregate, path-private scans, applies, and undo previews without changing
+dry-run, matching, cache, action-log, or verification semantics. Version 0.3.16
+reports reusable fingerprint-cache records, fingerprints
 required, and newly persisted records separately; `--no-cache` states its
 complete no-read/no-write boundary without lookup or update claims. Version
 0.3.15 adds independent, path-private monotonic durations for the
@@ -190,9 +195,10 @@ The four mutating tools support dry-run/apply behavior and `--undo`, which is
 also a preview unless combined with `--apply`. `scan` and `validate` are
 read-only. Global
 `--verbose`, `--quiet`,
-`--log-file PATH`, `--timestamps`, `--config PATH`, and `--show-ignored`
-options go before the subcommand. `--show-ignored` and command-specific options are also accepted by
-the selected command after its collection argument.
+`--log-file PATH`, `--timestamps`, `--no-timestamps`, `--config PATH`, and
+`--show-ignored` options go before the subcommand. `--show-ignored` and
+command-specific options are also accepted by the selected command after its
+collection argument.
 
 ## Shared configuration and collection layout
 
@@ -496,9 +502,13 @@ behavioral tests.
 - `--verbose` enables diagnostic `DEBUG` output.
 - `--quiet` keeps only warnings and errors.
 - `--log-file PATH` creates a timestamped local log only at the requested path.
-- `--timestamps` prefixes every physical console line with an ISO timestamp.
+- Normal human-readable command logging prefixes every physical console line
+  with an ISO timestamp by default.
+- `--no-timestamps` omits console timestamps; `--timestamps` remains accepted
+  for compatibility and explicit invocation.
+- Structured JSON, help, version, and argument-parser output remain unprefixed.
 - Explicit log files timestamp every physical line, including lines contained
-  inside one multi-line message.
+  inside one multi-line message, regardless of the console timestamp choice.
 - `--show-ignored` explicitly adds relative ignored paths; `--verbose` alone
   never reveals them.
 - No persistent log is created by default.
@@ -580,9 +590,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;
-- command runtime summaries, optional ISO console timestamps, timestamped
-  multi-line file logs, deterministic duration/rate/ETA formatting, exact-video
-  stage timing, stable
+- command runtime summaries, default and explicitly controlled ISO console
+  timestamps, timestamped multi-line file logs, deterministic duration/rate/ETA
+  formatting, exact-video stage timing, stable
   ten-milestone completed-work cadence, no forced per-item rows, early-ETA
   suppression, and distinct path-private long-FFmpeg heartbeat behavior;
 - typed configuration parsing, immutable/additive defaults, validated media

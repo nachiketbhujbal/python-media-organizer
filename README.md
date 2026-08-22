@@ -156,10 +156,11 @@ agrees on the same collection layout.
 
 Every mutating command is a dry run unless `--apply` is present. Review the
 preview before applying the same command. Every normal command ends with its
-total elapsed time. Long processing stages also report completed files, bytes
-where meaningful, observed rates, and an ETA once enough work has completed to
-calculate one honestly. ETA projection begins after three completed
-observations. Completed-work rows use ten evenly spaced count
+total elapsed time, and every physical line of that human-readable output has
+an ISO timestamp by default. Long processing stages also report completed
+files, bytes where meaningful, observed rates, and an ETA once enough work has
+completed to calculate one honestly. ETA projection begins after three
+completed observations. Completed-work rows use ten evenly spaced count
 milestones, genuinely due time reports, and one final row instead of printing
 after every item.
 
@@ -442,6 +443,7 @@ terminal:
 ```bash
 pymo --verbose organize "/path/to/media-collection"
 pymo --quiet organize "/path/to/media-collection"
+pymo --no-timestamps organize "/path/to/media-collection"
 pymo --timestamps find-video-duplicates "/path/to/media-collection"
 pymo --log-file "/path/to/pymo.log" organize "/path/to/media-collection"
 pymo --show-ignored organize "/path/to/media-collection"
@@ -449,9 +451,14 @@ pymo --show-ignored organize "/path/to/media-collection"
 
 Persistent logs are opt-in because paths and filenames can be private. No log
 file is created by default. Global logging options go before the subcommand.
-`--timestamps` prefixes every physical console line with an ISO timestamp;
-explicit log files always include ISO timestamps, levels, and logger names on
-every line. Normal console output remains uncluttered unless the flag is used.
+Normal human-readable command logging prefixes every physical console line
+with an ISO timestamp. Use `--no-timestamps` for plain console output;
+`--timestamps` remains accepted for compatibility and for callers that want to
+state the default explicitly. Structured `scan --json` and `validate --json`
+results remain clean JSON regardless of either flag. Help, version, and
+argument-parser output also remain unprefixed. Explicit log files always
+include ISO timestamps, levels, and logger names on every line regardless of
+the console choice.
 `--show-ignored` is a separate privacy opt-in and may appear globally or after
 the subcommand's collection argument.
 
@@ -491,8 +498,8 @@ content changes, strict folder ownership, exact image and video matching,
 different audio and timing, corrupt/ambiguous media, derived cache behavior,
 incremental cache recovery, cache opt-out, scan reports and JSON stability,
 bounded scan workers, removed v0.1 interfaces,
-elapsed-time summaries, timestamped multi-line logs, observed throughput and
-ETA reporting, FFmpeg heartbeats,
+elapsed-time summaries, default and opt-out console timestamps, timestamped
+multi-line logs, observed throughput and ETA reporting, FFmpeg heartbeats,
 shared built-in and custom policy, malformed-config refusal, centralized
 collection paths, default ignored-name privacy, explicit relative ignored-path
 output, logging privacy, report-only standard/full validation, validation JSON

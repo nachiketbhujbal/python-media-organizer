@@ -88,6 +88,7 @@ The same adversarial method was repeated after the first validation release.
 | ID | Severity | Finding | Resolution target | Status |
 | --- | --- | --- | --- | --- |
 | OUT-001 | Low | Duplicate-finder previews always print collection paths, filenames, per-group plans, and skipped-file details, leaving no concise aggregate mode for private logs or quick status checks. | 0.3.17 | Resolved in ADR 0054 |
+| OUT-002 | Low | Wall-clock correlation required an opt-in flag, so ordinary long-running console records lacked timestamps even though elapsed and stage durations were available. | 0.3.18 | Resolved in ADR 0055 |
 
 ## Release groups
 
@@ -133,6 +134,9 @@ The same adversarial method was repeated after the first validation release.
   new records, and the complete no-read/no-write cache opt-out.
 - `0.3.17`: add an explicit aggregate, path-private report mode for image and
   video duplicate scans, applies, and undo previews.
+- `0.3.18`: timestamp normal human-readable console records by default, retain
+  the explicit compatible spelling, and provide a plain-console opt-out without
+  affecting structured JSON.
 - `0.3.x`: close any remaining validation safety findings without crossing the
   approved version boundary.
 
@@ -145,7 +149,7 @@ The same adversarial method was repeated after the first validation release.
 - Independent typing found unsafe object narrowing in action-log deserialization
   and an imprecise selector file-object type.
 - A first parent-only coverage run reported a misleading 42 percent. After
-  subprocess instrumentation and direct adversarial tests, the current 165
+  subprocess instrumentation and direct adversarial tests, the current 167
   tests pass and the same suite reports 86 percent across real CLI child
   processes.
 

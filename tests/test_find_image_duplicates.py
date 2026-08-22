@@ -132,7 +132,8 @@ def test_duplicate_finder_honors_custom_file_rules(tmp_path: Path, run_script) -
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Scanning 1 image(s)" in result.stdout
     assert "Ignored by configuration: 1 path(s)." in result.stdout
-    assert "Ignored paths:\n  pics/protected-copy.png" in result.stdout
+    assert "Ignored paths:" in result.stdout
+    assert "  pics/protected-copy.png" in result.stdout
     assert "Moved 0 duplicate(s)" in result.stdout
     assert original.exists()
     assert protected_copy.exists()

@@ -31,6 +31,10 @@ never duplicate the version in source or static project metadata.
 - Keep processing local. No telemetry, analytics, automatic networking, cloud
   AI, hosted model fallback, or automatic downloads.
 - Persistent logs are opt-in because paths and filenames are sensitive.
+- Prefix every physical line of normal human-readable console logging with an
+  ISO timestamp by default. Keep `--no-timestamps` as the explicit console
+  opt-out, retain `--timestamps` for compatibility, and never prefix structured
+  JSON, help, version, or argument-parser output.
 - Keep ignored path names private by default. `--verbose` may add diagnostics
   but must not reveal ignored paths; only the explicit `--show-ignored` option
   may list them, using deterministic collection-relative paths.

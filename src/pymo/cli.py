@@ -45,11 +45,22 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="also write detailed logs to this explicit local path",
     )
-    parser.add_argument(
+    timestamp_output = parser.add_mutually_exclusive_group()
+    timestamp_output.add_argument(
         "--timestamps",
+        dest="timestamps",
         action="store_true",
-        help="prefix each console line with an ISO timestamp",
+        help=(
+            "prefix each human-readable console line with an ISO timestamp " "(default)"
+        ),
     )
+    timestamp_output.add_argument(
+        "--no-timestamps",
+        dest="timestamps",
+        action="store_false",
+        help="omit timestamps from human-readable console output",
+    )
+    parser.set_defaults(timestamps=True)
     parser.add_argument(
         "--config",
         type=Path,
