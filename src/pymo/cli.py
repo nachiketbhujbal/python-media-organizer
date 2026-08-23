@@ -8,7 +8,7 @@ import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from pymo import __version__, organize, rename, scan, validate
+from pymo import __version__, cache_status, organize, rename, scan, validate
 from pymo.config import add_show_ignored_argument
 from pymo.duplicates import images, videos
 from pymo.logging_config import configure_logging
@@ -19,6 +19,7 @@ def _commands() -> dict[str, Callable[[Sequence[str] | None], int]]:
     """Build the small dispatch table without mutable module-level state."""
     return {
         "scan": scan.main,
+        "cache": cache_status.main,
         "validate": validate.main,
         "organize": organize.main,
         "rename": rename.main,
@@ -73,10 +74,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     started_at = time.monotonic()
     structured_json = (
-        args.command in {"scan", "validate"} and "--json" in args.arguments
+        args.command in {"scan", "validate", "cache"} and "--json" in args.arguments
     )
     configure_logging(
         verbose=args.verbose and not structured_json,
@@ -88,15 +90,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         logging.getLogger("pymo").debug("Dispatching pymo command: %s", args.command)
     commands = _commands()
     command_arguments = list(args.arguments)
+    if args.command == "cache" and (args.config is not None or args.show_ignored):
+        parser.error("--config and --show-ignored are not used by cache status")
     if args.config is not None:
         command_arguments[0:0] = ["--config", str(args.config)]
     if args.show_ignored:
         command_arguments[0:0] = ["--show-ignored"]
     return_code: int | None = None
     interrupted = False
+    parser_exit = False
     try:
         return_code = commands[args.command](command_arguments)
         return return_code
+    except SystemExit:
+        parser_exit = True
+        raise
     except KeyboardInterrupt:
         interrupted = True
         return_code = 130
@@ -104,7 +112,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             logging.getLogger("pymo").error("Interrupted by user.")
         return return_code
     finally:
-        if not structured_json:
+        if not structured_json and not parser_exit:
             outcome = (
                 "Interrupted"
                 if interrupted

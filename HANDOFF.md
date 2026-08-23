@@ -26,10 +26,10 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.4.3` shared-cache-core release. It is a
-deliberately local-first tool for personal media collections. Git tags are the
-authoritative version source; package code and `[project]` do not contain a
-static version.
+`pymo` command, and includes the version 0.4.4 read-only cache-status release.
+The package is a deliberately local-first tool for personal media collections.
+Git tags are the authoritative version source; package code and `[project]` do
+not contain a static version.
 
 Version 0.4.0 makes directory traversal failures visible in scan reports and
 places report-only validation first in every scan recommendation plan. Existing
@@ -62,6 +62,16 @@ video caches remain read-only during lookup and migrate inside the private
 staged database only when a subsequent fingerprint is successfully saved.
 Migration uses an explicit SQLite savepoint, and schema validation rejects
 non-standard JSON values and non-canonical observation paths.
+
+Version 0.4.4 adds `pymo cache status COLLECTION [--cache PATH] [--json]`.
+It inspects a
+descriptor-pinned SQLite snapshot without creating a cache lock or any other
+state, validates known exact-video payloads, reports aggregate algorithm and
+observation freshness plus evidence coverage, and leaves runtime compatibility
+to the consuming command. Missing and healthy caches return 0, invalid cache
+health returns 1, and setup errors return 2. Human and schema-1 JSON reports do
+not expose collection roots, cache paths, filenames, scopes, hashes,
+algorithms, or runtime strings.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -219,6 +229,7 @@ python-media-organizer/
     discovery.py
     file_safety.py
     cache.py
+    cache_status.py
     action_log.py
     organize.py
     rename.py
@@ -237,19 +248,20 @@ The CLI subcommands are:
 pymo organize COLLECTION
 pymo rename COLLECTION
 pymo scan COLLECTION
+pymo cache status COLLECTION
 pymo validate COLLECTION
 pymo find-image-duplicates COLLECTION
 pymo find-video-duplicates COLLECTION
 ```
 
 The four mutating tools support dry-run/apply behavior and `--undo`, which is
-also a preview unless combined with `--apply`. `scan` and `validate` are
-read-only. Global
-`--verbose`, `--quiet`,
+also a preview unless combined with `--apply`. `scan`, `validate`, and
+`cache status` are report-only. Global `--verbose`, `--quiet`,
 `--log-file PATH`, `--timestamps`, `--no-timestamps`, `--config PATH`, and
 `--show-ignored` options go before the subcommand. `--show-ignored` and
 command-specific options are also accepted by the selected command after its
-collection argument.
+collection argument. Configuration and ignored-path options are not applicable
+to `cache status` and are rejected rather than silently ignored.
 
 ## Shared configuration and collection layout
 
@@ -270,7 +282,7 @@ Ignore patterns match case-insensitive basenames or collection-relative paths,
 and an ignored directory protects all descendants.
 
 `src/pymo/collection.py` owns the invariant paths for `pics`, `vids`, `dups`,
-the optional config, disposable video cache and lock, and collection-named
+the optional config, disposable shared derived cache and lock, and collection-named
 action log. These names are intentionally not configurable because cross-tool
 ownership, portable undo, and compatibility require one interpretation.
 
@@ -289,10 +301,10 @@ them. `--verbose` does not relax that privacy default. Explicit
 absolute collection root. If the user also requests `--log-file`, those listed
 paths are deliberately included in that log.
 
-The source contains only seven assigned module constants: the config schema,
+The source contains only eight assigned module constants: the config schema,
 action-log schema, shared cache schema, shared exact-video evidence type,
-video fingerprint algorithm, scan-report schema, and validation-report schema
-versions or identifiers. Each is an
+video fingerprint algorithm, cache-status report schema, scan-report schema,
+and validation-report schema versions or identifiers. Each is an
 on-disk compatibility boundary and has an adjacent justification. Dispatch,
 logging, collection paths, tool identifiers, operation identifiers, timestamp
 patterns, and policy collections no longer use scattered mutable globals.
@@ -504,6 +516,31 @@ apply and verification when duplicate moves actually execute. These monotonic
 records contain a fixed stage label and duration only; they do not disclose a
 collection path or filename and do not replace the final command runtime.
 
+## Derived cache status
+
+`pymo cache status COLLECTION` inspects the default collection-local
+`.pymo.sqlite3` without creating `.pymo.sqlite3.lock` or any other state.
+`--cache PATH` selects an external cache for this inspection only; it does not
+authorize another command to write there. Human and schema-1 JSON reports are
+path-private and aggregate cache format/storage, evidence types and namespaces,
+algorithm compatibility, file-observation freshness, evidence linkage, and
+pending legacy migration.
+
+Status opens the cache directory and public database through no-follow
+descriptors in SQLite read-only mode, validates the exact generic or legacy
+schema plus every known exact-video payload, and rechecks the cache and
+directory identities afterward. A concurrent atomic replacement invalidates
+the snapshot. Observation freshness walks collection-relative parents through
+no-follow descriptors and never reads media content. Runtime compatibility is
+not checked because status does not invoke FFmpeg; the exact-video command
+remains authoritative for actual reuse.
+
+A missing cache is healthy operational state and returns 0. Valid current and
+legacy caches also return 0, with legacy migration reported as pending. Unsafe,
+unreadable, corrupt, malformed, or incompatible caches return 1 without being
+changed. Invalid collection setup returns 2. Dispatched help and parser errors
+remain plain and do not receive the normal timestamped runtime footer.
+
 ## Collection scan
 
 `src/pymo/scan.py` provides the read-only first-run `pymo scan COLLECTION`
@@ -657,6 +694,10 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - concurrent-writer, interrupted-staging, cache-publication substitution, and
   lock-substitution tests that prove merged updates, durable atomic publication,
   preserved prior state, and no writes through an outside path;
+- read-only cache status for missing, shared, legacy, malformed, substituted,
+  externally located, concurrently replaced, current-observation, stale-
+  observation, and symbolic-link-parent cases, including JSON privacy and
+  proof that no cache lock or collection state is created;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

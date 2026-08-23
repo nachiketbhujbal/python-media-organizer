@@ -252,10 +252,11 @@ def _validate_file_observation(record: FileObservation) -> None:
         raise CacheError("SQLite cache contains an invalid file observation")
 
 
-def validate_current_schema(connection: sqlite3.Connection) -> None:
-    """Validate the exact current schema, version row, and every stored record."""
-
-    _require_integrity(connection)
+def _validated_current_records(
+    connection: sqlite3.Connection, *, require_integrity: bool
+) -> tuple[list[DerivedEvidence], list[FileObservation]]:
+    if require_integrity:
+        _require_integrity(connection)
     if _schema_objects(connection) != _current_objects():
         raise CacheError("SQLite cache has an incompatible schema")
     for table, expected in _current_signatures().items():
@@ -266,16 +267,31 @@ def validate_current_schema(connection: sqlite3.Connection) -> None:
     ).fetchall()
     if versions != [(1, SCHEMA_VERSION)]:
         raise CacheError("SQLite cache has an unsupported schema version")
-    for row in connection.execute(
-        "SELECT file_sha256, evidence_type, algorithm, runtime, payload_json "
-        "FROM derived_evidence"
-    ):
-        _validate_derived_evidence(DerivedEvidence(*row))
-    for row in connection.execute(
-        "SELECT scope, relative_path, device, inode, size, modified_ns, "
-        "changed_ns, byte_sha256 FROM file_observations"
-    ):
-        _validate_file_observation(FileObservation(*row))
+    evidence = [
+        DerivedEvidence(*row)
+        for row in connection.execute(
+            "SELECT file_sha256, evidence_type, algorithm, runtime, payload_json "
+            "FROM derived_evidence"
+        )
+    ]
+    for evidence_record in evidence:
+        _validate_derived_evidence(evidence_record)
+    observations = [
+        FileObservation(*row)
+        for row in connection.execute(
+            "SELECT scope, relative_path, device, inode, size, modified_ns, "
+            "changed_ns, byte_sha256 FROM file_observations"
+        )
+    ]
+    for observation_record in observations:
+        _validate_file_observation(observation_record)
+    return evidence, observations
+
+
+def validate_current_schema(connection: sqlite3.Connection) -> None:
+    """Validate the exact current schema, version row, and every stored record."""
+
+    _validated_current_records(connection, require_integrity=True)
 
 
 def _validated_legacy_video_rows(
@@ -400,6 +416,69 @@ def read_derived_evidence(
         (evidence_type, algorithm, runtime),
     ).fetchall()
     return [DerivedEvidence(*row) for row in rows]
+
+
+@dataclass(frozen=True)
+class CacheContents:
+    """Fully validated records from one legacy or current cache snapshot."""
+
+    schema_kind: CacheSchemaKind
+    evidence: tuple[DerivedEvidence, ...]
+    observations: tuple[FileObservation, ...]
+
+
+def read_cache_contents(connection: sqlite3.Connection) -> CacheContents:
+    """Validate a cache once, then materialize its aggregate-status records."""
+
+    _require_integrity(connection)
+    objects = _schema_objects(connection)
+    if not objects:
+        return CacheContents(schema_kind="empty", evidence=(), observations=())
+    if objects == [("table", "video_fingerprints")]:
+        if _table_signature(connection, "video_fingerprints") != (
+            _legacy_video_signature()
+        ):
+            raise CacheError("SQLite cache has an incompatible legacy schema")
+        rows = _validated_legacy_video_rows(connection)
+        return CacheContents(
+            schema_kind="legacy-video",
+            evidence=tuple(
+                DerivedEvidence(
+                    file_sha256=file_hash,
+                    evidence_type=LEGACY_VIDEO_EVIDENCE_TYPE,
+                    algorithm=algorithm,
+                    runtime=runtime,
+                    payload_json=json.dumps(
+                        {
+                            "audio_bytes": audio_bytes,
+                            "digest": fingerprint,
+                            "video_frames": video_frames,
+                        },
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                )
+                for (
+                    file_hash,
+                    algorithm,
+                    runtime,
+                    fingerprint,
+                    video_frames,
+                    audio_bytes,
+                ) in rows
+            ),
+            observations=(),
+        )
+    if objects != _current_objects():
+        raise CacheError("SQLite cache has an incompatible schema")
+    evidence, observations = _validated_current_records(
+        connection, require_integrity=False
+    )
+    return CacheContents(
+        schema_kind="current",
+        evidence=tuple(evidence),
+        observations=tuple(observations),
+    )
 
 
 def upsert_derived_evidence(
@@ -730,3 +809,99 @@ def create_cache_stage(directory_descriptor: int) -> tuple[str, int]:
             ) from error
         return name, descriptor
     raise CacheError("cannot allocate a unique SQLite cache staging file")
+
+
+@dataclass(frozen=True)
+class CacheSnapshot:
+    """One descriptor-pinned, read-only view of a public cache database."""
+
+    connection: sqlite3.Connection
+    state: CacheEntryState
+
+
+@contextmanager
+def read_cache_snapshot(database: Path) -> Iterator[CacheSnapshot | None]:
+    """Read a cache without creating a lock, sidecar, directory, or database.
+
+    A concurrent atomic publisher may replace the public pathname while this
+    descriptor remains a safe snapshot. Such a change is reported on context
+    exit rather than silently presenting the snapshot as current.
+    """
+
+    if database.name in {"", ".", ".."}:
+        raise CacheError("unexpected SQLite cache path")
+    directory = database.parent
+    directory_flags = (
+        os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    )
+    directory_descriptor: int | None = None
+    cache_descriptor: int | None = None
+    connection: sqlite3.Connection | None = None
+    try:
+        try:
+            directory_descriptor = os.open(directory, directory_flags)
+        except FileNotFoundError:
+            yield None
+            return
+        except OSError as error:
+            raise CacheError("cannot open the SQLite cache directory safely") from error
+        directory_state = os.fstat(directory_descriptor)
+        if not stat.S_ISDIR(directory_state.st_mode):
+            raise CacheError("SQLite cache parent is not a directory")
+
+        def require_directory_current() -> None:
+            try:
+                current = os.stat(directory, follow_symlinks=False)
+            except OSError as error:
+                raise CacheError(
+                    "SQLite cache directory changed during status inspection"
+                ) from error
+            if (
+                not stat.S_ISDIR(current.st_mode)
+                or current.st_dev != directory_state.st_dev
+                or current.st_ino != directory_state.st_ino
+            ):
+                raise CacheError(
+                    "SQLite cache directory changed during status inspection"
+                )
+
+        require_directory_current()
+        entry_state = cache_entry_at(
+            directory_descriptor, database.name, "SQLite cache"
+        )
+        if entry_state is None:
+            yield None
+            require_directory_current()
+            if (
+                cache_entry_at(directory_descriptor, database.name, "SQLite cache")
+                is not None
+            ):
+                raise CacheError("SQLite cache changed during status inspection")
+            return
+
+        cache_descriptor = open_cache_entry(
+            directory_descriptor, database.name, entry_state
+        )
+        connection = connect_cache_descriptor(cache_descriptor, read_only=True)
+        connection.execute("PRAGMA query_only=ON")
+        try:
+            yield CacheSnapshot(connection=connection, state=entry_state)
+        finally:
+            connection.close()
+            connection = None
+            require_cache_entry(
+                directory_descriptor,
+                database.name,
+                entry_state,
+                "SQLite cache",
+            )
+            require_directory_current()
+    except sqlite3.Error as error:
+        raise CacheError("cannot read the SQLite cache") from error
+    finally:
+        if connection is not None:
+            connection.close()
+        if cache_descriptor is not None:
+            os.close(cache_descriptor)
+        if directory_descriptor is not None:
+            os.close(directory_descriptor)

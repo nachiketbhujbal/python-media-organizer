@@ -2,6 +2,21 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.4 - 2026-08-22
+
+- Add `pymo cache status COLLECTION` with path-private human and stable JSON
+  reports for missing, healthy shared, healthy legacy, and invalid caches.
+- Report storage, evidence types and namespaces, algorithm compatibility,
+  observation freshness, evidence linkage coverage, and pending legacy
+  migration without claiming unchecked runtime reuse.
+- Support `--cache PATH` for read-only inspection of derived state outside the
+  media collection without enabling external writes in other commands.
+- Read cache snapshots and observation paths through no-follow descriptors,
+  reject concurrent cache replacement, validate known exact-video payloads,
+  and create no cache, lock, sidecar, media, or action state.
+- Keep dispatched help and argument-parser output free of timestamped runtime
+  messages.
+
 ## 0.4.3 - 2026-08-22
 
 - Extract descriptor-pinned cache access, process locking, private staging, and

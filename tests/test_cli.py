@@ -56,6 +56,23 @@ def test_cli_help_and_argument_errors_remain_unprefixed(tmp_path: Path) -> None:
     assert conflict_result.stderr.startswith("usage: pymo")
 
 
+def test_dispatched_help_and_argument_errors_remain_unprefixed(
+    tmp_path: Path,
+) -> None:
+    help_result = run_pymo("cache", "--help")
+    error_result = run_pymo("cache", "unknown", tmp_path / "collection")
+
+    assert help_result.returncode == 0
+    assert help_result.stdout.startswith("usage: pymo cache")
+    assert "Completed cache" not in help_result.stdout
+    assert "Stopped cache" not in help_result.stdout
+    assert help_result.stderr == ""
+    assert error_result.returncode == 2
+    assert error_result.stdout == ""
+    assert error_result.stderr.startswith("usage: pymo cache")
+    assert "Stopped cache" not in error_result.stderr
+
+
 def test_cli_does_not_create_persistent_logs_by_default(tmp_path: Path) -> None:
     collection = tmp_path / "collection"
     collection.mkdir()
@@ -231,6 +248,58 @@ def test_validate_json_stays_machine_readable_with_global_output_flags(
 
         assert result.returncode == 0, result.stdout + result.stderr
         assert json.loads(result.stdout)["schema_version"] == 1
+
+
+def test_cache_status_json_stays_machine_readable_and_read_only(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "media-collection"
+    collection.mkdir()
+
+    for output_flags in (
+        (),
+        ("--verbose",),
+        ("--quiet",),
+        ("--timestamps",),
+        ("--no-timestamps",),
+    ):
+        result = run_pymo(*output_flags, "cache", "status", collection, "--json")
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        report = json.loads(result.stdout)
+        assert report["schema_version"] == 1
+        assert report["cache"]["state"] == "missing"
+        assert result.stderr == ""
+        assert list(collection.iterdir()) == []
+
+
+def test_cache_status_human_output_is_read_only_and_reports_runtime(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "media-collection"
+    collection.mkdir()
+
+    result = run_pymo("--no-timestamps", "cache", "status", collection)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "State: missing" in result.stdout
+    assert "no cache, lock, media, or action state was written" in result.stdout
+    assert "Completed cache in " in result.stdout
+    assert result.stderr == ""
+    assert list(collection.iterdir()) == []
+
+
+def test_cache_status_rejects_irrelevant_global_configuration(tmp_path: Path) -> None:
+    collection = tmp_path / "media-collection"
+    collection.mkdir()
+
+    result = run_pymo(
+        "--config", tmp_path / "settings.toml", "cache", "status", collection
+    )
+
+    assert result.returncode == 2
+    assert "not used by cache status" in result.stderr
+    assert list(collection.iterdir()) == []
 
 
 def test_cli_returns_130_and_reports_runtime_after_keyboard_interrupt(
