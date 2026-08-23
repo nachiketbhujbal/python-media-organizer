@@ -48,13 +48,13 @@ def test_validation_reports_errors_without_paths_or_writes(
     (root / ".DS_Store").write_bytes(b"view state")
     before = snapshot(root)
 
-    result = run_script("validate.py", root)
+    result = run_script("validate.py", root, "--no-cache")
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Collection validation" in result.stdout
     assert "Files with errors: 1" in result.stdout
     assert "ERROR invalid_image: 1 file(s)" in result.stdout
-    assert "Validation is report-only; no files were changed" in result.stdout
+    assert "Validation did not modify media or action history" in result.stdout
     assert "healthy.png" not in result.stdout
     assert "damaged.png" not in result.stdout
     assert ".DS_Store" not in result.stdout
@@ -90,10 +90,17 @@ def test_validation_json_is_path_private_and_stable(tmp_path: Path, run_script) 
 
     assert private.returncode == 1
     report = json.loads(private.stdout)
-    assert report["schema_version"] == 1
+    assert report["schema_version"] == 2
     assert report["profile"] == "standard"
     assert report["health"]["files_with_errors"] == 1
     assert report["finding_files"] == []
+    assert report["cache"] == {
+        "enabled": True,
+        "fresh_validation_performed": True,
+        "issue": None,
+        "location": "collection-local",
+        "records_written": 1,
+    }
     assert "empty.png" not in private.stdout
     shown = json.loads(explicit.stdout)
     assert shown["finding_files"][0]["path"] == "empty.png"
@@ -388,7 +395,7 @@ def test_video_validation_continues_after_a_corrupt_file(
     damaged.write_bytes(b"not a video")
     before = snapshot(root)
 
-    result = run_script("validate.py", root, "--show-files")
+    result = run_script("validate.py", root, "--show-files", "--no-cache")
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Healthy files: 1" in result.stdout
@@ -433,7 +440,7 @@ def test_full_video_validation_uses_one_decode_worker_and_stays_read_only(
     assert generated.returncode == 0, generated.stderr
     before = video.read_bytes()
 
-    result = run_script("validate.py", root, "--full", "--workers", "4")
+    result = run_script("validate.py", root, "--full", "--workers", "4", "--no-cache")
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Profile: full (1 worker(s))" in result.stdout

@@ -249,7 +249,7 @@ def test_validate_json_stays_machine_readable_with_global_output_flags(
         result = run_pymo(*output_flags, "validate", collection, "--json")
 
         assert result.returncode == 0, result.stdout + result.stderr
-        assert json.loads(result.stdout)["schema_version"] == 1
+        assert json.loads(result.stdout)["schema_version"] == 2
 
 
 def test_cache_status_json_stays_machine_readable_and_read_only(
