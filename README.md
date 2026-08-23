@@ -253,10 +253,10 @@ and invalid command setup returns 2.
 
 The report includes cache format and storage, evidence records by type and
 namespace, current versus stale algorithms, file-observation freshness, and
-evidence linkage to recorded observations. It validates known exact-video and
-normalized ffprobe payloads but deliberately does not invoke native tools to
-decide runtime reuse; the video duplicate finder remains authoritative for
-actual reusable records.
+evidence linkage to recorded observations. It validates known exact-video,
+displayed-pixel, and normalized ffprobe payloads but deliberately does not
+invoke media libraries or native tools to decide runtime reuse; the consuming
+duplicate finder remains authoritative for actual reusable records.
 Legacy video caches are reported with migration pending and remain unchanged.
 
 The default is the collection-local `.pymo.sqlite3`. `--cache` can inspect a
@@ -371,6 +371,9 @@ a possible future, opt-in feature.
 ```bash
 pymo find-image-duplicates "/path/to/media-collection"
 pymo find-image-duplicates "/path/to/media-collection" --summary
+pymo find-image-duplicates "/path/to/media-collection" \
+  --cache "/path/to/writable-cache.sqlite3"
+pymo find-image-duplicates "/path/to/media-collection" --no-cache
 pymo find-image-duplicates "/path/to/media-collection" --apply
 pymo find-image-duplicates "/path/to/media-collection" --undo
 pymo find-image-duplicates "/path/to/media-collection" --undo --apply
@@ -384,6 +387,16 @@ inputs are skipped conservatively. Pillow reads each candidate through a stable
 no-follow descriptor anchored beneath the collection root, so a concurrent
 pathname or parent-directory swap cannot redirect pixel decoding to unrelated
 local content. Changed paths are reported and skipped.
+
+By default, the finder stores whole-file observations and displayed-pixel
+fingerprints in the shared collection cache. Reuse requires the same content
+SHA-256, pixel-normalization algorithm, and exact Pillow runtime. A newly added
+path can reuse known pixels only after its bytes hash to known content. Hash
+observations and new pixel evidence publish together in bounded atomic batches;
+output reports actual reused, computed, and persisted counts without exposing
+paths. `--cache PATH` selects an external writable cache and `--no-cache`
+disables both reads and writes. Before an applied move can depend on a cached
+hash, pymo re-reads and recomputes that file through its stable descriptor.
 
 ### Find exact video duplicates
 

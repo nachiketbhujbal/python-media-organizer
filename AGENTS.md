@@ -86,6 +86,10 @@ never duplicate the version in source or static project metadata.
   payload before use; malformed compatible evidence fails closed. Publish hash
   observations and newly computed probes from one inspection batch in one
   atomic cache update.
+- Reuse displayed-pixel fingerprints only for matching content SHA-256,
+  persisted normalization algorithm, and exact Pillow runtime. A cached hash
+  contributing to an applied image result must be freshly descriptor-pinned and
+  recomputed before creating duplicate directories, action history, or moves.
 - Describe video-cache activity as reusable records, fingerprints required,
   and new records actually persisted. When `--no-cache` is selected, state the
   no-read/no-write boundary without implying that a lookup or update occurred.
@@ -119,9 +123,10 @@ never duplicate the version in source or static project metadata.
   dependency-aware undo.
 - `src/pymo/cache/`: the disposable derived-cache subsystem. Its package facade
   exposes the supported storage API while `service.py`, `hashes.py`,
-  `probes.py`, `status.py`, `warm.py`, and `cli.py` own storage, observation
-  policy, normalized video structure evidence, reporting, deliberate
-  population, and dispatch respectively.
+  `images.py`, `paths.py`, `probes.py`, `status.py`, `warm.py`, and `cli.py` own
+  storage, byte observations, displayed-pixel evidence, writable-target policy,
+  normalized video structure evidence, reporting, deliberate population, and
+  dispatch respectively.
 - `src/pymo/video.py`: shared normalized video structure facts used by exact
   analysis and its derived evidence.
 - `src/pymo/classification.py`: shared local content-signature and extension
