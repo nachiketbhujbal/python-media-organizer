@@ -26,13 +26,13 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and includes the version 0.4.10 unified cache-warming release.
+`pymo` command, and includes the version 0.4.11 fresh validation-evidence release.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
 
 Version 0.4.0 makes directory traversal failures visible in scan reports and
-places report-only validation first in every scan recommendation plan. Existing
+places non-mutating validation first in every scan recommendation plan. Existing
 validation behavior continues after known per-file decoder failures, and direct
 regression coverage proves a damaged video does not prevent a healthy neighbor
 from being checked. No health finding is converted into ignore configuration.
@@ -139,6 +139,17 @@ normal output remains aggregate and path-private, external caches remain
 supported, and per-file failures retain resumable evidence while returning
 incomplete coverage.
 
+Version 0.4.11 records every freshly completed standard or full validation as
+strict disposable evidence. The record links complete-file SHA-256 and exact
+file observation to profile, semantic classification context, applicable
+Pillow/ffprobe/FFmpeg versions, findings, outcome, and UTC completion time.
+Content hash alone is deliberately insufficient because byte-identical files
+with different extensions can produce different classification findings.
+Normal validation never consumes old health as a substitute for a current
+probe or decode. `--cache PATH` moves derived writes outside the collection;
+`--no-cache` restores a zero-cache-read/write run. Validation JSON schema 2
+reports fresh execution and cache-publication facts without paths.
+
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
 behavior. Version 0.3.18 prefixes every physical line of normal human-readable
@@ -236,7 +247,7 @@ Hard requirements:
 13. Supported behavior is not removed in a patch release. The compatibility
     interfaces deprecated throughout v0.1 were removed at the v0.2 boundary.
 14. `scan` never writes media, action history, or cache state, reports directory
-    traversal failures, and recommends report-only validation before mutation.
+    traversal failures, and recommends fresh validation before mutation.
     Exact-video previews may persist disposable fingerprints by default so
     later preview or apply runs resume; `--no-cache` disables both cache reads
     and writes.
@@ -257,8 +268,10 @@ Hard requirements:
     and collision utilities.
 22. Release coverage includes child-process CLI execution and complements,
     rather than replaces, real integration and adversarial behavior tests.
-23. Validation is report-only and independent of organized layout. Repair or
-    quarantine requires a future ADR and reversible mutation design.
+23. Validation is media-non-mutating and independent of organized layout.
+    Fresh validation evidence is disposable cache state; `--no-cache` restores
+    the zero-state boundary. Repair or quarantine requires a future ADR and
+    reversible mutation design.
 24. Validation filenames are private unless `--show-files` is explicit; health
     errors return 1, warnings-only reports return 0, and setup errors return 2.
 
@@ -304,6 +317,7 @@ python-media-organizer/
       probes.py
       service.py
       status.py
+      validation.py
       warm.py
     action_log.py
     organize.py
@@ -332,9 +346,10 @@ pymo find-video-duplicates COLLECTION
 ```
 
 The four mutating tools support dry-run/apply behavior and `--undo`, which is
-also a preview unless combined with `--apply`. `scan`, `validate`, and
-`cache status` are report-only. `cache warm` writes only disposable cache state
-and never media or action history. Global `--verbose`, `--quiet`,
+also a preview unless combined with `--apply`. `scan` and `cache status` are
+strictly read-only. `validate` may write fresh disposable evidence unless
+`--no-cache` is explicit; `cache warm` writes only disposable cache state.
+Neither changes media or action history. Global `--verbose`, `--quiet`,
 `--log-file PATH`, `--timestamps`, `--no-timestamps`, `--config PATH`, and
 `--show-ignored` options go before the subcommand. `--show-ignored` and
 command-specific options are also accepted by the selected command after its
@@ -564,6 +579,9 @@ discovery finds at least two eligible videos.
 
 Schema version 1 is shared rather than video-specific. It contains exact
 schema metadata, generic derived evidence, and file-identity observations.
+Validation evidence uses this generic schema with profile-specific algorithms,
+canonical semantic-context/runtime namespaces, strict path-private payloads,
+and exact observations; no schema migration is required.
 Existing valid legacy `video_fingerprints` databases are still read without a
 write; the next successful cache update migrates their rows in memory and
 publishes the complete versioned database atomically. The low-level service
@@ -685,14 +703,17 @@ File state is captured at discovery and checked around classification and
 checksumming. Detected changes are omitted from inventory and duplicate facts
 and reported as an aggregate `changed_entries` count without revealing paths.
 Directory traversal failures are counted and warned about instead of silently
-omitted. Recommendations begin with report-only validation before organization,
-renaming, or duplicate isolation.
+omitted. Recommendations begin with fresh, non-mutating validation before
+organization, renaming, or duplicate isolation.
 
 ## Media validation
 
-`src/pymo/validate.py` implements report-only `pymo validate COLLECTION` over
-any collection layout. It never repairs, quarantines, moves, renames, deletes,
-caches, or appends action history.
+`src/pymo/validate.py` implements media-non-mutating
+`pymo validate COLLECTION` over any collection layout. It never repairs,
+quarantines, moves, renames, deletes, creates duplicate trees, or appends action
+history. By default it may write only fresh disposable validation evidence;
+`--no-cache` performs no cache reads or writes, while `--cache PATH` keeps
+derived state outside the collection.
 
 The standard profile uses Pillow integrity verification for supported images
 and local ffprobe structure inspection for non-empty videos. `--full` also
@@ -701,18 +722,22 @@ through local FFmpeg. Standard validation uses bounded workers; a full run
 containing video reports and uses one worker so full FFmpeg decodes remain
 sequential.
 
-Text and schema-1 JSON aggregate severity/code findings without collection
+Text and schema-2 JSON aggregate severity/code findings without collection
 names, root paths, or filenames. `--show-files` adds collection-relative
 affected paths, while `--show-ignored` remains a separate opt-in. Status 0 means
-no error-severity finding, 1 means health errors were reported, and 2 means the
-command could not run safely. Animated or multi-page images are counted, not
+no error-severity finding, 1 means health errors or incomplete cache publication
+were reported, and 2 means the command could not run safely. Animated or
+multi-page images are counted, not
 classified as corrupt. Unsupported recognized formats remain warnings rather
 than unverified claims of corruption. Unreadable subtrees are health errors,
 native-tool diagnostics are discarded, and concurrent changes supersede
 decoder conclusions. Known decoder failures become per-file findings and do not
 abort inspection of healthy neighboring media. Pillow and native tools read
 inherited stable descriptors, not a pathname that can be redirected after
-preflight. Health evidence remains distinct from user-authored ignore policy.
+preflight. When caching is enabled, the same descriptor is freshly hashed and
+its result publishes afterward in bounded atomic batches. Old health never
+satisfies a normal current request. Health evidence remains distinct from
+user-authored ignore policy.
 
 ## Logging
 
@@ -822,6 +847,10 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   reused, setup-invalid, and explicitly external cache runs, including proof
   that media, duplicate trees, action history, and read-only source cache state
   are not written;
+- fresh standard/full validation evidence for healthy and invalid content,
+  strict runtime/context payloads, byte-identical files with distinct
+  extensions, local/external/disabled cache modes, old-health non-reuse, cache
+  status recognition, JSON schema 2 privacy, and invalid-cache refusal;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;
@@ -836,7 +865,7 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - centralized collection-path derivation and duplicate-tree recognition;
 - fixed-name action-log non-detection and removed v0.1 interface refusal;
 - path-private fast and checksum scan reports, stable JSON, bounded worker
-  validation, readiness recommendations, and no-write guarantees;
+  validation, readiness recommendations, and explicit cache-state guarantees;
 - dynamic package metadata, packaged TOML data, runtime/distribution version
   agreement, and the selected Hatchling plus hatch-vcs configuration.
 

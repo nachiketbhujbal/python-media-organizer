@@ -2,6 +2,24 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.11 - 2026-08-23
+
+- Record every freshly completed standard or full media validation as strict,
+  path-private, disposable evidence linked to an exact file observation and
+  complete-file SHA-256.
+- Key validation evidence by profile, semantic classification context, and
+  exact Pillow/ffprobe/FFmpeg runtime so byte-identical files with distinct
+  extensions cannot overwrite different conclusions.
+- Keep normal validation authoritative and fresh: cached health is validated
+  before use of the cache but never substitutes for current probing or decode.
+- Add validation `--cache PATH` for an external writable evidence store and
+  `--no-cache` for the prior zero-cache-read/write performance boundary.
+- Publish observations and validation results together in bounded atomic
+  batches, retain completed batches after a later cache failure, and make cache
+  status strictly validate and recognize the new evidence.
+- Advance the path-private validation JSON contract to schema 2 with explicit
+  fresh-validation and cache-publication facts.
+
 ## 0.4.10 - 2026-08-23
 
 - Extend `pymo cache warm` with `images`, `videos`, and `all` selectors while

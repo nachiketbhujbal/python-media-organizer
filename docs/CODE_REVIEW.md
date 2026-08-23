@@ -42,6 +42,10 @@ The same adversarial method was repeated after the first validation release.
 | VAL-005 | Low | Video validation relied on an assertion for a runtime dependency and accepted video streams without checking their codec name or positive dimensions. | 0.3.1 | Resolved |
 | VAL-006 | Medium | Validation discovery and video inspection mixed traversal, classification, stream policy, decoding, and reporting through branch-heavy functions and long positional interfaces. | 0.3.2 | Resolved in ADR 0036 |
 | VAL-007 | High | Validation checks path state before and after content reads, but a hostile pathname swap could still redirect Pillow or a native tool to a symbolic link during the read itself. | 0.3.3 | Resolved in ADR 0037 |
+| VAL-008 | High | Content SHA-256 alone cannot key complete validation results because extension and detected-kind context can produce distinct findings for byte-identical files. | 0.4.11 | Resolved with a canonical semantic-context plus exact-runtime evidence namespace in ADR 0070 |
+| VAL-009 | High | Persisting an earlier healthy result must not let ordinary or full validation skip a current descriptor-pinned probe or decode. | 0.4.11 | Resolved by write-after-fresh-read evidence with no cached-result consumer |
+| VAL-010 | Medium | Validation evidence needs the external writable-cache and complete opt-out boundaries required for analyzing read-only sources without unannounced state. | 0.4.11 | Resolved with explicit `--cache`, `--no-cache`, schema-2 report facts, and integration coverage |
+| VAL-011 | Medium | Validation observations and results could diverge if published through separate SQLite replacements or if malformed known evidence were accepted. | 0.4.11 | Resolved with strict runtime/payload decoding and one atomic batch publication |
 
 ## Scan review findings
 
@@ -212,6 +216,10 @@ The same adversarial method was repeated after the first validation release.
   structure and publish each hash/probe batch atomically.
 - `0.4.9`: reuse strictly validated, Pillow-runtime-keyed displayed-pixel
   evidence and recheck cached content before image mutation.
+- `0.4.10`: warm image, video, or all supported evidence without duplicate
+  planning and preflight a combined request before its first cache write.
+- `0.4.11`: persist strictly validated fresh health evidence without using old
+  health to satisfy a current validation request.
 
 ## Independent review evidence
 
