@@ -26,7 +26,7 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and includes the version 0.5.0 directional byte-coverage release.
+`pymo` command, and includes the version 0.5.1 layered migration-evidence release.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -179,6 +179,18 @@ filename-private unless relative path disclosure is explicit. Neither tree
 receives cache, lock, configuration, action-history, duplicate-tree, or media
 writes. Version 0.5.0 is exact-byte scope only; image/video equivalence and the
 final sign-off gate remain planned through 0.5.3.
+
+Version 0.5.1 layers exact displayed-image evidence over source byte identities
+that lack a destination byte representative. One representative per eligible
+unique byte stream is freshly decoded through the same EXIF-transposed,
+single-image RGBA dimensions-plus-pixels algorithm used by the exact-image
+finder. Exact pixel coverage, missing pixels, and uninspectable source or
+destination candidates are reported separately from byte coverage. Schema-2
+JSON retains path privacy; relative image differences require `--show-files`.
+The image layer does not claim metadata, encoding, container bytes, or original
+file bytes survived, and it does not yet replace the byte verdict or exit
+status. The shared normalization now lives in `src/pymo/image_content.py`
+because duplicate and migration domains both consume it.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -338,6 +350,7 @@ python-media-organizer/
     progress.py
     discovery.py
     file_safety.py
+    image_content.py
     cache/
       __init__.py
       cli.py
@@ -352,6 +365,7 @@ python-media-organizer/
     migration/
       __init__.py
       coverage.py
+      images.py
       inventory.py
       report.py
     action_log.py
@@ -766,10 +780,10 @@ organization, renaming, or duplicate isolation.
 
 `src/pymo/verify_migration.py` coordinates report-only
 `pymo verify-migration SOURCE DESTINATION`. The `src/pymo/migration/`
-subpackage owns fresh stable inventory, exact-byte coverage and multiplicity
-accounting, and the root-free schema-1 report. The command never writes cache,
-locks, configuration, action history, duplicate trees, or media to either
-collection.
+subpackage owns fresh stable inventory, layered byte/image coverage and
+multiplicity accounting, and the root-free schema-2 report. The command never
+writes cache, locks, configuration, action history, duplicate trees, or media
+to either collection.
 
 Version 0.5.0 identifies each in-scope regular-file stream by complete SHA-256
 plus length. Paths, filenames, root names, and aggregate sizes are not content
@@ -782,10 +796,21 @@ The verdict is `complete` only for the declared in-scope byte contract,
 `incomplete` when complete evidence proves source identities absent, and
 `unproven` when source evidence is incomplete or destination failures could
 hide a missing representative. Symbolic links are never followed. Ignored
-entry points and pymo-owned state are counted but outside schema 1; the stricter
-post-transformation sign-off boundary remains reserved for version 0.5.3.
+entry points and pymo-owned state are counted but outside the byte scope; the
+stricter post-transformation sign-off boundary remains reserved for version
+0.5.3.
 Normal output reveals no roots or filenames. `--show-files` and
 `--show-ignored` deliberately expose collection-relative details.
+
+Version 0.5.1 adds the separate exact displayed-image layer for byte-missing
+source identities with configured exact-image extensions. It freshly decodes
+one representative per unique source and destination byte identity using
+EXIF-transposed single-image RGBA dimensions plus pixels. A metadata-varied or
+losslessly re-encoded image can therefore be content-represented while its
+absent source bytes remain visible. Source decode failures make that layer
+unproven; destination decode failures make an otherwise missing match
+unproven. Schema 2 reports the layer independently and keeps command status
+tied to the byte verdict until version 0.5.3 defines combined sign-off.
 
 ## Media validation
 
@@ -948,6 +973,10 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   trees, duplicate reduction and destination extras, missing content, ignored
   and pymo-owned state, symbolic links, traversal/read/change failures, root
   overlap, path privacy, and zero-write behavior;
+- exact displayed-image migration coverage for metadata- and format-varied
+  still images, genuinely different pixels, byte-represented no-op cases,
+  source/destination decode failures, schema-2 privacy, and unchanged
+  duplicate-finder semantics;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

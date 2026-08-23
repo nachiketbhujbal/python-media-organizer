@@ -7,11 +7,12 @@ from typing import Any
 
 from pymo.logging_config import emit as print
 from pymo.migration.coverage import ByteCoverage
+from pymo.migration.images import ImageContentCoverage, ImageInspectionIssue
 from pymo.migration.inventory import TreeInventory
 from pymo.progress import format_bytes
 
-# This value identifies the first public migration-verification report contract.
-MIGRATION_REPORT_SCHEMA_VERSION = 1
+# This value identifies the current layered migration-verification report.
+MIGRATION_REPORT_SCHEMA_VERSION = 2
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -35,6 +36,18 @@ def _problem_paths(inventory: TreeInventory) -> list[dict[str, str]]:
         for issue in (*inventory.unreadable, *inventory.changed)
     )
     return sorted(values, key=lambda item: (item["path"].casefold(), item["category"]))
+
+
+def _image_problem_paths(
+    root: Path, issues: tuple[ImageInspectionIssue, ...]
+) -> list[dict[str, str]]:
+    return sorted(
+        [
+            {"path": _relative(root, issue.path), "category": issue.category}
+            for issue in issues
+        ],
+        key=lambda item: (item["path"].casefold(), item["category"]),
+    )
 
 
 def _inventory_report(
@@ -79,6 +92,7 @@ def build_report(
     source: TreeInventory,
     destination: TreeInventory,
     coverage: ByteCoverage,
+    image_content: ImageContentCoverage,
     *,
     show_files: bool,
     show_ignored: bool,
@@ -102,6 +116,8 @@ def build_report(
             "symbolic_links_followed": False,
             "policy_ignored_content_proven": False,
             "tool_state_included": False,
+            "image_candidates": "configured-exact-image-extensions",
+            "image_equivalence_preserves_source_bytes": False,
             "filesystem_boundary": "stable-namespace-visible-content",
         },
         "source": _inventory_report(
@@ -139,6 +155,47 @@ def build_report(
             "reduced_copy_bytes": coverage.reduced_copy_bytes,
             "added_copies": coverage.added_copies,
             "added_copy_bytes": coverage.added_copy_bytes,
+        },
+        "image_content": {
+            "verdict": image_content.verdict,
+            "reasons": list(image_content.reasons),
+            "algorithm": image_content.algorithm,
+            "runtime": image_content.runtime,
+            "eligible_source_unique_streams": (
+                image_content.eligible_source_unique_streams
+            ),
+            "eligible_source_files": image_content.eligible_source_files,
+            "represented_unique_streams": image_content.represented_unique_streams,
+            "represented_source_files": len(image_content.represented_source_files),
+            "missing_unique_streams": image_content.missing_unique_streams,
+            "missing_source_files": len(image_content.missing_source_files),
+            "missing_source_paths": (
+                [
+                    _relative(source.root, path)
+                    for path in image_content.missing_source_files
+                ]
+                if show_files
+                else []
+            ),
+            "uninspectable_source_unique_streams": (
+                image_content.uninspectable_source_unique_streams
+            ),
+            "source_problem_paths": (
+                _image_problem_paths(source.root, image_content.source_issues)
+                if show_files
+                else []
+            ),
+            "destination_candidate_unique_streams": (
+                image_content.destination_candidate_unique_streams
+            ),
+            "destination_uninspectable_unique_streams": (
+                image_content.uninspectable_destination_unique_streams
+            ),
+            "destination_problem_paths": (
+                _image_problem_paths(destination.root, image_content.destination_issues)
+                if show_files
+                else []
+            ),
         },
         "destination_only": {
             "unique_streams": coverage.destination_only_unique_streams,
@@ -242,6 +299,44 @@ def print_report(report: dict[str, Any]) -> None:
         for path in destination_only["paths"]:
             print(f"    {path}")
 
+    images = report["image_content"]
+    print("\nExact displayed-image coverage for byte-missing source content:")
+    print(f"  Algorithm: {images['algorithm']} ({images['runtime']})")
+    print(
+        f"  Eligible source streams: {images['eligible_source_unique_streams']} "
+        f"across {images['eligible_source_files']} file(s)"
+    )
+    print(
+        f"  Represented by exact displayed pixels: "
+        f"{images['represented_unique_streams']} stream(s), "
+        f"{images['represented_source_files']} source file(s)"
+    )
+    print(
+        f"  Missing displayed content: {images['missing_unique_streams']} "
+        f"stream(s), {images['missing_source_files']} source file(s)"
+    )
+    print(
+        f"  Uninspectable source streams: "
+        f"{images['uninspectable_source_unique_streams']}"
+    )
+    print(
+        f"  Uninspectable destination candidate streams: "
+        f"{images['destination_uninspectable_unique_streams']}"
+    )
+    print(f"  Layer verdict: {images['verdict'].upper()}")
+    if images["missing_source_paths"]:
+        print("  Missing image-content paths:")
+        for path in images["missing_source_paths"]:
+            print(f"    {path}")
+    for label, key in (
+        ("Source image problems", "source_problem_paths"),
+        ("Destination image problems", "destination_problem_paths"),
+    ):
+        if images[key]:
+            print(f"  {label}:")
+            for issue in images[key]:
+                print(f"    {issue['path']}: {issue['category']}")
+
     verdict = coverage["verdict"]
     print("\nVerdict:")
     if verdict == "complete":
@@ -250,4 +345,8 @@ def print_report(report: dict[str, Any]) -> None:
         print("  INCOMPLETE: readable source byte streams are missing.")
     else:
         print("  UNPROVEN: incomplete filesystem evidence prevents a safe verdict.")
+    print(
+        "The image-content layer is separate evidence and does not replace the "
+        "byte verdict in version 0.5.1."
+    )
     print("Verification wrote no media, cache, configuration, or action history.")

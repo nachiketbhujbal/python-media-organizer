@@ -11,10 +11,8 @@ path is always the collection root, which also owns the shared action log.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import os
 import sys
-import warnings
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -55,11 +53,12 @@ from pymo.duplicates.common import (
     layout_problems,
 )
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
+from pymo.image_content import displayed_pixel_hash
 from pymo.logging_config import emit as print
 from pymo.progress import ProgressMeter, format_bytes
 
 try:
-    from PIL import Image, ImageOps, UnidentifiedImageError, __version__
+    from PIL import Image, UnidentifiedImageError, __version__
 except ImportError as error:
     print(
         "This script needs Pillow. Install it with:\n"
@@ -88,31 +87,6 @@ class ImageRecord:
 
 
 ImageMove = tuple[str, ImageRecord, ImageRecord, Path]
-
-
-def displayed_pixel_hash(descriptor: int) -> str:
-    """Hash the pixels as displayed, after applying EXIF orientation.
-
-    RGBA conversion makes equivalent RGB/palette/grayscale still images
-    comparable. Animated images are skipped because comparing only their first
-    frame could incorrectly classify two different animations as duplicates.
-    """
-    os.lseek(descriptor, 0, os.SEEK_SET)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", Image.DecompressionBombWarning)
-        with os.fdopen(descriptor, "rb", closefd=False) as stream:
-            with Image.open(stream) as opened:
-                if getattr(opened, "n_frames", 1) != 1:
-                    raise ValueError("animated or multi-page image")
-
-                image = ImageOps.exif_transpose(opened)
-                rgba = image.convert("RGBA")
-
-                digest = hashlib.sha256()
-                digest.update(rgba.width.to_bytes(8, "big"))
-                digest.update(rgba.height.to_bytes(8, "big"))
-                digest.update(rgba.tobytes())
-                return digest.hexdigest()
 
 
 class ImageAnalysisCacheError(RuntimeError):

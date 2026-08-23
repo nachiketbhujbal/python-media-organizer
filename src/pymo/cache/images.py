@@ -11,11 +11,12 @@ from pathlib import Path
 from pymo.cache import service as cache_service
 from pymo.cache.hashes import build_hash_observations
 from pymo.file_safety import FileState
+from pymo.image_content import DISPLAYED_PIXEL_ALGORITHM
 
 # These values identify persisted derived evidence. Changing displayed-pixel
 # normalization requires a new algorithm identifier.
 IMAGE_PIXEL_EVIDENCE_TYPE = "displayed-pixels"
-IMAGE_PIXEL_ALGORITHM = "displayed-pixels-rgba-v1"
+IMAGE_PIXEL_ALGORITHM = DISPLAYED_PIXEL_ALGORITHM
 
 
 class ImageCacheError(RuntimeError):

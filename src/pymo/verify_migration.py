@@ -16,6 +16,7 @@ from pymo.config import (
 )
 from pymo.logging_config import emit as print
 from pymo.migration.coverage import compare_byte_inventories
+from pymo.migration.images import compare_image_content
 from pymo.migration.inventory import discover_tree, hash_tree
 from pymo.migration.report import build_report, print_report
 from pymo.progress import StageTimer
@@ -123,10 +124,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     coverage = compare_byte_inventories(source_inventory, destination_inventory)
+    image_extensions = (
+        source_config.image_duplicates.extensions
+        | destination_config.image_duplicates.extensions
+    )
+    if not args.json:
+        print("Inspecting exact displayed-image coverage for byte-missing content...")
+    with timer.measure("image-content comparison"):
+        image_content = compare_image_content(
+            source_inventory,
+            destination_inventory,
+            image_extensions,
+            min(
+                source_config.performance.progress_interval_seconds,
+                destination_config.performance.progress_interval_seconds,
+            ),
+            show_progress=not args.json,
+        )
     report = build_report(
         source_inventory,
         destination_inventory,
         coverage,
+        image_content,
         show_files=args.show_files,
         show_ignored=args.show_ignored,
     )

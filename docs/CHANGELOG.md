@@ -2,6 +2,27 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.1 - 2026-08-23
+
+- Add a separate exact displayed-image layer to `verify-migration` for eligible
+  source byte identities that have no exact destination byte representative.
+- Share the versioned EXIF-transposed, single-image RGBA dimensions-plus-pixels
+  algorithm between duplicate analysis, cache evidence, and migration coverage
+  without coupling their discovery, reporting, or mutation policy.
+- Freshly decode one representative per eligible unique source and destination
+  byte stream, while retaining descriptor pinning, no-follow behavior, and
+  complete post-read file-state checks.
+- Distinguish exact-image `complete`, `incomplete`, `unproven`, and `not-needed`
+  results without rewriting the exact-byte verdict or claiming metadata,
+  encoding, container, or original source bytes are preserved.
+- Advance migration JSON to schema 2 with aggregate image eligibility,
+  represented, missing, and uninspectable evidence; keep relative paths behind
+  `--show-files` and preserve the command's zero-write boundary.
+- Add integration coverage for metadata- and format-varied exact pixels,
+  genuinely different pixels, unreadable source and destination candidates,
+  byte-represented decode avoidance, privacy, and unchanged image-finder
+  behavior.
+
 ## 0.5.0 - 2026-08-23
 
 - Add report-only `pymo verify-migration SOURCE DESTINATION` for directional,
