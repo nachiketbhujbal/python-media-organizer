@@ -8,6 +8,7 @@ from pathlib import Path
 from pymo import cache as cache_service
 from pymo import cache_status
 from pymo.collection import CollectionLayout
+from pymo.hash_cache import observation_scope
 from pymo.logging_config import configure_logging
 
 
@@ -33,7 +34,7 @@ def _write_current_cache(root: Path, media: Path) -> bytes:
         connection,
         [
             cache_service.FileObservation(
-                scope="collection",
+                scope=observation_scope(root),
                 relative_path=media.relative_to(root).as_posix(),
                 device=state.st_dev,
                 inode=state.st_ino,
@@ -155,6 +156,48 @@ def test_status_reports_stale_observations_after_file_change(tmp_path: Path) -> 
     }
 
 
+def test_status_treats_another_collection_scope_as_stale(tmp_path: Path) -> None:
+    collection = tmp_path / "media-collection"
+    other = tmp_path / "other-collection"
+    collection.mkdir()
+    other.mkdir()
+    media = collection / "garden.jpg"
+    media.write_bytes(b"content")
+    state = media.stat(follow_symlinks=False)
+    layout = CollectionLayout(collection)
+    connection = sqlite3.connect(layout.derived_cache)
+    cache_service.initialize_schema(connection)
+    cache_service.upsert_file_observations(
+        connection,
+        [
+            cache_service.FileObservation(
+                scope=observation_scope(other),
+                relative_path="garden.jpg",
+                device=state.st_dev,
+                inode=state.st_ino,
+                size=state.st_size,
+                modified_ns=state.st_mtime_ns,
+                changed_ns=state.st_ctime_ns,
+                byte_sha256=hashlib.sha256(media.read_bytes()).hexdigest(),
+            )
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    report, status = cache_status.inspect_cache_status(
+        collection, layout.derived_cache, location="collection-local"
+    )
+
+    assert status == 0
+    assert report["cache"]["file_observations"] == {
+        "total": 1,
+        "current": 0,
+        "stale": 1,
+        "unreadable": 0,
+    }
+
+
 def test_status_does_not_follow_an_observation_parent_symlink(tmp_path: Path) -> None:
     collection = tmp_path / "collection"
     outside = tmp_path / "outside"
@@ -173,7 +216,7 @@ def test_status_does_not_follow_an_observation_parent_symlink(tmp_path: Path) ->
         connection,
         [
             cache_service.FileObservation(
-                scope="collection",
+                scope=observation_scope(collection),
                 relative_path="pics/garden.jpg",
                 device=state.st_dev,
                 inode=state.st_ino,

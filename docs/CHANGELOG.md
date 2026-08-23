@@ -2,6 +2,23 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.6 - 2026-08-22
+
+- Persist whole-file SHA-256 observations under a path-private collection
+  identity and reuse them only for an exact relative-path, device, inode, size,
+  modification-time, and change-time match.
+- Reuse current hashes during exact-video probing, publish newly computed
+  observations in bounded atomic batches, and make `--no-cache` disable both
+  hash and fingerprint cache activity.
+- Recompute every reused hash that contributes to an applied exact-video result
+  before creating duplicate directories, action history, or moves.
+- Let read-only checksum scans reuse current local or explicitly selected cache
+  observations while never creating or updating a cache or lock, and report
+  aggregate reused-versus-computed hash counts.
+- Descriptor-pin checksum reads, interpret observation scope during cache
+  status, and make simultaneous first-time cache writers safely converge on one
+  lock instead of racing its creation.
+
 ## 0.4.5 - 2026-08-22
 
 - Add `pymo cache warm videos COLLECTION` to fingerprint every safely

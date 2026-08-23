@@ -23,7 +23,8 @@ from pymo.config import (
     add_show_ignored_argument,
     load_config,
 )
-from pymo.file_safety import FileChangedError, FileState
+from pymo.file_safety import FileChangedError, FileState, open_stable_file
+from pymo.hash_cache import HashCacheError, load_cached_hashes
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier, desired_directory
 from pymo.progress import ProgressMeter, format_bytes
@@ -189,26 +190,28 @@ def _folder_status(path: Path) -> str:
     return "ready"
 
 
-def _sha256(path: Path) -> str:
+def _sha256_descriptor(descriptor: int) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    while chunk := os.read(descriptor, 1024 * 1024):
+        digest.update(chunk)
     return digest.hexdigest()
 
 
-def _stable_sha256(entry: ScanEntry) -> str:
-    entry.state.require_unchanged(entry.path, "collection checksum")
-    digest = _sha256(entry.path)
-    entry.state.require_unchanged(entry.path, "collection checksum")
-    return digest
+def _stable_sha256(root: Path, entry: ScanEntry) -> str:
+    with open_stable_file(
+        root, entry.path, entry.state, "collection checksum"
+    ) as descriptor:
+        return _sha256_descriptor(descriptor)
 
 
 def _duplicate_statistics(
+    root: Path,
     entries: tuple[ScanEntry, ...],
     checksums: bool,
     progress_interval_seconds: int,
     show_progress: bool,
+    database: Path,
 ) -> tuple[dict[str, Any], frozenset[Path]]:
     by_kind_size: dict[tuple[str, int], list[ScanEntry]] = defaultdict(list)
     for entry in entries:
@@ -223,7 +226,11 @@ def _duplicate_statistics(
     unreadable = 0
     changed_paths: set[Path] = set()
     candidate_entries = [entry for values in candidates.values() for entry in values]
+    cache_hits = 0
+    computed_hashes = 0
     if checksums:
+        states = {entry.path: entry.state for entry in candidate_entries}
+        cached_hashes = load_cached_hashes(root, database, states, coordinated=False)
         progress = ProgressMeter(
             len(candidate_entries),
             sum(entry.size for entry in candidate_entries),
@@ -232,7 +239,15 @@ def _duplicate_statistics(
         for values in candidates.values():
             for entry in values:
                 try:
-                    digest = _stable_sha256(entry)
+                    digest = cached_hashes.get(entry.path)
+                    if digest is None:
+                        digest = _stable_sha256(root, entry)
+                        computed_hashes += 1
+                    else:
+                        entry.state.require_unchanged(
+                            entry.path, "cached collection checksum"
+                        )
+                        cache_hits += 1
                 except FileChangedError:
                     changed_paths.add(entry.path)
                 except OSError:
@@ -292,6 +307,8 @@ def _duplicate_statistics(
         "reclaimable_bytes": sum(group[0].size * (len(group) - 1) for group in matches),
         "hashed_files": hashed_files,
         "hashed_bytes": hashed_bytes,
+        "cache_hits": cache_hits,
+        "computed_hashes": computed_hashes,
         "unreadable_files": unreadable,
         "changed_files": len(changed_paths),
     }
@@ -429,6 +446,7 @@ def build_report(
     checksums: bool,
     show_ignored: bool,
     show_progress: bool,
+    cache_path: Path | None = None,
 ) -> dict[str, Any]:
     layout = CollectionLayout(root)
     walk = _collect_entries(root, config)
@@ -452,10 +470,12 @@ def build_report(
     entries = tuple(stable_entries)
 
     duplicate_report, checksum_changes = _duplicate_statistics(
+        root,
         entries,
         checksums,
         config.performance.progress_interval_seconds,
         show_progress,
+        cache_path or layout.derived_cache,
     )
     if checksum_changes:
         entries = tuple(
@@ -628,6 +648,10 @@ def print_report(report: dict[str, Any], show_ignored: bool) -> None:
             f"{exact['extra_copies']} extra copy or copies, "
             f"{format_bytes(exact['reclaimable_bytes'])} reclaimable"
         )
+        print(
+            f"  Whole-file hashes: {exact['cache_hits']} cache hit(s), "
+            f"{exact['computed_hashes']} computed"
+        )
 
     work = report["estimated_work"]
     print("\nEstimated expensive work:")
@@ -675,6 +699,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="hash same-size media candidates to report exact-byte duplicates",
     )
     parser.add_argument(
+        "--cache",
+        type=Path,
+        help=(
+            "read reusable whole-file hashes from this cache instead of the "
+            "collection-local default; scan never creates or updates it"
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="emit one machine-readable JSON report instead of terminal text",
@@ -706,17 +738,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not 1 <= workers <= 32:
         print("--workers must be between 1 and 32", file=sys.stderr)
         return 2
+    if args.cache is not None and not args.checksums:
+        print("--cache requires --checksums", file=sys.stderr)
+        return 2
 
     if not args.json:
         print("Scanning collection inventory...")
-    report = build_report(
-        root,
-        config,
-        workers,
-        args.checksums,
-        args.show_ignored,
-        not args.json,
-    )
+    cache_path = args.cache.expanduser().absolute() if args.cache else None
+    try:
+        report = build_report(
+            root,
+            config,
+            workers,
+            args.checksums,
+            args.show_ignored,
+            not args.json,
+            cache_path,
+        )
+    except HashCacheError as error:
+        print(f"Cannot use checksum cache safely: {error}", file=sys.stderr)
+        return 1
     if args.json:
         print(json.dumps(report, sort_keys=True, separators=(",", ":")))
     else:

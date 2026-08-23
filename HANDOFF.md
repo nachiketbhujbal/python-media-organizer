@@ -26,7 +26,7 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and includes the version 0.4.5 explicit video-cache-warm release.
+`pymo` command, and includes the version 0.4.6 stable whole-file hash release.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -84,6 +84,18 @@ and path-private;
 `--show-files` explicitly reveals collection-relative failures. Incomplete
 media coverage or unsafe cache state returns 1, invalid setup returns 2, and an
 empty organized video directory returns 0 without creating cache state.
+
+Version 0.4.6 activates whole-file SHA-256 observations in the shared cache.
+An observation is reusable only for the same path-private collection root
+identity, relative path, device, inode, size, modification time, and change
+time. Video inspection publishes new hashes in configurable bounded atomic
+batches and `--no-cache` disables both hash and fingerprint records. Before an
+applied exact-video result may create any state, every reused hash involved is
+read and verified again through a stable descriptor. Checksum scan may reuse
+the same current observations from the local or an explicit external cache,
+but remains strictly read-only and never persists its newly computed hashes.
+Version 0.4.7 is the promoted package-architecture checkpoint before additional
+cache producers are added.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -436,7 +448,8 @@ FFmpeg and ffprobe are explicit native executables. The implementation:
 
 1. Discovers flat videos with the same conservative classifier used by the
    collection tools.
-2. Computes whole-file SHA-256 as a cheap exact-byte identity and cache key.
+2. Computes whole-file SHA-256 as a cheap exact-byte identity and cache key, or
+   reuses it only for an exact current file observation.
 3. Uses ffprobe JSON for structure, dimensions, timing, orientation, audio, and
    candidate bucketing.
 4. Streams FFmpeg `framehash` output with microsecond-normalized frame timing
@@ -465,18 +478,21 @@ one no-follow descriptor opened relative to the collection root; native tools
 receive an inherited `/dev/fd` input. The finder rechecks the descriptor and
 pathname before grouping and during applied moves. Both exact-media finders
 reject a changed file or stop an apply rather than reuse a stale exact-match
-conclusion.
+conclusion. A hash reused from disposable cache state is freshly recomputed
+before an apply creates the review tree, action history, or a move.
 
 FFmpeg input protocols are restricted to `file,pipe`, and tests assert that
 decode commands contain no macOS, Windows, or X11 capture input. The tool does
 not need Screen & System Audio Recording, Camera, or Microphone permission.
 
 Preview and applied runs use collection-root `.pymo.sqlite3`. It is a derived
-cache keyed by content SHA-256, fingerprint algorithm version, and actual
-FFmpeg version. Each successful cache miss is persisted immediately so an
-interrupted preview retains completed work and a later `--apply` reuses it.
-The command reports candidate-relevant reusable records, fingerprints still
-required, and how many new records were durably persisted. `--no-cache`
+cache keyed by exact file observations plus content SHA-256, fingerprint
+algorithm version, and actual FFmpeg version. Fingerprints are persisted
+immediately; new whole-file hashes are persisted in bounded batches controlled
+by `performance.cache_publication_batch_size` (default 32). An interrupted
+preview retains completed publications and a later `--apply` reuses them. The
+command reports reusable and required hashes, candidate-relevant reusable
+fingerprints, and how many new records were durably persisted. `--no-cache`
 disables all cache reads and writes and emits no lookup or update claim.
 `--cache PATH` instead selects an external database and sibling lock; the two
 options are mutually exclusive.
@@ -498,7 +514,8 @@ separate writable cache for a read-only source.
 
 Cache readers share collection-root `.pymo.sqlite3.lock`; writers acquire it
 exclusively and re-read the latest public database before merging a completed
-fingerprint. Updates are built in memory, serialized to a random private
+update. Concurrent first writers use an exclusive create-or-open sequence and
+serialize on the same verified lock. Updates are built in memory, serialized to a random private
 `.pymo.sqlite3.new.*` descriptor, synced, reopened read-only, and fully
 validated. A missing public cache is published with an atomic no-replace rename;
 an existing cache uses an atomic exchange whose displaced identity is verified
@@ -547,7 +564,9 @@ pending legacy migration.
 Status opens the cache directory and public database through no-follow
 descriptors in SQLite read-only mode, validates the exact generic or legacy
 schema plus every known exact-video payload, and rechecks the cache and
-directory identities afterward. A concurrent atomic replacement invalidates
+directory identities afterward. Observation scope must match the current
+collection root identity; another collection's record is stale even when its
+relative path happens to match. A concurrent atomic replacement invalidates
 the snapshot. Observation freshness walks collection-relative parents through
 no-follow descriptors and never reads media content. Runtime compatibility is
 not checked because status does not invoke FFmpeg; the exact-video command
@@ -565,7 +584,8 @@ remain plain and do not receive the normal timestamped runtime footer.
 hash, probe, and decode path over every safely discovered video directly in
 `vids`. It fingerprints one representative per unique byte stream, reuses only
 algorithm- and FFmpeg-runtime-compatible evidence, and publishes successful
-new records immediately. It does not plan duplicates, create `dups`, move
+fingerprints immediately plus whole-file hashes in bounded atomic batches. It
+does not plan duplicates, create `dups`, move
 media, or append action history.
 
 The default cache remains collection-local. `--cache PATH` selects an existing
@@ -587,7 +607,10 @@ work; reports existing local pymo state; and recommends next commands.
 
 `--checksums` hashes only same-size picture and video candidates and reports
 exact-byte copies. It does not substitute for displayed-pixel image or decoded-
-playback video matching. `--json` emits stable schema version 1 without the
+playback video matching. Current whole-file observations may be read from the
+collection cache or `--cache PATH`; aggregate output distinguishes reuse from
+new computation. Scan never creates a cache or lock and never persists its
+computed hashes. `--json` emits stable schema version 1 without the
 collection name, root path, or filenames. Relative ignored paths remain opt-in
 through `--show-ignored`.
 

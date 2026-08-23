@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 from pymo import cache as cache_service
 from pymo.collection import CollectionLayout
 from pymo.duplicates import videos
+from pymo.hash_cache import HashCacheError, observation_scope
 from pymo.logging_config import emit as print
 from pymo.progress import format_bytes
 
@@ -58,6 +59,8 @@ def _base_report(location: str) -> dict[str, object]:
 
 
 def _observation_state(root: Path, record: cache_service.FileObservation) -> str:
+    if record.scope != observation_scope(root):
+        return "stale"
     relative = PurePosixPath(record.relative_path)
     directory_flags = (
         os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -195,7 +198,11 @@ def inspect_cache_status(
                     "unlinked": len(evidence) - linked,
                 }
             )
-    except (cache_service.CacheError, videos.VideoInspectionError):
+    except (
+        cache_service.CacheError,
+        HashCacheError,
+        videos.VideoInspectionError,
+    ):
         cache["state"] = "invalid"
         cache["issue"] = "unsafe-unreadable-or-incompatible"
         return report, 1

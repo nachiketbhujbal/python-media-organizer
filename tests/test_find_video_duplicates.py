@@ -580,7 +580,7 @@ def test_video_finder_rejects_a_corrupt_cache_before_decoding(
     )
 
     assert video_duplicates.main([str(tmp_path)]) == 1
-    assert "Fingerprint cache cannot be used safely" in caplog.text
+    assert "Whole-file hash cache cannot be used safely" in caplog.text
     assert "rerun with --no-cache" in caplog.text
 
 
@@ -688,10 +688,10 @@ def test_video_cache_read_pins_original_database_during_path_swap(
         observed.append(json.loads(row[0])["digest"])
         return connection
 
-    monkeypatch.setattr(video_duplicates.sqlite3, "connect", swap_before_sqlite_read)
+    monkeypatch.setattr(cache_service.sqlite3, "connect", swap_before_sqlite_read)
 
     with pytest.raises(
-        video_duplicates.VideoInspectionError, match="changed or is not a safe"
+        video_duplicates.VideoInspectionError, match="not a private regular file"
     ):
         video_duplicates.load_cached_fingerprints(root, cache, "test-ffmpeg")
 
@@ -756,10 +756,10 @@ def test_video_cache_interruption_preserves_public_cache_and_complete_stage(
     original_bytes = layout.video_cache.read_bytes()
 
     def interrupt_before_publication(*_args, **_kwargs) -> None:
-        raise video_duplicates.VideoInspectionError("simulated interruption")
+        raise cache_service.CacheError("simulated interruption")
 
     monkeypatch.setattr(
-        video_duplicates, "_publish_staged_cache", interrupt_before_publication
+        cache_service, "_publish_generic_stage", interrupt_before_publication
     )
 
     with pytest.raises(video_duplicates.VideoInspectionError, match="interruption"):
@@ -819,7 +819,9 @@ def test_video_cache_publication_never_writes_through_substituted_path(
         cache_service, "atomic_cache_rename", substitute_before_publication
     )
 
-    with pytest.raises(video_duplicates.VideoInspectionError, match="cache path"):
+    with pytest.raises(
+        video_duplicates.VideoInspectionError, match="changed during atomic publication"
+    ):
         video_duplicates.save_cached_fingerprints(
             root,
             layout.video_cache,
@@ -868,7 +870,7 @@ def test_video_cache_rechecks_lock_before_publication(
     outside = tmp_path / "outside.lock"
     outside.write_bytes(b"unrelated lock target")
     displaced_lock = tmp_path / "displaced.lock"
-    real_build = video_duplicates._build_staged_cache
+    real_build = cache_service._build_generic_stage
 
     def substitute_lock_after_staging(*args, **kwargs):
         result = real_build(*args, **kwargs)
@@ -877,7 +879,7 @@ def test_video_cache_rechecks_lock_before_publication(
         return result
 
     monkeypatch.setattr(
-        video_duplicates, "_build_staged_cache", substitute_lock_after_staging
+        cache_service, "_build_generic_stage", substitute_lock_after_staging
     )
 
     with pytest.raises(video_duplicates.VideoInspectionError, match="cache lock"):

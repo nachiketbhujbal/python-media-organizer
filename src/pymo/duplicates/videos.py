@@ -17,7 +17,6 @@ import os
 import re
 import selectors
 import shutil
-import sqlite3
 import subprocess
 import sys
 import time
@@ -57,6 +56,7 @@ from pymo.duplicates.common import (
     layout_problems,
 )
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
+from pymo.hash_cache import HashCacheError, load_cached_hashes, save_cached_hashes
 from pymo.logging_config import emit as print
 from pymo.organize import Classifier
 from pymo.progress import ProgressMeter, StageTimer, format_bytes
@@ -107,6 +107,7 @@ class VideoRecord:
     byte_sha256: str
     state: FileState
     probe: ProbeInfo
+    byte_sha256_cached: bool = False
 
     @property
     def file_size(self) -> int:
@@ -135,16 +136,24 @@ def sha256_descriptor(descriptor: int) -> str:
     return digest.hexdigest()
 
 
-def inspect_video(root: Path, path: Path, ffprobe: str) -> VideoRecord:
-    state = FileState.capture(path)
+def inspect_video(
+    root: Path,
+    path: Path,
+    ffprobe: str,
+    *,
+    state: FileState | None = None,
+    cached_sha256: str | None = None,
+) -> VideoRecord:
+    state = state or FileState.capture(path)
     with open_stable_file(root, path, state, "video inspection") as descriptor:
-        byte_sha256 = sha256_descriptor(descriptor)
+        byte_sha256 = cached_sha256 or sha256_descriptor(descriptor)
         probe = probe_video(descriptor, ffprobe)
     return VideoRecord(
         path=path,
         byte_sha256=byte_sha256,
         state=state,
         probe=probe,
+        byte_sha256_cached=cached_sha256 is not None,
     )
 
 
@@ -668,290 +677,23 @@ def decode_video_evidence(
     return decoded
 
 
-def _load_video_evidence(
-    connection: sqlite3.Connection, ffmpeg_release: str
-) -> dict[str, DerivedFingerprint]:
-    schema = cache_service.detect_schema(connection)
-    if schema == "legacy-video":
-        records = [
-            record
-            for record in cache_service.read_legacy_video_evidence(connection)
-            if record.algorithm == FINGERPRINT_ALGORITHM
-            and record.runtime == ffmpeg_release
-        ]
-    elif schema == "current":
-        records = cache_service.read_derived_evidence(
-            connection,
-            evidence_type=cache_service.LEGACY_VIDEO_EVIDENCE_TYPE,
-            algorithm=FINGERPRINT_ALGORITHM,
-            runtime=ffmpeg_release,
-        )
-    else:
-        raise VideoInspectionError("SQLite fingerprint cache has no schema")
-    return decode_video_evidence(records)
-
-
 def load_cached_fingerprints(
     _root: Path, database: Path, ffmpeg_release: str
 ) -> dict[str, DerivedFingerprint]:
-    lock_path = database.with_name(f"{database.name}.lock")
-    connection: sqlite3.Connection | None = None
     try:
-        with cache_service.locked_cache_directory(
-            database.parent, lock_path, exclusive=False
-        ) as locked:
-            directory_descriptor = locked.descriptor
-            entry_state = cache_service.cache_entry_at(
-                directory_descriptor, database.name, "SQLite fingerprint cache"
-            )
-            if entry_state is None:
-                return {}
-            descriptor = cache_service.open_cache_entry(
-                directory_descriptor, database.name, entry_state
-            )
-            try:
-                descriptor_state = cache_service.CacheEntryState.capture_descriptor(
-                    descriptor, "SQLite fingerprint cache"
-                )
-                if descriptor_state != entry_state:
-                    raise VideoInspectionError(
-                        "SQLite fingerprint cache changed during cache access"
-                    )
-                connection = cache_service.connect_cache_descriptor(
-                    descriptor, read_only=True
-                )
-                connection.execute("PRAGMA query_only=ON")
-                cached = _load_video_evidence(connection, ffmpeg_release)
-                connection.close()
-                connection = None
-                try:
-                    cache_service.require_cache_entry(
-                        directory_descriptor,
-                        database.name,
-                        entry_state,
-                        "SQLite fingerprint cache",
-                    )
-                except cache_service.CacheError as error:
-                    raise VideoInspectionError(
-                        "SQLite fingerprint cache changed or is not a safe "
-                        "collection file"
-                    ) from error
-            finally:
-                os.close(descriptor)
-    except FileChangedError as error:
-        raise VideoInspectionError(
-            "SQLite fingerprint cache changed or is not a safe collection file"
-        ) from error
+        contents = cache_service.read_coordinated_cache(database)
+        if contents is None:
+            return {}
+        records = [
+            record
+            for record in contents.evidence
+            if record.evidence_type == cache_service.LEGACY_VIDEO_EVIDENCE_TYPE
+            and record.algorithm == FINGERPRINT_ALGORITHM
+            and record.runtime == ffmpeg_release
+        ]
+        return decode_video_evidence(records)
     except cache_service.CacheError as error:
         raise VideoInspectionError(str(error)) from error
-    except sqlite3.Error as error:
-        raise VideoInspectionError(
-            f"cannot read SQLite fingerprint cache: {error}"
-        ) from error
-    except OSError as error:
-        raise VideoInspectionError(
-            f"cannot read SQLite fingerprint cache safely: {error}"
-        ) from error
-    finally:
-        if connection is not None:
-            connection.close()
-    return cached
-
-
-def _build_staged_cache(
-    directory_descriptor: int,
-    database_name: str,
-    existing_state: cache_service.CacheEntryState | None,
-    ffmpeg_release: str,
-    values: dict[str, DerivedFingerprint],
-) -> tuple[str, cache_service.CacheEntryState]:
-    source_descriptor: int | None = None
-    source: sqlite3.Connection | None = None
-    destination_descriptor: int | None = None
-    destination: sqlite3.Connection | None = None
-    verification: sqlite3.Connection | None = None
-    stage_name: str | None = None
-    try:
-        if existing_state is not None:
-            source_descriptor = cache_service.open_cache_entry(
-                directory_descriptor, database_name, existing_state
-            )
-            source = cache_service.connect_cache_descriptor(
-                source_descriptor, read_only=True
-            )
-            source.execute("PRAGMA query_only=ON")
-            if cache_service.detect_schema(source) == "empty":
-                raise VideoInspectionError("SQLite fingerprint cache has no schema")
-
-        destination = sqlite3.connect(":memory:")
-        if source is not None:
-            source.backup(destination)
-            if cache_service.detect_schema(destination) == "legacy-video":
-                cache_service.migrate_legacy_video_schema(destination)
-        else:
-            cache_service.initialize_schema(destination)
-        cache_service.upsert_derived_evidence(
-            destination,
-            [
-                cache_service.DerivedEvidence(
-                    file_sha256=file_hash,
-                    evidence_type=cache_service.LEGACY_VIDEO_EVIDENCE_TYPE,
-                    algorithm=FINGERPRINT_ALGORITHM,
-                    runtime=ffmpeg_release,
-                    payload_json=json.dumps(
-                        {
-                            "audio_bytes": value.audio_bytes,
-                            "digest": value.digest,
-                            "video_frames": value.video_frames,
-                        },
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    ),
-                )
-                for file_hash, value in sorted(values.items())
-            ],
-        )
-        destination.commit()
-        cache_service.validate_current_schema(destination)
-        payload = destination.serialize()
-        destination.close()
-        destination = None
-
-        stage_name, destination_descriptor = cache_service.create_cache_stage(
-            directory_descriptor
-        )
-        os.ftruncate(destination_descriptor, 0)
-        os.lseek(destination_descriptor, 0, os.SEEK_SET)
-        remaining = memoryview(payload)
-        while remaining:
-            written = os.write(destination_descriptor, remaining)
-            if written <= 0:
-                raise VideoInspectionError(
-                    "cannot write the SQLite cache staging file completely"
-                )
-            remaining = remaining[written:]
-        os.fsync(destination_descriptor)
-        verification = cache_service.connect_cache_descriptor(
-            destination_descriptor, read_only=True
-        )
-        verification.execute("PRAGMA query_only=ON")
-        cache_service.validate_current_schema(verification)
-        verification.close()
-        verification = None
-        stage_state = cache_service.CacheEntryState.capture_descriptor(
-            destination_descriptor, "SQLite cache staging file"
-        )
-        cache_service.require_cache_entry(
-            directory_descriptor,
-            stage_name,
-            stage_state,
-            "SQLite cache staging file",
-        )
-        if existing_state is not None:
-            cache_service.require_cache_entry(
-                directory_descriptor,
-                database_name,
-                existing_state,
-                "SQLite fingerprint cache",
-            )
-        return stage_name, stage_state
-    except sqlite3.Error as error:
-        raise VideoInspectionError(
-            f"cannot build a durable SQLite fingerprint cache update: {error}"
-        ) from error
-    finally:
-        if verification is not None:
-            verification.close()
-        if destination is not None:
-            destination.close()
-        if destination_descriptor is not None:
-            os.close(destination_descriptor)
-        if source is not None:
-            source.close()
-        if source_descriptor is not None:
-            os.close(source_descriptor)
-
-
-def _publish_staged_cache(
-    directory_descriptor: int,
-    database_name: str,
-    stage_name: str,
-    stage_state: cache_service.CacheEntryState,
-    existing_state: cache_service.CacheEntryState | None,
-) -> None:
-    cache_service.require_cache_entry(
-        directory_descriptor,
-        stage_name,
-        stage_state,
-        "SQLite cache staging file",
-    )
-    if existing_state is None:
-        if (
-            cache_service.cache_entry_at(
-                directory_descriptor, database_name, "SQLite fingerprint cache"
-            )
-            is not None
-        ):
-            raise VideoInspectionError("SQLite cache path became occupied")
-        cache_service.atomic_cache_rename(
-            directory_descriptor, stage_name, database_name, exchange=False
-        )
-        published = cache_service.cache_entry_at(
-            directory_descriptor, database_name, "SQLite fingerprint cache"
-        )
-        if not stage_state.matches_renamed(published):
-            raise VideoInspectionError(
-                "published SQLite cache failed identity verification"
-            )
-        os.fsync(directory_descriptor)
-        return
-
-    cache_service.require_cache_entry(
-        directory_descriptor,
-        database_name,
-        existing_state,
-        "SQLite fingerprint cache",
-    )
-    cache_service.atomic_cache_rename(
-        directory_descriptor, stage_name, database_name, exchange=True
-    )
-    valid_exchange = False
-    try:
-        displaced = cache_service.cache_entry_at(
-            directory_descriptor,
-            stage_name,
-            "displaced SQLite fingerprint cache",
-        )
-        published = cache_service.cache_entry_at(
-            directory_descriptor,
-            database_name,
-            "published SQLite fingerprint cache",
-        )
-        valid_exchange = existing_state.matches_renamed(
-            displaced
-        ) and stage_state.matches_renamed(published)
-    except cache_service.CacheError:
-        pass
-    if not valid_exchange:
-        try:
-            cache_service.atomic_cache_rename(
-                directory_descriptor, stage_name, database_name, exchange=True
-            )
-            os.fsync(directory_descriptor)
-        except cache_service.CacheError as rollback_error:
-            raise VideoInspectionError(
-                "SQLite cache path changed during publication and rollback failed"
-            ) from rollback_error
-        raise VideoInspectionError(
-            "SQLite cache path changed during atomic publication"
-        )
-    try:
-        os.unlink(stage_name, dir_fd=directory_descriptor)
-        os.fsync(directory_descriptor)
-    except OSError as error:
-        raise VideoInspectionError(
-            "SQLite cache was published but its replaced cache could not be removed"
-        ) from error
 
 
 def save_cached_fingerprints(
@@ -962,38 +704,33 @@ def save_cached_fingerprints(
 ) -> None:
     if not values:
         return
-    lock_path = database.with_name(f"{database.name}.lock")
+    records = tuple(
+        cache_service.DerivedEvidence(
+            file_sha256=file_hash,
+            evidence_type=cache_service.LEGACY_VIDEO_EVIDENCE_TYPE,
+            algorithm=FINGERPRINT_ALGORITHM,
+            runtime=ffmpeg_release,
+            payload_json=json.dumps(
+                {
+                    "audio_bytes": value.audio_bytes,
+                    "digest": value.digest,
+                    "video_frames": value.video_frames,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+        )
+        for file_hash, value in sorted(values.items())
+    )
     try:
-        with cache_service.locked_cache_directory(
-            database.parent, lock_path, exclusive=True
-        ) as locked:
-            directory_descriptor = locked.descriptor
-            existing_state = cache_service.cache_entry_at(
-                directory_descriptor, database.name, "SQLite fingerprint cache"
-            )
-            stage_name, stage_state = _build_staged_cache(
-                directory_descriptor,
-                database.name,
-                existing_state,
-                ffmpeg_release,
-                values,
-            )
-            locked.require_current()
-            _publish_staged_cache(
-                directory_descriptor,
-                database.name,
-                stage_name,
-                stage_state,
-                existing_state,
-            )
-    except VideoInspectionError:
-        raise
+        cache_service.publish_cache_update(
+            database,
+            lambda connection: cache_service.upsert_derived_evidence(
+                connection, records
+            ),
+        )
     except cache_service.CacheError as error:
         raise VideoInspectionError(str(error)) from error
-    except OSError as error:
-        raise VideoInspectionError(
-            f"cannot update SQLite fingerprint cache safely: {error}"
-        ) from error
 
 
 def keep_sort_key(record: VideoRecord) -> tuple[int, int, str]:
@@ -1068,31 +805,105 @@ def undo_duplicate_run(root: Path, apply: bool, *, summary: bool = False) -> int
 
 
 def inspect_video_paths(
-    root: Path, paths: list[Path], ffprobe: str, progress_interval_seconds: int
+    root: Path,
+    paths: list[Path],
+    ffprobe: str,
+    progress_interval_seconds: int,
+    database: Path | None,
+    publication_batch_size: int,
 ) -> tuple[list[VideoRecord], int, list[tuple[Path, str]]]:
     records: list[VideoRecord] = []
     scanned_bytes = 0
     skipped: list[tuple[Path, str]] = []
-    path_sizes: dict[Path, int] = {}
+    states: dict[Path, FileState] = {}
     for path in paths:
         try:
-            path_sizes[path] = path.stat().st_size
-        except OSError:
-            path_sizes[path] = 0
+            states[path] = FileState.capture(path)
+        except FileChangedError as error:
+            skipped.append((path, str(error)))
+    try:
+        cached_hashes = (
+            {}
+            if database is None
+            else load_cached_hashes(root, database, states, coordinated=True)
+        )
+    except HashCacheError as error:
+        raise VideoCacheError(
+            "Whole-file hash cache cannot be used safely: "
+            f"{error}\nThe cache is disposable; move it aside or rerun with --no-cache."
+        ) from error
+    if database is None:
+        print("Whole-file hash cache disabled: no records read or written.")
+    else:
+        print(
+            f"Whole-file hash cache lookup: {len(cached_hashes)} reusable "
+            f"record(s); {len(states) - len(cached_hashes)} hash(es) required."
+        )
     progress = ProgressMeter(
-        len(paths), sum(path_sizes.values()), progress_interval_seconds
+        len(states),
+        sum(state.size for state in states.values()),
+        progress_interval_seconds,
     )
-    for path in paths:
+    persisted = 0
+    pending: list[tuple[Path, FileState, str]] = []
+
+    def publish_pending() -> None:
+        nonlocal persisted
+        if database is None or not pending:
+            return
+        save_cached_hashes(root, database, pending)
+        persisted += len(pending)
+        pending.clear()
+
+    for path, state in states.items():
         try:
-            record = inspect_video(root, path, ffprobe)
+            record = inspect_video(
+                root,
+                path,
+                ffprobe,
+                state=state,
+                cached_sha256=cached_hashes.get(path),
+            )
             records.append(record)
             scanned_bytes += record.file_size
+            if database is not None and not record.byte_sha256_cached:
+                pending.append((record.path, record.state, record.byte_sha256))
+                if len(pending) >= publication_batch_size:
+                    publish_pending()
         except (FileChangedError, OSError, VideoInspectionError) as error:
             skipped.append((path, str(error)))
-        progress_message = progress.advance("inspected", byte_count=path_sizes[path])
+        except HashCacheError as error:
+            raise VideoCacheError(
+                f"Whole-file hash cache update failed safely: {error}"
+            ) from error
+        progress_message = progress.advance("inspected", byte_count=state.size)
         if progress_message:
             print(f"  {progress_message}")
+    try:
+        publish_pending()
+    except HashCacheError as error:
+        raise VideoCacheError(
+            f"Whole-file hash cache update failed safely: {error}"
+        ) from error
+    if database is not None:
+        print(f"Whole-file hash cache update: {persisted} new record(s) persisted.")
     return records, scanned_bytes, skipped
+
+
+def recheck_cached_video_hashes(root: Path, records: list[VideoRecord]) -> None:
+    """Re-read cached byte identities before permitting any exact move."""
+
+    for record in records:
+        if not record.byte_sha256_cached:
+            continue
+        with open_stable_file(
+            root, record.path, record.state, "cached video hash recheck"
+        ) as descriptor:
+            if sha256_descriptor(descriptor) != record.byte_sha256:
+                raise FileChangedError(
+                    "file content changed during cached video hash recheck: "
+                    f"{record.path}"
+                )
 
 
 def candidate_video_records(records: list[VideoRecord]) -> list[VideoRecord]:
@@ -1293,6 +1104,7 @@ def apply_video_moves(
     current_records = {
         record.path: record for records in duplicate_groups for record in records
     }
+    recheck_cached_video_hashes(root, list(current_records.values()))
     keepers = {kept.path: kept for kept, _, _ in move_plan}
     for record in current_records.values():
         require_current_video(record, "duplicate apply preflight")
@@ -1484,13 +1296,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     print(f"FFmpeg runtime: {ffmpeg_release}")
 
-    with stage_timer.measure("probing"):
-        records, scanned_bytes, skipped = inspect_video_paths(
-            root,
-            paths,
-            ffprobe,
-            config.performance.progress_interval_seconds,
+    try:
+        with stage_timer.measure("probing"):
+            records, scanned_bytes, skipped = inspect_video_paths(
+                root,
+                paths,
+                ffprobe,
+                config.performance.progress_interval_seconds,
+                None if args.no_cache else database,
+                config.performance.cache_publication_batch_size,
+            )
+    except VideoCacheError as error:
+        detail = (
+            "Whole-file hash cache cannot be used safely; rerun without --summary "
+            "for details."
+            if args.summary
+            else str(error)
         )
+        print(detail, file=sys.stderr)
+        return 1
     candidate_records = candidate_video_records(records)
     try:
         with stage_timer.measure("fingerprinting"):

@@ -74,6 +74,13 @@ never duplicate the version in source or static project metadata.
 - `scan` must never alter media, collection layout, or action history. Exact
   video dry runs may update the documented disposable fingerprint cache by
   default; `--no-cache` restores a zero-cache-read/write run.
+- A checksum scan may reuse exact-state whole-file observations but must use the
+  zero-write cache snapshot path: it never creates a cache, lock, sidecar, or
+  observation. An explicit scan cache path is read-only.
+- Reuse a whole-file hash only for an exact collection scope, relative path,
+  device, inode, size, modification-time, and change-time match. Recompute any
+  reused hash contributing to an applied exact-video result before creating
+  duplicate directories, action history, or moves.
 - Describe video-cache activity as reusable records, fingerprints required,
   and new records actually persisted. When `--no-cache` is selected, state the
   no-read/no-write boundary without implying that a lookup or update occurred.
@@ -113,6 +120,8 @@ never duplicate the version in source or static project metadata.
   status option boundaries.
 - `src/pymo/cache_warm.py`: explicit exact-video evidence warming for local or
   separately writable caches.
+- `src/pymo/hash_cache.py`: path-private exact-state whole-file hash observation
+  policy over the shared cache service.
 - `src/pymo/collection.py`: immutable canonical paths for one collection.
 - `src/pymo/logging_config.py`: console logging plus explicitly requested local
   log files.

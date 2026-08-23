@@ -107,6 +107,58 @@ def test_read_only_snapshot_detects_atomic_path_replacement(tmp_path: Path) -> N
     assert database.is_file()
 
 
+def test_generic_cache_publication_merges_validated_updates(tmp_path: Path) -> None:
+    database = tmp_path / "cache.sqlite3"
+    first = FileObservation("scope", "first.bin", 1, 2, 3, 4, 5, "a" * 64)
+    second = FileObservation("scope", "second.bin", 1, 3, 4, 5, 6, "b" * 64)
+
+    cache_service.publish_cache_update(
+        database,
+        lambda connection: upsert_file_observations(connection, (first,)),
+    )
+    cache_service.publish_cache_update(
+        database,
+        lambda connection: upsert_file_observations(connection, (second,)),
+    )
+
+    contents = cache_service.read_coordinated_cache(database)
+    assert contents is not None
+    assert set(contents.observations) == {first, second}
+
+
+def test_generic_cache_interruption_preserves_the_public_database(
+    tmp_path: Path, monkeypatch
+) -> None:
+    database = tmp_path / "cache.sqlite3"
+    first = FileObservation("scope", "first.bin", 1, 2, 3, 4, 5, "a" * 64)
+    second = FileObservation("scope", "second.bin", 1, 3, 4, 5, 6, "b" * 64)
+    cache_service.publish_cache_update(
+        database,
+        lambda connection: upsert_file_observations(connection, (first,)),
+    )
+    original = database.read_bytes()
+
+    def interrupt(*_args, **_kwargs) -> None:
+        raise CacheError("simulated interruption")
+
+    monkeypatch.setattr(cache_service, "_publish_generic_stage", interrupt)
+
+    with pytest.raises(CacheError, match="simulated interruption"):
+        cache_service.publish_cache_update(
+            database,
+            lambda connection: upsert_file_observations(connection, (second,)),
+        )
+
+    assert database.read_bytes() == original
+    stages = list(tmp_path.glob(".pymo.sqlite3.new.*"))
+    assert len(stages) == 1
+    connection = sqlite3.connect(stages[0])
+    assert connection.execute(
+        "SELECT relative_path FROM file_observations ORDER BY relative_path"
+    ).fetchall() == [("first.bin",), ("second.bin",)]
+    connection.close()
+
+
 def test_current_schema_records_versioned_evidence_and_file_identity() -> None:
     connection = sqlite3.connect(":memory:")
     initialize_schema(connection)
