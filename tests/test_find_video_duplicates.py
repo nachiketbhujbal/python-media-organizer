@@ -11,15 +11,15 @@ from pathlib import Path
 
 import pytest
 
-from pymo import cache as cache_service
 from pymo.action_log import action_log_path
+from pymo.cache import service as cache_service
+from pymo.classification import Classifier
 from pymo.collection import CollectionLayout
 from pymo.config import load_config
 from pymo.discovery import DiscoveryError
 from pymo.duplicates import common as duplicate_common
 from pymo.duplicates import videos as video_duplicates
 from pymo.duplicates.videos import ProbeInfo
-from pymo.organize import Classifier
 
 FFMPEG = shutil.which("ffmpeg")
 FFPROBE = shutil.which("ffprobe")

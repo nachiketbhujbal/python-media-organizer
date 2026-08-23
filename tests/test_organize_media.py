@@ -11,8 +11,8 @@ from PIL import Image
 
 from pymo import discovery, organize
 from pymo.action_log import action_log_path
+from pymo.classification import Classifier
 from pymo.config import load_config
-from pymo.organize import Classifier
 
 
 def make_fixture(root: Path) -> None:
@@ -41,7 +41,7 @@ def test_classifier_streams_descriptor_to_file_standard_input(
 
     classifier = Classifier(load_config(tmp_path).classification)
     classifier.file_command = "file"
-    monkeypatch.setattr("pymo.organize.subprocess.run", completed)
+    monkeypatch.setattr("pymo.classification.subprocess.run", completed)
     descriptor = os.open(path, os.O_RDONLY)
     try:
         assert classifier.classify(path, descriptor) == ("picture", "image/png")

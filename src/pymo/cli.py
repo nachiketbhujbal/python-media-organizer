@@ -8,7 +8,8 @@ import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from pymo import __version__, cache_cli, organize, rename, scan, validate
+from pymo import __version__, organize, rename, scan, validate
+from pymo.cache import cli as cache_cli
 from pymo.config import add_show_ignored_argument
 from pymo.duplicates import images, videos
 from pymo.logging_config import configure_logging

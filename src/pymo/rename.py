@@ -29,6 +29,7 @@ from pymo.action_log import (
     NoUndoableRun,
     ToolId,
 )
+from pymo.classification import Classifier
 from pymo.config import (
     ConfigError,
     PymoConfig,
@@ -39,7 +40,7 @@ from pymo.config import (
 )
 from pymo.discovery import DiscoveryError
 from pymo.logging_config import emit as print
-from pymo.organize import Classifier, discover_files, path_key
+from pymo.organize import discover_files, path_key
 from pymo.progress import ProgressMeter
 
 

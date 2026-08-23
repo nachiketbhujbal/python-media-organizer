@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 from pymo.action_log import is_action_log_path
+from pymo.cache.hashes import HashCacheError, load_cached_hashes
+from pymo.classification import Classifier, desired_directory
 from pymo.collection import CollectionLayout
 from pymo.config import (
     ConfigError,
@@ -24,9 +26,7 @@ from pymo.config import (
     load_config,
 )
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
-from pymo.hash_cache import HashCacheError, load_cached_hashes
 from pymo.logging_config import emit as print
-from pymo.organize import Classifier, desired_directory
 from pymo.progress import ProgressMeter, format_bytes
 from pymo.rename import canonical_match, collection_slug
 

@@ -7,6 +7,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from pymo.classification import Classifier
 from pymo.config import (
     ConfigError,
     add_config_argument,
@@ -27,7 +28,6 @@ from pymo.duplicates.videos import (
     writable_cache_path,
 )
 from pymo.logging_config import emit as print
-from pymo.organize import Classifier
 from pymo.progress import StageTimer, format_bytes
 
 

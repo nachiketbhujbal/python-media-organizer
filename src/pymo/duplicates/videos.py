@@ -35,6 +35,8 @@ from pymo.action_log import (
     NoUndoableRun,
     ToolId,
 )
+from pymo.cache.hashes import HashCacheError, load_cached_hashes, save_cached_hashes
+from pymo.classification import Classifier
 from pymo.collection import CollectionLayout
 from pymo.config import (
     ConfigError,
@@ -56,9 +58,7 @@ from pymo.duplicates.common import (
     layout_problems,
 )
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
-from pymo.hash_cache import HashCacheError, load_cached_hashes, save_cached_hashes
 from pymo.logging_config import emit as print
-from pymo.organize import Classifier
 from pymo.progress import ProgressMeter, StageTimer, format_bytes
 
 # This value is persisted with derived fingerprints. Changing the algorithm
