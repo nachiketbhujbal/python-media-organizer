@@ -96,10 +96,17 @@ never duplicate the version in source or static project metadata.
   no-read/no-write boundary without implying that a lookup or update occurred.
 - Scan inventory, classification, and checksum facts must come from stable file
   state. Omit detected changes and report only their aggregate count by default.
-- `validate` is report-only: it never repairs, quarantines, moves, deletes,
-  caches, or action-logs media. Collection roots and filenames are private by
-  default; filenames require explicit `--show-files`. An unreadable subtree is
-  a health error, and changing input supersedes any decoder conclusion.
+- `validate` is media-non-mutating: it never repairs, quarantines, moves,
+  deletes, or action-logs media. Fresh standard/full checks may publish
+  disposable validation evidence by default; `--no-cache` is a complete
+  cache-read/write opt-out and `--cache` keeps derived state outside a read-only
+  collection. Collection roots and filenames are private by default;
+  filenames require explicit `--show-files`. An unreadable subtree is a health
+  error, and changing input supersedes any decoder conclusion.
+- Never use cached validation health to satisfy an ordinary standard or full
+  validation request. Persist results only after a current descriptor-pinned
+  read. Key them by exact content, profile, semantic classification context,
+  and applicable local runtimes, with an exact file observation.
 - Keep validation content reads pinned to the same stable descriptor boundary.
   Do not reintroduce pathname-based decoder opens after a separate state check.
 
@@ -110,7 +117,8 @@ never duplicate the version in source or static project metadata.
 - `src/pymo/scan.py`: path-private inventory, layout/naming readiness,
   duplicate potential, estimated work, and stable JSON output.
 - `src/pymo/validate.py`: standard and full-decode media health reports over
-  any collection layout, with path-private JSON and health exit status.
+  any collection layout, with path-private JSON, fresh evidence publication,
+  and health exit status.
 - `src/pymo/rename.py`: deterministic timestamp/descriptor-based media names.
   It protects `dups` and does not claim visual recognition.
 - `src/pymo/duplicates/images.py`: exact displayed-pixel duplicate detection.
@@ -124,10 +132,10 @@ never duplicate the version in source or static project metadata.
   dependency-aware undo.
 - `src/pymo/cache/`: the disposable derived-cache subsystem. Its package facade
   exposes the supported storage API while `service.py`, `hashes.py`,
-  `images.py`, `paths.py`, `probes.py`, `status.py`, `warm.py`, and `cli.py` own
-  storage, byte observations, displayed-pixel evidence, writable-target policy,
-  normalized video structure evidence, reporting, deliberate population, and
-  dispatch respectively.
+  `images.py`, `paths.py`, `probes.py`, `validation.py`, `status.py`, `warm.py`,
+  and `cli.py` own storage, byte observations, displayed-pixel evidence,
+  writable-target policy, normalized video structure evidence, validation
+  evidence, reporting, deliberate population, and dispatch respectively.
 - `src/pymo/video.py`: shared normalized video structure facts used by exact
   analysis and its derived evidence.
 - `src/pymo/classification.py`: shared local content-signature and extension

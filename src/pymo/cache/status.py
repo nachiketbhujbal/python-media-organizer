@@ -25,6 +25,13 @@ from pymo.cache.probes import (
     ProbeCacheError,
     decode_probe_payload,
 )
+from pymo.cache.validation import (
+    VALIDATION_EVIDENCE_TYPE,
+    VALIDATION_FULL_ALGORITHM,
+    VALIDATION_STANDARD_ALGORITHM,
+    ValidationCacheError,
+    validate_evidence_records,
+)
 from pymo.collection import CollectionLayout
 from pymo.duplicates import videos
 from pymo.logging_config import emit as print
@@ -165,6 +172,12 @@ def inspect_cache_status(
             ]
             for record in image_pixels:
                 decode_pixel_payload(record.payload_json)
+            validation_records = [
+                record
+                for record in evidence
+                if record.evidence_type == VALIDATION_EVIDENCE_TYPE
+            ]
+            validate_evidence_records(validation_records)
             type_counts = Counter(record.evidence_type for record in evidence)
             cache["evidence_records"] = len(evidence)
             cache["evidence_types"] = dict(sorted(type_counts.items()))
@@ -185,8 +198,15 @@ def inspect_cache_status(
                 + sum(
                     record.algorithm == IMAGE_PIXEL_ALGORITHM for record in image_pixels
                 )
+                + sum(
+                    record.algorithm
+                    in {VALIDATION_STANDARD_ALGORITHM, VALIDATION_FULL_ALGORITHM}
+                    for record in validation_records
+                )
             )
-            known_evidence = exact_video + video_probes + image_pixels
+            known_evidence = (
+                exact_video + video_probes + image_pixels + validation_records
+            )
             compatibility = cache["evidence_compatibility"]
             assert isinstance(compatibility, dict)
             compatibility.update(
@@ -238,6 +258,7 @@ def inspect_cache_status(
         HashCacheError,
         ImageCacheError,
         ProbeCacheError,
+        ValidationCacheError,
         videos.VideoInspectionError,
     ):
         cache["state"] = "invalid"

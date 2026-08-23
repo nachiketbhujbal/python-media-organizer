@@ -16,9 +16,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from PIL import Image, ImageSequence, UnidentifiedImageError
+from PIL import Image, ImageSequence, UnidentifiedImageError, __version__
 
 from pymo.action_log import is_action_log_path
+from pymo.cache.hashes import sha256_descriptor
+from pymo.cache.paths import CachePathError, writable_cache_path
+from pymo.cache.validation import (
+    ValidationCacheError,
+    ValidationEvidenceValue,
+    ValidationFindingValue,
+    ValidationProfile,
+    completed_timestamp,
+    preflight_validation_cache,
+    publish_validation_batch,
+    validation_runtime,
+)
 from pymo.classification import Classifier
 from pymo.config import (
     ConfigError,
@@ -28,13 +40,18 @@ from pymo.config import (
     ignored_messages,
     load_config,
 )
-from pymo.duplicates.videos import VideoInspectionError, resolve_executable
+from pymo.duplicates.videos import (
+    VideoInspectionError,
+    ffmpeg_version,
+    ffprobe_version,
+    resolve_executable,
+)
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
 from pymo.progress import ProgressMeter, format_bytes
 
 # This identifies the public machine-readable validation report contract.
-VALIDATION_REPORT_SCHEMA_VERSION = 1
+VALIDATION_REPORT_SCHEMA_VERSION = 2
 
 
 Severity = Literal["error", "warning", "info"]
@@ -68,6 +85,8 @@ class ValidationResult:
     candidate: MediaCandidate
     findings: tuple[Finding, ...]
     animated_or_multipage: bool = False
+    byte_sha256: str | None = None
+    completed_at: str = ""
 
 
 @dataclass(frozen=True)
@@ -93,6 +112,7 @@ class ValidationOptions:
     timeout: int
     progress_interval_seconds: int
     show_progress: bool
+    hash_content: bool
 
 
 @dataclass(frozen=True)
@@ -101,6 +121,13 @@ class ReportOptions:
     workers: int
     show_files: bool
     show_ignored: bool
+    cache_enabled: bool = False
+    cache_location: str | None = None
+    cache_records_written: int = 0
+    cache_issue: str | None = None
+    cache_mode: str = "fresh"
+    cache_records_reused: int = 0
+    fresh_validation_files: int | None = None
 
 
 def _extension_kind(path: Path, config: PymoConfig) -> MediaKind | None:
@@ -245,6 +272,22 @@ def _changed_finding(candidate: MediaCandidate) -> Finding:
     )
 
 
+def _validation_result(
+    candidate: MediaCandidate,
+    findings: list[Finding],
+    *,
+    animated_or_multipage: bool = False,
+    byte_sha256: str | None = None,
+) -> ValidationResult:
+    return ValidationResult(
+        candidate,
+        tuple(findings),
+        animated_or_multipage,
+        byte_sha256,
+        completed_timestamp(),
+    )
+
+
 def _classification_findings(candidate: MediaCandidate) -> list[Finding]:
     findings: list[Finding] = []
     if candidate.state.size == 0:
@@ -279,16 +322,21 @@ def _classification_findings(candidate: MediaCandidate) -> list[Finding]:
     return findings
 
 
-def validate_image(candidate: MediaCandidate, full: bool) -> ValidationResult:
+def validate_image(
+    candidate: MediaCandidate, full: bool, *, hash_content: bool = False
+) -> ValidationResult:
     findings = _classification_findings(candidate)
     supported_extensions = Image.registered_extensions()
     animated_or_multipage = False
+    byte_sha256: str | None = None
     try:
         with open_stable_file(
             candidate.root, candidate.path, candidate.state, "image validation"
         ) as descriptor:
+            if hash_content:
+                byte_sha256 = sha256_descriptor(descriptor)
             if candidate.state.size == 0:
-                return ValidationResult(candidate, tuple(findings))
+                return _validation_result(candidate, findings, byte_sha256=byte_sha256)
             if (
                 candidate.extension_kind == "picture"
                 and candidate.path.suffix.casefold() not in supported_extensions
@@ -302,7 +350,7 @@ def validate_image(candidate: MediaCandidate, full: bool) -> ValidationResult:
                         "Pillow has no decoder for this recognized image format",
                     )
                 )
-                return ValidationResult(candidate, tuple(findings))
+                return _validation_result(candidate, findings, byte_sha256=byte_sha256)
             os.lseek(descriptor, 0, os.SEEK_SET)
             with os.fdopen(os.dup(descriptor), "rb") as handle:
                 with Image.open(handle) as opened:
@@ -332,6 +380,7 @@ def validate_image(candidate: MediaCandidate, full: bool) -> ValidationResult:
                             frame.load()
     except FileChangedError:
         findings = [_changed_finding(candidate)]
+        byte_sha256 = None
     except (
         Image.DecompressionBombError,
         Image.DecompressionBombWarning,
@@ -344,11 +393,17 @@ def validate_image(candidate: MediaCandidate, full: bool) -> ValidationResult:
             candidate.state.require_unchanged(candidate.path, "image validation")
         except FileChangedError:
             findings = [_changed_finding(candidate)]
+            byte_sha256 = None
         else:
             findings.append(
                 _finding(candidate, "error", "invalid_image", "image decode failed")
             )
-    return ValidationResult(candidate, tuple(findings), animated_or_multipage)
+    return _validation_result(
+        candidate,
+        findings,
+        animated_or_multipage=animated_or_multipage,
+        byte_sha256=byte_sha256,
+    )
 
 
 def _probe_video(descriptor: int, ffprobe: str) -> dict[str, Any]:
@@ -551,16 +606,21 @@ def validate_video(
     ffprobe: str | None,
     ffmpeg: str | None,
     timeout: int,
+    *,
+    hash_content: bool = False,
 ) -> ValidationResult:
     findings = _classification_findings(candidate)
+    byte_sha256: str | None = None
     if candidate.state.size > 0 and ffprobe is None:
         raise VideoInspectionError("ffprobe is required for non-empty video")
     try:
         with open_stable_file(
             candidate.root, candidate.path, candidate.state, "video validation"
         ) as descriptor:
+            if hash_content:
+                byte_sha256 = sha256_descriptor(descriptor)
             if candidate.state.size == 0:
-                return ValidationResult(candidate, tuple(findings))
+                return _validation_result(candidate, findings, byte_sha256=byte_sha256)
             if ffprobe is None:
                 raise VideoInspectionError("ffprobe is required for non-empty video")
             findings.extend(
@@ -568,11 +628,13 @@ def validate_video(
             )
     except FileChangedError:
         findings = [_changed_finding(candidate)]
-    except VideoInspectionError:
+        byte_sha256 = None
+    except (OSError, VideoInspectionError):
         try:
             candidate.state.require_unchanged(candidate.path, "video validation")
         except FileChangedError:
             findings = [_changed_finding(candidate)]
+            byte_sha256 = None
         else:
             findings.append(
                 _finding(
@@ -582,7 +644,7 @@ def validate_video(
                     "video probe or full decode failed",
                 )
             )
-    return ValidationResult(candidate, tuple(findings))
+    return _validation_result(candidate, findings, byte_sha256=byte_sha256)
 
 
 def validate_candidates(
@@ -597,9 +659,15 @@ def validate_candidates(
 
     def validate_one(candidate: MediaCandidate) -> ValidationResult:
         if candidate.kind == "picture":
-            return validate_image(candidate, options.full)
+            return validate_image(
+                candidate, options.full, hash_content=options.hash_content
+            )
         return validate_video(
-            candidate, options.ffprobe, options.ffmpeg, options.timeout
+            candidate,
+            options.ffprobe,
+            options.ffmpeg,
+            options.timeout,
+            hash_content=options.hash_content,
         )
 
     results: list[ValidationResult] = []
@@ -615,6 +683,72 @@ def validate_candidates(
                 if options.show_progress and message:
                     print(f"  {message}")
     return tuple(results)
+
+
+def _validation_evidence_values(
+    results: tuple[ValidationResult, ...],
+    profile: ValidationProfile,
+    ffprobe_release: str | None,
+    ffmpeg_release: str | None,
+) -> tuple[ValidationEvidenceValue, ...]:
+    values: list[ValidationEvidenceValue] = []
+    for result in results:
+        if result.byte_sha256 is None:
+            continue
+        candidate = result.candidate
+        runtime = validation_runtime(
+            kind=candidate.kind,
+            extension=candidate.path.suffix.casefold(),
+            extension_kind=candidate.extension_kind,
+            detected_kind=candidate.detected_kind,
+            pillow=f"Pillow {__version__}" if candidate.kind == "picture" else None,
+            ffprobe=ffprobe_release if candidate.kind == "video" else None,
+            ffmpeg=ffmpeg_release if candidate.kind == "video" else None,
+        )
+        values.append(
+            ValidationEvidenceValue(
+                path=candidate.path,
+                state=candidate.state,
+                byte_sha256=result.byte_sha256,
+                kind=candidate.kind,
+                profile=profile,
+                runtime=runtime,
+                completed_at=result.completed_at,
+                findings=tuple(
+                    ValidationFindingValue(
+                        finding.severity, finding.code, finding.description
+                    )
+                    for finding in result.findings
+                ),
+                animated_or_multipage=result.animated_or_multipage,
+            )
+        )
+    return tuple(values)
+
+
+def publish_validation_results(
+    root: Path,
+    database: Path,
+    results: tuple[ValidationResult, ...],
+    profile: ValidationProfile,
+    ffprobe_release: str | None,
+    ffmpeg_release: str | None,
+    batch_size: int,
+) -> tuple[int, str | None]:
+    """Publish bounded result batches and retain completed earlier batches."""
+
+    values = _validation_evidence_values(
+        results, profile, ffprobe_release, ffmpeg_release
+    )
+    written = 0
+    for start in range(0, len(values), batch_size):
+        batch = values[start : start + batch_size]
+        try:
+            publish_validation_batch(root, database, batch)
+        except ValidationCacheError:
+            return written, "validation evidence could not be published safely"
+        written += len(batch)
+    return written, None
 
 
 def build_report(
@@ -734,6 +868,25 @@ def build_report(
                 result.animated_or_multipage for result in results
             ),
         },
+        "cache": {
+            "enabled": options.cache_enabled,
+            "location": options.cache_location,
+            "records_written": options.cache_records_written,
+            "records_reused": options.cache_records_reused,
+            "mode": options.cache_mode,
+            "fresh_validation_files": (
+                len(results)
+                if options.fresh_validation_files is None
+                else options.fresh_validation_files
+            ),
+            "fresh_validation_performed": (
+                len(results)
+                if options.fresh_validation_files is None
+                else options.fresh_validation_files
+            )
+            > 0,
+            "issue": options.cache_issue,
+        },
         "findings": [
             {
                 "severity": severity,
@@ -786,7 +939,18 @@ def print_report(report: dict[str, Any], show_files: bool) -> None:
         print("\nAffected files:")
         for finding in report["finding_files"]:
             print(f"  {finding['path']}: {finding['severity']} " f"{finding['code']}")
-    print("\nValidation is report-only; no files were changed.")
+    print("\nValidation did not modify media or action history.")
+    cache = report["cache"]
+    if cache["enabled"]:
+        print(
+            "Disposable cache evidence: "
+            f"{cache['records_written']} validated file record(s) written "
+            f"({cache['location']})."
+        )
+        if cache["issue"]:
+            print(f"  WARNING: {cache['issue']}.")
+    else:
+        print("Disposable cache evidence: disabled; no records read or written.")
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -814,6 +978,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=int,
         help="bounded validation workers (default: configured scan workers)",
     )
+    cache_options = parser.add_mutually_exclusive_group()
+    cache_options.add_argument(
+        "--cache",
+        type=Path,
+        help=(
+            "write fresh validation evidence to this cache file instead of the "
+            "collection-local default; its parent must already exist"
+        ),
+    )
+    cache_options.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="perform fresh validation without reading or writing cache state",
+    )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
     return parser.parse_args(argv)
@@ -827,7 +1005,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     try:
         config = load_config(root, args.config)
-    except ConfigError as error:
+        database = None if args.no_cache else writable_cache_path(root, args.cache)
+    except (CachePathError, ConfigError) as error:
         print(f"Cannot use configuration: {error}", file=sys.stderr)
         return 2
     workers = (
@@ -838,6 +1017,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     discovery = discover_candidates(root, config)
+    if database is not None and discovery.candidates:
+        try:
+            preflight_validation_cache(database)
+        except ValidationCacheError:
+            print("Validation cache cannot be used safely.", file=sys.stderr)
+            return 1
     videos = [
         item
         for item in discovery.candidates
@@ -845,17 +1030,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     ]
     ffprobe: str | None = None
     ffmpeg: str | None = None
+    ffprobe_release: str | None = None
+    ffmpeg_release: str | None = None
     try:
         if videos:
             ffprobe = resolve_executable(None, "ffprobe")
             if args.full:
                 ffmpeg = resolve_executable(None, "ffmpeg")
+            if database is not None:
+                ffprobe_release = ffprobe_version(ffprobe)
+                if ffmpeg is not None:
+                    ffmpeg_release = ffmpeg_version(ffmpeg)
     except VideoInspectionError as error:
         print(str(error), file=sys.stderr)
         return 2
 
     if not args.json:
         print(f"Validating {len(discovery.candidates)} media file(s).")
+        if database is None:
+            print("Validation cache disabled: no records read or written.")
+        else:
+            location = "explicit" if args.cache is not None else "collection-local"
+            print(f"Fresh validation evidence will be cached ({location}).")
         for message in ignored_messages(
             list(discovery.ignored), root, args.show_ignored
         ):
@@ -871,8 +1067,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             timeout=config.video_duplicates.decode_timeout_seconds,
             progress_interval_seconds=config.performance.progress_interval_seconds,
             show_progress=not args.json,
+            hash_content=database is not None,
         ),
     )
+    profile: ValidationProfile = "full" if args.full else "standard"
+    cache_records_written = 0
+    cache_issue: str | None = None
+    if database is not None:
+        cache_records_written, cache_issue = publish_validation_results(
+            root,
+            database,
+            results,
+            profile,
+            ffprobe_release,
+            ffmpeg_release,
+            config.performance.cache_publication_batch_size,
+        )
     report = build_report(
         root,
         discovery,
@@ -882,13 +1092,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             workers=validation_workers,
             show_files=args.show_files,
             show_ignored=args.show_ignored,
+            cache_enabled=database is not None,
+            cache_location=(
+                None
+                if database is None
+                else "explicit" if args.cache is not None else "collection-local"
+            ),
+            cache_records_written=cache_records_written,
+            cache_issue=cache_issue,
         ),
     )
     if args.json:
         print(json.dumps(report, sort_keys=True, separators=(",", ":")))
     else:
         print_report(report, args.show_files)
-    return 1 if report["health"]["files_with_errors"] else 0
+    return 1 if report["health"]["files_with_errors"] or cache_issue else 0
 
 
 if __name__ == "__main__":

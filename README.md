@@ -25,9 +25,10 @@ for the source content.
 Mutation planning and undo require complete filesystem enumeration plus
 successful no-follow metadata inspection of every returned name. If a
 directory or enumerated entry cannot be read completely, pymo stops before
-creating action state or moving media; report-only scan and validation instead
+creating action state or moving media; non-mutating scan and validation instead
 preserve the problem as a visible health finding while continuing over readable
-neighbors.
+neighbors. Validation may record disposable cache evidence unless `--no-cache`
+is explicit, but it never changes media or authoritative action history.
 
 ## Requirements and installation
 
@@ -213,7 +214,7 @@ same-size duplicate candidates; estimated expensive work; existing local pymo
 state; and recommended next steps.
 
 Recommendations form an ordered plan rather than only naming the next command.
-`scan` recommends report-only `validate` before any mutating command. When
+`scan` recommends fresh `validate` before any mutating command. When
 layout and filenames both need work, it then recommends `organize` before
 `rename`, followed by the applicable exact-duplicate finders.
 
@@ -312,13 +313,31 @@ pymo validate "/path/to/media-collection"
 pymo validate "/path/to/media-collection" --full
 pymo validate "/path/to/media-collection" --json
 pymo validate "/path/to/media-collection" --show-files
+pymo validate "/path/to/media-collection" --no-cache
+pymo validate "/path/to/media-collection" \
+  --cache "/path/to/writable-cache.sqlite3"
 ```
 
 `validate` recursively checks media in any collection layout and never moves,
-deletes, repairs, quarantines, renames, caches, or action-logs a file. The
+deletes, repairs, quarantines, renames, or action-logs a file. The
 standard profile uses Pillow integrity verification for supported images and
 local ffprobe structure checks for videos. `--full` additionally loads every
 image frame and completely decodes video/audio streams through local FFmpeg.
+
+After each fresh check, validation records path-private, disposable evidence in
+the shared cache by default. A record binds the complete-file SHA-256 and exact
+file observation to the validation profile, semantic extension/content
+context, applicable Pillow or native-tool versions, result, findings, and UTC
+completion time. Observations and results publish together in bounded atomic
+batches. Cache evidence never lets ordinary or full validation skip a current
+probe or decode: an old healthy result cannot establish current health.
+
+`--no-cache` restores a run with no cache reads, evidence hashing, cache writes,
+or lock creation. `--cache PATH` writes the evidence database and sibling lock
+in an existing external directory instead, keeping a read-only media collection
+free of derived state. Invalid known validation evidence stops early and is
+left untouched. Neither cache mode changes media, creates `dups`, or writes
+action history.
 
 Reports cover empty and invalid media, unreadable or changing entries,
 extension/content mismatches, unsupported recognized image formats, video
@@ -337,12 +356,15 @@ result is reported as changed so the user can rerun safely.
 
 Collection roots and filenames are hidden by default. `--show-files` adds
 collection-relative affected paths; `--show-ignored` controls ignored paths
-separately. JSON uses stable schema version 1 without collection names or
-roots. Native video diagnostics are not copied into reports. Exit status is 0
-when no errors are found, 1 when validation reports errors, and 2 when the
-command cannot run safely. Warnings alone return 0. Standard validation uses
-bounded workers; full validation containing video uses one worker to avoid
-unmeasured competing FFmpeg decodes.
+separately. JSON schema version 2 omits collection names and roots and reports
+the validation mode, fresh and reused file counts, whether fresh validation
+ran, whether caching was enabled, the path-private cache location class,
+records written, and any publication issue. Native video
+diagnostics are not copied into reports. Exit status is 0 when no errors are
+found, 1 when validation reports errors or cache publication is incomplete,
+and 2 when the command cannot run safely. Warnings alone return 0. Standard
+validation uses bounded workers; full validation containing video uses one
+worker to avoid unmeasured competing FFmpeg decodes.
 
 ### Organize a collection
 
@@ -647,7 +669,8 @@ elapsed-time summaries, default and opt-out console timestamps, timestamped
 multi-line logs, observed throughput and ETA reporting, FFmpeg heartbeats,
 shared built-in and custom policy, malformed-config refusal, centralized
 collection paths, default ignored-name privacy, explicit relative ignored-path
-output, logging privacy, report-only standard/full validation, validation JSON
+output, logging privacy, non-mutating standard/full validation, fresh
+validation evidence, validation JSON
 privacy and health exit codes, and the guarantee that video decoding never
 invokes capture devices. Private collections and their names are not fixtures
 or repository content.

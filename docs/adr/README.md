@@ -75,3 +75,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0067](0067-cache-displayed-pixel-fingerprints.md) | Cache displayed-pixel fingerprints |
 | [0068](0068-shared-cache-input-policy.md) | Shared cache input policy |
 | [0069](0069-unified-cache-warming.md) | Unified image and video cache warming |
+| [0070](0070-fresh-validation-evidence.md) | Fresh validation evidence |
