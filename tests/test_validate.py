@@ -97,8 +97,11 @@ def test_validation_json_is_path_private_and_stable(tmp_path: Path, run_script) 
     assert report["cache"] == {
         "enabled": True,
         "fresh_validation_performed": True,
+        "fresh_validation_files": 1,
         "issue": None,
         "location": "collection-local",
+        "mode": "fresh",
+        "records_reused": 0,
         "records_written": 1,
     }
     assert "empty.png" not in private.stdout

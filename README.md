@@ -357,8 +357,9 @@ result is reported as changed so the user can rerun safely.
 Collection roots and filenames are hidden by default. `--show-files` adds
 collection-relative affected paths; `--show-ignored` controls ignored paths
 separately. JSON schema version 2 omits collection names and roots and reports
-that fresh validation ran, whether caching was enabled, the path-private cache
-location class, records written, and any publication issue. Native video
+the validation mode, fresh and reused file counts, whether fresh validation
+ran, whether caching was enabled, the path-private cache location class,
+records written, and any publication issue. Native video
 diagnostics are not copied into reports. Exit status is 0 when no errors are
 found, 1 when validation reports errors or cache publication is incomplete,
 and 2 when the command cannot run safely. Warnings alone return 0. Standard

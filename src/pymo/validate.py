@@ -125,6 +125,9 @@ class ReportOptions:
     cache_location: str | None = None
     cache_records_written: int = 0
     cache_issue: str | None = None
+    cache_mode: str = "fresh"
+    cache_records_reused: int = 0
+    fresh_validation_files: int | None = None
 
 
 def _extension_kind(path: Path, config: PymoConfig) -> MediaKind | None:
@@ -869,7 +872,19 @@ def build_report(
             "enabled": options.cache_enabled,
             "location": options.cache_location,
             "records_written": options.cache_records_written,
-            "fresh_validation_performed": True,
+            "records_reused": options.cache_records_reused,
+            "mode": options.cache_mode,
+            "fresh_validation_files": (
+                len(results)
+                if options.fresh_validation_files is None
+                else options.fresh_validation_files
+            ),
+            "fresh_validation_performed": (
+                len(results)
+                if options.fresh_validation_files is None
+                else options.fresh_validation_files
+            )
+            > 0,
             "issue": options.cache_issue,
         },
         "findings": [

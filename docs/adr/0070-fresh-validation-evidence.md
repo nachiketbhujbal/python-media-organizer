@@ -34,8 +34,10 @@ relative path, filesystem identity, state, and the same content hash.
 Observations and results publish together in bounded atomic updates. `--cache`
 selects an external database and sibling lock; `--no-cache` performs fresh
 validation without cache reads, hashes for evidence, or writes. Validation JSON
-schema 2 reports whether fresh validation ran, where evidence was directed,
-how many file records were written, and whether publication became incomplete.
+schema 2 reports the fresh/reuse mode, fresh and reused file counts, whether
+fresh validation ran, where evidence was directed, how many file records were
+written, and whether publication became incomplete. The reuse count is zero in
+this release and reserves the stable field for the explicit v0.4.12 mode.
 
 ## Consequences
 
