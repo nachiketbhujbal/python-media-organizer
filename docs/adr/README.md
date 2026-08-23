@@ -78,3 +78,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0070](0070-fresh-validation-evidence.md) | Fresh validation evidence |
 | [0071](0071-explicit-validation-reuse.md) | Explicit validation evidence reuse |
 | [0072](0072-targeted-cache-refresh.md) | Targeted derived-cache refresh |
+| [0073](0073-directional-fresh-byte-coverage.md) | Fresh directional byte coverage |

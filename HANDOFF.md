@@ -26,7 +26,7 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and includes the version 0.4.13 targeted cache-refresh release.
+`pymo` command, and includes the version 0.5.0 directional byte-coverage release.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -166,6 +166,19 @@ the ordinary always-fresh descriptor-pinned path. Atomic selected-key upserts
 preserve unrelated cache types, algorithms, runtimes, profiles, and collection
 scopes. Refresh keeps the external-cache, privacy, bounded-publication,
 organized-media ownership, and zero media/action-history mutation boundaries.
+
+Version 0.5.0 adds report-only
+`pymo verify-migration SOURCE DESTINATION`. It freshly hashes every in-scope
+regular file in two distinct, non-nested trees through stable, no-follow,
+collection-anchored descriptors and compares SHA-256-plus-length identities
+independently of roots, paths, and filenames. Unique coverage is distinct from
+duplicate multiplicity and destination-only content. Reports distinguish
+complete in-scope coverage, definitely incomplete coverage, and unproven
+filesystem evidence; schema-1 JSON and normal text remain root- and
+filename-private unless relative path disclosure is explicit. Neither tree
+receives cache, lock, configuration, action-history, duplicate-tree, or media
+writes. Version 0.5.0 is exact-byte scope only; image/video equivalence and the
+final sign-off gate remain planned through 0.5.3.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -336,11 +349,17 @@ python-media-organizer/
       status.py
       validation.py
       warm.py
+    migration/
+      __init__.py
+      coverage.py
+      inventory.py
+      report.py
     action_log.py
     organize.py
     rename.py
     scan.py
     validate.py
+    verify_migration.py
     video.py
     duplicates/
       common.py
@@ -359,6 +378,7 @@ pymo cache status COLLECTION
 pymo cache warm {images,videos,all} COLLECTION
 pymo cache refresh {images,videos,validation-standard,validation-full} COLLECTION
 pymo validate COLLECTION
+pymo verify-migration SOURCE DESTINATION
 pymo find-image-duplicates COLLECTION
 pymo find-video-duplicates COLLECTION
 ```
@@ -742,6 +762,31 @@ Directory traversal failures are counted and warned about instead of silently
 omitted. Recommendations begin with fresh, non-mutating validation before
 organization, renaming, or duplicate isolation.
 
+## Directional migration verification
+
+`src/pymo/verify_migration.py` coordinates report-only
+`pymo verify-migration SOURCE DESTINATION`. The `src/pymo/migration/`
+subpackage owns fresh stable inventory, exact-byte coverage and multiplicity
+accounting, and the root-free schema-1 report. The command never writes cache,
+locks, configuration, action history, duplicate trees, or media to either
+collection.
+
+Version 0.5.0 identifies each in-scope regular-file stream by complete SHA-256
+plus length. Paths, filenames, root names, and aggregate sizes are not content
+identity. One destination representative may cover several byte-identical
+source copies; duplicate reduction and destination-only content are reported
+separately. Both trees are freshly read through collection-anchored no-follow
+descriptors rather than relying on cached historical hashes.
+
+The verdict is `complete` only for the declared in-scope byte contract,
+`incomplete` when complete evidence proves source identities absent, and
+`unproven` when source evidence is incomplete or destination failures could
+hide a missing representative. Symbolic links are never followed. Ignored
+entry points and pymo-owned state are counted but outside schema 1; the stricter
+post-transformation sign-off boundary remains reserved for version 0.5.3.
+Normal output reveals no roots or filenames. `--show-files` and
+`--show-ignored` deliberately expose collection-relative details.
+
 ## Media validation
 
 `src/pymo/validate.py` implements media-non-mutating
@@ -899,6 +944,10 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - explicit validation reuse for unchanged exact matches, changed/profile/runtime
   misses, external caches, cached error outcomes, decoder non-invocation on a
   hit, post-lookup replacement rejection, and real FFmpeg full-decode evidence;
+- directional fresh-byte migration coverage across renamed and reorganized
+  trees, duplicate reduction and destination extras, missing content, ignored
+  and pymo-owned state, symbolic links, traversal/read/change failures, root
+  overlap, path privacy, and zero-write behavior;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

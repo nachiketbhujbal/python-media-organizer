@@ -66,6 +66,19 @@ The same adversarial method was repeated after the first validation release.
 | DISC-001 | High | Organizer and renamer planning, organizer verification, and action-log undo snapshots can consume an `os.walk` traversal without an error callback, allowing an unreadable subtree to be mistaken for a complete namespace. Flat duplicate discovery also exposes raw enumeration failures instead of a consistent no-state failure boundary. | 0.4.1 | Resolved in ADR 0059 |
 | DISC-002 | High | A corrupt filesystem can return a name from directory enumeration and then return `ENOENT` for that same name. `Path.is_file()`, `is_dir()`, and `is_symlink()` suppress these metadata failures as false, so v0.4.1 traversal completeness can still omit a ghost entry from mutation and undo plans. | 0.4.2 | Resolved in ADR 0060 |
 
+## Migration-verification review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| MIG-001 | High | Comparing paths, names, file counts, or total bytes cannot prove preservation after organization, renaming, or duplicate reduction. | 0.5.0 | Resolved with directional complete-file SHA-256 plus length identities |
+| MIG-002 | High | Silently omitted source traversal, entry, read, or change failures could turn incomplete filesystem evidence into a false successful migration verdict. | 0.5.0 | Resolved with explicit incomplete evidence and an `unproven` verdict |
+| MIG-003 | High | Reusing a historical hash by metadata identity alone cannot prove that the current source bytes remain readable for preservation sign-off. | 0.5.0 | Resolved with fresh stable-descriptor reads for both inventories |
+| MIG-004 | Medium | Treating every reduced duplicate copy as missing data would conflate multiplicity with unique-content preservation. | 0.5.0 | Resolved by separate unique coverage and reduced/added copy accounting |
+| MIG-005 | Medium | A missing source identity is not definitely absent when destination traversal or reads were incomplete; the candidate representative may be hidden by the failure. | 0.5.0 | Resolved by distinguishing `incomplete` from `unproven` based on destination evidence |
+| MIG-006 | Medium | Difference reports can expose two absolute roots and private filenames, doubling the privacy surface of a normal collection command. | 0.5.0 | Resolved with aggregate defaults, root-free JSON, and explicit relative-path opt-ins |
+| MIG-007 | Medium | Identical or nested roots let one inventory consume the other and make a directional comparison misleading. | 0.5.0 | Resolved by rejecting same and ancestor/descendant roots before discovery |
+| MIG-008 | Low | Pymo cache, configuration, lock, staging, and action-history bytes are tool state rather than media-preservation content. | 0.5.0 | Resolved with counted, zero-read tool-state exclusion in the declared schema-1 scope |
+
 ## CI portability findings
 
 | ID | Severity | Finding | Resolution target | Status |
@@ -231,6 +244,8 @@ The same adversarial method was repeated after the first validation release.
   every miss falling back to current descriptor-pinned validation.
 - `0.4.13`: force recomputation of one named evidence family without deleting
   unrelated disposable records or changing media and action history.
+- `0.5.0`: establish fresh, path-independent directional byte coverage with
+  explicit complete, incomplete, and unproven evidence states.
 
 ## Independent review evidence
 

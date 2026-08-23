@@ -10,13 +10,14 @@ not import a command entry point.
 ```text
 CLI dispatch
   -> command coordinators
-       -> duplicates/ and cache/ subsystems
+       -> duplicates/, cache/, and migration/ subsystems
             -> shared safety and policy modules
 ```
 
 - `cli.py` and `__main__.py` select a command and own no media policy.
 - `organize.py`, `rename.py`, `scan.py`, and `validate.py` are user-facing
-  command coordinators. Their staged functions remain directly testable.
+  command coordinators. `verify_migration.py` coordinates the directional
+  preservation report. Their staged functions remain directly testable.
 - `duplicates/` owns exact duplicate policy. Images and videos remain separate
   because their definitions of equivalent content and their native dependencies
   differ; `common.py` contains only shared layout and move-plan policy.
@@ -29,6 +30,11 @@ CLI dispatch
   population, `refresh.py` owns forced selected recomputation, and `cli.py`
   dispatches nested cache operations. The
   package `__init__.py` exposes the supported storage facade used by producers.
+- `migration/` owns path-independent preservation evidence. `inventory.py`
+  owns fresh stable byte inventory, `coverage.py` owns directional identity and
+  multiplicity accounting, and `report.py` owns the root-free public schema.
+  Later exact-image and exact-video coverage layers extend this domain without
+  moving command dispatch or cache ownership into it.
 - `action_log.py` owns the authoritative append-only mutation journal. It is
   deliberately outside `cache/` because journal evidence is portable and
   authoritative while cache state is derived and disposable.

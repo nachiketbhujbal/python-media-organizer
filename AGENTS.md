@@ -120,6 +120,16 @@ never duplicate the version in source or static project metadata.
   falls back to fresh validation. Do not recommend reuse for migration sign-off.
 - Keep validation content reads pinned to the same stable descriptor boundary.
   Do not reintroduce pathname-based decoder opens after a separate state check.
+- `verify-migration` is directional and report-only. It must never write cache,
+  lock, configuration, media, duplicate trees, or action history to either
+  root. Hash current content through stable collection-anchored descriptors;
+  do not let names, paths, aggregate sizes, or cached historical health prove
+  byte preservation.
+- A migration success claim is relative to its named evidence contract. Keep
+  unique-byte coverage distinct from duplicate multiplicity and destination
+  extras. Incomplete source evidence is `unproven`; missing identities are
+  definite only when destination evidence is also complete. Paths remain
+  hidden unless `--show-files` or `--show-ignored` is explicit.
 
 ## Package layout and tools
 
@@ -139,6 +149,10 @@ never duplicate the version in source or static project metadata.
 - `src/pymo/duplicates/common.py`: shared duplicate-folder validation,
   collision naming, review destinations, and undo display without combining
   image/video analysis policy.
+- `src/pymo/migration/`: fresh stable inventory, directional byte/content
+  coverage, multiplicity accounting, and path-private preservation reports.
+- `src/pymo/verify_migration.py`: thin coordinator for the public directional
+  verification command.
 - `src/pymo/action_log.py`: shared append-only mutation journal and guarded
   dependency-aware undo.
 - `src/pymo/cache/`: the disposable derived-cache subsystem. Its package facade
