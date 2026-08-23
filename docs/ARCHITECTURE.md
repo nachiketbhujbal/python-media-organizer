@@ -21,11 +21,12 @@ CLI dispatch
   because their definitions of equivalent content and their native dependencies
   differ; `common.py` contains only shared layout and move-plan policy.
 - `cache/` owns disposable derived state. `service.py` is the schema and safe
-  SQLite publication boundary, `hashes.py` owns whole-file observation policy,
-  `probes.py` owns normalized video structure evidence, `status.py` owns
-  zero-write reporting, `warm.py` owns deliberate population, and `cli.py`
-  dispatches nested cache operations. The package `__init__.py` exposes the
-  supported storage facade used by producers.
+  SQLite publication boundary, `hashes.py` owns whole-file observation and
+  descriptor-hash policy, `images.py` owns displayed-pixel evidence,
+  `paths.py` owns writable-target selection, `probes.py` owns normalized video
+  structure evidence, `status.py` owns zero-write reporting, `warm.py` owns
+  deliberate population, and `cli.py` dispatches nested cache operations. The
+  package `__init__.py` exposes the supported storage facade used by producers.
 - `action_log.py` owns the authoritative append-only mutation journal. It is
   deliberately outside `cache/` because journal evidence is portable and
   authoritative while cache state is derived and disposable.

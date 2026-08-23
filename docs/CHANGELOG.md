@@ -2,6 +2,21 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.9 - 2026-08-23
+
+- Cache displayed-pixel fingerprints by complete-file SHA-256, normalization
+  algorithm, and exact Pillow runtime, including reuse for newly hashed paths
+  containing already known bytes.
+- Add image-finder `--cache PATH` and `--no-cache` boundaries and report actual
+  hash/pixel reuse, computation, and publication without exposing paths.
+- Strictly validate cached pixel payloads and make cache status recognize
+  current versus stale displayed-pixel algorithms while remaining zero-write.
+- Publish each bounded batch's image observations and pixel evidence in one
+  atomic update, and freshly recompute every reused hash involved before an
+  applied image result can create state or move media.
+- Move writable-cache target resolution and descriptor hashing into the shared
+  cache subsystem so image and video consumers use one policy owner.
+
 ## 0.4.8 - 2026-08-22
 
 - Persist normalized ffprobe structure by content SHA-256, probe algorithm, and

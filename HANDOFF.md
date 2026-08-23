@@ -118,6 +118,17 @@ actual reused probes, computed probes, and newly persisted records without
 exposing paths. Cache status recognizes and validates probe evidence while
 remaining runtime-agnostic and zero-write.
 
+Version 0.4.9 adds the equivalent safe acceleration boundary for exact images.
+Displayed-pixel fingerprints are keyed by complete-file SHA-256, persisted RGBA
+normalization algorithm, and exact Pillow runtime. Hash observations and newly
+decoded pixel evidence publish together in bounded atomic batches. The finder
+supports its collection-local cache, an explicit external cache, or a complete
+`--no-cache` opt-out. Before an apply may create state or move an image, every
+reused byte hash involved is freshly descriptor-pinned and recomputed. Strict
+payload validation also makes cache status recognize malformed or stale image
+evidence without invoking Pillow. Shared writable-target policy and descriptor
+hashing now live in the cache subsystem rather than video command ownership.
+
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
 behavior. Version 0.3.18 prefixes every physical line of normal human-readable
@@ -278,6 +289,8 @@ python-media-organizer/
       __init__.py
       cli.py
       hashes.py
+      images.py
+      paths.py
       probes.py
       service.py
       status.py
@@ -447,6 +460,12 @@ collection root. Pillow receives a non-owning binary stream over that pinned
 descriptor, and both the descriptor and pathname are revalidated after pixel
 decoding. A concurrent pathname or parent-directory swap therefore cannot
 redirect Pillow to unrelated local content.
+
+Whole-file observations and displayed-pixel fingerprints use the shared cache
+by default. Reuse requires matching content SHA-256, normalization algorithm,
+and exact Pillow runtime. The finder accepts an external writable cache or
+`--no-cache`; a reused hash participating in apply is recomputed before any
+review directory, action history, or move is created.
 
 Within an exact group it keeps the largest file, then oldest on a size tie,
 then stable filename order. Extra copies move to flat readable names such as

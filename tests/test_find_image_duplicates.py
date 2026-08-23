@@ -7,6 +7,7 @@ import pytest
 from PIL import Image, PngImagePlugin
 
 from pymo.action_log import action_log_path
+from pymo.collection import CollectionLayout
 from pymo.discovery import DiscoveryError
 from pymo.duplicates import common as duplicate_common
 from pymo.duplicates import images as image_duplicates
@@ -37,6 +38,8 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
     assert dry_run.returncode == 0
     assert "Ignored by configuration: 1 path(s)." in dry_run.stdout
     assert "Would move 1 duplicate" in dry_run.stdout
+    assert "0 compatible record(s) available" in dry_run.stdout
+    assert "0 reused; 2 computed; 2 new record(s) persisted" in dry_run.stdout
     assert "Potentially reclaimable if extra copies were deleted" in dry_run.stdout
     assert "No files are deleted by this tool" in dry_run.stdout
     assert older.exists()
@@ -47,6 +50,8 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
     applied = run_script("find_image_duplicates.py", tmp_path, "--apply")
 
     assert applied.returncode == 0
+    assert "2 compatible record(s) available" in applied.stdout
+    assert "2 reused; 0 computed; 0 new record(s) persisted" in applied.stdout
     assert larger.exists()
     assert not older.exists()
     moved = tmp_path / "dups" / "pics" / "larger_copy(1).png"
@@ -162,6 +167,61 @@ def test_duplicate_finder_uses_custom_inspection_extensions(
     assert "Would move 1 duplicate" in result.stdout
     assert first.exists()
     assert second.exists()
+
+
+def test_image_finder_no_cache_mode_creates_no_derived_state(
+    tmp_path: Path, run_script
+) -> None:
+    pics, _ = make_organized_collection(tmp_path)
+    Image.new("RGB", (2, 2), "green").save(pics / "garden.png")
+    layout = CollectionLayout(tmp_path)
+
+    result = run_script("find_image_duplicates.py", tmp_path, "--no-cache")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Image fingerprint cache disabled" in result.stdout
+    assert not layout.derived_cache.exists()
+    assert not layout.derived_cache_lock.exists()
+
+
+def test_image_finder_uses_only_an_explicit_external_cache(
+    tmp_path: Path, run_script
+) -> None:
+    collection = tmp_path / "private-garden-collection"
+    pics, _ = make_organized_collection(collection)
+    Image.new("RGB", (2, 2), "green").save(pics / "garden.png")
+    external = tmp_path / "derived"
+    external.mkdir()
+    database = external / "portable.sqlite3"
+    layout = CollectionLayout(collection)
+
+    result = run_script(
+        "find_image_duplicates.py", collection, "--cache", database, "--summary"
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert database.is_file()
+    assert database.with_name(f"{database.name}.lock").is_file()
+    assert not layout.derived_cache.exists()
+    assert not layout.derived_cache_lock.exists()
+    assert collection.name not in result.stdout + result.stderr
+
+
+def test_image_finder_rejects_conflicting_cache_options(
+    tmp_path: Path, run_script
+) -> None:
+    make_organized_collection(tmp_path)
+
+    result = run_script(
+        "find_image_duplicates.py",
+        tmp_path,
+        "--cache",
+        tmp_path / "cache.sqlite3",
+        "--no-cache",
+    )
+
+    assert result.returncode == 2
+    assert "cannot be combined" in result.stderr
 
 
 def test_duplicate_finder_requires_organized_collection_root(

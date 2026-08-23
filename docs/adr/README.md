@@ -72,3 +72,5 @@ old one rather than rewriting why the earlier choice was made.
 | [0064](0064-stable-whole-file-hash-observations.md) | Exact-state whole-file hash reuse |
 | [0065](0065-cohesive-package-boundaries.md) | Cohesive package boundaries |
 | [0066](0066-cache-normalized-video-probes.md) | Cache normalized video probes |
+| [0067](0067-cache-displayed-pixel-fingerprints.md) | Cache displayed-pixel fingerprints |
+| [0068](0068-shared-cache-input-policy.md) | Shared cache input policy |

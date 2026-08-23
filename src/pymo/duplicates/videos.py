@@ -35,14 +35,14 @@ from pymo.action_log import (
     NoUndoableRun,
     ToolId,
 )
-from pymo.cache.hashes import HashCacheError, load_cached_hashes
+from pymo.cache.hashes import HashCacheError, load_cached_hashes, sha256_descriptor
+from pymo.cache.paths import CachePathError, writable_cache_path
 from pymo.cache.probes import (
     ProbeCacheError,
     load_cached_probes,
     publish_video_inspection_batch,
 )
 from pymo.classification import Classifier
-from pymo.collection import CollectionLayout
 from pymo.config import (
     ConfigError,
     PymoConfig,
@@ -106,14 +106,6 @@ class DerivedFingerprint:
 
 
 VideoMove = tuple[VideoRecord, VideoRecord, Path]
-
-
-def sha256_descriptor(descriptor: int) -> str:
-    digest = hashlib.sha256()
-    os.lseek(descriptor, 0, os.SEEK_SET)
-    while chunk := os.read(descriptor, 1024 * 1024):
-        digest.update(chunk)
-    return digest.hexdigest()
 
 
 def inspect_video(
@@ -361,21 +353,6 @@ def resolve_executable(value: Path | None, name: str) -> str:
     if not resolved.is_file() or not os.access(resolved, os.X_OK):
         raise VideoInspectionError(f"not an executable {name} path: {resolved}")
     return str(resolved)
-
-
-def writable_cache_path(root: Path, requested: Path | None) -> Path:
-    """Resolve a local or explicit cache target without creating its parent."""
-
-    if requested is None:
-        return CollectionLayout(root).derived_cache
-    database = Path(os.path.abspath(requested.expanduser()))
-    if database.name in {"", ".", ".."}:
-        raise VideoInspectionError("invalid explicit SQLite cache path")
-    if not database.parent.is_dir() or database.parent.is_symlink():
-        raise VideoInspectionError(
-            "explicit SQLite cache parent must be an existing regular directory"
-        )
-    return database
 
 
 def native_tool_version(executable: str, name: str) -> str:
@@ -1258,7 +1235,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         config = load_config(root, args.config)
         database = writable_cache_path(root, args.cache)
-    except (ConfigError, VideoInspectionError) as error:
+    except (CachePathError, ConfigError, VideoInspectionError) as error:
         detail = "rerun without --summary for details" if args.summary else str(error)
         print(f"Cannot use configuration: {detail}", file=sys.stderr)
         return 2

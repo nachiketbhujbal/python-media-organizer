@@ -7,6 +7,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from pymo.cache.paths import CachePathError, writable_cache_path
 from pymo.classification import Classifier
 from pymo.config import (
     ConfigError,
@@ -26,7 +27,6 @@ from pymo.duplicates.videos import (
     ffprobe_version,
     inspect_video_paths,
     resolve_executable,
-    writable_cache_path,
 )
 from pymo.logging_config import emit as print
 from pymo.progress import StageTimer, format_bytes
@@ -95,7 +95,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         config = load_config(root, args.config)
         database = writable_cache_path(root, args.cache)
         location = "explicit" if args.cache is not None else "collection-local"
-    except (ConfigError, VideoInspectionError) as error:
+    except (CachePathError, ConfigError, VideoInspectionError) as error:
         print(f"Cannot prepare cache warming: {error}", file=sys.stderr)
         return 2
 

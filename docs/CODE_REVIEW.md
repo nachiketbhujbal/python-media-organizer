@@ -96,6 +96,9 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-014 | Medium | Probe reuse needs a field-exact payload validator; accepting merely valid JSON could let malformed dimensions, timing, or audio shape enter exact-video candidate grouping. | 0.4.8 | Resolved with strict typed payload decoding and fail-closed status/consumer tests |
 | CACHE-015 | Low | Publishing hashes and probes through separate staged replacements would double durable cache publication work and allow one inspection batch to become only partially represented between updates. | 0.4.8 | Resolved with one combined atomic batch transaction |
 | CACHE-016 | Low | A pre-hash “probes required” estimate would be false when a newly added path hashes to content whose probe is already cached. | 0.4.8 | Resolved by reporting compatible records at lookup and observed reused/computed counts after inspection |
+| CACHE-017 | Low | Exact-image reruns decoded every unchanged image through Pillow even after the same displayed pixels had been established for the same bytes and runtime. | 0.4.9 | Resolved with content/algorithm/Pillow-runtime-keyed pixel evidence |
+| CACHE-018 | High | A displayed-pixel group derived from a reused byte hash must not authorize mutation solely from disposable cache state. | 0.4.9 | Resolved by descriptor-pinned byte recomputation before any image apply state is created |
+| CACHE-019 | Medium | Image-cache payloads, external target selection, and complete cache opt-out needed the same fail-closed and no-local-write boundaries as video evidence. | 0.4.9 | Resolved with strict payload validation plus external and `--no-cache` regressions |
 
 ## Checksum-read review findings
 
@@ -110,6 +113,7 @@ The same adversarial method was repeated after the first validation release.
 | ARCH-001 | Low | Cache schema, publication, observation policy, status, warming, and command-dispatch modules shared one derived-state lifecycle but were scattered across the package root without a discoverable subsystem boundary. | 0.4.7 | Resolved in ADR 0065 |
 | ARCH-002 | Low | Splitting modules by size alone would create new interfaces across cohesive action-journal and exact-media invariants without improving dependency direction or ownership. | 0.4.7 | Accepted and documented in ADR 0065 with explicit future extraction criteria |
 | ARCH-003 | Low | Scan, validation, rename, duplicate analysis, and cache warming imported media classification from the organizer command, giving shared policy misleading command ownership. | 0.4.7 | Resolved by the shared classification foundation in ADR 0065 |
+| ARCH-004 | Low | Writable cache paths and complete descriptor hashing were implemented under the video duplicate command even though image and video producers share both policies. | 0.4.9 | Resolved by shared cache target and hash primitives in ADR 0068 |
 
 ## Progress and timing review findings
 
@@ -203,6 +207,8 @@ The same adversarial method was repeated after the first validation release.
   ownership and dependency rules without changing behavior.
 - `0.4.8`: reuse strictly validated, ffprobe-runtime-keyed normalized video
   structure and publish each hash/probe batch atomically.
+- `0.4.9`: reuse strictly validated, Pillow-runtime-keyed displayed-pixel
+  evidence and recheck cached content before image mutation.
 
 ## Independent review evidence
 
