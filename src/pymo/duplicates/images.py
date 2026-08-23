@@ -273,6 +273,8 @@ def inspect_image_paths(
     database: Path | None,
     publication_batch_size: int,
     pillow_runtime: str,
+    *,
+    reuse_evidence: bool = True,
 ) -> tuple[list[ImageRecord], int, list[tuple[Path, str]]]:
     scanned_bytes = 0
     skipped: list[tuple[Path, str]] = []
@@ -285,12 +287,12 @@ def inspect_image_paths(
     try:
         cached_hashes = (
             {}
-            if database is None
+            if database is None or not reuse_evidence
             else load_cached_hashes(root, database, states, coordinated=True)
         )
         cached_pixels = (
             {}
-            if database is None
+            if database is None or not reuse_evidence
             else load_cached_pixel_hashes(database, pillow_runtime)
         )
     except (HashCacheError, ImageCacheError) as error:
@@ -302,12 +304,13 @@ def inspect_image_paths(
         print("Image fingerprint cache disabled: no records read or written.")
     else:
         print(
-            f"Whole-file hash cache lookup: {len(cached_hashes)} reusable "
-            f"record(s); {len(states) - len(cached_hashes)} hash(es) required."
+            f"Whole-file hash cache {'lookup' if reuse_evidence else 'refresh'}: "
+            f"{len(cached_hashes)} reusable record(s); "
+            f"{len(states) - len(cached_hashes)} hash(es) required."
         )
         print(
-            f"Displayed-pixel cache lookup: {len(cached_pixels)} compatible "
-            "record(s) available."
+            f"Displayed-pixel cache {'lookup' if reuse_evidence else 'refresh'}: "
+            f"{len(cached_pixels)} compatible record(s) available."
         )
     progress = ProgressMeter(
         len(states),
@@ -391,15 +394,16 @@ def inspect_image_paths(
             f"Image fingerprint cache update failed safely: {error}"
         ) from error
     if database is not None:
+        publication_label = "new" if reuse_evidence else "refreshed"
         print(
-            f"Whole-file hash cache update: {hashes_persisted} new record(s) "
-            "persisted."
+            f"Whole-file hash cache update: {hashes_persisted} "
+            f"{publication_label} record(s) persisted."
         )
         print(
             "Displayed-pixel cache use: "
             f"{sum(record.pixel_hash_cached for record in analyzed)} reused; "
             f"{sum(not record.pixel_hash_cached for record in analyzed)} computed; "
-            f"{len(pixels_persisted)} new record(s) persisted."
+            f"{len(pixels_persisted)} {publication_label} record(s) persisted."
         )
 
     return analyzed, scanned_bytes, skipped

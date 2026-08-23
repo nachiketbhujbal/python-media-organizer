@@ -25,8 +25,9 @@ CLI dispatch
   descriptor-hash policy, `images.py` owns displayed-pixel evidence,
   `paths.py` owns writable-target selection, `probes.py` owns normalized video
   structure evidence, `validation.py` owns health evidence,
-  `status.py` owns zero-write reporting, `warm.py` owns deliberate population,
-  and `cli.py` dispatches nested cache operations. The
+  `status.py` owns zero-write reporting, `warm.py` owns reusable media
+  population, `refresh.py` owns forced selected recomputation, and `cli.py`
+  dispatches nested cache operations. The
   package `__init__.py` exposes the supported storage facade used by producers.
 - `action_log.py` owns the authoritative append-only mutation journal. It is
   deliberately outside `cache/` because journal evidence is portable and

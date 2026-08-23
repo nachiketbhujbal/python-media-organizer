@@ -26,7 +26,7 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and includes the version 0.4.11 fresh validation-evidence release.
+`pymo` command, and includes the version 0.4.13 targeted cache-refresh release.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -157,6 +157,15 @@ candidate hit is reopened through the stable descriptor boundary before use;
 changed or incompatible files fall back to fresh validation and publication.
 Ordinary validation remains fresh, and fresh validation remains the required
 mode for final migration sign-off.
+
+Version 0.4.13 adds targeted `pymo cache refresh` operations for image
+fingerprints, video fingerprints, standard validation, and full validation.
+Image/video refresh bypasses persistent selected evidence and recomputes hashes
+plus the applicable pixel, probe, and playback records. Validation refresh uses
+the ordinary always-fresh descriptor-pinned path. Atomic selected-key upserts
+preserve unrelated cache types, algorithms, runtimes, profiles, and collection
+scopes. Refresh keeps the external-cache, privacy, bounded-publication,
+organized-media ownership, and zero media/action-history mutation boundaries.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -348,6 +357,7 @@ pymo rename COLLECTION
 pymo scan COLLECTION
 pymo cache status COLLECTION
 pymo cache warm {images,videos,all} COLLECTION
+pymo cache refresh {images,videos,validation-standard,validation-full} COLLECTION
 pymo validate COLLECTION
 pymo find-image-duplicates COLLECTION
 pymo find-video-duplicates COLLECTION
@@ -356,8 +366,9 @@ pymo find-video-duplicates COLLECTION
 The four mutating tools support dry-run/apply behavior and `--undo`, which is
 also a preview unless combined with `--apply`. `scan` and `cache status` are
 strictly read-only. `validate` may write fresh disposable evidence unless
-`--no-cache` is explicit; `cache warm` writes only disposable cache state.
-Neither changes media or action history. Global `--verbose`, `--quiet`,
+`--no-cache` is explicit; `cache warm` and `cache refresh` write only
+disposable cache state. Neither changes media or action history. Global
+`--verbose`, `--quiet`,
 `--log-file PATH`, `--timestamps`, `--no-timestamps`, `--config PATH`, and
 `--show-ignored` options go before the subcommand. `--show-ignored` and
 command-specific options are also accepted by the selected command after its
@@ -684,6 +695,23 @@ video input does not resolve FFmpeg. Image-only and video-only warming require
 only their owned organized folder, while `all` requires both. The command does
 not replace collection scan, validation, or preservation verification.
 
+## Targeted cache refresh
+
+`pymo cache refresh {images,videos,validation-standard,validation-full}
+COLLECTION` forces one named evidence family to be recomputed. Image refresh
+re-hashes and re-decodes displayed pixels in `pics`; video refresh re-hashes,
+re-probes, and re-decodes playback in `vids`. Byte-identical content may share
+one derived computation inside the current run, but persistent selected
+evidence is never accepted as a hit. Validation targets run the fresh standard
+or full profile over any layout and publish their current results.
+
+Refresh performs atomic upserts and never deletes the cache, so unrelated
+records survive. It supports the same external writable-cache, path-private
+failure reporting, configuration, and ignored-path rules as its underlying
+operation. It never creates `dups`, moves media, or appends action history.
+Invalid structural cache state fails closed; refresh is deliberate
+recomputation, not automatic repair or a preservation verdict.
+
 ## Collection scan
 
 `src/pymo/scan.py` provides the read-only first-run `pymo scan COLLECTION`
@@ -860,6 +888,10 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   reused, setup-invalid, and explicitly external cache runs, including proof
   that media, duplicate trees, action history, and read-only source cache state
   are not written;
+- targeted image, video, standard-validation, and full-validation refresh,
+  including forced recomputation, unrelated-record retention, external cache
+  isolation, profile separation, selector-specific argument rejection, media
+  immutability, and real FFmpeg execution;
 - fresh standard/full validation evidence for healthy and invalid content,
   strict runtime/context payloads, byte-identical files with distinct
   extensions, local/external/disabled cache modes, old-health non-reuse, cache

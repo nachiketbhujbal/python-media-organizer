@@ -58,6 +58,12 @@ never duplicate the version in source or static project metadata.
   history. A combined warm validates all selected layouts and required native
   tools before its first cache write. An explicit cache path keeps the
   analyzed collection free of cache and lock writes.
+- `cache refresh {images,videos,validation-standard,validation-full}` must
+  recompute only the selected evidence while preserving unrelated cache rows.
+  It may replace disposable records atomically but must never delete cache
+  siblings, mutate media, create duplicate trees, or append action history.
+  Validation refresh always performs a fresh check; it never consumes old
+  health evidence.
 - Bind exact-media analysis to a stable regular-file state. Revalidate complete
   duplicate groups before apply and retained originals through journal commit.
 - Keep exact-media classification, hashing, probing, and decoding pinned to
@@ -138,9 +144,10 @@ never duplicate the version in source or static project metadata.
 - `src/pymo/cache/`: the disposable derived-cache subsystem. Its package facade
   exposes the supported storage API while `service.py`, `hashes.py`,
   `images.py`, `paths.py`, `probes.py`, `validation.py`, `status.py`, `warm.py`,
-  and `cli.py` own storage, byte observations, displayed-pixel evidence,
+  `refresh.py`, and `cli.py` own storage, byte observations, displayed-pixel evidence,
   writable-target policy, normalized video structure evidence, validation
-  evidence, reporting, deliberate population, and dispatch respectively.
+  evidence, reporting, reusable population, forced targeted refresh, and
+  dispatch respectively.
 - `src/pymo/video.py`: shared normalized video structure facts used by exact
   analysis and its derived evidence.
 - `src/pymo/classification.py`: shared local content-signature and extension

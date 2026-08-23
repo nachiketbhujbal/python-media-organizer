@@ -780,6 +780,8 @@ def inspect_video_paths(
     database: Path | None,
     publication_batch_size: int,
     ffprobe_release: str | None = None,
+    *,
+    reuse_evidence: bool = True,
 ) -> tuple[list[VideoRecord], int, list[tuple[Path, str]]]:
     records: list[VideoRecord] = []
     scanned_bytes = 0
@@ -793,7 +795,7 @@ def inspect_video_paths(
     try:
         cached_hashes = (
             {}
-            if database is None
+            if database is None or not reuse_evidence
             else load_cached_hashes(root, database, states, coordinated=True)
         )
     except HashCacheError as error:
@@ -805,7 +807,7 @@ def inspect_video_paths(
         None if database is None else ffprobe_release or ffprobe_version(ffprobe)
     )
     try:
-        if database is None:
+        if database is None or not reuse_evidence:
             cached_probes = {}
         else:
             assert probe_runtime is not None
@@ -820,12 +822,13 @@ def inspect_video_paths(
         print("Video probe cache disabled: no records read or written.")
     else:
         print(
-            f"Whole-file hash cache lookup: {len(cached_hashes)} reusable "
-            f"record(s); {len(states) - len(cached_hashes)} hash(es) required."
+            f"Whole-file hash cache {'lookup' if reuse_evidence else 'refresh'}: "
+            f"{len(cached_hashes)} reusable record(s); "
+            f"{len(states) - len(cached_hashes)} hash(es) required."
         )
         print(
-            f"Video probe cache lookup: {len(cached_probes)} compatible "
-            "record(s) available."
+            f"Video probe cache {'lookup' if reuse_evidence else 'refresh'}: "
+            f"{len(cached_probes)} compatible record(s) available."
         )
     progress = ProgressMeter(
         len(states),
@@ -891,12 +894,16 @@ def inspect_video_paths(
             f"Video inspection cache update failed safely: {error}"
         ) from error
     if database is not None:
-        print(f"Whole-file hash cache update: {persisted} new record(s) persisted.")
+        publication_label = "new" if reuse_evidence else "refreshed"
+        print(
+            f"Whole-file hash cache update: {persisted} "
+            f"{publication_label} record(s) persisted."
+        )
         print(
             "Video probe cache use: "
             f"{sum(record.probe_cached for record in records)} reused; "
             f"{sum(not record.probe_cached for record in records)} computed; "
-            f"{len(probes_persisted)} new record(s) persisted."
+            f"{len(probes_persisted)} {publication_label} record(s) persisted."
         )
     return records, scanned_bytes, skipped
 
@@ -938,11 +945,14 @@ def derive_candidate_fingerprints(
     summary: bool = False,
     *,
     fingerprint_label: str = "candidate content",
+    reuse_evidence: bool = True,
 ) -> tuple[dict[str, DerivedFingerprint], list[tuple[Path, str]]]:
     unique_hashes = {record.byte_sha256: record for record in candidate_records}
     try:
         cached = (
-            {} if no_cache else load_cached_fingerprints(root, database, ffmpeg_release)
+            {}
+            if no_cache or not reuse_evidence
+            else load_cached_fingerprints(root, database, ffmpeg_release)
         )
     except VideoInspectionError as error:
         raise VideoCacheError(
@@ -959,7 +969,8 @@ def derive_candidate_fingerprints(
         )
     else:
         print(
-            f"Fingerprint cache lookup: {cache_hits} reusable record(s); "
+            f"Fingerprint cache {'lookup' if reuse_evidence else 'refresh'}: "
+            f"{cache_hits} reusable record(s); "
             f"{cache_misses} fingerprint(s) required."
         )
     ordered_hashes = sorted(
@@ -1039,8 +1050,10 @@ def derive_candidate_fingerprints(
         if progress_message:
             print(f"  {progress_message}")
     if not no_cache:
+        publication_label = "new" if reuse_evidence else "refreshed"
         print(
-            f"Fingerprint cache update: {persisted_records} new record(s) persisted; "
+            f"Fingerprint cache update: {persisted_records} "
+            f"{publication_label} record(s) persisted; "
             f"{cache_misses - persisted_records} required fingerprint(s) not "
             "persisted."
         )

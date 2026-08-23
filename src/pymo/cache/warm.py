@@ -122,11 +122,17 @@ def _selected_kinds(media: str) -> tuple[MediaKind, ...]:
     return ("picture",) if media == "images" else ("video",)
 
 
-def _layout_ready(root: Path, config: PymoConfig, kinds: tuple[MediaKind, ...]) -> bool:
+def _layout_ready(
+    root: Path,
+    config: PymoConfig,
+    kinds: tuple[MediaKind, ...],
+    *,
+    operation: str = "warming",
+) -> bool:
     counts = {kind: len(layout_problems(root, config, kind)) for kind in kinds}
     if not any(counts.values()):
         return True
-    print("Collection is not ready for selected cache warming:", file=sys.stderr)
+    print(f"Collection is not ready for selected cache {operation}:", file=sys.stderr)
     for kind, count in counts.items():
         if count:
             label = "image" if kind == "picture" else "video"
@@ -173,6 +179,8 @@ def _warm_images(
     database: Path,
     config: PymoConfig,
     timer: StageTimer,
+    *,
+    reuse_evidence: bool = True,
 ) -> WarmResult:
     with timer.measure("image fingerprinting"):
         records, inspected_bytes, skipped = inspect_image_paths(
@@ -182,6 +190,7 @@ def _warm_images(
             database,
             config.performance.cache_publication_batch_size,
             f"Pillow {PILLOW_VERSION}",
+            reuse_evidence=reuse_evidence,
         )
     hashes = {record.byte_sha256 for record in records}
     return WarmResult(
@@ -202,6 +211,8 @@ def _warm_videos(
     config: PymoConfig,
     tools: VideoTools,
     timer: StageTimer,
+    *,
+    reuse_evidence: bool = True,
 ) -> WarmResult:
     with timer.measure("video probing"):
         records, inspected_bytes, skipped = inspect_video_paths(
@@ -212,6 +223,7 @@ def _warm_videos(
             database,
             config.performance.cache_publication_batch_size,
             tools.ffprobe_release,
+            reuse_evidence=reuse_evidence,
         )
     with timer.measure("video fingerprinting"):
         derived, fingerprint_skips = derive_candidate_fingerprints(
@@ -225,6 +237,7 @@ def _warm_videos(
             False,
             True,
             fingerprint_label="video content",
+            reuse_evidence=reuse_evidence,
         )
     skipped.extend(fingerprint_skips)
     hashes = {record.byte_sha256 for record in records}
@@ -255,8 +268,14 @@ def _prepare_video_tools(args: argparse.Namespace, config: PymoConfig) -> VideoT
     )
 
 
-def _print_result(root: Path, result: WarmResult, show_files: bool) -> None:
-    print(f"\n{result.kind} cache warm summary:")
+def _print_result(
+    root: Path,
+    result: WarmResult,
+    show_files: bool,
+    *,
+    operation: str = "warm",
+) -> None:
+    print(f"\n{result.kind} cache {operation} summary:")
     print(f"  Discovered files: {result.discovered}")
     print(f"  Safely inspected files: {result.inspected}")
     print(f"  Inspected storage: {format_bytes(result.inspected_bytes)}")
@@ -273,8 +292,15 @@ def _print_result(root: Path, result: WarmResult, show_files: bool) -> None:
             print(_relative_failure(root, path, reason))
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    args = parse_args(argv)
+def run_media_population(
+    args: argparse.Namespace,
+    *,
+    reuse_evidence: bool,
+    operation: str,
+) -> int:
+    """Populate selected media evidence with warm or forced-refresh semantics."""
+
+    operation_noun = "warming" if operation == "warm" else "refresh"
     root = args.folder.expanduser().resolve()
     if not root.is_dir():
         print("Not a directory: supplied collection path", file=sys.stderr)
@@ -285,7 +311,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.media == "images" and any(
         value is not None for value in (args.ffmpeg, args.ffprobe, args.decode_timeout)
     ):
-        print("FFmpeg options are not used by image cache warming", file=sys.stderr)
+        print(
+            f"FFmpeg options are not used by image cache {operation_noun}",
+            file=sys.stderr,
+        )
         return 2
 
     try:
@@ -293,11 +322,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         database = writable_cache_path(root, args.cache)
         location = "explicit" if args.cache is not None else "collection-local"
     except (CachePathError, ConfigError) as error:
-        print(f"Cannot prepare cache warming: {error}", file=sys.stderr)
+        print(f"Cannot prepare cache {operation_noun}: {error}", file=sys.stderr)
         return 2
 
     kinds = _selected_kinds(args.media)
-    if not _layout_ready(root, config, kinds):
+    if not _layout_ready(root, config, kinds, operation=operation_noun):
         return 2
 
     timer = StageTimer(print)
@@ -308,12 +337,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     total = sum(len(paths) for paths in discovered.values())
-    print(f"Preparing reusable evidence for {total} media file(s).")
+    action = "Refreshing" if operation == "refresh" else "Preparing reusable"
+    print(f"{action} evidence for {total} media file(s).")
     print(f"Cache location: {location}.")
     for message in ignored_messages(ignored, root, args.show_ignored):
         print(message)
     if total == 0:
-        print("No selected media content required cache warming.")
+        print(f"No selected media content required cache {operation_noun}.")
         print("Cache writes: 0; media writes: 0; action-log writes: 0.")
         return 0
 
@@ -323,11 +353,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         video_tools = _prepare_video_tools(args, config) if video_paths else None
         image_paths = discovered.get("picture", [])
         if image_paths:
-            results.append(_warm_images(root, image_paths, database, config, timer))
+            results.append(
+                _warm_images(
+                    root,
+                    image_paths,
+                    database,
+                    config,
+                    timer,
+                    reuse_evidence=reuse_evidence,
+                )
+            )
         if video_paths:
             assert video_tools is not None
             results.append(
-                _warm_videos(root, video_paths, database, config, video_tools, timer)
+                _warm_videos(
+                    root,
+                    video_paths,
+                    database,
+                    config,
+                    video_tools,
+                    timer,
+                    reuse_evidence=reuse_evidence,
+                )
             )
     except ImageAnalysisCacheError:
         print("Derived image cache cannot be used safely.", file=sys.stderr)
@@ -340,16 +387,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     for result in results:
-        _print_result(root, result, args.show_files)
+        _print_result(root, result, args.show_files, operation=operation)
     print("  Media writes: 0; action-log writes: 0.")
     skipped = sum(len(result.skipped) for result in results)
     if skipped:
         print(
-            "Cache warming completed with incomplete media coverage.", file=sys.stderr
+            f"Cache {operation_noun} completed with incomplete media coverage.",
+            file=sys.stderr,
         )
         return 1
-    print("Cache warming completed with complete selected-media coverage.")
+    print(f"Cache {operation_noun} completed with complete selected-media coverage.")
     return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    return run_media_population(parse_args(argv), reuse_evidence=True, operation="warm")
 
 
 if __name__ == "__main__":

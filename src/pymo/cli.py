@@ -105,7 +105,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         forwarded_options.append("--show-ignored")
     if args.config is not None:
         forwarded_options.extend(("--config", str(args.config)))
-    insertion = 1 if args.command == "cache" and cache_action == "warm" else 0
+    insertion = (
+        1 if args.command == "cache" and cache_action in {"warm", "refresh"} else 0
+    )
     command_arguments[insertion:insertion] = forwarded_options
     return_code: int | None = None
     interrupted = False

@@ -60,15 +60,22 @@ def test_dispatched_help_and_argument_errors_remain_unprefixed(
     tmp_path: Path,
 ) -> None:
     help_result = run_pymo("cache", "--help")
+    refresh_help = run_pymo("cache", "refresh", "--help")
     error_result = run_pymo("cache", "unknown", tmp_path / "collection")
 
     assert help_result.returncode == 0
     assert help_result.stdout.startswith("usage: pymo cache")
     assert "inspect cache health without writing state" in help_result.stdout
     assert "deliberately populate reusable cache evidence" in help_result.stdout
+    assert "recompute selected cache evidence" in help_result.stdout
     assert "Completed cache" not in help_result.stdout
     assert "Stopped cache" not in help_result.stdout
     assert help_result.stderr == ""
+    assert refresh_help.returncode == 0
+    assert "validation-standard" in refresh_help.stdout
+    assert "validation-full" in refresh_help.stdout
+    assert "Completed cache" not in refresh_help.stdout
+    assert refresh_help.stderr == ""
     assert error_result.returncode == 2
     assert error_result.stdout == ""
     assert error_result.stderr.startswith("usage: pymo cache")
@@ -324,6 +331,28 @@ def test_cache_warm_receives_relevant_global_configuration(tmp_path: Path) -> No
     assert result.returncode == 0, result.stdout + result.stderr
     assert "No selected media content required cache warming" in result.stdout
     assert list(collection.iterdir()) == [collection / "vids"]
+
+
+def test_cache_refresh_receives_relevant_global_configuration(tmp_path: Path) -> None:
+    collection = tmp_path / "media-collection"
+    (collection / "pics").mkdir(parents=True)
+    config = tmp_path / "settings.toml"
+    config.write_text("version = 1\n", encoding="utf-8")
+
+    result = run_pymo(
+        "--config",
+        config,
+        "--show-ignored",
+        "--no-timestamps",
+        "cache",
+        "refresh",
+        "images",
+        collection,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "No selected media content required cache refresh" in result.stdout
+    assert list(collection.iterdir()) == [collection / "pics"]
 
 
 def test_cli_returns_130_and_reports_runtime_after_keyboard_interrupt(
