@@ -18,7 +18,7 @@ import secrets
 import sqlite3
 import stat
 import sys
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -653,7 +653,9 @@ def locked_cache_directory(
     directory_flags = (
         os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     )
-    lock_flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    create_lock_flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | no_follow
+    open_lock_flags = os.O_RDWR | no_follow
     directory_descriptor: int | None = None
     lock_descriptor: int | None = None
     try:
@@ -662,12 +664,19 @@ def locked_cache_directory(
             directory_state = os.fstat(directory_descriptor)
             if not stat.S_ISDIR(directory_state.st_mode):
                 raise OSError(errno.ENOTDIR, "cache parent is not a directory")
-            lock_descriptor = os.open(
-                lock_path.name,
-                lock_flags,
-                0o600,
-                dir_fd=directory_descriptor,
-            )
+            try:
+                lock_descriptor = os.open(
+                    lock_path.name,
+                    create_lock_flags,
+                    0o600,
+                    dir_fd=directory_descriptor,
+                )
+            except FileExistsError:
+                lock_descriptor = os.open(
+                    lock_path.name,
+                    open_lock_flags,
+                    dir_fd=directory_descriptor,
+                )
         except OSError as error:
             raise CacheError("cannot open the SQLite cache lock safely") from error
         lock_state = CacheEntryState.capture_descriptor(
@@ -809,6 +818,224 @@ def create_cache_stage(directory_descriptor: int) -> tuple[str, int]:
             ) from error
         return name, descriptor
     raise CacheError("cannot allocate a unique SQLite cache staging file")
+
+
+def _build_generic_stage(
+    directory_descriptor: int,
+    database_name: str,
+    existing_state: CacheEntryState | None,
+    update: Callable[[sqlite3.Connection], None],
+) -> tuple[str, CacheEntryState]:
+    source_descriptor: int | None = None
+    source: sqlite3.Connection | None = None
+    destination_descriptor: int | None = None
+    destination: sqlite3.Connection | None = None
+    verification: sqlite3.Connection | None = None
+    stage_name: str | None = None
+    try:
+        if existing_state is not None:
+            source_descriptor = open_cache_entry(
+                directory_descriptor, database_name, existing_state
+            )
+            source = connect_cache_descriptor(source_descriptor, read_only=True)
+            source.execute("PRAGMA query_only=ON")
+            if detect_schema(source) == "empty":
+                raise CacheError("SQLite cache has no schema")
+
+        destination = sqlite3.connect(":memory:")
+        if source is None:
+            initialize_schema(destination)
+        else:
+            source.backup(destination)
+            if detect_schema(destination) == "legacy-video":
+                migrate_legacy_video_schema(destination)
+        update(destination)
+        destination.commit()
+        validate_current_schema(destination)
+        payload = destination.serialize()
+        destination.close()
+        destination = None
+
+        stage_name, destination_descriptor = create_cache_stage(directory_descriptor)
+        os.ftruncate(destination_descriptor, 0)
+        os.lseek(destination_descriptor, 0, os.SEEK_SET)
+        remaining = memoryview(payload)
+        while remaining:
+            written = os.write(destination_descriptor, remaining)
+            if written <= 0:
+                raise CacheError(
+                    "cannot write the SQLite cache staging file completely"
+                )
+            remaining = remaining[written:]
+        os.fsync(destination_descriptor)
+        verification = connect_cache_descriptor(destination_descriptor, read_only=True)
+        verification.execute("PRAGMA query_only=ON")
+        validate_current_schema(verification)
+        verification.close()
+        verification = None
+        stage_state = CacheEntryState.capture_descriptor(
+            destination_descriptor, "SQLite cache staging file"
+        )
+        require_cache_entry(
+            directory_descriptor,
+            stage_name,
+            stage_state,
+            "SQLite cache staging file",
+        )
+        if existing_state is not None:
+            require_cache_entry(
+                directory_descriptor,
+                database_name,
+                existing_state,
+                "SQLite cache",
+            )
+        return stage_name, stage_state
+    except sqlite3.Error as error:
+        raise CacheError("cannot build a durable SQLite cache update") from error
+    finally:
+        if verification is not None:
+            verification.close()
+        if destination is not None:
+            destination.close()
+        if destination_descriptor is not None:
+            os.close(destination_descriptor)
+        if source is not None:
+            source.close()
+        if source_descriptor is not None:
+            os.close(source_descriptor)
+
+
+def _publish_generic_stage(
+    directory_descriptor: int,
+    database_name: str,
+    stage_name: str,
+    stage_state: CacheEntryState,
+    existing_state: CacheEntryState | None,
+) -> None:
+    require_cache_entry(
+        directory_descriptor,
+        stage_name,
+        stage_state,
+        "SQLite cache staging file",
+    )
+    if existing_state is None:
+        if cache_entry_at(directory_descriptor, database_name, "SQLite cache"):
+            raise CacheError("SQLite cache path became occupied")
+        atomic_cache_rename(
+            directory_descriptor, stage_name, database_name, exchange=False
+        )
+        published = cache_entry_at(
+            directory_descriptor, database_name, "published SQLite cache"
+        )
+        if not stage_state.matches_renamed(published):
+            raise CacheError("published SQLite cache failed identity verification")
+        os.fsync(directory_descriptor)
+        return
+
+    require_cache_entry(
+        directory_descriptor, database_name, existing_state, "SQLite cache"
+    )
+    atomic_cache_rename(directory_descriptor, stage_name, database_name, exchange=True)
+    valid_exchange = False
+    try:
+        displaced = cache_entry_at(
+            directory_descriptor, stage_name, "displaced SQLite cache"
+        )
+        published = cache_entry_at(
+            directory_descriptor, database_name, "published SQLite cache"
+        )
+        valid_exchange = existing_state.matches_renamed(
+            displaced
+        ) and stage_state.matches_renamed(published)
+    except CacheError:
+        pass
+    if not valid_exchange:
+        try:
+            atomic_cache_rename(
+                directory_descriptor, stage_name, database_name, exchange=True
+            )
+            os.fsync(directory_descriptor)
+        except CacheError as rollback_error:
+            raise CacheError(
+                "SQLite cache changed during publication and rollback failed"
+            ) from rollback_error
+        raise CacheError("SQLite cache changed during atomic publication")
+    try:
+        os.unlink(stage_name, dir_fd=directory_descriptor)
+        os.fsync(directory_descriptor)
+    except OSError as error:
+        raise CacheError(
+            "SQLite cache was published but its replaced cache could not be removed"
+        ) from error
+
+
+def publish_cache_update(
+    database: Path, update: Callable[[sqlite3.Connection], None]
+) -> None:
+    """Apply one validated update through locked, atomic cache publication."""
+
+    if database.name in {"", ".", ".."}:
+        raise CacheError("unexpected SQLite cache path")
+    lock_path = database.with_name(f"{database.name}.lock")
+    try:
+        with locked_cache_directory(
+            database.parent, lock_path, exclusive=True
+        ) as locked:
+            existing_state = cache_entry_at(
+                locked.descriptor, database.name, "SQLite cache"
+            )
+            stage_name, stage_state = _build_generic_stage(
+                locked.descriptor,
+                database.name,
+                existing_state,
+                update,
+            )
+            locked.require_current()
+            _publish_generic_stage(
+                locked.descriptor,
+                database.name,
+                stage_name,
+                stage_state,
+                existing_state,
+            )
+    except CacheError:
+        raise
+    except OSError as error:
+        raise CacheError("cannot update SQLite cache safely") from error
+
+
+def read_coordinated_cache(database: Path) -> CacheContents | None:
+    """Materialize one validated cache while holding its shared lock."""
+
+    if database.name in {"", ".", ".."}:
+        raise CacheError("unexpected SQLite cache path")
+    lock_path = database.with_name(f"{database.name}.lock")
+    descriptor: int | None = None
+    connection: sqlite3.Connection | None = None
+    try:
+        with locked_cache_directory(
+            database.parent, lock_path, exclusive=False
+        ) as locked:
+            state = cache_entry_at(locked.descriptor, database.name, "SQLite cache")
+            if state is None:
+                return None
+            descriptor = open_cache_entry(locked.descriptor, database.name, state)
+            connection = connect_cache_descriptor(descriptor, read_only=True)
+            connection.execute("PRAGMA query_only=ON")
+            contents = read_cache_contents(connection)
+            connection.close()
+            connection = None
+            require_cache_entry(locked.descriptor, database.name, state, "SQLite cache")
+            os.close(descriptor)
+            descriptor = None
+            return contents
+    except sqlite3.Error as error:
+        raise CacheError("cannot read SQLite cache") from error
+    finally:
+        if connection is not None:
+            connection.close()
+        if descriptor is not None:
+            os.close(descriptor)
 
 
 @dataclass(frozen=True)

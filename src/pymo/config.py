@@ -57,6 +57,7 @@ class VideoDuplicateConfig:
 class PerformanceConfig:
     scan_workers: int
     progress_interval_seconds: int
+    cache_publication_batch_size: int
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,7 @@ class _ConfigLayer:
     decode_timeout_seconds: int | None = None
     scan_workers: int | None = None
     progress_interval_seconds: int | None = None
+    cache_publication_batch_size: int | None = None
 
 
 def add_config_argument(parser: argparse.ArgumentParser) -> None:
@@ -245,7 +247,13 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
     performance = _table(
         document,
         "performance",
-        frozenset({"scan_workers", "progress_interval_seconds"}),
+        frozenset(
+            {
+                "scan_workers",
+                "progress_interval_seconds",
+                "cache_publication_batch_size",
+            }
+        ),
         source,
     )
 
@@ -282,6 +290,19 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
             raise ConfigError(
                 f"{source}: performance.progress_interval_seconds must be "
                 "between 1 and 3600"
+            )
+
+    cache_batch_size = performance.get("cache_publication_batch_size")
+    if cache_batch_size is not None:
+        if isinstance(cache_batch_size, bool) or not isinstance(cache_batch_size, int):
+            raise ConfigError(
+                f"{source}: performance.cache_publication_batch_size must be "
+                "an integer"
+            )
+        if not 1 <= cache_batch_size <= 1_000:
+            raise ConfigError(
+                f"{source}: performance.cache_publication_batch_size must be "
+                "between 1 and 1000"
             )
 
     return _ConfigLayer(
@@ -333,6 +354,7 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
         decode_timeout_seconds=timeout,
         scan_workers=scan_workers,
         progress_interval_seconds=progress_interval,
+        cache_publication_batch_size=cache_batch_size,
     )
 
 
@@ -393,6 +415,10 @@ def _packaged_defaults() -> _ConfigLayer:
         raise ConfigError(
             "packaged defaults: performance.progress_interval_seconds is required"
         )
+    if defaults.cache_publication_batch_size is None:
+        raise ConfigError(
+            "packaged defaults: performance.cache_publication_batch_size is required"
+        )
     return defaults
 
 
@@ -433,6 +459,15 @@ def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
     if progress_interval is None:
         raise ConfigError(
             "packaged defaults: performance.progress_interval_seconds is required"
+        )
+    cache_batch_size = (
+        custom.cache_publication_batch_size
+        if custom.cache_publication_batch_size is not None
+        else defaults.cache_publication_batch_size
+    )
+    if cache_batch_size is None:
+        raise ConfigError(
+            "packaged defaults: performance.cache_publication_batch_size is required"
         )
 
     return PymoConfig(
@@ -476,6 +511,7 @@ def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
         performance=PerformanceConfig(
             scan_workers=scan_workers,
             progress_interval_seconds=progress_interval,
+            cache_publication_batch_size=cache_batch_size,
         ),
         custom_path=custom_path,
     )

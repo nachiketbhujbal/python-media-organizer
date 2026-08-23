@@ -146,3 +146,4 @@ decode_timeout_seconds = 3600
 [performance]
 scan_workers = 4
 progress_interval_seconds = 15
+cache_publication_batch_size = 32

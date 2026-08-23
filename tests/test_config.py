@@ -35,6 +35,7 @@ def test_packaged_defaults_cover_common_local_system_metadata(
     assert config.video_duplicates.decode_timeout_seconds == 3600
     assert config.performance.scan_workers == 4
     assert config.performance.progress_interval_seconds == 15
+    assert config.performance.cache_publication_batch_size == 32
 
 
 def test_collection_config_extends_defaults_and_protects_itself(
@@ -87,7 +88,8 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
         "decode_timeout_seconds = 45\n"
         "[performance]\n"
         "scan_workers = 2\n"
-        "progress_interval_seconds = 5\n",
+        "progress_interval_seconds = 5\n"
+        "cache_publication_batch_size = 8\n",
         encoding="utf-8",
     )
 
@@ -102,6 +104,7 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
     assert config.video_duplicates.decode_timeout_seconds == 45
     assert config.performance.scan_workers == 2
     assert config.performance.progress_interval_seconds == 5
+    assert config.performance.cache_publication_batch_size == 8
 
 
 @pytest.mark.parametrize(
@@ -122,6 +125,8 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
         "version = 1\n[performance]\nscan_workers = true\n",
         "version = 1\n[performance]\nprogress_interval_seconds = 0\n",
         "version = 1\n[performance]\nprogress_interval_seconds = true\n",
+        "version = 1\n[performance]\ncache_publication_batch_size = 0\n",
+        "version = 1\n[performance]\ncache_publication_batch_size = true\n",
         "version = 1\n[image_duplicates]\nunknown = []\n",
         "version = 1\n[ignore]\nfiles = [\n",
     ],

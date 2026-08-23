@@ -140,13 +140,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         else config.video_duplicates.decode_timeout_seconds
     )
 
-    with timer.measure("probing"):
-        records, scanned_bytes, skipped = inspect_video_paths(
-            root,
-            paths,
-            ffprobe,
-            config.performance.progress_interval_seconds,
-        )
+    try:
+        with timer.measure("probing"):
+            records, scanned_bytes, skipped = inspect_video_paths(
+                root,
+                paths,
+                ffprobe,
+                config.performance.progress_interval_seconds,
+                database,
+                config.performance.cache_publication_batch_size,
+            )
+    except VideoCacheError:
+        print("Derived cache cannot be used safely.", file=sys.stderr)
+        return 1
     try:
         with timer.measure("fingerprinting"):
             derived, fingerprint_skips = derive_candidate_fingerprints(
