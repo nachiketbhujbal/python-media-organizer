@@ -19,6 +19,7 @@ from typing import Any, Literal
 from PIL import Image, ImageSequence, UnidentifiedImageError
 
 from pymo.action_log import is_action_log_path
+from pymo.classification import Classifier
 from pymo.config import (
     ConfigError,
     PymoConfig,
@@ -30,7 +31,6 @@ from pymo.config import (
 from pymo.duplicates.videos import VideoInspectionError, resolve_executable
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
-from pymo.organize import Classifier
 from pymo.progress import ProgressMeter, format_bytes
 
 # This identifies the public machine-readable validation report contract.

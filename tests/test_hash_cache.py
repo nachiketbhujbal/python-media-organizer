@@ -9,17 +9,17 @@ from PIL import Image
 
 from pymo import scan
 from pymo.action_log import action_log_path
-from pymo.collection import CollectionLayout
-from pymo.config import load_config
-from pymo.duplicates import videos as video_duplicates
-from pymo.duplicates.videos import ProbeInfo, VideoRecord
-from pymo.file_safety import FileChangedError, FileState
-from pymo.hash_cache import (
+from pymo.cache.hashes import (
     HashCacheError,
     load_cached_hashes,
     save_cached_hash,
     save_cached_hashes,
 )
+from pymo.collection import CollectionLayout
+from pymo.config import load_config
+from pymo.duplicates import videos as video_duplicates
+from pymo.duplicates.videos import ProbeInfo, VideoRecord
+from pymo.file_safety import FileChangedError, FileState
 
 
 def _probe() -> ProbeInfo:

@@ -6,7 +6,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 
-from pymo import cache_status, cache_warm
+from pymo.cache import status, warm
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,9 +29,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         build_parser().parse_args(arguments)
         raise AssertionError("argument parsing should exit")
     if arguments[0] == "status":
-        return cache_status.main(arguments)
+        return status.main(arguments)
     if arguments[0] == "warm":
-        return cache_warm.main(arguments)
+        return warm.main(arguments)
     build_parser().error(
         f"argument action: invalid choice: {arguments[0]!r} "
         "(choose from 'status', 'warm')"

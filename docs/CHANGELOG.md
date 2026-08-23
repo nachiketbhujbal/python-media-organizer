@@ -2,6 +2,22 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.7 - 2026-08-22
+
+- Establish `pymo.cache` as the cohesive package boundary for disposable
+  derived state, with focused storage, hash-observation, status, warming, and
+  nested-command modules behind a curated facade.
+- Document package dependency direction and the ownership criteria for future
+  subsystem extraction.
+- Move shared local media classification out of the organizer command so scan,
+  validation, rename, duplicate, and cache-warming code depend on explicit
+  policy ownership.
+- Retain command coordinators, exact image/video policy, shared safety
+  foundations, and the authoritative action journal at their existing
+  boundaries after a whole-package cohesion review.
+- Preserve every CLI, configuration, on-disk schema, cache path, journal, and
+  media behavior while reorganizing internal implementation ownership.
+
 ## 0.4.6 - 2026-08-22
 
 - Persist whole-file SHA-256 observations under a path-private collection

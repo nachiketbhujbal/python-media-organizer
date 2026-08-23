@@ -8,7 +8,7 @@ import stat
 from collections.abc import Iterable
 from pathlib import Path
 
-from pymo import cache as cache_service
+from pymo.cache import service as cache_service
 from pymo.file_safety import FileState
 
 

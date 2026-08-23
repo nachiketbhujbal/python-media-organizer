@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from pymo.action_log import Action
+from pymo.classification import Classifier
 from pymo.collection import CollectionLayout
 from pymo.config import PymoConfig
 from pymo.discovery import (
@@ -16,7 +17,6 @@ from pymo.discovery import (
     list_directory_complete,
 )
 from pymo.logging_config import emit as print
-from pymo.organize import Classifier
 
 
 @dataclass(frozen=True)

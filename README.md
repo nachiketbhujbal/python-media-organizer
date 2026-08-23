@@ -648,6 +648,7 @@ workloads without increasing contention or reducing safety.
 
 See the [documentation index](docs/README.md) for the release
 [roadmap](docs/ROADMAP.md), [research notebook](docs/RESEARCH.md),
-[changelog](docs/CHANGELOG.md), [architecture decisions](docs/adr/README.md),
-and [adversarial review ledger](docs/CODE_REVIEW.md). `HANDOFF.md` records the
+[changelog](docs/CHANGELOG.md), [package architecture](docs/ARCHITECTURE.md),
+[architecture decisions](docs/adr/README.md), and
+[adversarial review ledger](docs/CODE_REVIEW.md). `HANDOFF.md` records the
 current engineering state and compatibility details.

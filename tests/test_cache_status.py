@@ -5,10 +5,10 @@ import json
 import sqlite3
 from pathlib import Path
 
-from pymo import cache as cache_service
-from pymo import cache_status
+from pymo.cache import service as cache_service
+from pymo.cache import status as cache_status
+from pymo.cache.hashes import observation_scope
 from pymo.collection import CollectionLayout
-from pymo.hash_cache import observation_scope
 from pymo.logging_config import configure_logging
 
 

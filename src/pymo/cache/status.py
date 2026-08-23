@@ -11,10 +11,10 @@ from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 
-from pymo import cache as cache_service
+from pymo.cache import service as cache_service
+from pymo.cache.hashes import HashCacheError, observation_scope
 from pymo.collection import CollectionLayout
 from pymo.duplicates import videos
-from pymo.hash_cache import HashCacheError, observation_scope
 from pymo.logging_config import emit as print
 from pymo.progress import format_bytes
 

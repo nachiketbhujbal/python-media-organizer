@@ -53,8 +53,8 @@ metadata error, or a changed walk category stops the command before state is
 created. Report-only scan and validation continue to count such names as
 unreadable evidence and process readable neighbors.
 
-Version 0.4.3 extracts cache filesystem coordination into
-`src/pymo/cache.py` and introduces schema version 1. Generic derived evidence
+Version 0.4.3 extracts cache filesystem coordination into a shared cache
+service and introduces schema version 1. Generic derived evidence
 is keyed by content SHA-256, evidence type, algorithm, and runtime. Stable file
 observations retain an explicit analysis scope, relative path, device/inode,
 size, modification/change times, and optional verified byte hash. Valid legacy
@@ -94,8 +94,19 @@ applied exact-video result may create any state, every reused hash involved is
 read and verified again through a stable descriptor. Checksum scan may reuse
 the same current observations from the local or an explicit external cache,
 but remains strictly read-only and never persists its newly computed hashes.
-Version 0.4.7 is the promoted package-architecture checkpoint before additional
-cache producers are added.
+
+Version 0.4.7 establishes `pymo.cache` as the cohesive package boundary for
+disposable derived state before additional producers are added. A curated
+facade exposes supported storage operations, while focused modules own the
+schema/publication service, hash observation policy, read-only status,
+deliberate warming, and nested CLI. The architecture review retains the
+existing duplicate-media boundary, root command coordinators, shared safety
+foundations, and authoritative action journal because those responsibilities
+already have distinct lifecycles. Shared media classification moves out of the
+organizer command into its own foundation module so cache, scan, validation,
+rename, and duplicate code no longer depend on organizer ownership for that
+policy. No CLI, schema, configuration, action-log, cache-path, or media behavior
+changes.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -245,6 +256,7 @@ python-media-organizer/
     __init__.py
     __main__.py
     cli.py
+    classification.py
     collection.py
     config.py
     default_config.toml
@@ -252,10 +264,13 @@ python-media-organizer/
     progress.py
     discovery.py
     file_safety.py
-    cache.py
-    cache_cli.py
-    cache_status.py
-    cache_warm.py
+    cache/
+      __init__.py
+      cli.py
+      hashes.py
+      service.py
+      status.py
+      warm.py
     action_log.py
     organize.py
     rename.py

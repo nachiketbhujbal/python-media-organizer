@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from pymo import cache as cache_service
-from pymo.cache import (
+from pymo.cache import service as cache_service
+from pymo.cache.service import (
     LEGACY_VIDEO_EVIDENCE_TYPE,
     SCHEMA_VERSION,
     CacheError,
