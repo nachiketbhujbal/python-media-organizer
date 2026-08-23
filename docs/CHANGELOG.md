@@ -2,6 +2,20 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.8 - 2026-08-22
+
+- Persist normalized ffprobe structure by content SHA-256, probe algorithm, and
+  exact ffprobe runtime, and reuse it for unchanged paths or newly hashed files
+  with already known byte content.
+- Strictly validate dimensions, timing, audio shape, field types, and payload
+  schema before using compatible probe evidence; runtime changes require a new
+  probe and malformed selected evidence fails closed.
+- Publish each bounded batch's whole-file observations and new probes in one
+  locked atomic cache update, retaining safe incremental interruption recovery.
+- Report compatible probe records plus actual reused, computed, and persisted
+  counts without revealing paths, and make cache status recognize and validate
+  the new evidence while remaining zero-write and runtime-agnostic.
+
 ## 0.4.7 - 2026-08-22
 
 - Establish `pymo.cache` as the cohesive package boundary for disposable

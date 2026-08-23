@@ -108,6 +108,16 @@ rename, and duplicate code no longer depend on organizer ownership for that
 policy. No CLI, schema, configuration, action-log, cache-path, or media behavior
 changes.
 
+Version 0.4.8 caches normalized ffprobe structure by content SHA-256, persisted
+probe algorithm, and exact ffprobe runtime. Compatible payloads are decoded
+through a strict typed schema before reuse; a runtime or algorithm change is a
+cache miss, and malformed selected evidence stops safely. Newly computed hash
+observations and probes from each bounded inspection batch publish together in
+one locked atomic cache update. Output distinguishes compatible probe records,
+actual reused probes, computed probes, and newly persisted records without
+exposing paths. Cache status recognizes and validates probe evidence while
+remaining runtime-agnostic and zero-write.
+
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
 behavior. Version 0.3.18 prefixes every physical line of normal human-readable
@@ -268,6 +278,7 @@ python-media-organizer/
       __init__.py
       cli.py
       hashes.py
+      probes.py
       service.py
       status.py
       warm.py
@@ -276,6 +287,7 @@ python-media-organizer/
     rename.py
     scan.py
     validate.py
+    video.py
     duplicates/
       common.py
       images.py
@@ -466,7 +478,8 @@ FFmpeg and ffprobe are explicit native executables. The implementation:
 2. Computes whole-file SHA-256 as a cheap exact-byte identity and cache key, or
    reuses it only for an exact current file observation.
 3. Uses ffprobe JSON for structure, dimensions, timing, orientation, audio, and
-   candidate bucketing.
+   candidate bucketing, reusing only content/algorithm/runtime-compatible
+   normalized probe evidence.
 4. Streams FFmpeg `framehash` output with microsecond-normalized frame timing
    and autorotated displayed frames.
 5. Streams normalized decoded PCM into SHA-256 and includes audio start timing.
@@ -501,13 +514,15 @@ decode commands contain no macOS, Windows, or X11 capture input. The tool does
 not need Screen & System Audio Recording, Camera, or Microphone permission.
 
 Preview and applied runs use collection-root `.pymo.sqlite3`. It is a derived
-cache keyed by exact file observations plus content SHA-256, fingerprint
-algorithm version, and actual FFmpeg version. Fingerprints are persisted
-immediately; new whole-file hashes are persisted in bounded batches controlled
-by `performance.cache_publication_batch_size` (default 32). An interrupted
-preview retains completed publications and a later `--apply` reuses them. The
-command reports reusable and required hashes, candidate-relevant reusable
-fingerprints, and how many new records were durably persisted. `--no-cache`
+cache keyed by exact file observations plus content SHA-256, evidence algorithm
+version, and the relevant native runtime. Fingerprints are persisted
+immediately; new whole-file hashes and normalized ffprobe evidence are persisted
+together in bounded batches controlled by
+`performance.cache_publication_batch_size` (default 32). An interrupted preview
+retains completed publications and a later `--apply` reuses them. The command
+reports reusable and required hashes, actual probe reuse and computation,
+candidate-relevant reusable fingerprints, and how many new records were durably
+persisted. `--no-cache`
 disables all cache reads and writes and emits no lookup or update claim.
 `--cache PATH` instead selects an external database and sibling lock; the two
 options are mutually exclusive.
@@ -598,9 +613,10 @@ remain plain and do not receive the normal timestamped runtime footer.
 `pymo cache warm videos COLLECTION` uses the exact-video descriptor-pinned
 hash, probe, and decode path over every safely discovered video directly in
 `vids`. It fingerprints one representative per unique byte stream, reuses only
-algorithm- and FFmpeg-runtime-compatible evidence, and publishes successful
-fingerprints immediately plus whole-file hashes in bounded atomic batches. It
-does not plan duplicates, create `dups`, move
+content/algorithm/ffprobe-runtime-compatible normalized probes plus
+algorithm- and FFmpeg-runtime-compatible fingerprints. It publishes successful
+fingerprints immediately and publishes whole-file observations with probes in
+one bounded atomic batch transaction. It does not plan duplicates, create `dups`, move
 media, or append action history.
 
 The default cache remains collection-local. `--cache PATH` selects an existing
