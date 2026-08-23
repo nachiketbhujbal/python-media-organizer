@@ -2,6 +2,25 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.13 - 2026-08-23
+
+- Add `pymo cache refresh` targets for image fingerprints, video fingerprints,
+  standard validation, and full validation.
+- Force selected image/video refreshes to recompute exact hashes and dependent
+  evidence instead of accepting compatible cached values; byte-identical image
+  content remains decoded once within the same refresh run.
+- Route validation refresh through the always-fresh descriptor-pinned
+  validation path rather than explicit evidence reuse.
+- Atomically replace only selected matching evidence and observations while
+  preserving unrelated types, algorithms, runtimes, profiles, and collection
+  scopes.
+- Retain organized-layout boundaries for image/video refresh, any-layout
+  validation, external writable-cache support, path-private output, bounded
+  resumable publication, and zero media/action-history mutation.
+- Add focused synthetic and real-FFmpeg coverage for forced recomputation,
+  unrelated-record retention, external caches, profile separation,
+  selector-specific arguments, and media immutability.
+
 ## 0.4.12 - 2026-08-23
 
 - Add explicit `pymo validate --reuse-validation` mode, which reuses only an

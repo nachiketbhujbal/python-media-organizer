@@ -6,7 +6,7 @@ import argparse
 import sys
 from collections.abc import Sequence
 
-from pymo.cache import status, warm
+from pymo.cache import refresh, status, warm
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -18,6 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
     for name, help_text in (
         ("status", "inspect cache health without writing state"),
         ("warm", "deliberately populate reusable cache evidence"),
+        ("refresh", "recompute selected cache evidence without deleting siblings"),
     ):
         subcommands.add_parser(name, add_help=False, help=help_text)
     return parser
@@ -32,7 +33,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return status.main(arguments)
     if arguments[0] == "warm":
         return warm.main(arguments)
+    if arguments[0] == "refresh":
+        return refresh.main(arguments)
     build_parser().error(
         f"argument action: invalid choice: {arguments[0]!r} "
-        "(choose from 'status', 'warm')"
+        "(choose from 'status', 'warm', 'refresh')"
     )

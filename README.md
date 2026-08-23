@@ -306,6 +306,33 @@ represented, exit 1 means coverage was incomplete or the cache was unsafe, and
 exit 2 means setup was invalid. Run `scan` and `validate` separately because a
 successful warm is not a collection-health or preservation verdict.
 
+### Refresh selected cache evidence
+
+```bash
+pymo cache refresh images "/path/to/media-collection"
+pymo cache refresh videos "/path/to/media-collection"
+pymo cache refresh validation-standard "/path/to/media-collection"
+pymo cache refresh validation-full "/path/to/media-collection"
+pymo cache refresh images "/path/to/media-collection" \
+  --cache "/path/to/writable-cache.sqlite3"
+```
+
+`cache refresh` deliberately bypasses reusable evidence for the selected
+target. Image refresh recomputes whole-file hashes and displayed-pixel
+fingerprints; video refresh recomputes hashes, probes, and decoded-playback
+fingerprints. Validation targets perform a fresh current standard or full
+validation and publish the resulting evidence. Existing records for the same
+keys are atomically replaced while unrelated algorithms, runtimes, profiles,
+media types, and collection scopes remain intact.
+
+Refresh never deletes the cache, media, duplicate trees, or action history.
+Image and video targets retain their organized-layout requirements;
+validation targets work over any collection layout. Normal output remains
+path-private unless `--show-files` or `--show-ignored` is explicit. An external
+`--cache` keeps derived writes off a read-only collection. Refresh is not a
+repair operation: invalid cache structure still fails closed, and validation
+findings remain health evidence rather than ignored content.
+
 ### Validate collection health
 
 ```bash

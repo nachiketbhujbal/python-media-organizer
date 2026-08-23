@@ -110,6 +110,9 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-020 | Medium | Exact-image inspection and duplicate grouping were one operation, so image cache warming would either duplicate analysis policy or perform work outside its stated cache-only contract. | 0.4.10 | Resolved by separating reusable inspection/publication from grouping while retaining the finder wrapper |
 | CACHE-021 | Medium | A combined image/video warm could publish image evidence before discovering an invalid video layout or missing native tool, leaving state from a setup-invalid request. | 0.4.10 | Resolved with complete selected-layout, discovery, and native-tool preflight before the first cache write |
 | CACHE-022 | Low | Generalized warming needed selector-specific option validation, privacy, external-cache, empty-input, and no-mutation tests rather than assuming the video-only guarantees transferred automatically. | 0.4.10 | Resolved with explicit selector contracts and focused integration coverage |
+| CACHE-023 | Medium | Warming intentionally reuses compatible evidence, so it cannot prove that a selected derived record was recomputed after a tool/runtime concern or deliberate audit request. | 0.4.13 | Resolved with explicit image, video, standard-validation, and full-validation refresh targets that bypass reusable selected evidence |
+| CACHE-024 | Medium | A targeted refresh implemented as cache deletion would discard unrelated algorithms, profiles, runtimes, collection scopes, or media evidence and weaken resumability. | 0.4.13 | Resolved by atomic selected-key upserts with unrelated-record retention coverage |
+| CACHE-025 | Low | Reusing the validation cache-assisted mode for refresh would silently preserve old health rather than recording a current check. | 0.4.13 | Resolved by routing both validation refresh targets through the always-fresh validation path |
 
 ## Checksum-read review findings
 
@@ -226,6 +229,8 @@ The same adversarial method was repeated after the first validation release.
   health to satisfy a current validation request.
 - `0.4.12`: reuse exact compatible health only under an explicit flag, with
   every miss falling back to current descriptor-pinned validation.
+- `0.4.13`: force recomputation of one named evidence family without deleting
+  unrelated disposable records or changing media and action history.
 
 ## Independent review evidence
 
