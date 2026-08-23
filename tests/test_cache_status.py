@@ -8,8 +8,14 @@ from pathlib import Path
 from pymo.cache import service as cache_service
 from pymo.cache import status as cache_status
 from pymo.cache.hashes import observation_scope
+from pymo.cache.probes import (
+    VIDEO_PROBE_ALGORITHM,
+    VIDEO_PROBE_EVIDENCE_TYPE,
+    encode_probe,
+)
 from pymo.collection import CollectionLayout
 from pymo.logging_config import configure_logging
+from pymo.video import ProbeInfo
 
 
 def _write_current_cache(root: Path, media: Path) -> bytes:
@@ -154,6 +160,77 @@ def test_status_reports_stale_observations_after_file_change(tmp_path: Path) -> 
         "linked_to_current_observation": 0,
         "unlinked": 0,
     }
+
+
+def test_status_recognizes_and_validates_video_probe_evidence(tmp_path: Path) -> None:
+    layout = CollectionLayout(tmp_path)
+    probe = ProbeInfo(
+        display_width=64,
+        display_height=48,
+        duration_us=1_000_000,
+        video_start_us=0,
+        audio_start_us=None,
+        audio_sample_rate=None,
+        audio_channels=None,
+        audio_layout=None,
+        has_audio=False,
+    )
+    connection = sqlite3.connect(layout.derived_cache)
+    cache_service.initialize_schema(connection)
+    cache_service.upsert_derived_evidence(
+        connection,
+        [
+            cache_service.DerivedEvidence(
+                file_sha256="a" * 64,
+                evidence_type=VIDEO_PROBE_EVIDENCE_TYPE,
+                algorithm=VIDEO_PROBE_ALGORITHM,
+                runtime="ffprobe-test",
+                payload_json=encode_probe(probe),
+            )
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    report, status = cache_status.inspect_cache_status(
+        tmp_path, layout.derived_cache, location="collection-local"
+    )
+
+    assert status == 0
+    assert report["cache"]["evidence_types"] == {VIDEO_PROBE_EVIDENCE_TYPE: 1}
+    assert report["cache"]["evidence_compatibility"] == {
+        "algorithm_compatible": 1,
+        "stale_algorithm": 0,
+        "unknown_type": 0,
+        "runtime_checked": False,
+    }
+
+
+def test_status_rejects_malformed_video_probe_evidence(tmp_path: Path) -> None:
+    layout = CollectionLayout(tmp_path)
+    connection = sqlite3.connect(layout.derived_cache)
+    cache_service.initialize_schema(connection)
+    cache_service.upsert_derived_evidence(
+        connection,
+        [
+            cache_service.DerivedEvidence(
+                file_sha256="a" * 64,
+                evidence_type=VIDEO_PROBE_EVIDENCE_TYPE,
+                algorithm=VIDEO_PROBE_ALGORITHM,
+                runtime="ffprobe-test",
+                payload_json='{"unexpected":true}',
+            )
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    report, status = cache_status.inspect_cache_status(
+        tmp_path, layout.derived_cache, location="collection-local"
+    )
+
+    assert status == 1
+    assert report["cache"]["state"] == "invalid"
 
 
 def test_status_treats_another_collection_scope_as_stale(tmp_path: Path) -> None:

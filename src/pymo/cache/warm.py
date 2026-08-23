@@ -23,6 +23,7 @@ from pymo.duplicates.videos import (
     derive_candidate_fingerprints,
     discover_videos,
     ffmpeg_version,
+    ffprobe_version,
     inspect_video_paths,
     resolve_executable,
     writable_cache_path,
@@ -131,6 +132,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ffmpeg = resolve_executable(args.ffmpeg, "ffmpeg")
         ffprobe = resolve_executable(args.ffprobe, "ffprobe")
         ffmpeg_release = ffmpeg_version(ffmpeg)
+        ffprobe_release = ffprobe_version(ffprobe)
     except VideoInspectionError:
         print("Native video tools are unavailable.", file=sys.stderr)
         return 2
@@ -149,6 +151,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 config.performance.progress_interval_seconds,
                 database,
                 config.performance.cache_publication_batch_size,
+                ffprobe_release,
             )
     except VideoCacheError:
         print("Derived cache cannot be used safely.", file=sys.stderr)

@@ -94,11 +94,15 @@ def test_video_warm_populates_and_reuses_collection_cache(tmp_path: Path) -> Non
 
     assert first.returncode == 0, first.stdout + first.stderr
     assert "0 reusable record(s); 1 hash(es) required" in first.stdout
+    assert "0 compatible record(s) available" in first.stdout
+    assert "0 reused; 1 computed; 1 new record(s) persisted" in first.stdout
     assert "0 reusable record(s); 1 fingerprint(s) required" in first.stdout
     assert "1 new record(s) persisted" in first.stdout
     assert "complete discovered-video coverage" in first.stdout
     assert second.returncode == 0, second.stdout + second.stderr
     assert "1 reusable record(s); 0 hash(es) required" in second.stdout
+    assert "1 compatible record(s) available" in second.stdout
+    assert "1 reused; 0 computed; 0 new record(s) persisted" in second.stdout
     assert "1 reusable record(s); 0 fingerprint(s) required" in second.stdout
     assert layout.derived_cache.is_file()
     assert layout.derived_cache_lock.is_file()

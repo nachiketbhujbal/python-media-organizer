@@ -92,6 +92,10 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-010 | Medium | Two simultaneous writers creating a previously absent cache lock can race on macOS and make one writer fail with `ENOENT` instead of serializing. | 0.4.6 | Resolved with a pinned exclusive-create-or-open sequence and concurrent first-writer regression coverage |
 | CACHE-011 | Medium | Cache status checked every observation's relative path against the selected collection without interpreting its scope, so a multi-collection external cache could misreport another collection's coincidentally matching path as current. | 0.4.6 | Resolved by requiring the path-private root identity scope before an observation can be current |
 | CACHE-012 | Low | Publishing one whole-file observation per video would serialize, validate, sync, and atomically replace the complete cache for every inspected file, adding avoidable storage latency. | 0.4.6 | Resolved with validated configurable batches that retain incremental interruption recovery |
+| CACHE-013 | Low | Exact-video reruns reused stable whole-file hashes but still invoked ffprobe for every file even when the same normalized structure had already been established under the same tool runtime. | 0.4.8 | Resolved with strict content/algorithm/runtime-keyed probe evidence |
+| CACHE-014 | Medium | Probe reuse needs a field-exact payload validator; accepting merely valid JSON could let malformed dimensions, timing, or audio shape enter exact-video candidate grouping. | 0.4.8 | Resolved with strict typed payload decoding and fail-closed status/consumer tests |
+| CACHE-015 | Low | Publishing hashes and probes through separate staged replacements would double durable cache publication work and allow one inspection batch to become only partially represented between updates. | 0.4.8 | Resolved with one combined atomic batch transaction |
+| CACHE-016 | Low | A pre-hash “probes required” estimate would be false when a newly added path hashes to content whose probe is already cached. | 0.4.8 | Resolved by reporting compatible records at lookup and observed reused/computed counts after inspection |
 
 ## Checksum-read review findings
 
@@ -197,6 +201,8 @@ The same adversarial method was repeated after the first validation release.
   descriptor-pin checksum reads, and re-read cached content before mutation.
 - `0.4.7`: establish the cache subsystem facade and document the package-wide
   ownership and dependency rules without changing behavior.
+- `0.4.8`: reuse strictly validated, ffprobe-runtime-keyed normalized video
+  structure and publish each hash/probe batch atomically.
 
 ## Independent review evidence
 

@@ -253,9 +253,10 @@ and invalid command setup returns 2.
 
 The report includes cache format and storage, evidence records by type and
 namespace, current versus stale algorithms, file-observation freshness, and
-evidence linkage to recorded observations. It validates known exact-video
-payloads but deliberately does not invoke FFmpeg to decide runtime reuse; the
-video duplicate finder remains authoritative for actual reusable records.
+evidence linkage to recorded observations. It validates known exact-video and
+normalized ffprobe payloads but deliberately does not invoke native tools to
+decide runtime reuse; the video duplicate finder remains authoritative for
+actual reusable records.
 Legacy video caches are reported with migration pending and remain unchanged.
 
 The default is the collection-local `.pymo.sqlite3`. `--cache` can inspect a
@@ -275,12 +276,14 @@ pymo cache warm videos "/path/to/media-collection" \
 pymo cache warm videos "/path/to/media-collection" --show-files
 ```
 
-Cache warming fingerprints every safely discovered video directly inside
-`vids`; it does not perform duplicate grouping. Successful records are
-published incrementally, and whole-file hashes are published in bounded atomic
-batches, so interruption or later collection growth does not discard completed
-batches. A later video duplicate dry run or apply reuses
-records matching the current exact-playback algorithm and FFmpeg runtime.
+Cache warming hashes, structurally probes, and fingerprints every safely
+discovered video directly inside `vids`; it does not perform duplicate
+grouping. Whole-file observations and normalized probes are published together
+in bounded atomic batches, while successful fingerprints remain incremental,
+so interruption or later collection growth does not discard completed work. A
+later video duplicate dry run or apply reuses probes matching the content hash,
+probe algorithm, and exact ffprobe runtime, then reuses fingerprints matching
+the exact-playback algorithm and FFmpeg runtime.
 
 The command never moves media, creates `dups`, or appends action history. Its
 default cache and lock are collection-local. `--cache` instead writes the
@@ -425,12 +428,13 @@ shared cache. Schema version 1 stores generic evidence by content SHA-256,
 evidence type, algorithm version, and runtime version, plus stable file
 observations with optional whole-file hashes. An observation is reusable only
 when its collection identity, relative path, device, inode, size, modification
-time, and change time all match. Exact-video fingerprints are the first
-evidence type. Each newly decoded fingerprint is saved immediately and new
-hash observations are published in bounded atomic batches, so an
-interrupted preview can resume and the later `--apply` usually reuses the
-reviewed work. The command reports candidate-relevant reusable records,
-hashes and fingerprints still required, and the number of new records durably
+time, and change time all match. Exact-video fingerprints and normalized
+ffprobe structure are supported evidence types. Each newly decoded fingerprint
+is saved immediately; new hash observations and probes are published together
+in bounded atomic batches, so an interrupted preview can resume and the later
+`--apply` usually reuses the reviewed work. The command reports
+candidate-relevant reusable records, hashes and fingerprints still required,
+actual probe reuse and computation, and the number of new records durably
 persisted. Any reused hash that contributes to an applied result is recomputed
 before pymo creates duplicate directories, action history, or moves.
 Add `--no-cache` for a run that neither reads nor writes the cache; that mode

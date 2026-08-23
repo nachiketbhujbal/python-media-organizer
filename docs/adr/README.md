@@ -71,3 +71,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0063](0063-explicit-video-cache-warming.md) | Explicit exact-video cache warming |
 | [0064](0064-stable-whole-file-hash-observations.md) | Exact-state whole-file hash reuse |
 | [0065](0065-cohesive-package-boundaries.md) | Cohesive package boundaries |
+| [0066](0066-cache-normalized-video-probes.md) | Cache normalized video probes |

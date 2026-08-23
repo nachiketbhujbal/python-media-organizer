@@ -101,15 +101,14 @@ def load_cached_hashes(
         raise HashCacheError("whole-file hash cache cannot be read safely") from error
 
 
-def save_cached_hashes(
+def build_hash_observations(
     root: Path,
-    database: Path,
     values: Iterable[tuple[Path, FileState, str]],
-) -> None:
-    """Publish verified whole-file digests for exact file identities."""
+) -> tuple[cache_service.FileObservation, ...]:
+    """Build verified observations for one atomic cache publication."""
 
     scope = observation_scope(root)
-    observations = tuple(
+    return tuple(
         cache_service.FileObservation(
             scope=scope,
             relative_path=_relative_path(root, path),
@@ -122,6 +121,16 @@ def save_cached_hashes(
         )
         for path, state, digest in values
     )
+
+
+def save_cached_hashes(
+    root: Path,
+    database: Path,
+    values: Iterable[tuple[Path, FileState, str]],
+) -> None:
+    """Publish verified whole-file digests for exact file identities."""
+
+    observations = build_hash_observations(root, values)
     if not observations:
         return
     try:

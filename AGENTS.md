@@ -81,6 +81,11 @@ never duplicate the version in source or static project metadata.
   device, inode, size, modification-time, and change-time match. Recompute any
   reused hash contributing to an applied exact-video result before creating
   duplicate directories, action history, or moves.
+- Reuse normalized ffprobe structure only for the matching content SHA-256,
+  persisted probe algorithm, and exact ffprobe runtime. Validate every selected
+  payload before use; malformed compatible evidence fails closed. Publish hash
+  observations and newly computed probes from one inspection batch in one
+  atomic cache update.
 - Describe video-cache activity as reusable records, fingerprints required,
   and new records actually persisted. When `--no-cache` is selected, state the
   no-read/no-write boundary without implying that a lookup or update occurred.
@@ -114,8 +119,11 @@ never duplicate the version in source or static project metadata.
   dependency-aware undo.
 - `src/pymo/cache/`: the disposable derived-cache subsystem. Its package facade
   exposes the supported storage API while `service.py`, `hashes.py`,
-  `status.py`, `warm.py`, and `cli.py` own storage, observation policy,
-  reporting, deliberate population, and dispatch respectively.
+  `probes.py`, `status.py`, `warm.py`, and `cli.py` own storage, observation
+  policy, normalized video structure evidence, reporting, deliberate
+  population, and dispatch respectively.
+- `src/pymo/video.py`: shared normalized video structure facts used by exact
+  analysis and its derived evidence.
 - `src/pymo/classification.py`: shared local content-signature and extension
   fallback policy used by every media-processing command.
 - `src/pymo/collection.py`: immutable canonical paths for one collection.
