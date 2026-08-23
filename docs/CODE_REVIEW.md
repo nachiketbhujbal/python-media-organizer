@@ -46,6 +46,10 @@ The same adversarial method was repeated after the first validation release.
 | VAL-009 | High | Persisting an earlier healthy result must not let ordinary or full validation skip a current descriptor-pinned probe or decode. | 0.4.11 | Resolved by write-after-fresh-read evidence with no cached-result consumer |
 | VAL-010 | Medium | Validation evidence needs the external writable-cache and complete opt-out boundaries required for analyzing read-only sources without unannounced state. | 0.4.11 | Resolved with explicit `--cache`, `--no-cache`, schema-2 report facts, and integration coverage |
 | VAL-011 | Medium | Validation observations and results could diverge if published through separate SQLite replacements or if malformed known evidence were accepted. | 0.4.11 | Resolved with strict runtime/payload decoding and one atomic batch publication |
+| VAL-012 | High | Cache-assisted validation must not accept content evidence solely by SHA or a stale pathname observation; profile, semantic context, runtime, and exact current file identity all affect compatibility. | 0.4.12 | Resolved with one coordinated exact-key lookup plus descriptor-pinned hit revalidation |
+| VAL-013 | High | A file can change after a compatible cache row is selected but before its result enters the report. | 0.4.12 | Resolved by reopening every proposed hit through the stable collection descriptor boundary and treating change as a miss |
+| VAL-014 | Medium | Reusing cached error/warning results must preserve ordinary health counts, privacy, and exit status rather than treating cache hits as implicitly healthy. | 0.4.12 | Resolved by reconstructing the strict persisted findings into normal `ValidationResult` records |
+| VAL-015 | Medium | A cache-assisted full validation mode could accidentally become the default and weaken the current-read contract needed for preservation checks. | 0.4.12 | Resolved with the explicit `--reuse-validation` opt-in and always-fresh default regressions |
 
 ## Scan review findings
 
@@ -220,6 +224,8 @@ The same adversarial method was repeated after the first validation release.
   planning and preflight a combined request before its first cache write.
 - `0.4.11`: persist strictly validated fresh health evidence without using old
   health to satisfy a current validation request.
+- `0.4.12`: reuse exact compatible health only under an explicit flag, with
+  every miss falling back to current descriptor-pinned validation.
 
 ## Independent review evidence
 

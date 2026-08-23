@@ -22,11 +22,14 @@ from pymo.action_log import is_action_log_path
 from pymo.cache.hashes import sha256_descriptor
 from pymo.cache.paths import CachePathError, writable_cache_path
 from pymo.cache.validation import (
+    CachedValidationResult,
     ValidationCacheError,
     ValidationEvidenceValue,
     ValidationFindingValue,
+    ValidationLookup,
     ValidationProfile,
     completed_timestamp,
+    load_compatible_validation,
     preflight_validation_cache,
     publish_validation_batch,
     validation_runtime,
@@ -87,6 +90,7 @@ class ValidationResult:
     animated_or_multipage: bool = False
     byte_sha256: str | None = None
     completed_at: str = ""
+    reused: bool = False
 
 
 @dataclass(frozen=True)
@@ -696,14 +700,8 @@ def _validation_evidence_values(
         if result.byte_sha256 is None:
             continue
         candidate = result.candidate
-        runtime = validation_runtime(
-            kind=candidate.kind,
-            extension=candidate.path.suffix.casefold(),
-            extension_kind=candidate.extension_kind,
-            detected_kind=candidate.detected_kind,
-            pillow=f"Pillow {__version__}" if candidate.kind == "picture" else None,
-            ffprobe=ffprobe_release if candidate.kind == "video" else None,
-            ffmpeg=ffmpeg_release if candidate.kind == "video" else None,
+        runtime = _validation_runtime_for_candidate(
+            candidate, ffprobe_release, ffmpeg_release
         )
         values.append(
             ValidationEvidenceValue(
@@ -724,6 +722,80 @@ def _validation_evidence_values(
             )
         )
     return tuple(values)
+
+
+def _validation_runtime_for_candidate(
+    candidate: MediaCandidate,
+    ffprobe_release: str | None,
+    ffmpeg_release: str | None,
+) -> str:
+    return validation_runtime(
+        kind=candidate.kind,
+        extension=candidate.path.suffix.casefold(),
+        extension_kind=candidate.extension_kind,
+        detected_kind=candidate.detected_kind,
+        pillow=f"Pillow {__version__}" if candidate.kind == "picture" else None,
+        ffprobe=ffprobe_release if candidate.kind == "video" else None,
+        ffmpeg=ffmpeg_release if candidate.kind == "video" else None,
+    )
+
+
+def cached_validation_results(
+    root: Path,
+    database: Path,
+    candidates: tuple[MediaCandidate, ...],
+    profile: ValidationProfile,
+    ffprobe_release: str | None,
+    ffmpeg_release: str | None,
+) -> dict[Path, ValidationResult]:
+    lookups = tuple(
+        ValidationLookup(
+            path=candidate.path,
+            state=candidate.state,
+            kind=candidate.kind,
+            profile=profile,
+            runtime=_validation_runtime_for_candidate(
+                candidate, ffprobe_release, ffmpeg_release
+            ),
+        )
+        for candidate in candidates
+    )
+    cached = load_compatible_validation(root, database, lookups)
+    candidates_by_path = {candidate.path: candidate for candidate in candidates}
+    results: dict[Path, ValidationResult] = {}
+    for path, value in cached.items():
+        candidate = candidates_by_path[path]
+        try:
+            with open_stable_file(
+                root, path, candidate.state, "cached validation reuse"
+            ):
+                pass
+        except FileChangedError:
+            continue
+        results[path] = _cached_validation_result(candidate, value)
+    return results
+
+
+def _cached_validation_result(
+    candidate: MediaCandidate, cached: CachedValidationResult
+) -> ValidationResult:
+    return ValidationResult(
+        candidate=candidate,
+        findings=tuple(
+            Finding(
+                path=candidate.path,
+                kind=candidate.kind,
+                severity=finding.severity,
+                code=finding.code,
+                description=finding.description,
+            )
+            for finding in cached.findings
+        ),
+        animated_or_multipage=cached.animated_or_multipage,
+        byte_sha256=cached.byte_sha256,
+        completed_at=cached.completed_at,
+        reused=True,
+    )
 
 
 def publish_validation_results(
@@ -949,6 +1021,8 @@ def print_report(report: dict[str, Any], show_files: bool) -> None:
         )
         if cache["issue"]:
             print(f"  WARNING: {cache['issue']}.")
+        print(f"  Compatible prior records reused: {cache['records_reused']}.")
+        print(f"  Files freshly validated: {cache['fresh_validation_files']}.")
     else:
         print("Disposable cache evidence: disabled; no records read or written.")
 
@@ -992,6 +1066,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="perform fresh validation without reading or writing cache state",
     )
+    parser.add_argument(
+        "--reuse-validation",
+        action="store_true",
+        help=(
+            "reuse exact compatible validation results for unchanged files and "
+            "freshly validate every miss"
+        ),
+    )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
     return parser.parse_args(argv)
@@ -999,6 +1081,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.reuse_validation and args.no_cache:
+        print("--reuse-validation cannot be combined with --no-cache", file=sys.stderr)
+        return 2
     root = args.folder.expanduser().resolve()
     if not root.is_dir():
         print(f"Not a directory: {root}", file=sys.stderr)
@@ -1045,20 +1130,52 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(str(error), file=sys.stderr)
         return 2
 
+    profile: ValidationProfile = "full" if args.full else "standard"
+    reused_results: dict[Path, ValidationResult] = {}
+    if args.reuse_validation and database is not None:
+        try:
+            reused_results = cached_validation_results(
+                root,
+                database,
+                discovery.candidates,
+                profile,
+                ffprobe_release,
+                ffmpeg_release,
+            )
+        except ValidationCacheError:
+            print("Validation cache cannot be used safely.", file=sys.stderr)
+            return 1
+    fresh_candidates = tuple(
+        candidate
+        for candidate in discovery.candidates
+        if candidate.path not in reused_results
+    )
+
     if not args.json:
-        print(f"Validating {len(discovery.candidates)} media file(s).")
+        print(f"Evaluating {len(discovery.candidates)} media file(s).")
         if database is None:
             print("Validation cache disabled: no records read or written.")
         else:
             location = "explicit" if args.cache is not None else "collection-local"
-            print(f"Fresh validation evidence will be cached ({location}).")
+            if args.reuse_validation:
+                print(
+                    "Compatible validation evidence will be read; fresh misses "
+                    f"will be cached ({location})."
+                )
+            else:
+                print(f"Fresh validation evidence will be cached ({location}).")
+        if args.reuse_validation:
+            print(
+                f"Compatible validation reuse: {len(reused_results)} file(s); "
+                f"fresh validation required: {len(fresh_candidates)} file(s)."
+            )
         for message in ignored_messages(
             list(discovery.ignored), root, args.show_ignored
         ):
             print(message)
     validation_workers = 1 if args.full and videos else workers
-    results = validate_candidates(
-        discovery.candidates,
+    fresh_results = validate_candidates(
+        fresh_candidates,
         ValidationOptions(
             workers=validation_workers,
             full=args.full,
@@ -1070,14 +1187,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             hash_content=database is not None,
         ),
     )
-    profile: ValidationProfile = "full" if args.full else "standard"
+    fresh_by_path = {result.candidate.path: result for result in fresh_results}
+    results = tuple(
+        reused_results.get(candidate.path) or fresh_by_path[candidate.path]
+        for candidate in discovery.candidates
+    )
     cache_records_written = 0
     cache_issue: str | None = None
     if database is not None:
         cache_records_written, cache_issue = publish_validation_results(
             root,
             database,
-            results,
+            fresh_results,
             profile,
             ffprobe_release,
             ffmpeg_release,
@@ -1100,6 +1221,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             ),
             cache_records_written=cache_records_written,
             cache_issue=cache_issue,
+            cache_mode=("reuse-compatible" if args.reuse_validation else "fresh"),
+            cache_records_reused=len(reused_results),
+            fresh_validation_files=len(fresh_results),
         ),
     )
     if args.json:

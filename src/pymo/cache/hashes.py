@@ -49,11 +49,13 @@ def _relative_path(root: Path, path: Path) -> str:
     return relative.as_posix()
 
 
-def _matching_hashes(
+def matching_hashes(
     root: Path,
     states: dict[Path, FileState],
     observations: tuple[cache_service.FileObservation, ...],
 ) -> dict[Path, str]:
+    """Match exact current file states against one validated observation set."""
+
     scope = observation_scope(root)
     by_relative = {
         record.relative_path: record
@@ -107,7 +109,7 @@ def load_cached_hashes(
                     observations = cache_service.read_cache_contents(
                         snapshot.connection
                     ).observations
-        return _matching_hashes(root, states, observations)
+        return matching_hashes(root, states, observations)
     except (cache_service.CacheError, sqlite3.Error, OSError) as error:
         raise HashCacheError("whole-file hash cache cannot be read safely") from error
 
