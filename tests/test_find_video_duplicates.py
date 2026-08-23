@@ -514,6 +514,7 @@ def test_video_cache_keeps_completed_fingerprints_after_interruption(
 
     monkeypatch.setattr(video_duplicates, "resolve_executable", lambda *_: "tool")
     monkeypatch.setattr(video_duplicates, "ffmpeg_version", lambda _: "test-ffmpeg")
+    monkeypatch.setattr(video_duplicates, "ffprobe_version", lambda _: "test-ffprobe")
     monkeypatch.setattr(
         video_duplicates,
         "discover_videos",
@@ -569,6 +570,7 @@ def test_video_finder_rejects_a_corrupt_cache_before_decoding(
 
     monkeypatch.setattr(video_duplicates, "resolve_executable", lambda *_: "tool")
     monkeypatch.setattr(video_duplicates, "ffmpeg_version", lambda _: "test-ffmpeg")
+    monkeypatch.setattr(video_duplicates, "ffprobe_version", lambda _: "test-ffprobe")
     monkeypatch.setattr(
         video_duplicates, "discover_videos", lambda *_: ([first, second], [])
     )

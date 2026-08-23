@@ -35,7 +35,12 @@ from pymo.action_log import (
     NoUndoableRun,
     ToolId,
 )
-from pymo.cache.hashes import HashCacheError, load_cached_hashes, save_cached_hashes
+from pymo.cache.hashes import HashCacheError, load_cached_hashes
+from pymo.cache.probes import (
+    ProbeCacheError,
+    load_cached_probes,
+    publish_video_inspection_batch,
+)
 from pymo.classification import Classifier
 from pymo.collection import CollectionLayout
 from pymo.config import (
@@ -60,6 +65,7 @@ from pymo.duplicates.common import (
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
 from pymo.progress import ProgressMeter, StageTimer, format_bytes
+from pymo.video import ProbeInfo
 
 # This value is persisted with derived fingerprints. Changing the algorithm
 # without changing this identifier could reuse incompatible cached results.
@@ -75,39 +81,13 @@ class VideoCacheError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class ProbeInfo:
-    display_width: int
-    display_height: int
-    duration_us: int
-    video_start_us: int
-    audio_start_us: int | None
-    audio_sample_rate: int | None
-    audio_channels: int | None
-    audio_layout: str | None
-    has_audio: bool
-
-    @property
-    def candidate_key(self) -> tuple[object, ...]:
-        # This intentionally omits codecs, containers, and source pixel format.
-        # Files in different basic buckets cannot produce the same canonical
-        # playback, while files in the same bucket still require full decoding.
-        return (
-            self.display_width,
-            self.display_height,
-            self.has_audio,
-            self.audio_sample_rate,
-            self.audio_channels,
-            self.audio_layout,
-        )
-
-
-@dataclass(frozen=True)
 class VideoRecord:
     path: Path
     byte_sha256: str
     state: FileState
     probe: ProbeInfo
     byte_sha256_cached: bool = False
+    probe_cached: bool = False
 
     @property
     def file_size(self) -> int:
@@ -143,17 +123,20 @@ def inspect_video(
     *,
     state: FileState | None = None,
     cached_sha256: str | None = None,
+    cached_probes: dict[str, ProbeInfo] | None = None,
 ) -> VideoRecord:
     state = state or FileState.capture(path)
     with open_stable_file(root, path, state, "video inspection") as descriptor:
         byte_sha256 = cached_sha256 or sha256_descriptor(descriptor)
-        probe = probe_video(descriptor, ffprobe)
+        cached_probe = (cached_probes or {}).get(byte_sha256)
+        probe = cached_probe or probe_video(descriptor, ffprobe)
     return VideoRecord(
         path=path,
         byte_sha256=byte_sha256,
         state=state,
         probe=probe,
         byte_sha256_cached=cached_sha256 is not None,
+        probe_cached=cached_probe is not None,
     )
 
 
@@ -395,20 +378,28 @@ def writable_cache_path(root: Path, requested: Path | None) -> Path:
     return database
 
 
-def ffmpeg_version(ffmpeg: str) -> str:
+def native_tool_version(executable: str, name: str) -> str:
     try:
         result = subprocess.run(
-            [ffmpeg, "-version"],
+            [executable, "-version"],
             check=False,
             capture_output=True,
             text=True,
             timeout=30,
         )
     except (OSError, subprocess.SubprocessError) as error:
-        raise VideoInspectionError(f"cannot query FFmpeg version: {error}") from error
+        raise VideoInspectionError(f"cannot query {name} version: {error}") from error
     if result.returncode != 0 or not result.stdout.strip():
-        raise VideoInspectionError("cannot query FFmpeg version")
+        raise VideoInspectionError(f"cannot query {name} version")
     return result.stdout.splitlines()[0].strip()
+
+
+def ffmpeg_version(ffmpeg: str) -> str:
+    return native_tool_version(ffmpeg, "FFmpeg")
+
+
+def ffprobe_version(ffprobe: str) -> str:
+    return native_tool_version(ffprobe, "FFprobe")
 
 
 def _stream_command(
@@ -811,6 +802,7 @@ def inspect_video_paths(
     progress_interval_seconds: int,
     database: Path | None,
     publication_batch_size: int,
+    ffprobe_release: str | None = None,
 ) -> tuple[list[VideoRecord], int, list[tuple[Path, str]]]:
     records: list[VideoRecord] = []
     scanned_bytes = 0
@@ -832,12 +824,31 @@ def inspect_video_paths(
             "Whole-file hash cache cannot be used safely: "
             f"{error}\nThe cache is disposable; move it aside or rerun with --no-cache."
         ) from error
+    probe_runtime = (
+        None if database is None else ffprobe_release or ffprobe_version(ffprobe)
+    )
+    try:
+        if database is None:
+            cached_probes = {}
+        else:
+            assert probe_runtime is not None
+            cached_probes = load_cached_probes(database, probe_runtime)
+    except ProbeCacheError as error:
+        raise VideoCacheError(
+            "Video probe cache cannot be used safely: "
+            f"{error}\nThe cache is disposable; move it aside or rerun with --no-cache."
+        ) from error
     if database is None:
         print("Whole-file hash cache disabled: no records read or written.")
+        print("Video probe cache disabled: no records read or written.")
     else:
         print(
             f"Whole-file hash cache lookup: {len(cached_hashes)} reusable "
             f"record(s); {len(states) - len(cached_hashes)} hash(es) required."
+        )
+        print(
+            f"Video probe cache lookup: {len(cached_probes)} compatible "
+            "record(s) available."
         )
     progress = ProgressMeter(
         len(states),
@@ -845,15 +856,26 @@ def inspect_video_paths(
         progress_interval_seconds,
     )
     persisted = 0
+    probes_persisted: set[str] = set()
     pending: list[tuple[Path, FileState, str]] = []
+    pending_probes: dict[str, ProbeInfo] = {}
 
     def publish_pending() -> None:
         nonlocal persisted
-        if database is None or not pending:
+        if database is None or (not pending and not pending_probes):
             return
-        save_cached_hashes(root, database, pending)
+        assert probe_runtime is not None
+        publish_video_inspection_batch(
+            root,
+            database,
+            probe_runtime,
+            pending,
+            pending_probes,
+        )
         persisted += len(pending)
+        probes_persisted.update(pending_probes)
         pending.clear()
+        pending_probes.clear()
 
     for path, state in states.items():
         try:
@@ -863,30 +885,42 @@ def inspect_video_paths(
                 ffprobe,
                 state=state,
                 cached_sha256=cached_hashes.get(path),
+                cached_probes=cached_probes,
             )
             records.append(record)
             scanned_bytes += record.file_size
-            if database is not None and not record.byte_sha256_cached:
-                pending.append((record.path, record.state, record.byte_sha256))
-                if len(pending) >= publication_batch_size:
+            if database is not None and (
+                not record.byte_sha256_cached or not record.probe_cached
+            ):
+                if not record.byte_sha256_cached:
+                    pending.append((record.path, record.state, record.byte_sha256))
+                if not record.probe_cached:
+                    pending_probes[record.byte_sha256] = record.probe
+                if max(len(pending), len(pending_probes)) >= publication_batch_size:
                     publish_pending()
         except (FileChangedError, OSError, VideoInspectionError) as error:
             skipped.append((path, str(error)))
-        except HashCacheError as error:
+        except (HashCacheError, ProbeCacheError) as error:
             raise VideoCacheError(
-                f"Whole-file hash cache update failed safely: {error}"
+                f"Video inspection cache update failed safely: {error}"
             ) from error
         progress_message = progress.advance("inspected", byte_count=state.size)
         if progress_message:
             print(f"  {progress_message}")
     try:
         publish_pending()
-    except HashCacheError as error:
+    except (HashCacheError, ProbeCacheError) as error:
         raise VideoCacheError(
-            f"Whole-file hash cache update failed safely: {error}"
+            f"Video inspection cache update failed safely: {error}"
         ) from error
     if database is not None:
         print(f"Whole-file hash cache update: {persisted} new record(s) persisted.")
+        print(
+            "Video probe cache use: "
+            f"{sum(record.probe_cached for record in records)} reused; "
+            f"{sum(not record.probe_cached for record in records)} computed; "
+            f"{len(probes_persisted)} new record(s) persisted."
+        )
     return records, scanned_bytes, skipped
 
 
@@ -1286,6 +1320,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ffmpeg = resolve_executable(args.ffmpeg, "ffmpeg")
         ffprobe = resolve_executable(args.ffprobe, "ffprobe")
         ffmpeg_release = ffmpeg_version(ffmpeg)
+        ffprobe_release = ffprobe_version(ffprobe)
     except VideoInspectionError as error:
         detail = (
             "native video tools are unavailable; rerun without --summary for details"
@@ -1295,6 +1330,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(detail, file=sys.stderr)
         return 2
     print(f"FFmpeg runtime: {ffmpeg_release}")
+    print(f"FFprobe runtime: {ffprobe_release}")
 
     try:
         with stage_timer.measure("probing"):
@@ -1305,10 +1341,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 config.performance.progress_interval_seconds,
                 None if args.no_cache else database,
                 config.performance.cache_publication_batch_size,
+                ffprobe_release,
             )
     except VideoCacheError as error:
         detail = (
-            "Whole-file hash cache cannot be used safely; rerun without --summary "
+            "Video inspection cache cannot be used safely; rerun without --summary "
             "for details."
             if args.summary
             else str(error)

@@ -13,6 +13,12 @@ from pathlib import Path, PurePosixPath
 
 from pymo.cache import service as cache_service
 from pymo.cache.hashes import HashCacheError, observation_scope
+from pymo.cache.probes import (
+    VIDEO_PROBE_ALGORITHM,
+    VIDEO_PROBE_EVIDENCE_TYPE,
+    ProbeCacheError,
+    decode_probe_payload,
+)
 from pymo.collection import CollectionLayout
 from pymo.duplicates import videos
 from pymo.logging_config import emit as print
@@ -139,6 +145,13 @@ def inspect_cache_status(
                 if record.evidence_type == cache_service.LEGACY_VIDEO_EVIDENCE_TYPE
             ]
             videos.decode_video_evidence(exact_video)
+            video_probes = [
+                record
+                for record in evidence
+                if record.evidence_type == VIDEO_PROBE_EVIDENCE_TYPE
+            ]
+            for record in video_probes:
+                decode_probe_payload(record.payload_json)
             type_counts = Counter(record.evidence_type for record in evidence)
             cache["evidence_records"] = len(evidence)
             cache["evidence_types"] = dict(sorted(type_counts.items()))
@@ -151,14 +164,17 @@ def inspect_cache_status(
             compatible = sum(
                 record.algorithm == videos.FINGERPRINT_ALGORITHM
                 for record in exact_video
+            ) + sum(
+                record.algorithm == VIDEO_PROBE_ALGORITHM for record in video_probes
             )
+            known_evidence = exact_video + video_probes
             compatibility = cache["evidence_compatibility"]
             assert isinstance(compatibility, dict)
             compatibility.update(
                 {
                     "algorithm_compatible": compatible,
-                    "stale_algorithm": len(exact_video) - compatible,
-                    "unknown_type": len(evidence) - len(exact_video),
+                    "stale_algorithm": len(known_evidence) - compatible,
+                    "unknown_type": len(evidence) - len(known_evidence),
                 }
             )
 
@@ -201,6 +217,7 @@ def inspect_cache_status(
     except (
         cache_service.CacheError,
         HashCacheError,
+        ProbeCacheError,
         videos.VideoInspectionError,
     ):
         cache["state"] = "invalid"
