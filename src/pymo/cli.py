@@ -8,7 +8,7 @@ import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from pymo import __version__, cache_status, organize, rename, scan, validate
+from pymo import __version__, cache_cli, organize, rename, scan, validate
 from pymo.config import add_show_ignored_argument
 from pymo.duplicates import images, videos
 from pymo.logging_config import configure_logging
@@ -19,7 +19,7 @@ def _commands() -> dict[str, Callable[[Sequence[str] | None], int]]:
     """Build the small dispatch table without mutable module-level state."""
     return {
         "scan": scan.main,
-        "cache": cache_status.main,
+        "cache": cache_cli.main,
         "validate": validate.main,
         "organize": organize.main,
         "rename": rename.main,
@@ -90,12 +90,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         logging.getLogger("pymo").debug("Dispatching pymo command: %s", args.command)
     commands = _commands()
     command_arguments = list(args.arguments)
-    if args.command == "cache" and (args.config is not None or args.show_ignored):
+    cache_action = (
+        args.arguments[0] if args.command == "cache" and args.arguments else None
+    )
+    if (
+        args.command == "cache"
+        and cache_action == "status"
+        and (args.config is not None or args.show_ignored)
+    ):
         parser.error("--config and --show-ignored are not used by cache status")
-    if args.config is not None:
-        command_arguments[0:0] = ["--config", str(args.config)]
+    forwarded_options: list[str] = []
     if args.show_ignored:
-        command_arguments[0:0] = ["--show-ignored"]
+        forwarded_options.append("--show-ignored")
+    if args.config is not None:
+        forwarded_options.extend(("--config", str(args.config)))
+    insertion = 1 if args.command == "cache" and cache_action == "warm" else 0
+    command_arguments[insertion:insertion] = forwarded_options
     return_code: int | None = None
     interrupted = False
     parser_exit = False

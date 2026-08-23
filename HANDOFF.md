@@ -26,7 +26,7 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and includes the version 0.4.4 read-only cache-status release.
+`pymo` command, and includes the version 0.4.5 explicit video-cache-warm release.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -72,6 +72,18 @@ to the consuming command. Missing and healthy caches return 0, invalid cache
 health returns 1, and setup errors return 2. Human and schema-1 JSON reports do
 not expose collection roots, cache paths, filenames, scopes, hashes,
 algorithms, or runtime strings.
+
+Version 0.4.5 adds `pymo cache warm videos COLLECTION [--cache PATH]`. It
+fingerprints every safely discovered flat video instead of only duplicate
+candidates, publishes each successful new exact-playback record immediately,
+and performs no grouping or media mutation. An explicit cache path anchors the
+database and sibling lock outside the analyzed collection so a read-only source
+receives no derived state. The exact-video finder accepts the same external
+cache path; it cannot be combined with `--no-cache`. Normal output is aggregate
+and path-private;
+`--show-files` explicitly reveals collection-relative failures. Incomplete
+media coverage or unsafe cache state returns 1, invalid setup returns 2, and an
+empty organized video directory returns 0 without creating cache state.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -229,7 +241,9 @@ python-media-organizer/
     discovery.py
     file_safety.py
     cache.py
+    cache_cli.py
     cache_status.py
+    cache_warm.py
     action_log.py
     organize.py
     rename.py
@@ -249,6 +263,7 @@ pymo organize COLLECTION
 pymo rename COLLECTION
 pymo scan COLLECTION
 pymo cache status COLLECTION
+pymo cache warm videos COLLECTION
 pymo validate COLLECTION
 pymo find-image-duplicates COLLECTION
 pymo find-video-duplicates COLLECTION
@@ -256,7 +271,8 @@ pymo find-video-duplicates COLLECTION
 
 The four mutating tools support dry-run/apply behavior and `--undo`, which is
 also a preview unless combined with `--apply`. `scan`, `validate`, and
-`cache status` are report-only. Global `--verbose`, `--quiet`,
+`cache status` are report-only. `cache warm videos` writes only disposable
+cache state and never media or action history. Global `--verbose`, `--quiet`,
 `--log-file PATH`, `--timestamps`, `--no-timestamps`, `--config PATH`, and
 `--show-ignored` options go before the subcommand. `--show-ignored` and
 command-specific options are also accepted by the selected command after its
@@ -462,6 +478,8 @@ interrupted preview retains completed work and a later `--apply` reuses it.
 The command reports candidate-relevant reusable records, fingerprints still
 required, and how many new records were durably persisted. `--no-cache`
 disables all cache reads and writes and emits no lookup or update claim.
+`--cache PATH` instead selects an external database and sibling lock; the two
+options are mutually exclusive.
 Existing cache schemas and rows are validated read-only before decoding. The
 read-only SQLite connection uses a stable no-follow descriptor anchored beneath
 the collection root, and a pathname swap stops safely rather than redirecting
@@ -474,9 +492,9 @@ schema metadata, generic derived evidence, and file-identity observations.
 Existing valid legacy `video_fingerprints` databases are still read without a
 write; the next successful cache update migrates their rows in memory and
 publishes the complete versioned database atomically. The low-level service
-anchors safety to the cache directory rather than the analyzed media root so a
-future read-only source can use an explicitly separate writable cache. No
-public external-cache option exists yet.
+anchors safety to the cache directory rather than the analyzed media root, and
+both exact-video warming and duplicate analysis can therefore use an explicitly
+separate writable cache for a read-only source.
 
 Cache readers share collection-root `.pymo.sqlite3.lock`; writers acquire it
 exclusively and re-read the latest public database before merging a completed
@@ -540,6 +558,24 @@ legacy caches also return 0, with legacy migration reported as pending. Unsafe,
 unreadable, corrupt, malformed, or incompatible caches return 1 without being
 changed. Invalid collection setup returns 2. Dispatched help and parser errors
 remain plain and do not receive the normal timestamped runtime footer.
+
+## Derived cache warming
+
+`pymo cache warm videos COLLECTION` uses the exact-video descriptor-pinned
+hash, probe, and decode path over every safely discovered video directly in
+`vids`. It fingerprints one representative per unique byte stream, reuses only
+algorithm- and FFmpeg-runtime-compatible evidence, and publishes successful
+new records immediately. It does not plan duplicates, create `dups`, move
+media, or append action history.
+
+The default cache remains collection-local. `--cache PATH` selects an existing
+external parent directory and anchors both the database and sibling lock there,
+allowing a read-only collection to remain unchanged. Normal output does not
+name paths; `--show-files` deliberately lists collection-relative failures.
+Any unrepresented discovered media produces exit 1 while preserving completed
+evidence. Empty `vids` returns 0 without resolving FFmpeg or creating state.
+The command does not replace collection scan, validation, or preservation
+verification.
 
 ## Collection scan
 
@@ -698,6 +734,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   externally located, concurrently replaced, current-observation, stale-
   observation, and symbolic-link-parent cases, including JSON privacy and
   proof that no cache lock or collection state is created;
+- exact-video cache warming for empty, complete, incomplete, reused, and
+  explicitly external cache runs, including proof that media, duplicate trees,
+  action history, and read-only source cache state are not written;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

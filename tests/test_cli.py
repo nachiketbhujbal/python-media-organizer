@@ -64,6 +64,8 @@ def test_dispatched_help_and_argument_errors_remain_unprefixed(
 
     assert help_result.returncode == 0
     assert help_result.stdout.startswith("usage: pymo cache")
+    assert "inspect cache health without writing state" in help_result.stdout
+    assert "deliberately populate reusable cache evidence" in help_result.stdout
     assert "Completed cache" not in help_result.stdout
     assert "Stopped cache" not in help_result.stdout
     assert help_result.stderr == ""
@@ -300,6 +302,28 @@ def test_cache_status_rejects_irrelevant_global_configuration(tmp_path: Path) ->
     assert result.returncode == 2
     assert "not used by cache status" in result.stderr
     assert list(collection.iterdir()) == []
+
+
+def test_cache_warm_receives_relevant_global_configuration(tmp_path: Path) -> None:
+    collection = tmp_path / "media-collection"
+    (collection / "vids").mkdir(parents=True)
+    config = tmp_path / "settings.toml"
+    config.write_text("version = 1\n", encoding="utf-8")
+
+    result = run_pymo(
+        "--config",
+        config,
+        "--show-ignored",
+        "--no-timestamps",
+        "cache",
+        "warm",
+        "videos",
+        collection,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "No video content required cache warming" in result.stdout
+    assert list(collection.iterdir()) == [collection / "vids"]
 
 
 def test_cli_returns_130_and_reports_runtime_after_keyboard_interrupt(

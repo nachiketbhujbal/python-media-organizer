@@ -257,6 +257,31 @@ replacement invalidates the snapshot. Human and schema-1 JSON output omit the
 collection root, cache path, filenames, scopes, hashes, algorithms, and runtime
 strings.
 
+### Warm exact-video cache evidence
+
+```bash
+pymo cache warm videos "/path/to/media-collection"
+pymo cache warm videos "/path/to/media-collection" \
+  --cache "/path/to/writable-cache.sqlite3"
+pymo cache warm videos "/path/to/media-collection" --show-files
+```
+
+Cache warming fingerprints every safely discovered video directly inside
+`vids`; it does not perform duplicate grouping. Successful records are
+published incrementally, so interruption or later collection growth does not
+discard completed work. A later video duplicate dry run or apply reuses
+records matching the current exact-playback algorithm and FFmpeg runtime.
+
+The command never moves media, creates `dups`, or appends action history. Its
+default cache and lock are collection-local. `--cache` instead writes the
+database and sibling lock in an existing external directory, allowing the
+media collection itself to remain read-only. Normal output is aggregate and
+path-private; `--show-files` explicitly lists collection-relative paths that
+could not be represented. Exit 0 means every discovered video byte stream was
+represented, exit 1 means coverage was incomplete or the cache was unsafe, and
+exit 2 means setup was invalid. Run `scan` and `validate` separately because a
+successful warm is not a collection-health or preservation verdict.
+
 ### Validate collection health
 
 ```bash
@@ -352,6 +377,8 @@ local content. Changed paths are reported and skipped.
 ```bash
 pymo find-video-duplicates "/path/to/media-collection"
 pymo find-video-duplicates "/path/to/media-collection" --summary
+pymo find-video-duplicates "/path/to/media-collection" \
+  --cache "/path/to/writable-cache.sqlite3"
 pymo find-video-duplicates "/path/to/media-collection" --apply
 pymo find-video-duplicates "/path/to/media-collection" --undo
 pymo find-video-duplicates "/path/to/media-collection" --undo --apply
@@ -394,6 +421,11 @@ fingerprints still required, and the number of new records durably persisted.
 Add `--no-cache` for a run that neither reads nor writes the cache; that mode
 emits no lookup or update claim. Cache writes are derived local state only:
 they never move media or write action history.
+
+Use `--cache PATH` to read and update an explicitly selected external cache and
+its sibling lock instead of placing derived state in the collection. This is
+the same external-cache contract used by `cache warm videos`. `--cache` and
+`--no-cache` cannot be combined.
 
 An existing cache is opened read-only through a stable no-follow descriptor
 anchored beneath the collection root, then its exact schema, integrity, and

@@ -183,6 +183,22 @@ def test_video_finder_can_disable_all_cache_reads_and_writes(
     assert not action_log_path(tmp_path).exists()
 
 
+def test_video_finder_rejects_conflicting_cache_controls(
+    tmp_path: Path, run_script
+) -> None:
+    result = run_script(
+        "find_video_duplicates.py",
+        tmp_path,
+        "--no-cache",
+        "--cache",
+        tmp_path / "cache.sqlite3",
+    )
+
+    assert result.returncode == 2
+    assert "--no-cache cannot be combined with --cache" in result.stderr
+    assert list(tmp_path.iterdir()) == []
+
+
 @requires_ffmpeg
 def test_video_summary_applies_with_path_private_aggregate_output(
     tmp_path: Path, run_script
