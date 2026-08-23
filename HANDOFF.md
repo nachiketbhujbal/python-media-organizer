@@ -150,6 +150,14 @@ probe or decode. `--cache PATH` moves derived writes outside the collection;
 `--no-cache` restores a zero-cache-read/write run. Validation JSON schema 2
 reports fresh execution and cache-publication facts without paths.
 
+Version 0.4.12 adds explicit `pymo validate --reuse-validation`. It reuses only
+strictly compatible evidence with an exact file observation, content SHA-256,
+profile, semantic context, validation algorithm, and applicable runtime. Every
+candidate hit is reopened through the stable descriptor boundary before use;
+changed or incompatible files fall back to fresh validation and publication.
+Ordinary validation remains fresh, and fresh validation remains the required
+mode for final migration sign-off.
+
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
 behavior. Version 0.3.18 prefixes every physical line of normal human-readable
@@ -722,6 +730,11 @@ through local FFmpeg. Standard validation uses bounded workers; a full run
 containing video reports and uses one worker so full FFmpeg decodes remain
 sequential.
 
+`--reuse-validation` is an explicit acceleration mode. It can reconstruct a
+prior healthy, warning, or error result only from a strict exact match and only
+after reopening the current path safely; misses are checked freshly. It is not
+the default and must not replace fresh validation for migration sign-off.
+
 Text and schema-2 JSON aggregate severity/code findings without collection
 names, root paths, or filenames. `--show-files` adds collection-relative
 affected paths, while `--show-ignored` remains a separate opt-in. Status 0 means
@@ -851,6 +864,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   strict runtime/context payloads, byte-identical files with distinct
   extensions, local/external/disabled cache modes, old-health non-reuse, cache
   status recognition, JSON schema 2 privacy, and invalid-cache refusal;
+- explicit validation reuse for unchanged exact matches, changed/profile/runtime
+  misses, external caches, cached error outcomes, decoder non-invocation on a
+  hit, post-lookup replacement rejection, and real FFmpeg full-decode evidence;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

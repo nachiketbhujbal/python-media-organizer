@@ -107,6 +107,11 @@ never duplicate the version in source or static project metadata.
   validation request. Persist results only after a current descriptor-pinned
   read. Key them by exact content, profile, semantic classification context,
   and applicable local runtimes, with an exact file observation.
+- Validation evidence may satisfy work only under the explicit
+  `--reuse-validation` mode. Require an exact observation, hash, profile,
+  semantic context, algorithm, and runtime match; reopen every proposed hit
+  through the stable descriptor boundary before accepting it. A miss or change
+  falls back to fresh validation. Do not recommend reuse for migration sign-off.
 - Keep validation content reads pinned to the same stable descriptor boundary.
   Do not reintroduce pathname-based decoder opens after a separate state check.
 

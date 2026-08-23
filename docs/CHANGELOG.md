@@ -2,6 +2,24 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.12 - 2026-08-23
+
+- Add explicit `pymo validate --reuse-validation` mode, which reuses only an
+  exact current file observation and matching profile, algorithm, semantic
+  classification context, and Pillow/ffprobe/FFmpeg runtime.
+- Freshly validate and publish every cache miss while retaining ordinary
+  standard and full validation as always-fresh behavior.
+- Reconstruct cached warnings and errors into the same health report and exit
+  status, with stable schema-2 counts for reused, fresh, and written records.
+- Reopen every proposed cache hit through the collection-anchored stable
+  descriptor boundary before accepting it, so a post-lookup path or state
+  change becomes a fresh-validation miss.
+- Require current native tool versions to establish video compatibility even
+  on a cache hit, and keep `--reuse-validation` incompatible with `--no-cache`.
+- Add real Pillow and FFmpeg coverage for exact reuse, profile/runtime misses,
+  changed files, cached errors, external caches, decoder avoidance, and lookup
+  races.
+
 ## 0.4.11 - 2026-08-23
 
 - Record every freshly completed standard or full media validation as strict,

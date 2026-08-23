@@ -76,3 +76,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0068](0068-shared-cache-input-policy.md) | Shared cache input policy |
 | [0069](0069-unified-cache-warming.md) | Unified image and video cache warming |
 | [0070](0070-fresh-validation-evidence.md) | Fresh validation evidence |
+| [0071](0071-explicit-validation-reuse.md) | Explicit validation evidence reuse |

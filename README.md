@@ -313,6 +313,7 @@ pymo validate "/path/to/media-collection"
 pymo validate "/path/to/media-collection" --full
 pymo validate "/path/to/media-collection" --json
 pymo validate "/path/to/media-collection" --show-files
+pymo validate "/path/to/media-collection" --reuse-validation
 pymo validate "/path/to/media-collection" --no-cache
 pymo validate "/path/to/media-collection" \
   --cache "/path/to/writable-cache.sqlite3"
@@ -331,6 +332,15 @@ context, applicable Pillow or native-tool versions, result, findings, and UTC
 completion time. Observations and results publish together in bounded atomic
 batches. Cache evidence never lets ordinary or full validation skip a current
 probe or decode: an old healthy result cannot establish current health.
+
+`--reuse-validation` is an explicit performance mode that may satisfy an
+unchanged file from strictly compatible validation evidence. Reuse requires an
+exact file observation, complete-file SHA-256, validation profile, semantic
+classification context, validation algorithm, and applicable local runtime.
+Pymo reopens every proposed hit through its stable descriptor boundary before
+accepting it; changed or incompatible files are validated freshly and refresh
+their evidence. Omit this option when current proof is required, including a
+final migration sign-off.
 
 `--no-cache` restores a run with no cache reads, evidence hashing, cache writes,
 or lock creation. `--cache PATH` writes the evidence database and sibling lock

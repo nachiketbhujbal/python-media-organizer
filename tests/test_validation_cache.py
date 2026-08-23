@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import sqlite3
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -25,6 +27,39 @@ from pymo.cache.validation import (
     encode_validation_payload,
 )
 from pymo.collection import CollectionLayout
+
+FFMPEG = shutil.which("ffmpeg")
+FFPROBE = shutil.which("ffprobe")
+requires_ffmpeg = pytest.mark.skipif(
+    not FFMPEG or not FFPROBE,
+    reason="real validation reuse test requires ffmpeg and ffprobe",
+)
+
+
+def make_video(path: Path) -> None:
+    assert FFMPEG
+    result = subprocess.run(
+        [
+            FFMPEG,
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=32x24:rate=4:duration=0.5",
+            "-c:v",
+            "mpeg4",
+            "-pix_fmt",
+            "yuv420p",
+            path,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def validation_records(
@@ -347,3 +382,212 @@ def test_validation_publication_retains_completed_batches_after_later_failure(
     contents, records = validation_records(database)
     assert len(contents.observations) == 1
     assert len(records) == 1
+
+
+def test_explicit_validation_reuse_uses_an_exact_unchanged_result(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    media = root / "fern.png"
+    Image.new("RGB", (3, 2), "green").save(media)
+    database = CollectionLayout(root).derived_cache
+
+    seed = run_script("validate.py", root)
+    original_cache = database.read_bytes()
+    reused = run_script("validate.py", root, "--reuse-validation", "--json")
+
+    assert seed.returncode == 0, seed.stdout + seed.stderr
+    assert reused.returncode == 0, reused.stdout + reused.stderr
+    report = json.loads(reused.stdout)
+    assert report["cache"] == {
+        "enabled": True,
+        "fresh_validation_files": 0,
+        "fresh_validation_performed": False,
+        "issue": None,
+        "location": "collection-local",
+        "mode": "reuse-compatible",
+        "records_reused": 1,
+        "records_written": 0,
+    }
+    assert database.read_bytes() == original_cache
+
+
+def test_normal_validation_remains_fresh_after_evidence_exists(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    Image.new("RGB", (2, 2), "green").save(root / "cedar.png")
+
+    first = run_script("validate.py", root)
+    second = run_script("validate.py", root, "--json")
+
+    assert first.returncode == second.returncode == 0
+    report = json.loads(second.stdout)
+    assert report["cache"]["mode"] == "fresh"
+    assert report["cache"]["records_reused"] == 0
+    assert report["cache"]["fresh_validation_files"] == 1
+    assert report["cache"]["fresh_validation_performed"] is True
+
+
+def test_explicit_reuse_freshly_validates_a_changed_file(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    media = root / "orchid.png"
+    Image.new("RGB", (2, 2), "green").save(media)
+
+    seed = run_script("validate.py", root)
+    media.write_bytes(b"damaged")
+    changed = run_script("validate.py", root, "--reuse-validation", "--json")
+
+    assert seed.returncode == 0
+    assert changed.returncode == 1
+    report = json.loads(changed.stdout)
+    assert report["health"]["files_with_errors"] == 1
+    assert report["cache"]["records_reused"] == 0
+    assert report["cache"]["fresh_validation_files"] == 1
+    assert report["cache"]["records_written"] == 1
+
+
+def test_explicit_reuse_requires_the_same_validation_profile(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    Image.new("RGB", (2, 2), "green").save(root / "willow.png")
+
+    standard = run_script("validate.py", root)
+    full = run_script("validate.py", root, "--full", "--reuse-validation", "--json")
+
+    assert standard.returncode == full.returncode == 0
+    report = json.loads(full.stdout)
+    assert report["profile"] == "full"
+    assert report["cache"]["records_reused"] == 0
+    assert report["cache"]["fresh_validation_files"] == 1
+
+
+def test_explicit_reuse_preserves_a_cached_error_and_exit_status(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    (root / "damaged.png").write_bytes(b"invalid image")
+
+    seed = run_script("validate.py", root)
+    reused = run_script("validate.py", root, "--reuse-validation", "--json")
+
+    assert seed.returncode == reused.returncode == 1
+    report = json.loads(reused.stdout)
+    assert report["health"]["files_with_errors"] == 1
+    assert report["cache"]["records_reused"] == 1
+    assert report["cache"]["fresh_validation_files"] == 0
+    assert report["cache"]["records_written"] == 0
+
+
+def test_explicit_reuse_can_use_an_external_cache_without_collection_state(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    Image.new("RGB", (2, 2), "green").save(root / "maple.png")
+    external = tmp_path / "derived"
+    external.mkdir()
+    database = external / "portable.sqlite3"
+
+    seed = run_script("validate.py", root, "--cache", database)
+    reused = run_script(
+        "validate.py", root, "--cache", database, "--reuse-validation", "--json"
+    )
+
+    assert seed.returncode == reused.returncode == 0
+    assert json.loads(reused.stdout)["cache"]["records_reused"] == 1
+    assert not CollectionLayout(root).derived_cache.exists()
+    assert not CollectionLayout(root).derived_cache_lock.exists()
+    assert not action_log_path(root).exists()
+    assert sorted(path.name for path in root.iterdir()) == ["maple.png"]
+
+
+def test_explicit_reuse_cannot_be_combined_with_no_cache(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+
+    result = run_script("validate.py", root, "--reuse-validation", "--no-cache")
+
+    assert result.returncode == 2
+    assert "cannot be combined" in result.stderr
+    assert list(root.iterdir()) == []
+
+
+def test_explicit_reuse_does_not_invoke_the_image_decoder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    Image.new("RGB", (2, 2), "green").save(root / "fern.png")
+    assert validate.main([str(root)]) == 0
+
+    monkeypatch.setattr(
+        validate,
+        "validate_image",
+        lambda *_args, **_kwargs: pytest.fail(
+            "an exact explicit cache hit must not decode again"
+        ),
+    )
+
+    assert validate.main([str(root), "--reuse-validation"]) == 0
+
+
+def test_explicit_reuse_rejects_a_file_changed_after_cache_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    media = root / "willow.png"
+    Image.new("RGB", (2, 2), "green").save(media)
+    assert validate.main([str(root)]) == 0
+    discovery = validate.discover_candidates(root, validate.load_config(root))
+    load = validate.load_compatible_validation
+
+    def change_after_lookup(*args, **kwargs):
+        cached = load(*args, **kwargs)
+        media.write_bytes(b"changed after lookup")
+        return cached
+
+    monkeypatch.setattr(validate, "load_compatible_validation", change_after_lookup)
+
+    cached = validate.cached_validation_results(
+        root,
+        CollectionLayout(root).derived_cache,
+        discovery.candidates,
+        "standard",
+        None,
+        None,
+    )
+
+    assert cached == {}
+
+
+@requires_ffmpeg
+def test_explicit_full_video_reuse_requires_and_matches_native_runtimes(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    make_video(root / "harbor.mp4")
+
+    standard = run_script("validate.py", root)
+    full = run_script("validate.py", root, "--full", "--reuse-validation", "--json")
+    full_reused = run_script(
+        "validate.py", root, "--full", "--reuse-validation", "--json"
+    )
+
+    assert standard.returncode == full.returncode == full_reused.returncode == 0
+    assert json.loads(full.stdout)["cache"]["fresh_validation_files"] == 1
+    reused_report = json.loads(full_reused.stdout)
+    assert reused_report["cache"]["records_reused"] == 1
+    assert reused_report["cache"]["fresh_validation_files"] == 0

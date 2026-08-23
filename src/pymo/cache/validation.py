@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 from pymo.cache import service as cache_service
-from pymo.cache.hashes import build_hash_observations
+from pymo.cache.hashes import HashCacheError, build_hash_observations, matching_hashes
 from pymo.file_safety import FileState
 
 VALIDATION_EVIDENCE_TYPE = "media-validation"
@@ -42,6 +42,23 @@ class ValidationEvidenceValue:
     kind: ValidationKind
     profile: ValidationProfile
     runtime: str
+    completed_at: str
+    findings: tuple[ValidationFindingValue, ...]
+    animated_or_multipage: bool
+
+
+@dataclass(frozen=True)
+class ValidationLookup:
+    path: Path
+    state: FileState
+    kind: ValidationKind
+    profile: ValidationProfile
+    runtime: str
+
+
+@dataclass(frozen=True)
+class CachedValidationResult:
+    byte_sha256: str
     completed_at: str
     findings: tuple[ValidationFindingValue, ...]
     animated_or_multipage: bool
@@ -295,6 +312,80 @@ def preflight_validation_cache(database: Path) -> None:
             contents = cache_service.read_cache_contents(snapshot.connection)
             validate_evidence_records(contents.evidence)
     except (cache_service.CacheError, sqlite3.Error, OSError) as error:
+        raise ValidationCacheError(
+            "media-validation cache cannot be read safely"
+        ) from error
+
+
+def load_compatible_validation(
+    root: Path,
+    database: Path,
+    lookups: Iterable[ValidationLookup],
+) -> dict[Path, CachedValidationResult]:
+    """Load only exact-state, profile, context, and runtime-compatible results."""
+
+    requested = tuple(lookups)
+    if not requested:
+        return {}
+    try:
+        contents = cache_service.read_coordinated_cache(database)
+        if contents is None:
+            return {}
+        validate_evidence_records(contents.evidence)
+        hashes = matching_hashes(
+            root,
+            {lookup.path: lookup.state for lookup in requested},
+            contents.observations,
+        )
+        evidence = {
+            (
+                record.file_sha256,
+                record.algorithm,
+                record.runtime,
+            ): record
+            for record in contents.evidence
+            if record.evidence_type == VALIDATION_EVIDENCE_TYPE
+        }
+        matches: dict[Path, CachedValidationResult] = {}
+        for lookup in requested:
+            file_hash = hashes.get(lookup.path)
+            if file_hash is None:
+                continue
+            record = evidence.get(
+                (
+                    file_hash,
+                    validation_algorithm(lookup.profile),
+                    lookup.runtime,
+                )
+            )
+            if record is None:
+                continue
+            payload = decode_validation_payload(record.payload_json, record.algorithm)
+            runtime = decode_validation_runtime(record.runtime)
+            if payload["kind"] != lookup.kind or runtime["kind"] != lookup.kind:
+                raise ValidationCacheError(
+                    "cached media validation contains invalid evidence"
+                )
+            raw_findings = payload["findings"]
+            assert isinstance(raw_findings, list)
+            findings = tuple(
+                ValidationFindingValue(
+                    finding["severity"], finding["code"], finding["description"]
+                )
+                for finding in raw_findings
+            )
+            completed_at = payload["completed_at"]
+            animated = payload["animated_or_multipage"]
+            assert isinstance(completed_at, str)
+            assert isinstance(animated, bool)
+            matches[lookup.path] = CachedValidationResult(
+                byte_sha256=file_hash,
+                completed_at=completed_at,
+                findings=findings,
+                animated_or_multipage=animated,
+            )
+        return matches
+    except (cache_service.CacheError, HashCacheError, sqlite3.Error, OSError) as error:
         raise ValidationCacheError(
             "media-validation cache cannot be read safely"
         ) from error
