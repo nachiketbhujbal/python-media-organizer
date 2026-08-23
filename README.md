@@ -267,30 +267,40 @@ replacement invalidates the snapshot. Human and schema-1 JSON output omit the
 collection root, cache path, filenames, scopes, hashes, algorithms, and runtime
 strings.
 
-### Warm exact-video cache evidence
+### Warm derived cache evidence
 
 ```bash
+pymo cache warm images "/path/to/media-collection"
 pymo cache warm videos "/path/to/media-collection"
-pymo cache warm videos "/path/to/media-collection" \
+pymo cache warm all "/path/to/media-collection"
+pymo cache warm all "/path/to/media-collection" \
   --cache "/path/to/writable-cache.sqlite3"
-pymo cache warm videos "/path/to/media-collection" --show-files
+pymo cache warm all "/path/to/media-collection" --show-files
 ```
 
-Cache warming hashes, structurally probes, and fingerprints every safely
-discovered video directly inside `vids`; it does not perform duplicate
-grouping. Whole-file observations and normalized probes are published together
-in bounded atomic batches, while successful fingerprints remain incremental,
-so interruption or later collection growth does not discard completed work. A
-later video duplicate dry run or apply reuses probes matching the content hash,
-probe algorithm, and exact ffprobe runtime, then reuses fingerprints matching
-the exact-playback algorithm and FFmpeg runtime.
+Image warming hashes and computes displayed-pixel evidence for every safely
+discovered file directly inside `pics`. Video warming hashes, structurally
+probes, and fingerprints every safely discovered file directly inside `vids`.
+`all` performs both. Warming inspects and publishes evidence but never groups
+duplicates. Whole-file observations and derived records are published in
+bounded atomic batches, so interruption or later collection growth does not
+discard completed work. Later duplicate dry runs or applies reuse only evidence
+matching its content, algorithm, and exact library or native-tool runtime.
+
+Every selected layout is checked and all selected media is discovered before
+cache writes begin. A combined warm also resolves required video tools before
+publishing image evidence, preventing an invalid FFmpeg setup from leaving a
+partially initialized combined run. `images` does not require `vids` or native
+video tools; `videos` does not require `pics`. `all` requires both organized
+media folders. An empty selection returns successfully without creating a
+cache or lock.
 
 The command never moves media, creates `dups`, or appends action history. Its
 default cache and lock are collection-local. `--cache` instead writes the
 database and sibling lock in an existing external directory, allowing the
 media collection itself to remain read-only. Normal output is aggregate and
 path-private; `--show-files` explicitly lists collection-relative paths that
-could not be represented. Exit 0 means every discovered video byte stream was
+could not be represented. Exit 0 means every selected media byte stream was
 represented, exit 1 means coverage was incomplete or the cache was unsafe, and
 exit 2 means setup was invalid. Run `scan` and `validate` separately because a
 successful warm is not a collection-health or preservation verdict.
@@ -456,7 +466,7 @@ they never move media or write action history.
 
 Use `--cache PATH` to read and update an explicitly selected external cache and
 its sibling lock instead of placing derived state in the collection. This is
-the same external-cache contract used by `cache warm videos`. `--cache` and
+the same external-cache contract used by `cache warm`. `--cache` and
 `--no-cache` cannot be combined.
 
 An existing cache is opened read-only through a stable no-follow descriptor

@@ -2,6 +2,22 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.10 - 2026-08-23
+
+- Extend `pymo cache warm` with `images`, `videos`, and `all` selectors while
+  retaining explicit, path-private, cache-only behavior.
+- Separate exact-image inspection and cache publication from duplicate
+  grouping so deliberate warming never performs duplicate planning.
+- Reuse a freshly computed displayed-pixel fingerprint for byte-identical
+  files later in the same run instead of decoding identical content again.
+- Preflight every selected layout, discover every selected media set, and
+  resolve required native video tools before a combined warm may write cache
+  state.
+- Report per-media coverage and preserve completed evidence when individual
+  files are unreadable, while empty selections create no cache or lock.
+- Reject video-only options for image-only warming and retain external-cache,
+  privacy, exit-status, and no-media-mutation contracts across every selector.
+
 ## 0.4.9 - 2026-08-23
 
 - Cache displayed-pixel fingerprints by complete-file SHA-256, normalization

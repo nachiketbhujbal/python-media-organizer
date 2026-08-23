@@ -1,16 +1,21 @@
-"""Explicitly populate reusable exact-video cache evidence."""
+"""Explicitly populate reusable image and video cache evidence."""
 
 from __future__ import annotations
 
 import argparse
 import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
+
+from PIL import __version__ as PILLOW_VERSION
 
 from pymo.cache.paths import CachePathError, writable_cache_path
 from pymo.classification import Classifier
 from pymo.config import (
     ConfigError,
+    PymoConfig,
     add_config_argument,
     add_show_ignored_argument,
     ignored_messages,
@@ -18,6 +23,11 @@ from pymo.config import (
 )
 from pymo.discovery import DiscoveryError
 from pymo.duplicates.common import duplicate_layout, layout_problems
+from pymo.duplicates.images import (
+    ImageAnalysisCacheError,
+    discover_images,
+    inspect_image_paths,
+)
 from pymo.duplicates.videos import (
     VideoCacheError,
     VideoInspectionError,
@@ -32,6 +42,26 @@ from pymo.logging_config import emit as print
 from pymo.progress import StageTimer, format_bytes
 
 
+@dataclass(frozen=True)
+class WarmResult:
+    kind: str
+    discovered: int
+    inspected: int
+    inspected_bytes: int
+    represented_hashes: int
+    unique_hashes: int
+    skipped: tuple[tuple[Path, str], ...]
+
+
+@dataclass(frozen=True)
+class VideoTools:
+    ffmpeg: str
+    ffprobe: str
+    ffmpeg_release: str
+    ffprobe_release: str
+    decode_timeout: int
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="pymo cache",
@@ -41,9 +71,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument("action", choices=("warm",))
-    parser.add_argument("media", choices=("videos",))
+    parser.add_argument("media", choices=("images", "videos", "all"))
     parser.add_argument(
-        "folder", type=Path, help="organized media-collection root containing vids"
+        "folder",
+        type=Path,
+        help="organized media-collection root containing selected media folders",
     )
     parser.add_argument(
         "--cache",
@@ -81,6 +113,166 @@ def _relative_failure(root: Path, path: Path, reason: str) -> str:
     return f"  {relative}: {reason}"
 
 
+MediaKind = Literal["picture", "video"]
+
+
+def _selected_kinds(media: str) -> tuple[MediaKind, ...]:
+    if media == "all":
+        return ("picture", "video")
+    return ("picture",) if media == "images" else ("video",)
+
+
+def _layout_ready(root: Path, config: PymoConfig, kinds: tuple[MediaKind, ...]) -> bool:
+    counts = {kind: len(layout_problems(root, config, kind)) for kind in kinds}
+    if not any(counts.values()):
+        return True
+    print("Collection is not ready for selected cache warming:", file=sys.stderr)
+    for kind, count in counts.items():
+        if count:
+            label = "image" if kind == "picture" else "video"
+            print(f"  {label}: {count} layout problem(s).", file=sys.stderr)
+    print(
+        "Run pymo organize COLLECTION first so media is directly in pics and vids.",
+        file=sys.stderr,
+    )
+    return False
+
+
+def _discover_selected(
+    root: Path,
+    config: PymoConfig,
+    kinds: tuple[MediaKind, ...],
+    timer: StageTimer,
+) -> tuple[dict[str, list[Path]], list[Path]]:
+    discovered: dict[str, list[Path]] = {}
+    ignored: list[Path] = []
+    if "picture" in kinds:
+        with timer.measure("image discovery"):
+            paths, image_ignored = discover_images(
+                duplicate_layout(root, "picture").source, root, config
+            )
+        discovered["picture"] = paths
+        ignored.extend(image_ignored)
+    if "video" in kinds:
+        classifier = Classifier(config.classification)
+        with timer.measure("video discovery"):
+            paths, video_ignored = discover_videos(
+                duplicate_layout(root, "video").source,
+                root,
+                classifier,
+                config,
+            )
+        discovered["video"] = paths
+        ignored.extend(video_ignored)
+    return discovered, ignored
+
+
+def _warm_images(
+    root: Path,
+    paths: list[Path],
+    database: Path,
+    config: PymoConfig,
+    timer: StageTimer,
+) -> WarmResult:
+    with timer.measure("image fingerprinting"):
+        records, inspected_bytes, skipped = inspect_image_paths(
+            root,
+            paths,
+            config.performance.progress_interval_seconds,
+            database,
+            config.performance.cache_publication_batch_size,
+            f"Pillow {PILLOW_VERSION}",
+        )
+    hashes = {record.byte_sha256 for record in records}
+    return WarmResult(
+        kind="Image",
+        discovered=len(paths),
+        inspected=len(records),
+        inspected_bytes=inspected_bytes,
+        represented_hashes=len(hashes),
+        unique_hashes=len(hashes),
+        skipped=tuple(skipped),
+    )
+
+
+def _warm_videos(
+    root: Path,
+    paths: list[Path],
+    database: Path,
+    config: PymoConfig,
+    tools: VideoTools,
+    timer: StageTimer,
+) -> WarmResult:
+    with timer.measure("video probing"):
+        records, inspected_bytes, skipped = inspect_video_paths(
+            root,
+            paths,
+            tools.ffprobe,
+            config.performance.progress_interval_seconds,
+            database,
+            config.performance.cache_publication_batch_size,
+            tools.ffprobe_release,
+        )
+    with timer.measure("video fingerprinting"):
+        derived, fingerprint_skips = derive_candidate_fingerprints(
+            root,
+            records,
+            database,
+            tools.ffmpeg,
+            tools.ffmpeg_release,
+            tools.decode_timeout,
+            config.performance.progress_interval_seconds,
+            False,
+            True,
+            fingerprint_label="video content",
+        )
+    skipped.extend(fingerprint_skips)
+    hashes = {record.byte_sha256 for record in records}
+    return WarmResult(
+        kind="Video",
+        discovered=len(paths),
+        inspected=len(records),
+        inspected_bytes=inspected_bytes,
+        represented_hashes=sum(file_hash in derived for file_hash in hashes),
+        unique_hashes=len(hashes),
+        skipped=tuple(skipped),
+    )
+
+
+def _prepare_video_tools(args: argparse.Namespace, config: PymoConfig) -> VideoTools:
+    ffmpeg = resolve_executable(args.ffmpeg, "ffmpeg")
+    ffprobe = resolve_executable(args.ffprobe, "ffprobe")
+    return VideoTools(
+        ffmpeg=ffmpeg,
+        ffprobe=ffprobe,
+        ffmpeg_release=ffmpeg_version(ffmpeg),
+        ffprobe_release=ffprobe_version(ffprobe),
+        decode_timeout=(
+            args.decode_timeout
+            if args.decode_timeout is not None
+            else config.video_duplicates.decode_timeout_seconds
+        ),
+    )
+
+
+def _print_result(root: Path, result: WarmResult, show_files: bool) -> None:
+    print(f"\n{result.kind} cache warm summary:")
+    print(f"  Discovered files: {result.discovered}")
+    print(f"  Safely inspected files: {result.inspected}")
+    print(f"  Inspected storage: {format_bytes(result.inspected_bytes)}")
+    print(
+        "  Unique byte streams represented: "
+        f"{result.represented_hashes}/{result.unique_hashes}"
+    )
+    print(f"  Uncached or unreadable files: {len(result.skipped)}")
+    if show_files and result.skipped:
+        print(f"\n{result.kind} files not represented:")
+        for path, reason in sorted(
+            result.skipped, key=lambda item: str(item[0]).casefold()
+        ):
+            print(_relative_failure(root, path, reason))
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     root = args.folder.expanduser().resolve()
@@ -90,110 +282,73 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.decode_timeout is not None and args.decode_timeout <= 0:
         print("--decode-timeout must be a positive number", file=sys.stderr)
         return 2
+    if args.media == "images" and any(
+        value is not None for value in (args.ffmpeg, args.ffprobe, args.decode_timeout)
+    ):
+        print("FFmpeg options are not used by image cache warming", file=sys.stderr)
+        return 2
 
     try:
         config = load_config(root, args.config)
         database = writable_cache_path(root, args.cache)
         location = "explicit" if args.cache is not None else "collection-local"
-    except (CachePathError, ConfigError, VideoInspectionError) as error:
+    except (CachePathError, ConfigError) as error:
         print(f"Cannot prepare cache warming: {error}", file=sys.stderr)
         return 2
 
-    problems = layout_problems(root, config, "video")
-    if problems:
-        print("Collection is not ready for video cache warming:", file=sys.stderr)
-        print(f"  {len(problems)} layout problem(s).", file=sys.stderr)
-        print(
-            "Run pymo organize COLLECTION first so videos are directly in vids.",
-            file=sys.stderr,
-        )
+    kinds = _selected_kinds(args.media)
+    if not _layout_ready(root, config, kinds):
         return 2
 
-    vids = duplicate_layout(root, "video").source
-    classifier = Classifier(config.classification)
     timer = StageTimer(print)
     try:
-        with timer.measure("discovery"):
-            paths, ignored = discover_videos(vids, root, classifier, config)
+        discovered, ignored = _discover_selected(root, config, kinds, timer)
     except DiscoveryError:
-        print("Video discovery stopped safely.", file=sys.stderr)
+        print("Media discovery stopped safely.", file=sys.stderr)
         return 1
 
-    print(f"Preparing exact-video evidence for {len(paths)} video(s).")
+    total = sum(len(paths) for paths in discovered.values())
+    print(f"Preparing reusable evidence for {total} media file(s).")
     print(f"Cache location: {location}.")
     for message in ignored_messages(ignored, root, args.show_ignored):
         print(message)
-    if not paths:
-        print("No video content required cache warming.")
+    if total == 0:
+        print("No selected media content required cache warming.")
         print("Cache writes: 0; media writes: 0; action-log writes: 0.")
         return 0
 
+    results: list[WarmResult] = []
     try:
-        ffmpeg = resolve_executable(args.ffmpeg, "ffmpeg")
-        ffprobe = resolve_executable(args.ffprobe, "ffprobe")
-        ffmpeg_release = ffmpeg_version(ffmpeg)
-        ffprobe_release = ffprobe_version(ffprobe)
+        video_paths = discovered.get("video", [])
+        video_tools = _prepare_video_tools(args, config) if video_paths else None
+        image_paths = discovered.get("picture", [])
+        if image_paths:
+            results.append(_warm_images(root, image_paths, database, config, timer))
+        if video_paths:
+            assert video_tools is not None
+            results.append(
+                _warm_videos(root, video_paths, database, config, video_tools, timer)
+            )
+    except ImageAnalysisCacheError:
+        print("Derived image cache cannot be used safely.", file=sys.stderr)
+        return 1
+    except VideoCacheError:
+        print("Derived video cache cannot be used safely.", file=sys.stderr)
+        return 1
     except VideoInspectionError:
         print("Native video tools are unavailable.", file=sys.stderr)
         return 2
-    decode_timeout = (
-        args.decode_timeout
-        if args.decode_timeout is not None
-        else config.video_duplicates.decode_timeout_seconds
-    )
 
-    try:
-        with timer.measure("probing"):
-            records, scanned_bytes, skipped = inspect_video_paths(
-                root,
-                paths,
-                ffprobe,
-                config.performance.progress_interval_seconds,
-                database,
-                config.performance.cache_publication_batch_size,
-                ffprobe_release,
-            )
-    except VideoCacheError:
-        print("Derived cache cannot be used safely.", file=sys.stderr)
-        return 1
-    try:
-        with timer.measure("fingerprinting"):
-            derived, fingerprint_skips = derive_candidate_fingerprints(
-                root,
-                records,
-                database,
-                ffmpeg,
-                ffmpeg_release,
-                decode_timeout,
-                config.performance.progress_interval_seconds,
-                False,
-                True,
-                fingerprint_label="video content",
-            )
-    except VideoCacheError:
-        print("Derived cache cannot be used safely.", file=sys.stderr)
-        return 1
-    skipped.extend(fingerprint_skips)
-    unique_hashes = {record.byte_sha256 for record in records}
-    represented = sum(file_hash in derived for file_hash in unique_hashes)
-
-    print("\nVideo cache warm summary:")
-    print(f"  Discovered videos: {len(paths)}")
-    print(f"  Safely inspected videos: {len(records)}")
-    print(f"  Inspected storage: {format_bytes(scanned_bytes)}")
-    print(f"  Unique byte streams represented: {represented}/{len(unique_hashes)}")
-    print(f"  Uncached or unreadable files: {len(skipped)}")
+    for result in results:
+        _print_result(root, result, args.show_files)
     print("  Media writes: 0; action-log writes: 0.")
-    if args.show_files and skipped:
-        print("\nFiles not represented:")
-        for path, reason in sorted(skipped, key=lambda item: str(item[0]).casefold()):
-            print(_relative_failure(root, path, reason))
+    skipped = sum(len(result.skipped) for result in results)
     if skipped:
         print(
             "Cache warming completed with incomplete media coverage.", file=sys.stderr
         )
         return 1
-    print("Cache warming completed with complete discovered-video coverage.")
+    print("Cache warming completed with complete selected-media coverage.")
     return 0
 
 
