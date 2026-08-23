@@ -8,6 +8,11 @@ from pathlib import Path
 from pymo.cache import service as cache_service
 from pymo.cache import status as cache_status
 from pymo.cache.hashes import observation_scope
+from pymo.cache.images import (
+    IMAGE_PIXEL_ALGORITHM,
+    IMAGE_PIXEL_EVIDENCE_TYPE,
+    encode_pixel_hash,
+)
 from pymo.cache.probes import (
     VIDEO_PROBE_ALGORITHM,
     VIDEO_PROBE_EVIDENCE_TYPE,
@@ -113,8 +118,8 @@ def test_current_cache_reports_evidence_coverage_without_writing(
         "evidence_namespaces": 1,
         "evidence_compatibility": {
             "algorithm_compatible": 0,
-            "stale_algorithm": 0,
-            "unknown_type": 1,
+            "stale_algorithm": 1,
+            "unknown_type": 0,
             "runtime_checked": False,
         },
         "evidence_coverage": {
@@ -231,6 +236,65 @@ def test_status_rejects_malformed_video_probe_evidence(tmp_path: Path) -> None:
 
     assert status == 1
     assert report["cache"]["state"] == "invalid"
+
+
+def test_status_rejects_malformed_displayed_pixel_evidence(tmp_path: Path) -> None:
+    layout = CollectionLayout(tmp_path)
+    connection = sqlite3.connect(layout.derived_cache)
+    cache_service.initialize_schema(connection)
+    cache_service.upsert_derived_evidence(
+        connection,
+        [
+            cache_service.DerivedEvidence(
+                file_sha256="a" * 64,
+                evidence_type=IMAGE_PIXEL_EVIDENCE_TYPE,
+                algorithm=IMAGE_PIXEL_ALGORITHM,
+                runtime="Pillow test",
+                payload_json='{"digest":"invalid"}',
+            )
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    report, status = cache_status.inspect_cache_status(
+        tmp_path, layout.derived_cache, location="collection-local"
+    )
+
+    assert status == 1
+    assert report["cache"]["state"] == "invalid"
+
+
+def test_status_recognizes_current_displayed_pixel_evidence(tmp_path: Path) -> None:
+    layout = CollectionLayout(tmp_path)
+    connection = sqlite3.connect(layout.derived_cache)
+    cache_service.initialize_schema(connection)
+    cache_service.upsert_derived_evidence(
+        connection,
+        [
+            cache_service.DerivedEvidence(
+                file_sha256="a" * 64,
+                evidence_type=IMAGE_PIXEL_EVIDENCE_TYPE,
+                algorithm=IMAGE_PIXEL_ALGORITHM,
+                runtime="Pillow test",
+                payload_json=encode_pixel_hash("b" * 64),
+            )
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    report, status = cache_status.inspect_cache_status(
+        tmp_path, layout.derived_cache, location="collection-local"
+    )
+
+    assert status == 0
+    assert report["cache"]["evidence_compatibility"] == {
+        "algorithm_compatible": 1,
+        "stale_algorithm": 0,
+        "unknown_type": 0,
+        "runtime_checked": False,
+    }
 
 
 def test_status_treats_another_collection_scope_as_stale(tmp_path: Path) -> None:

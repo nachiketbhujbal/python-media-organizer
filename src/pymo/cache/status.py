@@ -13,6 +13,12 @@ from pathlib import Path, PurePosixPath
 
 from pymo.cache import service as cache_service
 from pymo.cache.hashes import HashCacheError, observation_scope
+from pymo.cache.images import (
+    IMAGE_PIXEL_ALGORITHM,
+    IMAGE_PIXEL_EVIDENCE_TYPE,
+    ImageCacheError,
+    decode_pixel_payload,
+)
 from pymo.cache.probes import (
     VIDEO_PROBE_ALGORITHM,
     VIDEO_PROBE_EVIDENCE_TYPE,
@@ -152,6 +158,13 @@ def inspect_cache_status(
             ]
             for record in video_probes:
                 decode_probe_payload(record.payload_json)
+            image_pixels = [
+                record
+                for record in evidence
+                if record.evidence_type == IMAGE_PIXEL_EVIDENCE_TYPE
+            ]
+            for record in image_pixels:
+                decode_pixel_payload(record.payload_json)
             type_counts = Counter(record.evidence_type for record in evidence)
             cache["evidence_records"] = len(evidence)
             cache["evidence_types"] = dict(sorted(type_counts.items()))
@@ -161,13 +174,19 @@ def inspect_cache_status(
                     for record in evidence
                 }
             )
-            compatible = sum(
-                record.algorithm == videos.FINGERPRINT_ALGORITHM
-                for record in exact_video
-            ) + sum(
-                record.algorithm == VIDEO_PROBE_ALGORITHM for record in video_probes
+            compatible = (
+                sum(
+                    record.algorithm == videos.FINGERPRINT_ALGORITHM
+                    for record in exact_video
+                )
+                + sum(
+                    record.algorithm == VIDEO_PROBE_ALGORITHM for record in video_probes
+                )
+                + sum(
+                    record.algorithm == IMAGE_PIXEL_ALGORITHM for record in image_pixels
+                )
             )
-            known_evidence = exact_video + video_probes
+            known_evidence = exact_video + video_probes + image_pixels
             compatibility = cache["evidence_compatibility"]
             assert isinstance(compatibility, dict)
             compatibility.update(
@@ -217,6 +236,7 @@ def inspect_cache_status(
     except (
         cache_service.CacheError,
         HashCacheError,
+        ImageCacheError,
         ProbeCacheError,
         videos.VideoInspectionError,
     ):

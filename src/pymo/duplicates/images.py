@@ -28,6 +28,13 @@ from pymo.action_log import (
     NoUndoableRun,
     ToolId,
 )
+from pymo.cache.hashes import HashCacheError, load_cached_hashes, sha256_descriptor
+from pymo.cache.images import (
+    ImageCacheError,
+    load_cached_pixel_hashes,
+    publish_image_analysis_batch,
+)
+from pymo.cache.paths import CachePathError, writable_cache_path
 from pymo.config import (
     ConfigError,
     PymoConfig,
@@ -52,7 +59,7 @@ from pymo.logging_config import emit as print
 from pymo.progress import ProgressMeter, format_bytes
 
 try:
-    from PIL import Image, ImageOps, UnidentifiedImageError
+    from PIL import Image, ImageOps, UnidentifiedImageError, __version__
 except ImportError as error:
     print(
         "This script needs Pillow. Install it with:\n"
@@ -65,8 +72,11 @@ except ImportError as error:
 @dataclass(frozen=True)
 class ImageRecord:
     path: Path
+    byte_sha256: str
     pixel_hash: str
     state: FileState
+    byte_sha256_cached: bool = False
+    pixel_hash_cached: bool = False
 
     @property
     def file_size(self) -> int:
@@ -105,15 +115,51 @@ def displayed_pixel_hash(descriptor: int) -> str:
                 return digest.hexdigest()
 
 
-def inspect_image(root: Path, path: Path) -> ImageRecord:
-    state = FileState.capture(path)
+class ImageAnalysisCacheError(RuntimeError):
+    """Image analysis cache state cannot be used safely."""
+
+
+def inspect_image(
+    root: Path,
+    path: Path,
+    *,
+    state: FileState | None = None,
+    cached_sha256: str | None = None,
+    cached_pixels: dict[str, str] | None = None,
+) -> ImageRecord:
+    state = state or FileState.capture(path)
     with open_stable_file(root, path, state, "image analysis") as descriptor:
-        pixel_hash = displayed_pixel_hash(descriptor)
-    return ImageRecord(path=path, pixel_hash=pixel_hash, state=state)
+        byte_sha256 = cached_sha256 or sha256_descriptor(descriptor)
+        cached_pixel_hash = (cached_pixels or {}).get(byte_sha256)
+        pixel_hash = cached_pixel_hash or displayed_pixel_hash(descriptor)
+    return ImageRecord(
+        path=path,
+        byte_sha256=byte_sha256,
+        pixel_hash=pixel_hash,
+        state=state,
+        byte_sha256_cached=cached_sha256 is not None,
+        pixel_hash_cached=cached_pixel_hash is not None,
+    )
 
 
 def require_current_image(record: ImageRecord) -> None:
     record.state.require_unchanged(record.path, "duplicate apply preflight")
+
+
+def recheck_cached_image_hashes(root: Path, records: list[ImageRecord]) -> None:
+    """Re-read cached byte identities before permitting any image move."""
+
+    for record in records:
+        if not record.byte_sha256_cached:
+            continue
+        with open_stable_file(
+            root, record.path, record.state, "cached image hash recheck"
+        ) as descriptor:
+            if sha256_descriptor(descriptor) != record.byte_sha256:
+                raise FileChangedError(
+                    "file content changed during cached image hash recheck: "
+                    f"{record.path}"
+                )
 
 
 def discover_images(
@@ -221,25 +267,102 @@ def keep_sort_key(record: ImageRecord) -> tuple[int, int, str]:
 
 
 def analyze_images(
-    root: Path, paths: list[Path], progress_interval_seconds: int
+    root: Path,
+    paths: list[Path],
+    progress_interval_seconds: int,
+    database: Path | None,
+    publication_batch_size: int,
+    pillow_runtime: str,
 ) -> tuple[list[list[ImageRecord]], int, list[tuple[Path, str]]]:
     groups: dict[str, list[ImageRecord]] = defaultdict(list)
     scanned_bytes = 0
     skipped: list[tuple[Path, str]] = []
-    path_sizes: dict[Path, int] = {}
+    states: dict[Path, FileState] = {}
     for path in paths:
         try:
-            path_sizes[path] = FileState.capture(path).size
-        except FileChangedError:
-            path_sizes[path] = 0
+            states[path] = FileState.capture(path)
+        except FileChangedError as error:
+            skipped.append((path, str(error)))
+    try:
+        cached_hashes = (
+            {}
+            if database is None
+            else load_cached_hashes(root, database, states, coordinated=True)
+        )
+        cached_pixels = (
+            {}
+            if database is None
+            else load_cached_pixel_hashes(database, pillow_runtime)
+        )
+    except (HashCacheError, ImageCacheError) as error:
+        raise ImageAnalysisCacheError(
+            "Image fingerprint cache cannot be used safely: "
+            f"{error}\nThe cache is disposable; move it aside or rerun with --no-cache."
+        ) from error
+    if database is None:
+        print("Image fingerprint cache disabled: no records read or written.")
+    else:
+        print(
+            f"Whole-file hash cache lookup: {len(cached_hashes)} reusable "
+            f"record(s); {len(states) - len(cached_hashes)} hash(es) required."
+        )
+        print(
+            f"Displayed-pixel cache lookup: {len(cached_pixels)} compatible "
+            "record(s) available."
+        )
     progress = ProgressMeter(
-        len(paths), sum(path_sizes.values()), progress_interval_seconds
+        len(states),
+        sum(state.size for state in states.values()),
+        progress_interval_seconds,
     )
-    for path in paths:
+    pending_hashes: list[tuple[Path, FileState, str]] = []
+    pending_pixels: dict[str, str] = {}
+    hashes_persisted = 0
+    pixels_persisted: set[str] = set()
+    analyzed: list[ImageRecord] = []
+
+    def publish_pending() -> None:
+        nonlocal hashes_persisted
+        if database is None or (not pending_hashes and not pending_pixels):
+            return
+        publish_image_analysis_batch(
+            root,
+            database,
+            pillow_runtime,
+            pending_hashes,
+            pending_pixels,
+        )
+        hashes_persisted += len(pending_hashes)
+        pixels_persisted.update(pending_pixels)
+        pending_hashes.clear()
+        pending_pixels.clear()
+
+    for path, state in states.items():
         try:
-            record = inspect_image(root, path)
+            record = inspect_image(
+                root,
+                path,
+                state=state,
+                cached_sha256=cached_hashes.get(path),
+                cached_pixels=cached_pixels,
+            )
+            analyzed.append(record)
             groups[record.pixel_hash].append(record)
             scanned_bytes += record.file_size
+            if database is not None and (
+                not record.byte_sha256_cached or not record.pixel_hash_cached
+            ):
+                if not record.byte_sha256_cached:
+                    pending_hashes.append(
+                        (record.path, record.state, record.byte_sha256)
+                    )
+                if not record.pixel_hash_cached:
+                    pending_pixels[record.byte_sha256] = record.pixel_hash
+                if (
+                    max(len(pending_hashes), len(pending_pixels))
+                    >= publication_batch_size
+                ):
+                    publish_pending()
         except (
             FileChangedError,
             Image.DecompressionBombError,
@@ -249,9 +372,31 @@ def analyze_images(
             ValueError,
         ) as error:
             skipped.append((path, str(error)))
-        progress_message = progress.advance("processed", byte_count=path_sizes[path])
+        except (HashCacheError, ImageCacheError) as error:
+            raise ImageAnalysisCacheError(
+                f"Image fingerprint cache update failed safely: {error}"
+            ) from error
+        progress_message = progress.advance("processed", byte_count=state.size)
         if progress_message:
             print(f"  {progress_message}")
+
+    try:
+        publish_pending()
+    except (HashCacheError, ImageCacheError) as error:
+        raise ImageAnalysisCacheError(
+            f"Image fingerprint cache update failed safely: {error}"
+        ) from error
+    if database is not None:
+        print(
+            f"Whole-file hash cache update: {hashes_persisted} new record(s) "
+            "persisted."
+        )
+        print(
+            "Displayed-pixel cache use: "
+            f"{sum(record.pixel_hash_cached for record in analyzed)} reused; "
+            f"{sum(not record.pixel_hash_cached for record in analyzed)} computed; "
+            f"{len(pixels_persisted)} new record(s) persisted."
+        )
 
     duplicate_groups = [items for items in groups.values() if len(items) > 1]
     duplicate_groups.sort(key=lambda items: str(min(r.path for r in items)).casefold())
@@ -299,6 +444,7 @@ def apply_image_moves(
     current_records = {
         record.path: record for records in duplicate_groups for record in records
     }
+    recheck_cached_image_hashes(root, list(current_records.values()))
     keepers = {kept.path: kept for _, kept, _, _ in move_plan}
     for record in current_records.values():
         require_current_image(record)
@@ -364,6 +510,19 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="show aggregate path-private results without file or group details",
     )
+    parser.add_argument(
+        "--cache",
+        type=Path,
+        help=(
+            "read and update this cache file instead of the collection-local "
+            "default; its parent directory must already exist"
+        ),
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="do not read or write hash or displayed-pixel cache records",
+    )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
     return parser.parse_args(argv)
@@ -383,12 +542,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    if args.no_cache and args.cache is not None:
+        print("--no-cache cannot be combined with --cache", file=sys.stderr)
+        return 2
     if args.undo:
         return undo_duplicate_run(root, args.apply, summary=args.summary)
 
     try:
         config = load_config(root, args.config)
-    except ConfigError as error:
+        database = writable_cache_path(root, args.cache)
+    except (CachePathError, ConfigError) as error:
         detail = "rerun without --summary for details" if args.summary else str(error)
         print(f"Cannot use configuration: {detail}", file=sys.stderr)
         return 2
@@ -426,11 +589,31 @@ def main(argv: Sequence[str] | None = None) -> int:
     for message in ignored_messages(ignored, root, args.show_ignored):
         print(message)
 
-    duplicate_groups, scanned_bytes, skipped = analyze_images(
-        root,
-        paths,
-        config.performance.progress_interval_seconds,
-    )
+    if not paths:
+        print("No image content required duplicate analysis.")
+        verb = "Moved" if args.apply else "Would move"
+        print(f"\n{verb} 0 duplicate(s) from 0 group(s).")
+        print_storage_summary([], 0)
+        return 0
+
+    try:
+        duplicate_groups, scanned_bytes, skipped = analyze_images(
+            root,
+            paths,
+            config.performance.progress_interval_seconds,
+            None if args.no_cache else database,
+            config.performance.cache_publication_batch_size,
+            f"Pillow {__version__}",
+        )
+    except ImageAnalysisCacheError as error:
+        detail = (
+            "Image fingerprint cache cannot be used safely; rerun without "
+            "--summary for details."
+            if args.summary
+            else str(error)
+        )
+        print(detail, file=sys.stderr)
+        return 1
     move_plan = plan_image_moves(
         duplicate_groups, destination, args.apply, summary=args.summary
     )

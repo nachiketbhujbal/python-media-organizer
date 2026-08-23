@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sqlite3
 import stat
@@ -14,6 +15,16 @@ from pymo.file_safety import FileState
 
 class HashCacheError(RuntimeError):
     """Whole-file hash observations cannot be used safely."""
+
+
+def sha256_descriptor(descriptor: int) -> str:
+    """Hash a complete already-open file descriptor from its beginning."""
+
+    digest = hashlib.sha256()
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    while chunk := os.read(descriptor, 1024 * 1024):
+        digest.update(chunk)
+    return digest.hexdigest()
 
 
 def observation_scope(root: Path) -> str:
