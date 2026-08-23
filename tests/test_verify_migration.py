@@ -7,13 +7,20 @@ import subprocess
 import sys
 from pathlib import Path
 
+from PIL import Image
+
 from pymo.collection import CollectionLayout
 from pymo.config import load_config
+from pymo.migration import images as migration_images
 from pymo.migration import inventory
 from pymo.migration.coverage import compare_byte_inventories
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
+
+
+def write_image(path: Path, color: tuple[int, int, int]) -> None:
+    Image.new("RGB", (4, 3), color).save(path)
 
 
 def run_verify(*arguments: object) -> subprocess.CompletedProcess[str]:
@@ -64,7 +71,7 @@ def test_verify_migration_is_path_independent_private_and_zero_write(
 
     assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads(result.stdout)
-    assert report["schema_version"] == 1
+    assert report["schema_version"] == 2
     assert report["direction"] == "source-to-destination"
     assert report["contract"] == "unique-byte-stream"
     assert report["coverage"]["verdict"] == "complete"
@@ -327,3 +334,160 @@ def test_missing_content_with_incomplete_destination_is_unproven(
     assert report["coverage"]["verdict"] == "unproven"
     assert report["coverage"]["reasons"] == ["destination-inventory-incomplete"]
     assert report["coverage"]["missing_unique_streams"] == 1
+
+
+def test_metadata_or_format_varied_image_is_reported_as_exact_pixel_coverage(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    write_image(source / "garden.png", (12, 34, 56))
+    write_image(destination / "renamed-garden.bmp", (12, 34, 56))
+    before_source = files_under(source)
+    before_destination = files_under(destination)
+
+    result = run_verify(source, destination, "--json")
+
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    assert report["coverage"]["verdict"] == "incomplete"
+    assert report["coverage"]["missing_unique_streams"] == 1
+    assert report["image_content"]["verdict"] == "complete"
+    assert report["image_content"]["eligible_source_unique_streams"] == 1
+    assert report["image_content"]["represented_unique_streams"] == 1
+    assert report["image_content"]["missing_unique_streams"] == 0
+    assert "garden.png" not in result.stdout
+    assert "renamed-garden.bmp" not in result.stdout
+    assert files_under(source) == before_source
+    assert files_under(destination) == before_destination
+
+
+def test_different_displayed_pixels_are_reported_separately_from_missing_bytes(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    write_image(source / "source.png", (1, 2, 3))
+    write_image(destination / "destination.bmp", (3, 2, 1))
+
+    result = run_verify(source, destination, "--show-files", "--json")
+
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    images = report["image_content"]
+    assert images["verdict"] == "incomplete"
+    assert images["reasons"] == ["image-content-missing"]
+    assert images["missing_source_paths"] == ["source.png"]
+
+
+def test_unreadable_source_image_makes_image_layer_unproven(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    (source / "damaged.png").write_bytes(b"not an image")
+    write_image(destination / "candidate.png", (1, 2, 3))
+
+    result = run_verify(source, destination, "--show-files", "--json")
+
+    assert result.returncode == 1
+    images = json.loads(result.stdout)["image_content"]
+    assert images["verdict"] == "unproven"
+    assert images["reasons"] == ["source-image-evidence-incomplete"]
+    assert images["uninspectable_source_unique_streams"] == 1
+    assert images["source_problem_paths"] == [
+        {"category": "unreadable-image-content", "path": "damaged.png"}
+    ]
+
+
+def test_unreadable_destination_image_can_hide_a_pixel_representative(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    write_image(source / "source.png", (1, 2, 3))
+    (destination / "unknown.png").write_bytes(b"not an image")
+
+    result = run_verify(source, destination, "--show-files", "--json")
+
+    assert result.returncode == 1
+    images = json.loads(result.stdout)["image_content"]
+    assert images["verdict"] == "unproven"
+    assert images["reasons"] == ["destination-image-evidence-incomplete"]
+    assert images["destination_uninspectable_unique_streams"] == 1
+    assert images["destination_problem_paths"] == [
+        {"category": "unreadable-image-content", "path": "unknown.png"}
+    ]
+
+
+def test_byte_represented_images_do_not_require_pixel_inspection(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    write_image(source / "source.png", (1, 2, 3))
+    (destination / "renamed.png").write_bytes((source / "source.png").read_bytes())
+    source_inventory = inventory.hash_tree(
+        inventory.discover_tree(source, load_config(source)), 15, show_progress=False
+    )
+    destination_inventory = inventory.hash_tree(
+        inventory.discover_tree(destination, load_config(destination)),
+        15,
+        show_progress=False,
+    )
+
+    def reject_decode(_descriptor: int) -> str:
+        raise AssertionError("byte-represented content should not be decoded")
+
+    monkeypatch.setattr(migration_images, "displayed_pixel_hash", reject_decode)
+    result = migration_images.compare_image_content(
+        source_inventory,
+        destination_inventory,
+        load_config(source).image_duplicates.extensions,
+        15,
+        show_progress=False,
+    )
+
+    assert result.verdict == "not-needed"
+    assert result.eligible_source_unique_streams == 0
+
+
+def test_image_changed_after_byte_inventory_is_unproven(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    source_image = source / "source.png"
+    write_image(source_image, (1, 2, 3))
+    write_image(destination / "destination.bmp", (1, 2, 3))
+    source_inventory = inventory.hash_tree(
+        inventory.discover_tree(source, load_config(source)), 15, show_progress=False
+    )
+    destination_inventory = inventory.hash_tree(
+        inventory.discover_tree(destination, load_config(destination)),
+        15,
+        show_progress=False,
+    )
+    write_image(source_image, (9, 8, 7))
+
+    result = migration_images.compare_image_content(
+        source_inventory,
+        destination_inventory,
+        load_config(source).image_duplicates.extensions,
+        15,
+        show_progress=False,
+    )
+
+    assert result.verdict == "unproven"
+    assert result.uninspectable_source_unique_streams == 1
+    assert [issue.category for issue in result.source_issues] == [
+        "changed-during-image-inspection"
+    ]

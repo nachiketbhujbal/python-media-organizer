@@ -78,6 +78,11 @@ The same adversarial method was repeated after the first validation release.
 | MIG-006 | Medium | Difference reports can expose two absolute roots and private filenames, doubling the privacy surface of a normal collection command. | 0.5.0 | Resolved with aggregate defaults, root-free JSON, and explicit relative-path opt-ins |
 | MIG-007 | Medium | Identical or nested roots let one inventory consume the other and make a directional comparison misleading. | 0.5.0 | Resolved by rejecting same and ancestor/descendant roots before discovery |
 | MIG-008 | Low | Pymo cache, configuration, lock, staging, and action-history bytes are tool state rather than media-preservation content. | 0.5.0 | Resolved with counted, zero-read tool-state exclusion in the declared schema-1 scope |
+| MIG-009 | High | Treating a metadata-varied image as byte-preserved would hide the loss of its original metadata, encoding, container, and file bytes. | 0.5.1 | Resolved with a separate exact displayed-image layer that leaves the byte verdict unchanged |
+| MIG-010 | High | Similar-looking, animated, multi-page, unsafe, unsupported, unreadable, or changing images must not satisfy a deterministic content-preservation claim. | 0.5.1 | Resolved with the existing conservative single-image exact-RGBA algorithm and explicit unproven evidence |
+| MIG-011 | Medium | Decoding only destination byte identities absent from the source misses a valid case where one retained source variant represents another removed metadata variant by pixels. | 0.5.1 | Resolved by inspecting one representative of every eligible destination byte identity |
+| MIG-012 | Medium | Copying the displayed-pixel algorithm into migration code would allow duplicate and preservation semantics to drift. | 0.5.1 | Resolved by a shared versioned `image_content.py` normalization boundary |
+| MIG-013 | Medium | A destination image decode failure can hide a representative for otherwise missing source pixels. | 0.5.1 | Resolved with an unproven image-layer verdict whenever an unmatched source pixel identity coexists with incomplete destination image evidence |
 
 ## CI portability findings
 
@@ -246,6 +251,8 @@ The same adversarial method was repeated after the first validation release.
   unrelated disposable records or changing media and action history.
 - `0.5.0`: establish fresh, path-independent directional byte coverage with
   explicit complete, incomplete, and unproven evidence states.
+- `0.5.1`: layer exact displayed-image coverage over byte-missing source
+  identities without weakening or relabeling the byte-preservation contract.
 
 ## Independent review evidence
 

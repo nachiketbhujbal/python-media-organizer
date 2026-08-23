@@ -130,6 +130,11 @@ never duplicate the version in source or static project metadata.
   extras. Incomplete source evidence is `unproven`; missing identities are
   definite only when destination evidence is also complete. Paths remain
   hidden unless `--show-files` or `--show-ignored` is explicit.
+- Keep exact displayed-image evidence layered over, not substituted for, byte
+  evidence. Pixel equivalence never proves metadata, encoding, container, or
+  source-file bytes. Decode migration candidates freshly through the shared
+  versioned algorithm; unsupported, unsafe, changing, or unreadable inputs do
+  not receive an exact-image claim.
 
 ## Package layout and tools
 
@@ -151,6 +156,9 @@ never duplicate the version in source or static project metadata.
   image/video analysis policy.
 - `src/pymo/migration/`: fresh stable inventory, directional byte/content
   coverage, multiplicity accounting, and path-private preservation reports.
+- `src/pymo/image_content.py`: shared exact displayed-pixel normalization used
+  by duplicate and migration domains; it owns no discovery, cache, reporting,
+  or mutation policy.
 - `src/pymo/verify_migration.py`: thin coordinator for the public directional
   verification command.
 - `src/pymo/action_log.py`: shared append-only mutation journal and guarded

@@ -51,6 +51,7 @@ class HashedEntry:
     path: Path
     size: int
     sha256: str
+    state: FileState
 
     @property
     def identity(self) -> tuple[int, str]:
@@ -230,7 +231,7 @@ def hash_tree(
         except OSError:
             unreadable.append(InventoryIssue(entry.path, "unreadable-during-hash"))
         else:
-            files.append(HashedEntry(entry.path, entry.size, digest))
+            files.append(HashedEntry(entry.path, entry.size, digest, entry.state))
             hashed_bytes = entry.size
         message = progress.advance("hashed", byte_count=hashed_bytes)
         if show_progress and message:
