@@ -504,6 +504,13 @@ This ordering is intentional. For example, if organization is followed by
 renaming, organization cannot be undone until renaming is undone. The same rule
 applies when a duplicate finder later moves a renamed file.
 
+The promoted future direction includes a path-private collection-history
+synopsis over this journal and a separate duplicate-finalization command. Any
+irreversible disposal must remain outside the duplicate finders, require fresh
+preservation evidence and explicit confirmation, and be recorded as an
+irreversible audit event without pretending it can be undone. Its journal
+schema and quarantine/deletion ceremony are not yet designed or implemented.
+
 Version 0.2.0 removed CSV organizer undo and `--manifest`, grouped image-output
 migration and its options, the image finder's no-op `--recursive` option, and
 fixed-name `media_actions.jsonl` detection. Users needing one of those v0.1
@@ -913,6 +920,12 @@ behavioral tests.
 - `--show-ignored` explicitly adds relative ignored paths; `--verbose` alone
   never reveals them.
 - No persistent log is created by default.
+
+Automatic collection-local diagnostic logging, conventional log-level
+selection, and a `--debug` alias are research items rather than current
+behavior. Default logging would conflict with the present opt-in privacy rule,
+report-only command guarantees, read-only collections, and two-root migration
+verification unless those boundaries receive an explicit design and ADR.
 
 Do not put media bytes or unrelated metadata into exceptions or diagnostics.
 Scan JSON is the first machine-readable result contract; human command output

@@ -185,6 +185,13 @@ state.
 These have an accepted product direction but no release number yet:
 
 - richer local collection statistics and historical comparisons;
+- a collection-history command that summarizes committed runs and actions from
+  the portable journal without exposing paths by default, including an explicit
+  distinction between reversible operations and any future irreversible event;
+- deliberate duplicate finalization as a command separate from the duplicate
+  finders, dry-run by default and gated by fresh preservation evidence, with a
+  quarantine-first workflow and an unmistakable explicit boundary before any
+  irreversible deletion is recorded;
 - a task-oriented root README readability and information-architecture sweep,
   including a table of contents, linkable status and command sections, less
   repetition, and links to detailed version, roadmap, and research records
