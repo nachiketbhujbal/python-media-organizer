@@ -440,6 +440,17 @@ The journal schema, confirmation ceremony, quarantine portability across
 macOS/Linux/WSL, and preservation-evidence binding require an ADR before this
 work receives a release number.
 
+Ordinary migration verification must continue to describe the physical target
+that actually exists, including media under `dups`; silently excluding that
+tree by default could hide that it contains the only representative of unique
+content. A future explicit `--simulate-without-dups` mode should discover and
+inventory the destination review tree, report its files and bytes separately,
+exclude those files only from destination preservation evidence, perform no
+writes, and label the resulting verdict as a simulated post-finalization
+outcome. It must become non-complete when removing `dups` would leave any source
+content unaccounted and should provide the evidence gate consumed by a later
+duplicate-finalization command.
+
 ### Persistent diagnostic logging
 
 Collection-local diagnostic logs are useful acceptance and operational

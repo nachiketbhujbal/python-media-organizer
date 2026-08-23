@@ -191,7 +191,11 @@ These have an accepted product direction but no release number yet:
 - deliberate duplicate finalization as a command separate from the duplicate
   finders, dry-run by default and gated by fresh preservation evidence, with a
   quarantine-first workflow and an unmistakable explicit boundary before any
-  irreversible deletion is recorded;
+  irreversible deletion is recorded; add a zero-write
+  `verify-migration --simulate-without-dups` preview that inventories the
+  destination review tree but prevents it from satisfying preservation
+  coverage, clearly labels the verdict as simulated, and reports whether
+  finalization would discard unique content;
 - validation remediation guidance that turns findings into explicit next
   actions, including reversible extension normalization where content identity
   is certain and reversible quarantine planning for media that cannot be

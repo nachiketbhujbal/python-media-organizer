@@ -510,6 +510,10 @@ irreversible disposal must remain outside the duplicate finders, require fresh
 preservation evidence and explicit confirmation, and be recorded as an
 irreversible audit event without pretending it can be undone. Its journal
 schema and quarantine/deletion ceremony are not yet designed or implemented.
+Normal verification continues to include `dups` because it reports the real
+target namespace. Promoted future work adds an explicit zero-write
+`--simulate-without-dups` mode that inventories that tree but prevents it from
+satisfying coverage and clearly reports a simulated post-finalization verdict.
 
 Later promoted work also includes actionable validation guidance, reversible
 extension normalization and damaged-media quarantine designs, plus migration
