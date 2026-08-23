@@ -322,7 +322,7 @@ def test_cache_warm_receives_relevant_global_configuration(tmp_path: Path) -> No
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "No video content required cache warming" in result.stdout
+    assert "No selected media content required cache warming" in result.stdout
     assert list(collection.iterdir()) == [collection / "vids"]
 
 

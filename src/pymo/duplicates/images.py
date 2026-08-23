@@ -266,15 +266,14 @@ def keep_sort_key(record: ImageRecord) -> tuple[int, int, str]:
     return (-record.file_size, record.modified_ns, str(record.path).casefold())
 
 
-def analyze_images(
+def inspect_image_paths(
     root: Path,
     paths: list[Path],
     progress_interval_seconds: int,
     database: Path | None,
     publication_batch_size: int,
     pillow_runtime: str,
-) -> tuple[list[list[ImageRecord]], int, list[tuple[Path, str]]]:
-    groups: dict[str, list[ImageRecord]] = defaultdict(list)
+) -> tuple[list[ImageRecord], int, list[tuple[Path, str]]]:
     scanned_bytes = 0
     skipped: list[tuple[Path, str]] = []
     states: dict[Path, FileState] = {}
@@ -317,6 +316,7 @@ def analyze_images(
     )
     pending_hashes: list[tuple[Path, FileState, str]] = []
     pending_pixels: dict[str, str] = {}
+    available_pixels = dict(cached_pixels)
     hashes_persisted = 0
     pixels_persisted: set[str] = set()
     analyzed: list[ImageRecord] = []
@@ -344,10 +344,14 @@ def analyze_images(
                 path,
                 state=state,
                 cached_sha256=cached_hashes.get(path),
-                cached_pixels=cached_pixels,
+                cached_pixels=available_pixels,
             )
             analyzed.append(record)
-            groups[record.pixel_hash].append(record)
+            # A complete byte hash is a sufficient key for reusing a pixel
+            # fingerprint computed earlier in this same run. This avoids
+            # decoding byte-identical copies before their bounded batch is
+            # published.
+            available_pixels.setdefault(record.byte_sha256, record.pixel_hash)
             scanned_bytes += record.file_size
             if database is not None and (
                 not record.byte_sha256_cached or not record.pixel_hash_cached
@@ -398,9 +402,37 @@ def analyze_images(
             f"{len(pixels_persisted)} new record(s) persisted."
         )
 
+    return analyzed, scanned_bytes, skipped
+
+
+def group_image_duplicates(records: list[ImageRecord]) -> list[list[ImageRecord]]:
+    """Group inspected images by exact displayed pixels."""
+
+    groups: dict[str, list[ImageRecord]] = defaultdict(list)
+    for record in records:
+        groups[record.pixel_hash].append(record)
     duplicate_groups = [items for items in groups.values() if len(items) > 1]
     duplicate_groups.sort(key=lambda items: str(min(r.path for r in items)).casefold())
-    return duplicate_groups, scanned_bytes, skipped
+    return duplicate_groups
+
+
+def analyze_images(
+    root: Path,
+    paths: list[Path],
+    progress_interval_seconds: int,
+    database: Path | None,
+    publication_batch_size: int,
+    pillow_runtime: str,
+) -> tuple[list[list[ImageRecord]], int, list[tuple[Path, str]]]:
+    records, scanned_bytes, skipped = inspect_image_paths(
+        root,
+        paths,
+        progress_interval_seconds,
+        database,
+        publication_batch_size,
+        pillow_runtime,
+    )
+    return group_image_duplicates(records), scanned_bytes, skipped
 
 
 def plan_image_moves(
