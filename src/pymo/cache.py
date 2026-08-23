@@ -252,10 +252,11 @@ def _validate_file_observation(record: FileObservation) -> None:
         raise CacheError("SQLite cache contains an invalid file observation")
 
 
-def validate_current_schema(connection: sqlite3.Connection) -> None:
-    """Validate the exact current schema, version row, and every stored record."""
-
-    _require_integrity(connection)
+def _validated_current_records(
+    connection: sqlite3.Connection, *, require_integrity: bool
+) -> tuple[list[DerivedEvidence], list[FileObservation]]:
+    if require_integrity:
+        _require_integrity(connection)
     if _schema_objects(connection) != _current_objects():
         raise CacheError("SQLite cache has an incompatible schema")
     for table, expected in _current_signatures().items():
@@ -266,16 +267,31 @@ def validate_current_schema(connection: sqlite3.Connection) -> None:
     ).fetchall()
     if versions != [(1, SCHEMA_VERSION)]:
         raise CacheError("SQLite cache has an unsupported schema version")
-    for row in connection.execute(
-        "SELECT file_sha256, evidence_type, algorithm, runtime, payload_json "
-        "FROM derived_evidence"
-    ):
-        _validate_derived_evidence(DerivedEvidence(*row))
-    for row in connection.execute(
-        "SELECT scope, relative_path, device, inode, size, modified_ns, "
-        "changed_ns, byte_sha256 FROM file_observations"
-    ):
-        _validate_file_observation(FileObservation(*row))
+    evidence = [
+        DerivedEvidence(*row)
+        for row in connection.execute(
+            "SELECT file_sha256, evidence_type, algorithm, runtime, payload_json "
+            "FROM derived_evidence"
+        )
+    ]
+    for evidence_record in evidence:
+        _validate_derived_evidence(evidence_record)
+    observations = [
+        FileObservation(*row)
+        for row in connection.execute(
+            "SELECT scope, relative_path, device, inode, size, modified_ns, "
+            "changed_ns, byte_sha256 FROM file_observations"
+        )
+    ]
+    for observation_record in observations:
+        _validate_file_observation(observation_record)
+    return evidence, observations
+
+
+def validate_current_schema(connection: sqlite3.Connection) -> None:
+    """Validate the exact current schema, version row, and every stored record."""
+
+    _validated_current_records(connection, require_integrity=True)
 
 
 def _validated_legacy_video_rows(
@@ -402,32 +418,67 @@ def read_derived_evidence(
     return [DerivedEvidence(*row) for row in rows]
 
 
-def read_all_derived_evidence(
-    connection: sqlite3.Connection,
-) -> list[DerivedEvidence]:
-    """Read all validated evidence namespaces from a current cache."""
+@dataclass(frozen=True)
+class CacheContents:
+    """Fully validated records from one legacy or current cache snapshot."""
 
-    validate_current_schema(connection)
-    rows = connection.execute(
-        "SELECT file_sha256, evidence_type, algorithm, runtime, payload_json "
-        "FROM derived_evidence "
-        "ORDER BY file_sha256, evidence_type, algorithm, runtime"
-    ).fetchall()
-    return [DerivedEvidence(*row) for row in rows]
+    schema_kind: CacheSchemaKind
+    evidence: tuple[DerivedEvidence, ...]
+    observations: tuple[FileObservation, ...]
 
 
-def read_file_observations(
-    connection: sqlite3.Connection,
-) -> list[FileObservation]:
-    """Read all validated file observations from a current cache."""
+def read_cache_contents(connection: sqlite3.Connection) -> CacheContents:
+    """Validate a cache once, then materialize its aggregate-status records."""
 
-    validate_current_schema(connection)
-    rows = connection.execute(
-        "SELECT scope, relative_path, device, inode, size, modified_ns, "
-        "changed_ns, byte_sha256 FROM file_observations "
-        "ORDER BY scope, relative_path"
-    ).fetchall()
-    return [FileObservation(*row) for row in rows]
+    _require_integrity(connection)
+    objects = _schema_objects(connection)
+    if not objects:
+        return CacheContents(schema_kind="empty", evidence=(), observations=())
+    if objects == [("table", "video_fingerprints")]:
+        if _table_signature(connection, "video_fingerprints") != (
+            _legacy_video_signature()
+        ):
+            raise CacheError("SQLite cache has an incompatible legacy schema")
+        rows = _validated_legacy_video_rows(connection)
+        return CacheContents(
+            schema_kind="legacy-video",
+            evidence=tuple(
+                DerivedEvidence(
+                    file_sha256=file_hash,
+                    evidence_type=LEGACY_VIDEO_EVIDENCE_TYPE,
+                    algorithm=algorithm,
+                    runtime=runtime,
+                    payload_json=json.dumps(
+                        {
+                            "audio_bytes": audio_bytes,
+                            "digest": fingerprint,
+                            "video_frames": video_frames,
+                        },
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                )
+                for (
+                    file_hash,
+                    algorithm,
+                    runtime,
+                    fingerprint,
+                    video_frames,
+                    audio_bytes,
+                ) in rows
+            ),
+            observations=(),
+        )
+    if objects != _current_objects():
+        raise CacheError("SQLite cache has an incompatible schema")
+    evidence, observations = _validated_current_records(
+        connection, require_integrity=False
+    )
+    return CacheContents(
+        schema_kind="current",
+        evidence=tuple(evidence),
+        observations=tuple(observations),
+    )
 
 
 def upsert_derived_evidence(

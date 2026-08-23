@@ -273,6 +273,22 @@ def test_cache_status_json_stays_machine_readable_and_read_only(
         assert list(collection.iterdir()) == []
 
 
+def test_cache_status_human_output_is_read_only_and_reports_runtime(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "media-collection"
+    collection.mkdir()
+
+    result = run_pymo("--no-timestamps", "cache", "status", collection)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "State: missing" in result.stdout
+    assert "no cache, lock, media, or action state was written" in result.stdout
+    assert "Completed cache in " in result.stdout
+    assert result.stderr == ""
+    assert list(collection.iterdir()) == []
+
+
 def test_cache_status_rejects_irrelevant_global_configuration(tmp_path: Path) -> None:
     collection = tmp_path / "media-collection"
     collection.mkdir()

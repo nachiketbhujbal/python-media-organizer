@@ -87,6 +87,7 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-005 | Low | Schema signatures were stored as several module globals despite the project's rule that assigned constants represent durable persisted identifiers only. | 0.4.3 | Resolved by constructing validation signatures locally; only persisted cache identifiers remain constants |
 | CACHE-006 | Medium | The existing coordinated cache reader creates the persistent lock when absent, so reusing it for status would violate a zero-write inspection contract. | 0.4.4 | Resolved with a descriptor-pinned read-only snapshot that creates no lock or other state |
 | CACHE-007 | Medium | A cached relative observation containing a symbolic-link parent could redirect a metadata freshness check outside the selected collection. | 0.4.4 | Resolved with collection-anchored no-follow descriptor traversal |
+| CACHE-008 | Low | Cache status composed independently validating readers and therefore rescanned every current cache row three times before reporting it. | 0.4.4 | Resolved with one validated aggregate snapshot read |
 
 ## Progress and timing review findings
 

@@ -323,3 +323,50 @@ def test_json_main_is_path_private_and_creates_no_state(tmp_path: Path, capsys) 
     assert collection.name not in captured.out
     assert captured.err == ""
     assert list(collection.iterdir()) == []
+
+
+def test_human_report_is_aggregate_and_path_private(tmp_path: Path, capsys) -> None:
+    media = tmp_path / "garden.jpg"
+    media.write_bytes(b"synthetic image bytes")
+    _write_current_cache(tmp_path, media)
+    report, status = cache_status.inspect_cache_status(
+        tmp_path,
+        CollectionLayout(tmp_path).derived_cache,
+        location="collection-local",
+    )
+    configure_logging(timestamps=False)
+
+    cache_status.print_report(report)
+    captured = capsys.readouterr()
+
+    assert status == 0
+    assert "State: healthy" in captured.out
+    assert "Format: shared schema 1" in captured.out
+    assert '"displayed-pixels": 1' in captured.out
+    assert "Runtime compatibility: not checked" in captured.out
+    assert "1 total; 1 current; 0 stale; 0 unreadable" in captured.out
+    assert (
+        "Read-only: no cache, lock, media, or action state was written" in captured.out
+    )
+    assert str(tmp_path) not in captured.out
+    assert media.name not in captured.out
+    assert captured.err == ""
+
+
+def test_invalid_collection_json_is_path_private_setup_error(
+    tmp_path: Path, capsys
+) -> None:
+    missing = tmp_path / "private-topic"
+    configure_logging(timestamps=False)
+
+    status = cache_status.main(["status", str(missing), "--json"])
+    captured = capsys.readouterr()
+
+    assert status == 2
+    report = json.loads(captured.out)
+    assert report["cache"]["state"] == "invalid"
+    assert report["cache"]["issue"] == "collection-not-directory"
+    assert str(missing) not in captured.out
+    assert missing.name not in captured.out
+    assert captured.err == ""
+    assert not missing.exists()

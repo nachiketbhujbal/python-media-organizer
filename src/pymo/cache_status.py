@@ -116,20 +116,19 @@ def inspect_cache_status(
                 return report, 0
             connection = snapshot.connection
             cache["bytes"] = snapshot.state.size
-            schema = cache_service.detect_schema(connection)
+            contents = cache_service.read_cache_contents(connection)
+            schema = contents.schema_kind
             cache["state"] = "healthy"
             if schema == "legacy-video":
-                evidence = cache_service.read_legacy_video_evidence(connection)
-                observations: list[cache_service.FileObservation] = []
                 cache["format"] = "legacy-video"
                 cache["legacy_migration_pending"] = True
             elif schema == "current":
-                evidence = cache_service.read_all_derived_evidence(connection)
-                observations = cache_service.read_file_observations(connection)
                 cache["format"] = "shared"
                 cache["cache_schema_version"] = cache_service.SCHEMA_VERSION
             else:
                 raise cache_service.CacheError("SQLite cache has no schema")
+            evidence = contents.evidence
+            observations = contents.observations
 
             exact_video = [
                 record
