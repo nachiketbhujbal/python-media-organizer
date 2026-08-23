@@ -127,6 +127,7 @@ decode_timeout_seconds = 3600
 [performance]
 scan_workers = 4
 progress_interval_seconds = 15
+cache_publication_batch_size = 32
 ```
 
 Patterns are case-insensitive and match either a basename or a path relative
@@ -155,6 +156,9 @@ precedence over the configured video timeout. `scan_workers` controls bounded
 parallel content classification for `pymo scan`; it must be between 1 and 32,
 and `--workers` overrides it for one scan. `progress_interval_seconds` controls
 periodic status and long-operation heartbeat cadence from 1 to 3600 seconds.
+`cache_publication_batch_size` controls how many new file observations are
+merged into each durable atomic cache publication; it must be between 1 and
+1000.
 
 An alternate extension file can be selected for one command:
 
@@ -195,6 +199,8 @@ free of these human-facing records.
 ```bash
 pymo scan "/path/to/media-collection"
 pymo scan "/path/to/media-collection" --checksums
+pymo scan "/path/to/media-collection" --checksums \
+  --cache "/path/to/cache.sqlite3"
 pymo scan "/path/to/media-collection" --json
 pymo scan "/path/to/media-collection" --workers 1
 ```
@@ -214,7 +220,10 @@ layout and filenames both need work, it then recommends `organize` before
 Same-size candidates are only an upper bound, not duplicate proof.
 `--checksums` additionally hashes those candidates to report exact-byte copies
 without performing displayed-pixel or decoded-playback comparison. Use the two
-dedicated duplicate finders for those stronger definitions. `--json` emits the
+dedicated duplicate finders for those stronger definitions. A checksum scan
+may reuse whole-file hashes recorded for the exact current file state in the
+collection cache or an explicit `--cache PATH`; it reports reused and computed
+hash counts but never creates or updates a cache or lock. `--json` emits the
 complete stable schema without the collection name, root path, or filenames;
 ignored relative paths appear only with the explicit `--show-ignored` opt-in.
 The default four classification workers can improve scans on mixed collections
@@ -268,8 +277,9 @@ pymo cache warm videos "/path/to/media-collection" --show-files
 
 Cache warming fingerprints every safely discovered video directly inside
 `vids`; it does not perform duplicate grouping. Successful records are
-published incrementally, so interruption or later collection growth does not
-discard completed work. A later video duplicate dry run or apply reuses
+published incrementally, and whole-file hashes are published in bounded atomic
+batches, so interruption or later collection growth does not discard completed
+batches. A later video duplicate dry run or apply reuses
 records matching the current exact-playback algorithm and FFmpeg runtime.
 
 The command never moves media, creates `dups`, or appends action history. Its
@@ -413,11 +423,16 @@ conservative skips.
 Preview and applied runs use `.pymo.sqlite3`, a disposable collection-local
 shared cache. Schema version 1 stores generic evidence by content SHA-256,
 evidence type, algorithm version, and runtime version, plus stable file
-observations for future producers. Exact-video fingerprints are the first
-evidence type. Each newly decoded fingerprint is saved immediately, so an
+observations with optional whole-file hashes. An observation is reusable only
+when its collection identity, relative path, device, inode, size, modification
+time, and change time all match. Exact-video fingerprints are the first
+evidence type. Each newly decoded fingerprint is saved immediately and new
+hash observations are published in bounded atomic batches, so an
 interrupted preview can resume and the later `--apply` usually reuses the
 reviewed work. The command reports candidate-relevant reusable records,
-fingerprints still required, and the number of new records durably persisted.
+hashes and fingerprints still required, and the number of new records durably
+persisted. Any reused hash that contributes to an applied result is recomputed
+before pymo creates duplicate directories, action history, or moves.
 Add `--no-cache` for a run that neither reads nor writes the cache; that mode
 emits no lookup or update claim. Cache writes are derived local state only:
 they never move media or write action history.
@@ -440,7 +455,9 @@ records only inside the private staged replacement, so a failed migration
 leaves the public legacy cache intact.
 
 Readers share `.pymo.sqlite3.lock`; writers take it exclusively and merge the
-latest completed records. A write is first built in memory, serialized to a
+latest completed records. Concurrent first-time writers safely create or open
+one direct-child lock before serializing. A write is first built in memory,
+serialized to a
 private collection-anchored staging descriptor, synced, reopened read-only, and
 validated. Only then does pymo publish it with an atomic no-replace rename or a
 verified atomic exchange and sync the collection directory. The public cache
@@ -596,7 +613,8 @@ fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,
 content changes, strict folder ownership, exact image and video matching,
 different audio and timing, corrupt/ambiguous media, derived cache behavior,
 incremental cache recovery, cache opt-out, zero-write cache status, cache
-health/coverage JSON, scan reports and JSON stability,
+health/coverage JSON, exact-state whole-file hash reuse, cached-hash mutation
+rechecks, concurrent first-lock creation, scan reports and JSON stability,
 bounded scan workers, removed v0.1 interfaces,
 elapsed-time summaries, default and opt-out console timestamps, timestamped
 multi-line logs, observed throughput and ETA reporting, FFmpeg heartbeats,

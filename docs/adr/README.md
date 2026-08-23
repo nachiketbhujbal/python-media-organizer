@@ -69,3 +69,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0061](0061-versioned-shared-cache-schema.md) | Versioned shared derived-cache schema |
 | [0062](0062-read-only-cache-status.md) | Read-only derived-cache status |
 | [0063](0063-explicit-video-cache-warming.md) | Explicit exact-video cache warming |
+| [0064](0064-stable-whole-file-hash-observations.md) | Exact-state whole-file hash reuse |

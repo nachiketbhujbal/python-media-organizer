@@ -89,6 +89,15 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-007 | Medium | A cached relative observation containing a symbolic-link parent could redirect a metadata freshness check outside the selected collection. | 0.4.4 | Resolved with collection-anchored no-follow descriptor traversal |
 | CACHE-008 | Low | Cache status composed independently validating readers and therefore rescanned every current cache row three times before reporting it. | 0.4.4 | Resolved with one validated aggregate snapshot read |
 | CACHE-009 | High | Generalizing the video-cache reader to an external directory initially retained a pinned safe read but omitted the final public-entry identity check, allowing a concurrent replacement to go unreported. | 0.4.5 | Resolved by rechecking the locked public entry after the SQLite read and retaining the path-swap regression |
+| CACHE-010 | Medium | Two simultaneous writers creating a previously absent cache lock can race on macOS and make one writer fail with `ENOENT` instead of serializing. | 0.4.6 | Resolved with a pinned exclusive-create-or-open sequence and concurrent first-writer regression coverage |
+| CACHE-011 | Medium | Cache status checked every observation's relative path against the selected collection without interpreting its scope, so a multi-collection external cache could misreport another collection's coincidentally matching path as current. | 0.4.6 | Resolved by requiring the path-private root identity scope before an observation can be current |
+| CACHE-012 | Low | Publishing one whole-file observation per video would serialize, validate, sync, and atomically replace the complete cache for every inspected file, adding avoidable storage latency. | 0.4.6 | Resolved with validated configurable batches that retain incremental interruption recovery |
+
+## Checksum-read review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| SCAN-004 | High | Checksum scan opened a pathname between state checks, allowing a transient parent or file substitution to redirect content reads outside the collection before the later change was noticed. | 0.4.6 | Resolved by hashing through the collection-anchored stable no-follow descriptor boundary |
 
 ## Progress and timing review findings
 
@@ -176,6 +185,8 @@ The same adversarial method was repeated after the first validation release.
   creating coordination state or following observed path components.
 - `0.4.5`: warm strict exact-video evidence independently of duplicate planning,
   including an explicitly external writable-cache boundary.
+- `0.4.6`: reuse exact-state whole-file hashes without making scan stateful,
+  descriptor-pin checksum reads, and re-read cached content before mutation.
 
 ## Independent review evidence
 
