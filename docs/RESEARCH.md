@@ -464,6 +464,66 @@ separate console/file thresholds, and compatibility treatment for the current
 `--verbose` and `--quiet` options. The current default remains console INFO and
 explicit-file INFO, with DEBUG enabled only deliberately.
 
+### Validation remediation and guidance
+
+Validation should eventually answer “what can I safely do next?” without
+silently repairing, ignoring, or deleting evidence. The remediation design
+should classify findings by actionability:
+
+- an extension/content mismatch can support a separately reviewed, reversible
+  extension-normalization plan when decoder and signature evidence agree;
+- a decode failure may support reversible quarantine into a dedicated review
+  tree, but cannot be described as repaired and must remain represented in
+  subsequent baseline comparison;
+- an unsupported recognized format is unverified, not corrupt; resolving it
+  requires an explicit, locally installed decoder with reviewed provenance or
+  continued exact-byte preservation; and
+- informational stream findings need an explanation and usually no mutation.
+
+Remediation must remain dry-run-first, action-journaled, collision-safe, and
+separate from ordinary validation. It must define ordering with organization
+and renaming, retain the original finding and evidence, and recommend fresh
+validation plus migration verification afterward. Quarantine must never become
+an implicit ignore list.
+
+### Migration orchestration and queues
+
+A future orchestrator could own the proven manual sequence for one or more
+collections, but naive recursive copy and unconstrained collection-level
+parallelism are unsafe defaults. Research must cover:
+
+- a declarative local manifest of source, unchanged baseline, working target,
+  quarantine, and final destination rather than fragile positional queues;
+- capacity and case-folded collision preflight before copying between
+  case-sensitive and case-insensitive filesystems;
+- resumable, no-overwrite copying with retained copy evidence instead of
+  assuming `cp -R` or a Finder duplicate completed;
+- explicit checkpoints before transformation, duplicate finalization, baseline
+  removal, and final collection renaming;
+- sequential execution by default on one physical disk, with bounded
+  cross-collection parallelism only when storage topology and benchmarks show
+  it will not increase contention or recovery risk; and
+- restartable per-collection state whose reports remain path-private by
+  default and never treat a successful prior stage as proof that current files
+  are unchanged.
+
+Automatic creation of `_base` and `_target` trees may improve usability, but
+their names are policy rather than identity. The design must handle interrupted
+copies, insufficient space, existing destinations, external quarantine,
+cross-filesystem moves, and the fact that two copies on one device are not
+independent backups.
+
+### AI-tool repository coordination
+
+Multiple coding agents can share the project only through the same reviewed
+source, tests, roadmap, ADRs, and handoff boundaries. Tool-specific directories
+or a common `.ai` directory with `.claude`/`.codex` symlinks require research:
+symlink behavior, host-tool discovery conventions, POSIX portability, private
+local context, and conflicting generated settings all need consideration.
+Until then, the root `AGENTS.md` and project `HANDOFF.md` remain authoritative,
+and any tool-specific local handoff stays outside Git when it contains private
+acceptance data.
+
 - Which exact decoded-video normalization is most stable across FFmpeg versions
   and harmless container remuxing without collapsing meaningful timing or audio
   differences?

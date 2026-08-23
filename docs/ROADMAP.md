@@ -192,6 +192,15 @@ These have an accepted product direction but no release number yet:
   finders, dry-run by default and gated by fresh preservation evidence, with a
   quarantine-first workflow and an unmistakable explicit boundary before any
   irreversible deletion is recorded;
+- validation remediation guidance that turns findings into explicit next
+  actions, including reversible extension normalization where content identity
+  is certain and reversible quarantine planning for media that cannot be
+  decoded, while never converting damage into an ignore rule or claiming an
+  unsupported format is corrupt;
+- migration orchestration over a declared baseline/working-copy pair, followed
+  later by a resumable queue manifest for multiple collections with capacity,
+  case-collision, copy-completeness, validation, transformation, preservation,
+  quarantine, and final naming checkpoints;
 - a task-oriented root README readability and information-architecture sweep,
   including a table of contents, linkable status and command sections, less
   repetition, and links to detailed version, roadmap, and research records

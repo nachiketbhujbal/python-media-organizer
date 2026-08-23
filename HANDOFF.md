@@ -511,6 +511,15 @@ preservation evidence and explicit confirmation, and be recorded as an
 irreversible audit event without pretending it can be undone. Its journal
 schema and quarantine/deletion ceremony are not yet designed or implemented.
 
+Later promoted work also includes actionable validation guidance, reversible
+extension normalization and damaged-media quarantine designs, plus migration
+orchestration over explicit baseline and working-copy state. Multi-collection
+queues, copying, final naming, and cleanup remain research until capacity,
+case-collision, resumability, storage-contention, and evidence-checkpoint
+policies are designed. Existing organizer collisions are already resolved to
+Finder-style numbered names during planning and still protected by atomic
+no-replace moves during apply.
+
 Version 0.2.0 removed CSV organizer undo and `--manifest`, grouped image-output
 migration and its options, the image finder's no-op `--recursive` option, and
 fixed-name `media_actions.jsonl` detection. Users needing one of those v0.1
