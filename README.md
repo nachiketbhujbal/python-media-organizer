@@ -12,11 +12,11 @@ The broader product goal is safe media preservation during collection moves
 between local storage devices. Organization, deterministic naming, validation,
 and duplicate isolation are steps toward proving that readable source content
 remains represented after paths change and redundant copies are reviewed. The
-current release includes directional, read-only exact-byte verification plus a
-separate exact displayed-image evidence layer. It does not copy drives, perform
-filesystem recovery, or yet establish decoded-video equivalence; those later
-guarantees remain in the roadmap ahead of optional metadata, similarity, and
-local-AI features.
+current release includes directional, read-only exact-byte verification plus
+separate exact displayed-image and strict decoded-video evidence layers. It
+does not copy drives or perform filesystem recovery; final combined sign-off
+remains in the roadmap ahead of optional metadata, similarity, and local-AI
+features.
 
 pymo is not a failing-drive recovery utility. Do not postpone making a
 recovery-grade copy of readable data while waiting for a future pymo release.
@@ -40,7 +40,8 @@ is explicit, but it never changes media or authoritative action history.
   the current append-only journal uses POSIX file locking
 - uv 0.12 or newer for the reproducible development workflow
 - Pillow, installed from `pyproject.toml`
-- FFmpeg and ffprobe for exact video duplicate detection
+- FFmpeg and ffprobe for exact video duplicate detection and migration playback
+  evidence
 - pytest only for development and testing
 
 On macOS, FFmpeg can be installed with Homebrew:
@@ -241,7 +242,7 @@ snapshot. Directory traversal failures are counted and warned about rather than
 silently omitted; run `validate --show-files` when collection-relative finding
 paths are needed.
 
-### Verify a migration by exact bytes and displayed pixels
+### Verify a migration by exact bytes and media content
 
 ```bash
 pymo verify-migration "/path/to/baseline" "/path/to/working-copy"
@@ -272,7 +273,7 @@ source data, unsupported entries, or destination uncertainty prevents that
 claim. Ignored entry points and pymo state are counted and explicitly outside
 the byte contract.
 
-Version 0.5.1 adds a separate schema-2 exact-image layer for source byte
+Version 0.5.1 adds a separate exact-image layer for source byte
 identities that are absent from the destination. Eligible still images are
 freshly decoded, EXIF-oriented, converted to RGBA, and compared by dimensions
 plus every displayed pixel under `displayed-pixels-rgba-v1`. This can account
@@ -286,6 +287,21 @@ The image layer reports `complete`, `incomplete`, `unproven`, or `not-needed`
 independently. It does not rewrite the byte verdict or exit status in version
 0.5.1; decoded-video coverage and the combined final-sign-off policy remain
 reserved through version 0.5.3.
+
+Version 0.5.2 adds schema-3 strict decoded-video evidence for byte-missing
+source identities with configured video extensions. It freshly normalizes
+supported stream structure with ffprobe, then streams complete displayed-frame,
+normalized-timing, and decoded-audio fingerprints through local FFmpeg under
+`exact-playback-v2`. Supported container remuxes may match; recompression,
+different audio or timing, cropping, watermarks, ambiguous streams,
+HDR/high-bit-depth inputs, unreadable media, native decode failures, and
+concurrent changes do not. A match does not claim the source container,
+metadata, codec bitstream, or original file bytes survived.
+
+FFmpeg and ffprobe are resolved only when an eligible byte-missing video needs
+comparison. `--ffmpeg PATH`, `--ffprobe PATH`, and `--decode-timeout SECONDS`
+provide explicit local overrides. Video decoding remains sequential and fresh;
+the verifier neither consumes nor creates cache evidence.
 
 Normal text and JSON omit both roots and all filenames. `--show-files` exposes
 only relative missing, destination-only, and problem paths;
@@ -662,11 +678,11 @@ a later active operation touched the same files or paths.
 
 Run `verify-migration` against the retained baseline after destination-side
 changes and before discarding that baseline. Version 0.5.0 proves exact
-in-scope bytes after byte-identical duplicate removal, and version 0.5.1
-separately accounts for exact displayed images after metadata-varied image
-deduplication. Do not use either layer alone to approve remuxed-video removal or
-discard the baseline until the final v0.5.3 hardening is released and passes
-the actual collection.
+in-scope bytes after byte-identical duplicate removal, version 0.5.1 separately
+accounts for exact displayed images after metadata-varied image deduplication,
+and version 0.5.2 separately accounts for supported strict-playback video
+remuxes. Do not use the separate layers alone to discard the baseline until the
+final v0.5.3 hardening is released and passes the actual collection.
 
 ## Action history and undo
 
@@ -775,9 +791,10 @@ validation evidence, validation JSON
 privacy and health exit codes, and the guarantee that video decoding never
 invokes capture devices. Directional migration tests cover fresh exact-byte
 inventory, duplicate multiplicity, missing/unproven evidence, zero writes,
-schema privacy, and exact displayed-image matches across metadata or format
-changes without relabeling absent source bytes. Private collections and their
-names are not fixtures or repository content.
+schema privacy, exact displayed-image matches across metadata or format
+changes, and strict decoded-video matches across supported remuxes without
+relabeling absent source bytes. Private collections and their names are not
+fixtures or repository content.
 
 ## Versions and releases
 
@@ -793,9 +810,9 @@ installers can still build and install the package.
 `pymo scan COLLECTION` provides the fast local overview and recommends
 `pymo validate COLLECTION` before mutation. Version 0.4 established
 corruption-tolerant discovery and the shared cache foundation; version 0.5.0
-adds fresh directional exact-byte coverage and version 0.5.1 adds exact
-displayed-image evidence, followed by decoded-video coverage and final verdict
-hardening. Corrupt, unreadable, changing,
+adds fresh directional exact-byte coverage, version 0.5.1 adds exact
+displayed-image evidence, and version 0.5.2 adds strict decoded-video evidence,
+followed by final verdict hardening. Corrupt, unreadable, changing,
 unsupported, and mismatched media remain visible findings rather than automatic
 ignore rules. Richer metadata and similarity tooling remain later roadmap or
 research work. Full video decoding remains sequential until representative

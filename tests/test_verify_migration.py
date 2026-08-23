@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from pymo.collection import CollectionLayout
@@ -17,10 +19,49 @@ from pymo.migration.coverage import compare_byte_inventories
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
+FFMPEG = shutil.which("ffmpeg")
+FFPROBE = shutil.which("ffprobe")
+requires_ffmpeg = pytest.mark.skipif(
+    not FFMPEG or not FFPROBE,
+    reason="real FFmpeg integration test requires ffmpeg and ffprobe",
+)
 
 
 def write_image(path: Path, color: tuple[int, int, int]) -> None:
     Image.new("RGB", (4, 3), color).save(path)
+
+
+def run_ffmpeg(*arguments: object) -> None:
+    assert FFMPEG
+    result = subprocess.run(
+        [FFMPEG, "-v", "error", "-y", *(str(item) for item in arguments)],
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def write_video(path: Path, *, frequency: int = 440) -> None:
+    run_ffmpeg(
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=64x48:rate=5:duration=1",
+        "-f",
+        "lavfi",
+        "-i",
+        f"sine=frequency={frequency}:sample_rate=8000:duration=1",
+        "-c:v",
+        "mpeg4",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-shortest",
+        path,
+    )
 
 
 def run_verify(*arguments: object) -> subprocess.CompletedProcess[str]:
@@ -71,7 +112,7 @@ def test_verify_migration_is_path_independent_private_and_zero_write(
 
     assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads(result.stdout)
-    assert report["schema_version"] == 2
+    assert report["schema_version"] == 3
     assert report["direction"] == "source-to-destination"
     assert report["contract"] == "unique-byte-stream"
     assert report["coverage"]["verdict"] == "complete"
@@ -491,3 +532,157 @@ def test_image_changed_after_byte_inventory_is_unproven(tmp_path: Path) -> None:
     assert [issue.category for issue in result.source_issues] == [
         "changed-during-image-inspection"
     ]
+
+
+@requires_ffmpeg
+def test_remuxed_video_is_reported_as_strict_playback_coverage(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    original = source / "original.mp4"
+    remuxed = destination / "renamed.mp4"
+    write_video(original)
+    run_ffmpeg(
+        "-i",
+        original,
+        "-map",
+        "0",
+        "-c",
+        "copy",
+        "-metadata",
+        "title=synthetic",
+        remuxed,
+    )
+    assert original.read_bytes() != remuxed.read_bytes()
+    before_source = files_under(source)
+    before_destination = files_under(destination)
+
+    result = run_verify(source, destination, "--json")
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    assert report["coverage"]["verdict"] == "incomplete"
+    videos = report["video_content"]
+    assert videos["verdict"] == "complete"
+    assert videos["eligible_source_unique_streams"] == 1
+    assert videos["represented_unique_streams"] == 1
+    assert videos["missing_unique_streams"] == 0
+    assert videos["algorithm"] == "exact-playback-v2"
+    assert "original.mp4" not in result.stdout
+    assert "renamed.mp4" not in result.stdout
+    assert files_under(source) == before_source
+    assert files_under(destination) == before_destination
+
+
+@requires_ffmpeg
+def test_different_audio_is_missing_strict_video_playback(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    write_video(source / "source.mp4", frequency=440)
+    write_video(destination / "destination.mp4", frequency=880)
+
+    result = run_verify(source, destination, "--show-files", "--json")
+
+    assert result.returncode == 1
+    videos = json.loads(result.stdout)["video_content"]
+    assert videos["verdict"] == "incomplete"
+    assert videos["reasons"] == ["video-content-missing"]
+    assert videos["missing_source_paths"] == ["source.mp4"]
+
+
+@requires_ffmpeg
+def test_uninspectable_source_video_makes_video_layer_unproven(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    (source / "damaged.mp4").write_bytes(b"not a video")
+    write_video(destination / "candidate.mp4")
+
+    result = run_verify(source, destination, "--show-files", "--json")
+
+    assert result.returncode == 1
+    videos = json.loads(result.stdout)["video_content"]
+    assert videos["verdict"] == "unproven"
+    assert videos["reasons"] == ["source-video-evidence-incomplete"]
+    assert videos["uninspectable_source_unique_streams"] == 1
+    assert videos["source_problem_paths"] == [
+        {"category": "uninspectable-video-probe", "path": "damaged.mp4"}
+    ]
+
+
+@requires_ffmpeg
+def test_uninspectable_destination_video_can_hide_a_playback_representative(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    write_video(source / "source.mp4")
+    (destination / "unknown.mp4").write_bytes(b"not a video")
+
+    result = run_verify(source, destination, "--show-files", "--json")
+
+    assert result.returncode == 1
+    videos = json.loads(result.stdout)["video_content"]
+    assert videos["verdict"] == "unproven"
+    assert videos["reasons"] == ["destination-video-evidence-incomplete"]
+    assert videos["destination_uninspectable_unique_streams"] == 1
+    assert videos["destination_problem_paths"] == [
+        {"category": "uninspectable-video-probe", "path": "unknown.mp4"}
+    ]
+
+
+def test_byte_represented_video_does_not_require_native_tools(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    (source / "source.mp4").write_bytes(b"same bytes")
+    (destination / "renamed.mp4").write_bytes(b"same bytes")
+    missing = tmp_path / "missing-ffmpeg"
+
+    result = run_verify(source, destination, "--ffmpeg", missing, "--json")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    assert report["coverage"]["verdict"] == "complete"
+    assert report["video_content"]["verdict"] == "not-needed"
+    assert report["video_content"]["ffmpeg_runtime"] is None
+
+
+def test_byte_missing_video_requires_native_tools_only_for_content_layer(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    (source / "source.mp4").write_bytes(b"source")
+    missing = tmp_path / "missing-ffmpeg"
+
+    result = run_verify(source, destination, "--ffmpeg", missing, "--json")
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "Native video tools are unavailable" in result.stderr
+
+
+def test_verify_migration_rejects_nonpositive_decode_timeout(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+
+    result = run_verify(source, destination, "--decode-timeout", 0)
+
+    assert result.returncode == 2
+    assert "positive number" in result.stderr

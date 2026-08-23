@@ -9,10 +9,11 @@ from pymo.logging_config import emit as print
 from pymo.migration.coverage import ByteCoverage
 from pymo.migration.images import ImageContentCoverage, ImageInspectionIssue
 from pymo.migration.inventory import TreeInventory
+from pymo.migration.videos import VideoContentCoverage, VideoInspectionIssue
 from pymo.progress import format_bytes
 
 # This value identifies the current layered migration-verification report.
-MIGRATION_REPORT_SCHEMA_VERSION = 2
+MIGRATION_REPORT_SCHEMA_VERSION = 3
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -40,6 +41,18 @@ def _problem_paths(inventory: TreeInventory) -> list[dict[str, str]]:
 
 def _image_problem_paths(
     root: Path, issues: tuple[ImageInspectionIssue, ...]
+) -> list[dict[str, str]]:
+    return sorted(
+        [
+            {"path": _relative(root, issue.path), "category": issue.category}
+            for issue in issues
+        ],
+        key=lambda item: (item["path"].casefold(), item["category"]),
+    )
+
+
+def _video_problem_paths(
+    root: Path, issues: tuple[VideoInspectionIssue, ...]
 ) -> list[dict[str, str]]:
     return sorted(
         [
@@ -93,6 +106,7 @@ def build_report(
     destination: TreeInventory,
     coverage: ByteCoverage,
     image_content: ImageContentCoverage,
+    video_content: VideoContentCoverage,
     *,
     show_files: bool,
     show_ignored: bool,
@@ -118,6 +132,8 @@ def build_report(
             "tool_state_included": False,
             "image_candidates": "configured-exact-image-extensions",
             "image_equivalence_preserves_source_bytes": False,
+            "video_candidates": "configured-video-extensions",
+            "video_equivalence_preserves_source_bytes": False,
             "filesystem_boundary": "stable-namespace-visible-content",
         },
         "source": _inventory_report(
@@ -193,6 +209,48 @@ def build_report(
             ),
             "destination_problem_paths": (
                 _image_problem_paths(destination.root, image_content.destination_issues)
+                if show_files
+                else []
+            ),
+        },
+        "video_content": {
+            "verdict": video_content.verdict,
+            "reasons": list(video_content.reasons),
+            "algorithm": video_content.algorithm,
+            "ffmpeg_runtime": video_content.ffmpeg_runtime,
+            "ffprobe_runtime": video_content.ffprobe_runtime,
+            "eligible_source_unique_streams": (
+                video_content.eligible_source_unique_streams
+            ),
+            "eligible_source_files": video_content.eligible_source_files,
+            "represented_unique_streams": video_content.represented_unique_streams,
+            "represented_source_files": len(video_content.represented_source_files),
+            "missing_unique_streams": video_content.missing_unique_streams,
+            "missing_source_files": len(video_content.missing_source_files),
+            "missing_source_paths": (
+                [
+                    _relative(source.root, path)
+                    for path in video_content.missing_source_files
+                ]
+                if show_files
+                else []
+            ),
+            "uninspectable_source_unique_streams": (
+                video_content.uninspectable_source_unique_streams
+            ),
+            "source_problem_paths": (
+                _video_problem_paths(source.root, video_content.source_issues)
+                if show_files
+                else []
+            ),
+            "destination_candidate_unique_streams": (
+                video_content.destination_candidate_unique_streams
+            ),
+            "destination_uninspectable_unique_streams": (
+                video_content.uninspectable_destination_unique_streams
+            ),
+            "destination_problem_paths": (
+                _video_problem_paths(destination.root, video_content.destination_issues)
                 if show_files
                 else []
             ),
@@ -337,6 +395,47 @@ def print_report(report: dict[str, Any]) -> None:
             for issue in images[key]:
                 print(f"    {issue['path']}: {issue['category']}")
 
+    videos = report["video_content"]
+    print("\nStrict decoded-video coverage for byte-missing source content:")
+    print(f"  Algorithm: {videos['algorithm']}")
+    if videos["ffmpeg_runtime"] is not None:
+        print(f"  FFmpeg runtime: {videos['ffmpeg_runtime']}")
+        print(f"  FFprobe runtime: {videos['ffprobe_runtime']}")
+    print(
+        f"  Eligible source streams: {videos['eligible_source_unique_streams']} "
+        f"across {videos['eligible_source_files']} file(s)"
+    )
+    print(
+        f"  Represented by strict decoded playback: "
+        f"{videos['represented_unique_streams']} stream(s), "
+        f"{videos['represented_source_files']} source file(s)"
+    )
+    print(
+        f"  Missing playback content: {videos['missing_unique_streams']} "
+        f"stream(s), {videos['missing_source_files']} source file(s)"
+    )
+    print(
+        f"  Uninspectable source streams: "
+        f"{videos['uninspectable_source_unique_streams']}"
+    )
+    print(
+        f"  Uninspectable destination candidate streams: "
+        f"{videos['destination_uninspectable_unique_streams']}"
+    )
+    print(f"  Layer verdict: {videos['verdict'].upper()}")
+    if videos["missing_source_paths"]:
+        print("  Missing video-content paths:")
+        for path in videos["missing_source_paths"]:
+            print(f"    {path}")
+    for label, key in (
+        ("Source video problems", "source_problem_paths"),
+        ("Destination video problems", "destination_problem_paths"),
+    ):
+        if videos[key]:
+            print(f"  {label}:")
+            for issue in videos[key]:
+                print(f"    {issue['path']}: {issue['category']}")
+
     verdict = coverage["verdict"]
     print("\nVerdict:")
     if verdict == "complete":
@@ -346,7 +445,7 @@ def print_report(report: dict[str, Any]) -> None:
     else:
         print("  UNPROVEN: incomplete filesystem evidence prevents a safe verdict.")
     print(
-        "The image-content layer is separate evidence and does not replace the "
-        "byte verdict in version 0.5.1."
+        "The media-content layers are separate evidence and do not replace the "
+        "byte verdict before version 0.5.3."
     )
     print("Verification wrote no media, cache, configuration, or action history.")

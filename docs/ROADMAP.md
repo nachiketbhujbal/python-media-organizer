@@ -126,7 +126,7 @@ and never writes derived state to `SOURCE`.
 | --- | --- | --- | --- |
 | 0.5.0 | Directional byte coverage | Inventory two stable namespace-visible trees and prove whether every readable unique source byte stream has an exact SHA-backed representative in the destination, independent of paths and filenames. Report missing, extra, duplicate-count, traversal-failure, unreadable, changing, policy-excluded, and storage facts with a machine-readable schema and health-style exit status. | Released |
 | 0.5.1 | Image-content coverage | Account separately for source pictures represented by the existing exact displayed-pixel definition when a byte-identical representative is absent, without describing metadata or container bytes as preserved. | Released |
-| 0.5.2 | Video-content coverage | Account separately for source videos represented by the existing strict decoded-playback definition when a byte-identical representative is absent, retaining all conservative unsupported-case boundaries. | Planned |
+| 0.5.2 | Video-content coverage | Account separately for source videos represented by the existing strict decoded-playback definition when a byte-identical representative is absent, retaining all conservative unsupported-case boundaries. | Released |
 | 0.5.3 | Preservation verdict hardening | Combine byte and declared media-equivalence layers into an explicit evidence report, exercise interrupted and changing-source cases, reuse only validated cache evidence, and reserve a complete-success verdict for runs with no unreadable, unstable, unsupported, or unaccounted source entry. | Planned |
 
 The report must distinguish at least three conclusions: strict byte
