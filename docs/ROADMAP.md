@@ -93,7 +93,7 @@ file, or action log on a source being preserved.
 | 0.4.7 | Package architecture | Review package cohesion and dependency direction, establish durable subsystem boundaries—especially for cache services—and reorganize only where behavior-preserving ownership becomes clearer. | Released |
 | 0.4.8 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. | Released |
 | 0.4.9 | Image fingerprint cache | Persist deterministic displayed-pixel image fingerprints for safe rescans. | Released |
-| 0.4.10 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. | Planned |
+| 0.4.10 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. | Released |
 | 0.4.11 | Validation evidence | Record validation profile, result, file identity, runtime/tool versions, and completion time as disposable history without allowing an old healthy result to satisfy a fresh full validation. | Planned |
 | 0.4.12 | Explicit cached validation | Offer an explicitly named cache-assisted validation mode for unchanged files while retaining fresh reads as the default contract of `validate --full`. | Planned |
 | 0.4.13 | Targeted cache refresh | Recompute selected validation or fingerprint records without deleting unrelated cache evidence; reserve `--no-cache` for disabling both cache reads and writes. | Planned |

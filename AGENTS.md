@@ -53,10 +53,11 @@ never duplicate the version in source or static project metadata.
 - `cache status` is strictly read-only: it must not create a cache, lock,
   sidecar, directory, action record, or media state. Its normal output remains
   path-private, and an explicit cache path selects inspection only.
-- `cache warm videos` may write only disposable cache state. It must never
-  group duplicates, create `dups`, alter media, or append action history. An
-  explicit cache path keeps the analyzed collection free of cache and lock
-  writes.
+- `cache warm {images,videos,all}` may write only disposable cache state. It
+  must never group duplicates, create `dups`, alter media, or append action
+  history. A combined warm validates all selected layouts and required native
+  tools before its first cache write. An explicit cache path keeps the
+  analyzed collection free of cache and lock writes.
 - Bind exact-media analysis to a stable regular-file state. Revalidate complete
   duplicate groups before apply and retained originals through journal commit.
 - Keep exact-media classification, hashing, probing, and decoding pinned to

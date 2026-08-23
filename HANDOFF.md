@@ -26,7 +26,7 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and includes the version 0.4.6 stable whole-file hash release.
+`pymo` command, and includes the version 0.4.10 unified cache-warming release.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -128,6 +128,16 @@ reused byte hash involved is freshly descriptor-pinned and recomputed. Strict
 payload validation also makes cache status recognize malformed or stale image
 evidence without invoking Pillow. Shared writable-target policy and descriptor
 hashing now live in the cache subsystem rather than video command ownership.
+
+Version 0.4.10 generalizes deliberate cache warming to
+`pymo cache warm {images,videos,all} COLLECTION`. Image inspection and cache
+publication are separated from duplicate grouping, so every selector remains
+strictly cache-only. Every selected layout and media set is preflighted before
+the first write; combined warming also resolves required native video tools
+before publishing image evidence. Empty selections create no cache or lock,
+normal output remains aggregate and path-private, external caches remain
+supported, and per-file failures retain resumable evidence while returning
+incomplete coverage.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -315,7 +325,7 @@ pymo organize COLLECTION
 pymo rename COLLECTION
 pymo scan COLLECTION
 pymo cache status COLLECTION
-pymo cache warm videos COLLECTION
+pymo cache warm {images,videos,all} COLLECTION
 pymo validate COLLECTION
 pymo find-image-duplicates COLLECTION
 pymo find-video-duplicates COLLECTION
@@ -323,8 +333,8 @@ pymo find-video-duplicates COLLECTION
 
 The four mutating tools support dry-run/apply behavior and `--undo`, which is
 also a preview unless combined with `--apply`. `scan`, `validate`, and
-`cache status` are report-only. `cache warm videos` writes only disposable
-cache state and never media or action history. Global `--verbose`, `--quiet`,
+`cache status` are report-only. `cache warm` writes only disposable cache state
+and never media or action history. Global `--verbose`, `--quiet`,
 `--log-file PATH`, `--timestamps`, `--no-timestamps`, `--config PATH`, and
 `--show-ignored` options go before the subcommand. `--show-ignored` and
 command-specific options are also accepted by the selected command after its
@@ -629,23 +639,24 @@ remain plain and do not receive the normal timestamped runtime footer.
 
 ## Derived cache warming
 
-`pymo cache warm videos COLLECTION` uses the exact-video descriptor-pinned
-hash, probe, and decode path over every safely discovered video directly in
-`vids`. It fingerprints one representative per unique byte stream, reuses only
-content/algorithm/ffprobe-runtime-compatible normalized probes plus
-algorithm- and FFmpeg-runtime-compatible fingerprints. It publishes successful
-fingerprints immediately and publishes whole-file observations with probes in
-one bounded atomic batch transaction. It does not plan duplicates, create `dups`, move
-media, or append action history.
+`pymo cache warm {images,videos,all} COLLECTION` deliberately populates one or
+both supported evidence families. Images use the exact-image descriptor-pinned
+hash and displayed-pixel inspection path over `pics`; videos use the hash,
+probe, and decode path over `vids`. Inspection is separate from duplicate
+grouping. Selected layouts, discovery, and any required native tool setup
+complete before the first cache write. Bounded atomic publication keeps
+successful evidence resumable without planning duplicates, creating `dups`,
+moving media, or appending action history.
 
 The default cache remains collection-local. `--cache PATH` selects an existing
 external parent directory and anchors both the database and sibling lock there,
 allowing a read-only collection to remain unchanged. Normal output does not
 name paths; `--show-files` deliberately lists collection-relative failures.
 Any unrepresented discovered media produces exit 1 while preserving completed
-evidence. Empty `vids` returns 0 without resolving FFmpeg or creating state.
-The command does not replace collection scan, validation, or preservation
-verification.
+evidence. An empty selected media set returns 0 without creating state; empty
+video input does not resolve FFmpeg. Image-only and video-only warming require
+only their owned organized folder, while `all` requires both. The command does
+not replace collection scan, validation, or preservation verification.
 
 ## Collection scan
 
@@ -807,9 +818,10 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   externally located, concurrently replaced, current-observation, stale-
   observation, and symbolic-link-parent cases, including JSON privacy and
   proof that no cache lock or collection state is created;
-- exact-video cache warming for empty, complete, incomplete, reused, and
-  explicitly external cache runs, including proof that media, duplicate trees,
-  action history, and read-only source cache state are not written;
+- image, video, and combined cache warming for empty, complete, incomplete,
+  reused, setup-invalid, and explicitly external cache runs, including proof
+  that media, duplicate trees, action history, and read-only source cache state
+  are not written;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

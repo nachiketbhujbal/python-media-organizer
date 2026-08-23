@@ -99,6 +99,9 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-017 | Low | Exact-image reruns decoded every unchanged image through Pillow even after the same displayed pixels had been established for the same bytes and runtime. | 0.4.9 | Resolved with content/algorithm/Pillow-runtime-keyed pixel evidence |
 | CACHE-018 | High | A displayed-pixel group derived from a reused byte hash must not authorize mutation solely from disposable cache state. | 0.4.9 | Resolved by descriptor-pinned byte recomputation before any image apply state is created |
 | CACHE-019 | Medium | Image-cache payloads, external target selection, and complete cache opt-out needed the same fail-closed and no-local-write boundaries as video evidence. | 0.4.9 | Resolved with strict payload validation plus external and `--no-cache` regressions |
+| CACHE-020 | Medium | Exact-image inspection and duplicate grouping were one operation, so image cache warming would either duplicate analysis policy or perform work outside its stated cache-only contract. | 0.4.10 | Resolved by separating reusable inspection/publication from grouping while retaining the finder wrapper |
+| CACHE-021 | Medium | A combined image/video warm could publish image evidence before discovering an invalid video layout or missing native tool, leaving state from a setup-invalid request. | 0.4.10 | Resolved with complete selected-layout, discovery, and native-tool preflight before the first cache write |
+| CACHE-022 | Low | Generalized warming needed selector-specific option validation, privacy, external-cache, empty-input, and no-mutation tests rather than assuming the video-only guarantees transferred automatically. | 0.4.10 | Resolved with explicit selector contracts and focused integration coverage |
 
 ## Checksum-read review findings
 
