@@ -53,6 +53,10 @@ never duplicate the version in source or static project metadata.
 - `cache status` is strictly read-only: it must not create a cache, lock,
   sidecar, directory, action record, or media state. Its normal output remains
   path-private, and an explicit cache path selects inspection only.
+- `cache warm videos` may write only disposable cache state. It must never
+  group duplicates, create `dups`, alter media, or append action history. An
+  explicit cache path keeps the analyzed collection free of cache and lock
+  writes.
 - Bind exact-media analysis to a stable regular-file state. Revalidate complete
   duplicate groups before apply and retained originals through journal commit.
 - Keep exact-media classification, hashing, probing, and decoding pinned to
@@ -105,6 +109,10 @@ never duplicate the version in source or static project metadata.
   locked, atomically published disposable derived state.
 - `src/pymo/cache_status.py`: zero-write cache health, evidence coverage, and
   stale-observation reporting for local or explicitly selected cache files.
+- `src/pymo/cache_cli.py`: nested cache-operation dispatch without weakening
+  status option boundaries.
+- `src/pymo/cache_warm.py`: explicit exact-video evidence warming for local or
+  separately writable caches.
 - `src/pymo/collection.py`: immutable canonical paths for one collection.
 - `src/pymo/logging_config.py`: console logging plus explicitly requested local
   log files.

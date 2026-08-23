@@ -2,6 +2,21 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.4.5 - 2026-08-22
+
+- Add `pymo cache warm videos COLLECTION` to fingerprint every safely
+  discovered organized video without duplicate grouping or media mutation.
+- Persist successful exact-video evidence incrementally, reuse records for the
+  current FFmpeg runtime, and return an incomplete status when some discovered
+  media cannot be represented.
+- Add `--cache PATH` so warming can write only to an explicitly selected cache
+  and sibling lock outside a read-only media collection, and let the exact-video
+  finder consume that same external cache.
+- Keep normal output aggregate and path-private, with collection-relative
+  failure paths available only through explicit `--show-files`.
+- Recheck a cache's public entry after every descriptor-pinned read and forward
+  global configuration options safely through the nested cache dispatcher.
+
 ## 0.4.4 - 2026-08-22
 
 - Add `pymo cache status COLLECTION` with path-private human and stable JSON

@@ -88,6 +88,7 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-006 | Medium | The existing coordinated cache reader creates the persistent lock when absent, so reusing it for status would violate a zero-write inspection contract. | 0.4.4 | Resolved with a descriptor-pinned read-only snapshot that creates no lock or other state |
 | CACHE-007 | Medium | A cached relative observation containing a symbolic-link parent could redirect a metadata freshness check outside the selected collection. | 0.4.4 | Resolved with collection-anchored no-follow descriptor traversal |
 | CACHE-008 | Low | Cache status composed independently validating readers and therefore rescanned every current cache row three times before reporting it. | 0.4.4 | Resolved with one validated aggregate snapshot read |
+| CACHE-009 | High | Generalizing the video-cache reader to an external directory initially retained a pinned safe read but omitted the final public-entry identity check, allowing a concurrent replacement to go unreported. | 0.4.5 | Resolved by rechecking the locked public entry after the SQLite read and retaining the path-swap regression |
 
 ## Progress and timing review findings
 
@@ -104,6 +105,7 @@ The same adversarial method was repeated after the first validation release.
 | OUT-001 | Low | Duplicate-finder previews always print collection paths, filenames, per-group plans, and skipped-file details, leaving no concise aggregate mode for private logs or quick status checks. | 0.3.17 | Resolved in ADR 0054 |
 | OUT-002 | Low | Wall-clock correlation required an opt-in flag, so ordinary long-running console records lacked timestamps even though elapsed and stage durations were available. | 0.3.18 | Resolved in ADR 0055 |
 | OUT-003 | Low | Help and argument errors raised by a dispatched command parser were followed by the outer CLI's timestamped stopped-runtime message. | 0.4.4 | Resolved by recognizing parser exits and leaving their output plain |
+| OUT-004 | Medium | Global configuration options were inserted before nested cache arguments, which would make the cache dispatcher parse an option where it required the action verb. | 0.4.5 | Resolved by forwarding applicable global options immediately after the `warm` action and retaining status-option refusal |
 
 ## Documentation review findings
 
@@ -171,6 +173,8 @@ The same adversarial method was repeated after the first validation release.
   legacy migration, and reject malformed generic evidence before reuse.
 - `0.4.4`: expose strictly read-only cache health and evidence coverage without
   creating coordination state or following observed path components.
+- `0.4.5`: warm strict exact-video evidence independently of duplicate planning,
+  including an explicitly external writable-cache boundary.
 
 ## Independent review evidence
 
