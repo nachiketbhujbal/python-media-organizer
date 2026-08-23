@@ -302,6 +302,28 @@ def test_cache_status_rejects_irrelevant_global_configuration(tmp_path: Path) ->
     assert list(collection.iterdir()) == []
 
 
+def test_cache_warm_receives_relevant_global_configuration(tmp_path: Path) -> None:
+    collection = tmp_path / "media-collection"
+    (collection / "vids").mkdir(parents=True)
+    config = tmp_path / "settings.toml"
+    config.write_text("version = 1\n", encoding="utf-8")
+
+    result = run_pymo(
+        "--config",
+        config,
+        "--show-ignored",
+        "--no-timestamps",
+        "cache",
+        "warm",
+        "videos",
+        collection,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "No video content required cache warming" in result.stdout
+    assert list(collection.iterdir()) == [collection / "vids"]
+
+
 def test_cli_returns_130_and_reports_runtime_after_keyboard_interrupt(
     monkeypatch, capsys
 ) -> None:

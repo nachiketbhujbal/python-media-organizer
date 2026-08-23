@@ -371,6 +371,21 @@ def resolve_executable(value: Path | None, name: str) -> str:
     return str(resolved)
 
 
+def writable_cache_path(root: Path, requested: Path | None) -> Path:
+    """Resolve a local or explicit cache target without creating its parent."""
+
+    if requested is None:
+        return CollectionLayout(root).derived_cache
+    database = Path(os.path.abspath(requested.expanduser()))
+    if database.name in {"", ".", ".."}:
+        raise VideoInspectionError("invalid explicit SQLite cache path")
+    if not database.parent.is_dir() or database.parent.is_symlink():
+        raise VideoInspectionError(
+            "explicit SQLite cache parent must be an existing regular directory"
+        )
+    return database
+
+
 def ffmpeg_version(ffmpeg: str) -> str:
     try:
         result = subprocess.run(
@@ -677,26 +692,24 @@ def _load_video_evidence(
 
 
 def load_cached_fingerprints(
-    root: Path, database: Path, ffmpeg_release: str
+    _root: Path, database: Path, ffmpeg_release: str
 ) -> dict[str, DerivedFingerprint]:
-    layout = CollectionLayout(root)
-    if database != layout.derived_cache:
-        raise VideoInspectionError("unexpected SQLite cache path")
+    lock_path = database.with_name(f"{database.name}.lock")
     connection: sqlite3.Connection | None = None
     try:
         with cache_service.locked_cache_directory(
-            root, layout.derived_cache_lock, exclusive=False
+            database.parent, lock_path, exclusive=False
         ) as locked:
-            root_descriptor = locked.descriptor
+            directory_descriptor = locked.descriptor
             entry_state = cache_service.cache_entry_at(
-                root_descriptor, database.name, "SQLite fingerprint cache"
+                directory_descriptor, database.name, "SQLite fingerprint cache"
             )
             if entry_state is None:
                 return {}
-            state = FileState.capture(database)
-            with open_stable_file(
-                root, database, state, "SQLite fingerprint cache read"
-            ) as descriptor:
+            descriptor = cache_service.open_cache_entry(
+                directory_descriptor, database.name, entry_state
+            )
+            try:
                 descriptor_state = cache_service.CacheEntryState.capture_descriptor(
                     descriptor, "SQLite fingerprint cache"
                 )
@@ -711,6 +724,20 @@ def load_cached_fingerprints(
                 cached = _load_video_evidence(connection, ffmpeg_release)
                 connection.close()
                 connection = None
+                try:
+                    cache_service.require_cache_entry(
+                        directory_descriptor,
+                        database.name,
+                        entry_state,
+                        "SQLite fingerprint cache",
+                    )
+                except cache_service.CacheError as error:
+                    raise VideoInspectionError(
+                        "SQLite fingerprint cache changed or is not a safe "
+                        "collection file"
+                    ) from error
+            finally:
+                os.close(descriptor)
     except FileChangedError as error:
         raise VideoInspectionError(
             "SQLite fingerprint cache changed or is not a safe collection file"
@@ -928,19 +955,17 @@ def _publish_staged_cache(
 
 
 def save_cached_fingerprints(
-    root: Path,
+    _root: Path,
     database: Path,
     ffmpeg_release: str,
     values: dict[str, DerivedFingerprint],
 ) -> None:
     if not values:
         return
-    layout = CollectionLayout(root)
-    if database != layout.derived_cache:
-        raise VideoInspectionError("unexpected SQLite cache path")
+    lock_path = database.with_name(f"{database.name}.lock")
     try:
         with cache_service.locked_cache_directory(
-            root, layout.derived_cache_lock, exclusive=True
+            database.parent, lock_path, exclusive=True
         ) as locked:
             directory_descriptor = locked.descriptor
             existing_state = cache_service.cache_entry_at(
@@ -1089,6 +1114,8 @@ def derive_candidate_fingerprints(
     progress_interval_seconds: int,
     no_cache: bool,
     summary: bool = False,
+    *,
+    fingerprint_label: str = "candidate content",
 ) -> tuple[dict[str, DerivedFingerprint], list[tuple[Path, str]]]:
     unique_hashes = {record.byte_sha256: record for record in candidate_records}
     try:
@@ -1133,7 +1160,7 @@ def derive_candidate_fingerprints(
     )
     if decode_items:
         print(
-            f"Fingerprinting {len(decode_items)} candidate content "
+            f"Fingerprinting {len(decode_items)} {fingerprint_label} "
             f"file(s), {format_bytes(progress.total_bytes or 0)} total."
         )
 
@@ -1324,6 +1351,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="do not read or update the disposable fingerprint cache",
     )
     parser.add_argument(
+        "--cache",
+        type=Path,
+        help=(
+            "use this cache file instead of the collection-local default; its "
+            "parent directory must already exist"
+        ),
+    )
+    parser.add_argument(
         "--undo",
         action="store_true",
         help=(
@@ -1368,12 +1403,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.decode_timeout is not None and args.decode_timeout <= 0:
         print("--decode-timeout must be a positive number", file=sys.stderr)
         return 2
+    if args.no_cache and args.cache is not None:
+        print("--no-cache cannot be combined with --cache", file=sys.stderr)
+        return 2
     if args.undo:
         return undo_duplicate_run(root, args.apply, summary=args.summary)
 
     try:
         config = load_config(root, args.config)
-    except ConfigError as error:
+        database = writable_cache_path(root, args.cache)
+    except (ConfigError, VideoInspectionError) as error:
         detail = "rerun without --summary for details" if args.summary else str(error)
         print(f"Cannot use configuration: {detail}", file=sys.stderr)
         return 2
@@ -1401,7 +1440,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         return 2
 
-    layout = CollectionLayout(root)
     duplicate_paths = duplicate_layout(root, "video")
     vids = duplicate_paths.source
     destination = duplicate_paths.destination
@@ -1459,7 +1497,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             derived, fingerprint_skips = derive_candidate_fingerprints(
                 root,
                 candidate_records,
-                layout.video_cache,
+                database,
                 ffmpeg,
                 ffmpeg_release,
                 decode_timeout,
