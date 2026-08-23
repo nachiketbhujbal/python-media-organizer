@@ -12,18 +12,17 @@ The broader product goal is safe media preservation during collection moves
 between local storage devices. Organization, deterministic naming, validation,
 and duplicate isolation are steps toward proving that readable source content
 remains represented after paths change and redundant copies are reviewed. The
-current release includes directional, read-only exact-byte verification plus
-separate exact displayed-image and strict decoded-video evidence layers. It
-does not copy drives or perform filesystem recovery; final combined sign-off
-remains in the roadmap ahead of optional metadata, similarity, and local-AI
-features.
+current release includes a directional, read-only layered preservation verdict
+over exact bytes, exact displayed images, and strict decoded video. It does not
+copy drives or perform filesystem recovery; optional metadata, similarity, and
+local-AI features remain later work.
 
 pymo is not a failing-drive recovery utility. Do not postpone making a
 recovery-grade copy of readable data while waiting for a future pymo release.
 Use pymo on a healthy working copy; retain an unchanged baseline until the
 complete verification workflow—or an independently trusted equivalent—accounts
-for the source content. Version 0.5.0 proves exact in-scope byte-stream coverage;
-the roadmap reserves full post-transformation sign-off for version 0.5.3.
+for the source content. Version 0.5.3 is the earliest pymo release eligible for
+post-transformation human sign-off when its final verdict is complete.
 
 Mutation planning and undo require complete filesystem enumeration plus
 successful no-follow metadata inspection of every returned name. If a
@@ -284,9 +283,7 @@ images never receive an exact-content match. Candidate eligibility uses the
 configured exact-image extensions.
 
 The image layer reports `complete`, `incomplete`, `unproven`, or `not-needed`
-independently. It does not rewrite the byte verdict or exit status in version
-0.5.1; decoded-video coverage and the combined final-sign-off policy remain
-reserved through version 0.5.3.
+independently and never rewrites the byte verdict.
 
 Version 0.5.2 adds schema-3 strict decoded-video evidence for byte-missing
 source identities with configured video extensions. It freshly normalizes
@@ -303,10 +300,26 @@ comparison. `--ffmpeg PATH`, `--ffprobe PATH`, and `--decode-timeout SECONDS`
 provide explicit local overrides. Video decoding remains sequential and fresh;
 the verifier neither consumes nor creates cache evidence.
 
+Version 0.5.3 adds schema-4 final preservation accounting. Each unique source
+stream is represented once by exact bytes, exact displayed pixels, or strict
+decoded playback. The command then freshly re-discovers both declared scopes
+and revalidates every hashed file, in-scope directory namespace, unsafe entry
+category, and collection-root identity while refreshing exclusion counts. The
+final verdict is `complete` only when all
+source streams are accounted for and no unreadable, unstable, unsupported, or
+incomplete evidence remains. Unknown missing non-media content is
+`incomplete`; recognized media without a supported exact evidence path is
+`unproven`.
+
+A complete verdict is eligible for human sign-off, not an instruction to
+delete a baseline. It covers stable namespace-visible content inside the two
+declared roots and cannot prove orphaned filesystem allocations or whole-drive
+recovery.
+
 Normal text and JSON omit both roots and all filenames. `--show-files` exposes
 only relative missing, destination-only, and problem paths;
 `--show-ignored` separately exposes relative policy exclusions. Exit status 0
-means complete in-scope byte coverage, 1 means incomplete or unproven, and 2
+means complete layered preservation, 1 means incomplete or unproven, and 2
 means invalid setup.
 
 ### Inspect the derived cache
@@ -681,8 +694,9 @@ changes and before discarding that baseline. Version 0.5.0 proves exact
 in-scope bytes after byte-identical duplicate removal, version 0.5.1 separately
 accounts for exact displayed images after metadata-varied image deduplication,
 and version 0.5.2 separately accounts for supported strict-playback video
-remuxes. Do not use the separate layers alone to discard the baseline until the
-final v0.5.3 hardening is released and passes the actual collection.
+remuxes. Version 0.5.3 combines them into the final preservation verdict. Do
+not discard a baseline unless that verdict is complete for the actual
+collection and all recovery evidence has been reviewed.
 
 ## Action history and undo
 
@@ -811,8 +825,8 @@ installers can still build and install the package.
 `pymo validate COLLECTION` before mutation. Version 0.4 established
 corruption-tolerant discovery and the shared cache foundation; version 0.5.0
 adds fresh directional exact-byte coverage, version 0.5.1 adds exact
-displayed-image evidence, and version 0.5.2 adds strict decoded-video evidence,
-followed by final verdict hardening. Corrupt, unreadable, changing,
+displayed-image evidence, version 0.5.2 adds strict decoded-video evidence, and
+version 0.5.3 adds the fresh layered final verdict. Corrupt, unreadable, changing,
 unsupported, and mismatched media remain visible findings rather than automatic
 ignore rules. Richer metadata and similarity tooling remain later roadmap or
 research work. Full video decoding remains sequential until representative

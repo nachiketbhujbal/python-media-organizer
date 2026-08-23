@@ -2,6 +2,28 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.3 - 2026-08-23
+
+- Add the final `layered-exact-preservation` verdict that accounts for each
+  unique source stream through exact bytes, exact displayed pixels, or strict
+  decoded playback while keeping all three evidence layers visible.
+- Return success for supported exact image transformations and video remuxes
+  only when every source stream is accounted for; retain `incomplete` for
+  definite missing supported content and `unproven` for unreadable, unstable,
+  unsupported, or otherwise incomplete evidence.
+- Re-discover both declared collection scopes after media inspection and
+  revalidate every hashed file, in-scope directory namespace, unsafe entry
+  category, and collection-root identity before allowing a complete verdict;
+  refresh excluded-entry counts without making excluded state a blocker.
+- Advance migration JSON to schema 4 with aggregate layered accounting, final
+  stability, exclusions, unsupported and unaccounted content, fresh-evidence
+  status, and an explicit human-signoff disposition.
+- Keep normal output path-private and relative differences opt-in, perform no
+  cache reads or writes, and state that completion covers stable namespace-
+  visible collection content rather than whole-device recovery.
+- Add adversarial coverage for final file, directory, and root changes,
+  unsupported recognized media, layered success, privacy, and zero writes.
+
 ## 0.5.2 - 2026-08-23
 
 - Add a separate strict decoded-video layer to `verify-migration` for eligible

@@ -88,6 +88,10 @@ The same adversarial method was repeated after the first validation release.
 | MIG-016 | Medium | Fingerprinting every destination video wastes full decodes when normalized structure already proves it cannot match any source playback candidate. | 0.5.2 | Resolved by probing unique streams first and decoding only structurally relevant destination identities |
 | MIG-017 | Medium | Copying probe and fingerprint logic into migration would let duplicate and preservation semantics drift. | 0.5.2 | Resolved with a shared `video_content.py` primitive boundary and independent domain policy |
 | MIG-018 | Medium | A failed relevant destination video probe or decode can hide a playback representative. | 0.5.2 | Resolved with an unproven video-layer verdict whenever unmatched source playback coexists with incomplete destination video evidence |
+| MIG-019 | High | Leaving command status tied to byte coverage cannot safely recognize an exact supported image transformation or video remux as content-preserved. | 0.5.3 | Resolved with an explicit layered final verdict that retains the byte result separately |
+| MIG-020 | High | Reopening only previously hashed files cannot detect a new entry or directory namespace change during long media decoding. | 0.5.3 | Resolved by a fresh final discovery plus exact file-state, directory, category, and root-identity comparison |
+| MIG-021 | High | Recognized source media without a supported deterministic equivalence path could otherwise be reported as definitely missing instead of unproven. | 0.5.3 | Resolved with explicit unsupported-media accounting and an unproven final disposition |
+| MIG-022 | Medium | A complete collection-level result could be misread as whole-device recovery or an automatic deletion instruction. | 0.5.3 | Resolved with a named namespace-visible contract, exclusion counts, and human-signoff-only disposition |
 
 ## CI portability findings
 
@@ -260,6 +264,9 @@ The same adversarial method was repeated after the first validation release.
   identities without weakening or relabeling the byte-preservation contract.
 - `0.5.2`: layer strict decoded-playback coverage over byte-missing source
   identities without weakening or relabeling the byte-preservation contract.
+- `0.5.3`: combine fresh exact-byte, displayed-image, and decoded-video
+  evidence only after both declared namespaces remain stable through a final
+  pass, without claiming whole-device recovery or authorizing deletion.
 
 ## Independent review evidence
 

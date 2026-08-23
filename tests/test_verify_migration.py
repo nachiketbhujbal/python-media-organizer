@@ -112,10 +112,15 @@ def test_verify_migration_is_path_independent_private_and_zero_write(
 
     assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads(result.stdout)
-    assert report["schema_version"] == 3
+    assert report["schema_version"] == 4
     assert report["direction"] == "source-to-destination"
-    assert report["contract"] == "unique-byte-stream"
+    assert report["contract"] == "layered-exact-preservation"
     assert report["coverage"]["verdict"] == "complete"
+    assert report["preservation"]["verdict"] == "complete"
+    assert report["preservation"]["evidence"] == {
+        "cache_reused": False,
+        "fresh": True,
+    }
     assert report["coverage"]["represented_unique_streams"] == 2
     assert report["coverage"]["missing_unique_streams"] == 0
     assert report["writes_performed"] is False
@@ -179,11 +184,15 @@ def test_missing_and_destination_only_paths_require_explicit_disclosure(
     assert "extra-private-name.bin" not in private.stdout + private.stderr
     report = json.loads(disclosed.stdout)
     assert report["coverage"]["verdict"] == "incomplete"
+    assert report["preservation"]["verdict"] == "incomplete"
+    assert report["preservation"]["unaccounted_source_paths"] == [
+        "missing-private-name.bin"
+    ]
     assert report["coverage"]["missing_source_paths"] == ["missing-private-name.bin"]
     assert report["destination_only"]["paths"] == ["extra-private-name.bin"]
 
 
-def test_source_policy_exclusion_is_explicit_but_v050_verdict_is_scope_relative(
+def test_source_policy_exclusion_is_explicit_and_verdict_is_scope_relative(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "source"
@@ -200,6 +209,8 @@ def test_source_policy_exclusion_is_explicit_but_v050_verdict_is_scope_relative(
     assert private.returncode == disclosed.returncode == 0
     private_report = json.loads(private.stdout)
     assert private_report["coverage"]["verdict"] == "complete"
+    assert private_report["preservation"]["verdict"] == "complete"
+    assert private_report["preservation"]["source_excluded_entry_points"] == 1
     assert private_report["scope"]["policy_ignored_content_proven"] is False
     assert private_report["source"]["ignored_entry_points"] == 1
     assert private_report["source"]["ignored_paths"] == []
@@ -391,7 +402,7 @@ def test_metadata_or_format_varied_image_is_reported_as_exact_pixel_coverage(
 
     result = run_verify(source, destination, "--json")
 
-    assert result.returncode == 1
+    assert result.returncode == 0
     report = json.loads(result.stdout)
     assert report["coverage"]["verdict"] == "incomplete"
     assert report["coverage"]["missing_unique_streams"] == 1
@@ -399,6 +410,12 @@ def test_metadata_or_format_varied_image_is_reported_as_exact_pixel_coverage(
     assert report["image_content"]["eligible_source_unique_streams"] == 1
     assert report["image_content"]["represented_unique_streams"] == 1
     assert report["image_content"]["missing_unique_streams"] == 0
+    assert report["preservation"]["verdict"] == "complete"
+    assert report["preservation"]["by_layer"] == {
+        "exact_bytes": 0,
+        "exact_displayed_images": 1,
+        "strict_decoded_videos": 0,
+    }
     assert "garden.png" not in result.stdout
     assert "renamed-garden.bmp" not in result.stdout
     assert files_under(source) == before_source
@@ -436,13 +453,100 @@ def test_unreadable_source_image_makes_image_layer_unproven(tmp_path: Path) -> N
     result = run_verify(source, destination, "--show-files", "--json")
 
     assert result.returncode == 1
-    images = json.loads(result.stdout)["image_content"]
+    report = json.loads(result.stdout)
+    images = report["image_content"]
     assert images["verdict"] == "unproven"
     assert images["reasons"] == ["source-image-evidence-incomplete"]
     assert images["uninspectable_source_unique_streams"] == 1
     assert images["source_problem_paths"] == [
         {"category": "unreadable-image-content", "path": "damaged.png"}
     ]
+    assert report["preservation"]["verdict"] == "unproven"
+    assert report["preservation"]["unsupported_source_paths"] == ["damaged.png"]
+
+
+def test_unsupported_recognized_source_media_makes_preservation_unproven(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    (source / "unavailable.heic").write_bytes(b"synthetic unsupported payload")
+
+    result = run_verify(source, destination, "--show-files", "--json")
+
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    assert report["image_content"]["verdict"] == "not-needed"
+    preservation = report["preservation"]
+    assert preservation["verdict"] == "unproven"
+    assert preservation["reasons"] == ["unsupported-source-media"]
+    assert preservation["unsupported_unique_streams"] == 1
+    assert preservation["unsupported_source_paths"] == ["unavailable.heic"]
+
+
+def test_final_stability_detects_file_and_directory_namespace_changes(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "media-collection"
+    existing = root / "existing"
+    existing.mkdir(parents=True)
+    media = existing / "media.bin"
+    media.write_bytes(b"before")
+    config = load_config(root)
+    original = inventory.hash_tree(
+        inventory.discover_tree(root, config), 15, show_progress=False
+    )
+    media.write_bytes(b"after")
+    (root / "new").mkdir()
+    (root / "appeared.bin").write_bytes(b"new")
+
+    stability = inventory.revalidate_tree(original, config)
+
+    assert stability.complete is False
+    assert {(issue.path.name, issue.category) for issue in stability.changed} == {
+        ("appeared.bin", "appeared-after-analysis"),
+        ("media.bin", "changed-after-analysis"),
+        ("new", "directory-namespace-changed-after-analysis"),
+    }
+
+
+def test_final_stability_detects_replaced_collection_root(tmp_path: Path) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    (root / "media.bin").write_bytes(b"media")
+    config = load_config(root)
+    original = inventory.hash_tree(
+        inventory.discover_tree(root, config), 15, show_progress=False
+    )
+    moved = tmp_path / "old-root"
+    root.rename(moved)
+    root.mkdir()
+
+    stability = inventory.revalidate_tree(original, config)
+
+    assert stability.complete is False
+    assert stability.root_changed is True
+
+
+def test_final_stability_refreshes_ignored_state_without_blocking(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    (root / "media.bin").write_bytes(b"media")
+    config = load_config(root)
+    original = inventory.hash_tree(
+        inventory.discover_tree(root, config), 15, show_progress=False
+    )
+    (root / ".DS_Store").write_bytes(b"excluded")
+
+    stability = inventory.revalidate_tree(original, config)
+
+    assert stability.complete is True
+    assert stability.ignored_entry_points == 1
+    assert stability.tool_state_entries == 0
 
 
 def test_unreadable_destination_image_can_hide_a_pixel_representative(
@@ -562,7 +666,7 @@ def test_remuxed_video_is_reported_as_strict_playback_coverage(
 
     result = run_verify(source, destination, "--json")
 
-    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads(result.stdout)
     assert report["coverage"]["verdict"] == "incomplete"
     videos = report["video_content"]
@@ -571,6 +675,8 @@ def test_remuxed_video_is_reported_as_strict_playback_coverage(
     assert videos["represented_unique_streams"] == 1
     assert videos["missing_unique_streams"] == 0
     assert videos["algorithm"] == "exact-playback-v2"
+    assert report["preservation"]["verdict"] == "complete"
+    assert report["preservation"]["by_layer"]["strict_decoded_videos"] == 1
     assert "original.mp4" not in result.stdout
     assert "renamed.mp4" not in result.stdout
     assert files_under(source) == before_source

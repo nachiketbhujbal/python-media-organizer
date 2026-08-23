@@ -1,4 +1,4 @@
-"""Path-private reports for directional migration byte coverage."""
+"""Path-private reports for directional layered preservation."""
 
 from __future__ import annotations
 
@@ -8,12 +8,13 @@ from typing import Any
 from pymo.logging_config import emit as print
 from pymo.migration.coverage import ByteCoverage
 from pymo.migration.images import ImageContentCoverage, ImageInspectionIssue
-from pymo.migration.inventory import TreeInventory
+from pymo.migration.inventory import StabilityEvidence, TreeInventory
+from pymo.migration.verdict import PreservationEvidence
 from pymo.migration.videos import VideoContentCoverage, VideoInspectionIssue
 from pymo.progress import format_bytes
 
 # This value identifies the current layered migration-verification report.
-MIGRATION_REPORT_SCHEMA_VERSION = 3
+MIGRATION_REPORT_SCHEMA_VERSION = 4
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -82,7 +83,7 @@ def _inventory_report(
         "duplicate_bytes": sum(
             identity[0] * (count - 1) for identity, count in identities.items()
         ),
-        "directories": inventory.directories,
+        "directories": len(inventory.directories),
         "ignored_entry_points": len(inventory.ignored),
         "tool_state_entries": len(inventory.tool_state),
         "symbolic_links": len(inventory.symbolic_links),
@@ -107,6 +108,7 @@ def build_report(
     coverage: ByteCoverage,
     image_content: ImageContentCoverage,
     video_content: VideoContentCoverage,
+    preservation: PreservationEvidence,
     *,
     show_files: bool,
     show_ignored: bool,
@@ -124,7 +126,7 @@ def build_report(
     return {
         "schema_version": MIGRATION_REPORT_SCHEMA_VERSION,
         "direction": "source-to-destination",
-        "contract": "unique-byte-stream",
+        "contract": "layered-exact-preservation",
         "scope": {
             "regular_files_only": True,
             "symbolic_links_followed": False,
@@ -135,6 +137,8 @@ def build_report(
             "video_candidates": "configured-video-extensions",
             "video_equivalence_preserves_source_bytes": False,
             "filesystem_boundary": "stable-namespace-visible-content",
+            "whole_device_recovery_proven": False,
+            "cache_reused": False,
         },
         "source": _inventory_report(
             source, show_files=show_files, show_ignored=show_ignored
@@ -255,6 +259,12 @@ def build_report(
                 else []
             ),
         },
+        "preservation": _preservation_report(
+            source,
+            destination,
+            preservation,
+            show_files=show_files,
+        ),
         "destination_only": {
             "unique_streams": coverage.destination_only_unique_streams,
             "files": len(coverage.destination_only_files),
@@ -269,6 +279,79 @@ def build_report(
             ),
         },
         "writes_performed": False,
+    }
+
+
+def _stability_report(
+    inventory: TreeInventory,
+    evidence: StabilityEvidence,
+    *,
+    show_files: bool,
+) -> dict[str, Any]:
+    return {
+        "complete": evidence.complete,
+        "changed_entries": len(evidence.changed),
+        "root_changed": evidence.root_changed,
+        "traversal_errors": evidence.traversal_errors,
+        "problem_paths": (
+            [
+                {
+                    "path": _relative(inventory.root, issue.path),
+                    "category": issue.category,
+                }
+                for issue in evidence.changed
+            ]
+            if show_files
+            else []
+        ),
+    }
+
+
+def _preservation_report(
+    source: TreeInventory,
+    destination: TreeInventory,
+    evidence: PreservationEvidence,
+    *,
+    show_files: bool,
+) -> dict[str, Any]:
+    return {
+        "verdict": evidence.verdict,
+        "reasons": list(evidence.reasons),
+        "disposition": evidence.disposition,
+        "source_unique_streams": evidence.source_unique_streams,
+        "source_files": evidence.source_files,
+        "accounted_unique_streams": evidence.accounted_unique_streams,
+        "accounted_source_files": evidence.accounted_source_files,
+        "by_layer": {
+            "exact_bytes": evidence.byte_represented_unique_streams,
+            "exact_displayed_images": evidence.image_represented_unique_streams,
+            "strict_decoded_videos": evidence.video_represented_unique_streams,
+        },
+        "unaccounted_unique_streams": evidence.unaccounted_unique_streams,
+        "unaccounted_source_files": len(evidence.unaccounted_source_files),
+        "unaccounted_source_paths": (
+            [_relative(source.root, path) for path in evidence.unaccounted_source_files]
+            if show_files
+            else []
+        ),
+        "unsupported_unique_streams": evidence.unsupported_unique_streams,
+        "unsupported_source_files": len(evidence.unsupported_source_files),
+        "unsupported_source_paths": (
+            [_relative(source.root, path) for path in evidence.unsupported_source_files]
+            if show_files
+            else []
+        ),
+        "source_excluded_entry_points": evidence.source_excluded_entry_points,
+        "destination_excluded_entry_points": (
+            evidence.destination_excluded_entry_points
+        ),
+        "source_final_stability": _stability_report(
+            source, evidence.source_stability, show_files=show_files
+        ),
+        "destination_final_stability": _stability_report(
+            destination, evidence.destination_stability, show_files=show_files
+        ),
+        "evidence": {"fresh": True, "cache_reused": False},
     }
 
 
@@ -307,13 +390,13 @@ def _print_inventory(label: str, values: dict[str, Any]) -> None:
 
 def print_report(report: dict[str, Any]) -> None:
     print("Directional migration verification")
-    print("Contract: exact unique byte-stream coverage (source to destination)")
+    print("Contract: layered exact preservation (source to destination)")
     print("Scope: stable namespace-visible regular files; links are not followed.")
     _print_inventory("Source", report["source"])
     _print_inventory("Destination", report["destination"])
 
     coverage = report["coverage"]
-    print("\nCoverage:")
+    print("\nByte-layer coverage:")
     print(
         f"  Unique streams represented: {coverage['represented_unique_streams']}/"
         f"{coverage['source_unique_streams']} "
@@ -436,16 +519,61 @@ def print_report(report: dict[str, Any]) -> None:
             for issue in videos[key]:
                 print(f"    {issue['path']}: {issue['category']}")
 
-    verdict = coverage["verdict"]
-    print("\nVerdict:")
-    if verdict == "complete":
-        print("  COMPLETE: every in-scope unique source byte stream is represented.")
-    elif verdict == "incomplete":
-        print("  INCOMPLETE: readable source byte streams are missing.")
-    else:
-        print("  UNPROVEN: incomplete filesystem evidence prevents a safe verdict.")
+    preservation = report["preservation"]
+    print("\nFinal preservation accounting:")
     print(
-        "The media-content layers are separate evidence and do not replace the "
-        "byte verdict before version 0.5.3."
+        f"  Accounted: {preservation['accounted_unique_streams']}/"
+        f"{preservation['source_unique_streams']} unique stream(s), "
+        f"{preservation['accounted_source_files']}/"
+        f"{preservation['source_files']} source file(s)"
     )
+    layers = preservation["by_layer"]
+    print(f"  Exact byte streams: {layers['exact_bytes']}")
+    print(f"  Exact displayed-image streams: {layers['exact_displayed_images']}")
+    print(f"  Strict decoded-video streams: {layers['strict_decoded_videos']}")
+    print(
+        f"  Unaccounted: {preservation['unaccounted_unique_streams']} unique "
+        f"stream(s), {preservation['unaccounted_source_files']} source file(s)"
+    )
+    print(
+        f"  Unsupported: {preservation['unsupported_unique_streams']} unique "
+        f"stream(s), {preservation['unsupported_source_files']} source file(s)"
+    )
+    if preservation["unaccounted_source_paths"]:
+        print("  Unaccounted source paths:")
+        for path in preservation["unaccounted_source_paths"]:
+            print(f"    {path}")
+    if preservation["unsupported_source_paths"]:
+        print("  Unsupported source paths:")
+        for path in preservation["unsupported_source_paths"]:
+            print(f"    {path}")
+    for label, key in (
+        ("Source final stability problems", "source_final_stability"),
+        ("Destination final stability problems", "destination_final_stability"),
+    ):
+        stability = preservation[key]
+        if stability["problem_paths"]:
+            print(f"  {label}:")
+            for issue in stability["problem_paths"]:
+                print(f"    {issue['path']}: {issue['category']}")
+
+    verdict = preservation["verdict"]
+    print("\nPreservation verdict:")
+    if verdict == "complete":
+        print(
+            "  COMPLETE: every in-scope unique source stream is represented by "
+            "an exact supported evidence layer."
+        )
+    elif verdict == "incomplete":
+        print("  INCOMPLETE: readable supported source content is unaccounted.")
+    else:
+        print(
+            "  UNPROVEN: incomplete, unstable, or unsupported evidence prevents "
+            "a safe verdict."
+        )
+    print(
+        "This verdict covers stable namespace-visible content in the declared "
+        "media-collection scope; it does not prove whole-device recovery."
+    )
+    print(f"Disposition: {preservation['disposition']}")
     print("Verification wrote no media, cache, configuration, or action history.")

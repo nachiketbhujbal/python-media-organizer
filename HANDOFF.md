@@ -26,7 +26,7 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and includes the version 0.5.2 layered migration-evidence release.
+`pymo` command, and includes the version 0.5.3 layered preservation release.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -177,8 +177,8 @@ complete in-scope coverage, definitely incomplete coverage, and unproven
 filesystem evidence; schema-1 JSON and normal text remain root- and
 filename-private unless relative path disclosure is explicit. Neither tree
 receives cache, lock, configuration, action-history, duplicate-tree, or media
-writes. Version 0.5.0 is exact-byte scope only; image/video equivalence and the
-final sign-off gate remain planned through 0.5.3.
+writes. Version 0.5.0 is exact-byte scope only; versions 0.5.1 through 0.5.3
+subsequently add media equivalence and final layered sign-off.
 
 Version 0.5.1 layers exact displayed-image evidence over source byte identities
 that lack a destination byte representative. One representative per eligible
@@ -204,6 +204,19 @@ survived. Native tools resolve only when video work is required, decoding is
 sequential and timeout-bounded, and migration comparison never uses or writes
 cache evidence. Shared probe/fingerprint primitives now live in
 `src/pymo/video_content.py`; duplicate and migration policy remain separate.
+
+Version 0.5.3 defines the final `layered-exact-preservation` contract. Each
+unique source byte identity is accounted for by exact bytes, exact displayed
+pixels, or strict decoded playback without hiding the lower-layer result. A
+fresh second discovery validates every hashed file state, in-scope directory
+namespace, unsafe entry category, and collection-root identity after media
+decoding while refreshing non-blocking exclusion counts.
+The final verdict is complete only when all declared source content is
+accounted for and no unreadable, unstable, unsupported, or incomplete evidence
+remains. Migration comparison still reads no cache and writes no state.
+Completion is only eligible for human sign-off over stable namespace-visible
+collection content; it neither proves whole-device recovery nor authorizes
+automatic deletion.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -812,8 +825,7 @@ The verdict is `complete` only for the declared in-scope byte contract,
 `unproven` when source evidence is incomplete or destination failures could
 hide a missing representative. Symbolic links are never followed. Ignored
 entry points and pymo-owned state are counted but outside the byte scope; the
-stricter post-transformation sign-off boundary remains reserved for version
-0.5.3.
+stricter post-transformation sign-off boundary is implemented by version 0.5.3.
 Normal output reveals no roots or filenames. `--show-files` and
 `--show-ignored` deliberately expose collection-relative details.
 
@@ -835,6 +847,12 @@ are not fully decoded because they cannot match. Source inspection failures, or
 relevant destination failures that could hide a match, make the video layer
 unproven. Schema 3 reports exact playback independently and keeps command status
 tied to the byte verdict until the version 0.5.3 final-sign-off policy.
+
+Version 0.5.3 combines those fresh layers in schema 4, re-discovers both trees
+after all media work, and bases command status on the final preservation
+verdict. Exact bytes, pixels, and playback remain separately visible; missing
+unknown content is incomplete, while unsupported recognized media or uncertain
+filesystem evidence is unproven.
 
 ## Media validation
 
