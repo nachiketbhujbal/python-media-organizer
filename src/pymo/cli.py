@@ -8,7 +8,7 @@ import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from pymo import __version__, organize, rename, scan, validate
+from pymo import __version__, organize, rename, scan, validate, verify_migration
 from pymo.cache import cli as cache_cli
 from pymo.config import add_show_ignored_argument
 from pymo.duplicates import images, videos
@@ -22,6 +22,7 @@ def _commands() -> dict[str, Callable[[Sequence[str] | None], int]]:
         "scan": scan.main,
         "cache": cache_cli.main,
         "validate": validate.main,
+        "verify-migration": verify_migration.main,
         "organize": organize.main,
         "rename": rename.main,
         "find-image-duplicates": images.main,
@@ -79,7 +80,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     started_at = time.monotonic()
     structured_json = (
-        args.command in {"scan", "validate", "cache"} and "--json" in args.arguments
+        args.command in {"scan", "validate", "cache", "verify-migration"}
+        and "--json" in args.arguments
     )
     configure_logging(
         verbose=args.verbose and not structured_json,

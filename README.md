@@ -12,15 +12,17 @@ The broader product goal is safe media preservation during collection moves
 between local storage devices. Organization, deterministic naming, validation,
 and duplicate isolation are steps toward proving that readable source content
 remains represented after paths change and redundant copies are reviewed. The
-current release does not copy drives or certify a migration; a directional,
-read-only migration-verification command is promoted in the roadmap ahead of
-optional metadata, similarity, and local-AI features.
+current release includes directional, read-only exact-byte migration
+verification. It does not copy drives, perform filesystem recovery, or yet
+establish image/video content equivalence; those layered guarantees remain in
+the roadmap ahead of optional metadata, similarity, and local-AI features.
 
 pymo is not a failing-drive recovery utility. Do not postpone making a
 recovery-grade copy of readable data while waiting for a future pymo release.
 Use pymo on a healthy working copy; retain an unchanged baseline until the
-planned verification workflow—or an independently trusted equivalent—accounts
-for the source content.
+complete verification workflow—or an independently trusted equivalent—accounts
+for the source content. Version 0.5.0 proves exact in-scope byte-stream coverage;
+the roadmap reserves full post-transformation sign-off for version 0.5.3.
 
 Mutation planning and undo require complete filesystem enumeration plus
 successful no-follow metadata inspection of every returned name. If a
@@ -237,6 +239,45 @@ and path-private warning; rerun after other writers become idle for a complete
 snapshot. Directory traversal failures are counted and warned about rather than
 silently omitted; run `validate --show-files` when collection-relative finding
 paths are needed.
+
+### Verify a migration by exact bytes
+
+```bash
+pymo verify-migration "/path/to/baseline" "/path/to/working-copy"
+pymo verify-migration "/path/to/baseline" "/path/to/working-copy" --json
+pymo verify-migration "/path/to/baseline" "/path/to/working-copy" --show-files
+```
+
+`verify-migration` is directional: every in-scope unique byte stream readable
+from `SOURCE` must have an exact SHA-256-and-length representative in
+`DESTINATION`. Collection-root names, directory layouts, and filenames are not
+identity, so organization and deterministic renaming do not create false
+differences. Several byte-identical source copies may be represented by one
+destination copy; reduced and added multiplicity are reported separately.
+Destination-only content is also reported but does not invalidate source
+coverage.
+
+Both trees are enumerated without following symbolic links, then every
+in-scope regular file is hashed from a fresh, stable, collection-anchored
+descriptor. The command does not accept cached historical hashes as current
+preservation proof and writes no cache, lock, configuration, media, duplicate
+tree, or action history. Source and destination must be distinct, non-nested
+directories.
+
+The verdict is `complete` when all in-scope source identities have readable
+destination representatives, `incomplete` when complete evidence proves some
+are absent, and `unproven` when filesystem traversal, unreadable or changing
+source data, unsupported entries, or destination uncertainty prevents that
+claim. Ignored entry points and pymo state are counted and explicitly outside
+the schema-1 byte contract. Version 0.5.0 therefore proves exact coverage only
+for its declared scope; the roadmap reserves final post-transformation sign-off
+until image/video equivalence and stricter evidence gates land through 0.5.3.
+
+Normal text and JSON omit both roots and all filenames. `--show-files` exposes
+only relative missing, destination-only, and problem paths;
+`--show-ignored` separately exposes relative policy exclusions. Exit status 0
+means complete in-scope byte coverage, 1 means incomplete or unproven, and 2
+means invalid setup.
 
 ### Inspect the derived cache
 
@@ -596,6 +637,7 @@ pymo organize "/path/to/media-collection" --apply
 pymo rename "/path/to/media-collection" --apply
 pymo find-image-duplicates "/path/to/media-collection" --apply
 pymo find-video-duplicates "/path/to/media-collection" --apply
+pymo verify-migration "/path/to/unchanged-baseline" "/path/to/working-copy"
 ```
 
 Resolve or consciously account for validation errors before applying changes;
@@ -603,6 +645,12 @@ use `validate --full` when complete local decoding is warranted. Image and
 video duplicate scans are independent and may run in either order. Undo
 dependent changes in reverse order. The action log refuses an earlier undo when
 a later active operation touched the same files or paths.
+
+Run `verify-migration` against the retained baseline after destination-side
+changes and before discarding that baseline. Version 0.5.0 can prove exact
+in-scope bytes after byte-identical duplicate removal; do not use it alone to
+approve metadata-varied image or remuxed-video removal until the later content
+layers and final v0.5.3 hardening are released and pass the actual collection.
 
 ## Action history and undo
 
@@ -724,9 +772,10 @@ installers can still build and install the package.
 ## Roadmap and research
 
 `pymo scan COLLECTION` provides the fast local overview and recommends
-`pymo validate COLLECTION` before mutation. Version 0.4 begins with
-corruption-tolerant discovery and then builds the shared cache foundation,
-followed by directional migration verification. Corrupt, unreadable, changing,
+`pymo validate COLLECTION` before mutation. Version 0.4 established
+corruption-tolerant discovery and the shared cache foundation; version 0.5.0
+adds fresh directional exact-byte coverage, followed by exact image/video
+content layers and final verdict hardening. Corrupt, unreadable, changing,
 unsupported, and mismatched media remain visible findings rather than automatic
 ignore rules. Richer metadata and similarity tooling remain later roadmap or
 research work. Full video decoding remains sequential until representative

@@ -2,6 +2,29 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.0 - 2026-08-23
+
+- Add report-only `pymo verify-migration SOURCE DESTINATION` for directional,
+  path-independent exact unique-byte-stream coverage.
+- Discover both trees without following symbolic links, record ignored,
+  pymo-state, non-regular, unreadable, changed, and traversal evidence, and
+  hash every in-scope regular file through a stable collection-anchored
+  descriptor from a fresh read.
+- Distinguish complete in-scope coverage, definitely incomplete coverage, and
+  unproven coverage when filesystem evidence could hide a representative.
+- Report unique bytes and streams, missing content, destination-only content,
+  source/destination duplicate copies, and reduced or added multiplicity
+  independently of filenames, paths, and collection-root names.
+- Add path-private human output and schema-1 JSON, with collection-relative
+  differences only under `--show-files` and ignored paths only under
+  `--show-ignored`.
+- Reject same or nested roots, write no cache, lock, configuration, action
+  history, or media state, and return health-style statuses 0, 1, and 2.
+- Add adversarial coverage for renames, reorganization, duplicate reduction,
+  destination extras, missing data, policy exclusions, tool state, symbolic
+  links, changing and unreadable files, traversal failures, root overlap,
+  privacy, and zero-write behavior.
+
 ## 0.4.13 - 2026-08-23
 
 - Add `pymo cache refresh` targets for image fingerprints, video fingerprints,
