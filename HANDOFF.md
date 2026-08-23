@@ -26,11 +26,10 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and has a `v0.4.3` shared-cache-core release. Version 0.4.4
-cache status is in progress on `cache/v0.4.4-status`; it is not released or
-tagged. The package is a deliberately local-first tool for personal media
-collections. Git tags are the authoritative version source; package code and
-`[project]` do not contain a static version.
+`pymo` command, and includes the version 0.4.4 read-only cache-status release.
+The package is a deliberately local-first tool for personal media collections.
+Git tags are the authoritative version source; package code and `[project]` do
+not contain a static version.
 
 Version 0.4.0 makes directory traversal failures visible in scan reports and
 places report-only validation first in every scan recommendation plan. Existing
@@ -64,8 +63,8 @@ staged database only when a subsequent fingerprint is successfully saved.
 Migration uses an explicit SQLite savepoint, and schema validation rejects
 non-standard JSON values and non-canonical observation paths.
 
-The in-progress version 0.4.4 adds
-`pymo cache status COLLECTION [--cache PATH] [--json]`. It inspects a
+Version 0.4.4 adds `pymo cache status COLLECTION [--cache PATH] [--json]`.
+It inspects a
 descriptor-pinned SQLite snapshot without creating a cache lock or any other
 state, validates known exact-video payloads, reports aggregate algorithm and
 observation freshness plus evidence coverage, and leaves runtime compatibility
