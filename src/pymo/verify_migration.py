@@ -1,4 +1,4 @@
-"""Verify directional exact-byte coverage between two media collections."""
+"""Verify directional layered preservation between two media collections."""
 
 from __future__ import annotations
 
@@ -17,8 +17,9 @@ from pymo.config import (
 from pymo.logging_config import emit as print
 from pymo.migration.coverage import compare_byte_inventories
 from pymo.migration.images import compare_image_content
-from pymo.migration.inventory import discover_tree, hash_tree
+from pymo.migration.inventory import discover_tree, hash_tree, revalidate_tree
 from pymo.migration.report import build_report, print_report
+from pymo.migration.verdict import build_preservation_evidence
 from pymo.migration.videos import (
     compare_video_content,
     not_needed_video_content,
@@ -36,7 +37,7 @@ from pymo.video_content import (
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Prove directional exact-byte coverage without relying on names or layout."
+            "Prove directional layered preservation without relying on names or layout."
         )
     )
     parser.add_argument("source", type=Path, help="baseline media-collection root")
@@ -212,12 +213,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         video_content = not_needed_video_content(
             destination_inventory, video_extensions
         )
+    if not args.json:
+        print("Revalidating both collection namespaces and file states...")
+    with timer.measure("source final stability"):
+        source_stability = revalidate_tree(source_inventory, source_config)
+    with timer.measure("destination final stability"):
+        destination_stability = revalidate_tree(
+            destination_inventory, destination_config
+        )
+    preservation = build_preservation_evidence(
+        source_inventory,
+        destination_inventory,
+        coverage,
+        image_content,
+        video_content,
+        source_stability,
+        destination_stability,
+        source_config.classification.image_extensions,
+        image_extensions,
+    )
     report = build_report(
         source_inventory,
         destination_inventory,
         coverage,
         image_content,
         video_content,
+        preservation,
         show_files=args.show_files,
         show_ignored=args.show_ignored,
     )
@@ -225,7 +246,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(report, sort_keys=True, separators=(",", ":")))
     else:
         print_report(report)
-    return 0 if coverage.verdict == "complete" else 1
+    return 0 if preservation.verdict == "complete" else 1
 
 
 if __name__ == "__main__":

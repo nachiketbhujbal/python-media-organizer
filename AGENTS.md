@@ -140,6 +140,12 @@ never duplicate the version in source or static project metadata.
   or file bytes. Use the shared versioned probe/fingerprint primitives, resolve
   native tools only when required, and preserve every conservative unsupported
   stream, decode, timeout, and concurrent-change boundary.
+- A final migration success requires fresh layered accounting plus a final
+  re-discovery of both declared namespaces. Do not use cache evidence, hide an
+  unsupported source format, or issue `complete` while any in-scope content or
+  filesystem evidence is unreadable, unstable, unsupported, or unaccounted.
+  Completion is eligible for human sign-off only and never proves whole-device
+  recovery or authorizes automatic deletion.
 
 ## Package layout and tools
 
@@ -161,6 +167,8 @@ never duplicate the version in source or static project metadata.
   image/video analysis policy.
 - `src/pymo/migration/`: fresh stable inventory, directional byte/content
   coverage, multiplicity accounting, and path-private preservation reports.
+- `src/pymo/migration/verdict.py`: final layered accounting and human-signoff
+  disposition after fresh namespace and file-state revalidation.
 - `src/pymo/image_content.py`: shared exact displayed-pixel normalization used
   by duplicate and migration domains; it owns no discovery, cache, reporting,
   or mutation policy.

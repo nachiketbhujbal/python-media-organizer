@@ -36,7 +36,7 @@ class TreeDiscovery:
     root: Path
     root_identity: tuple[int, int]
     entries: tuple[InventoryEntry, ...]
-    directories: int
+    directories: tuple[Path, ...]
     ignored: tuple[Path, ...]
     tool_state: tuple[Path, ...]
     symbolic_links: tuple[Path, ...]
@@ -61,8 +61,9 @@ class HashedEntry:
 @dataclass(frozen=True)
 class TreeInventory:
     root: Path
+    root_identity: tuple[int, int]
     files: tuple[HashedEntry, ...]
-    directories: int
+    directories: tuple[Path, ...]
     ignored: tuple[Path, ...]
     tool_state: tuple[Path, ...]
     symbolic_links: tuple[Path, ...]
@@ -127,7 +128,7 @@ def discover_tree(root: Path, config: PymoConfig) -> TreeDiscovery:
     non_regular: list[Path] = []
     unreadable: list[InventoryIssue] = []
     changed: list[InventoryIssue] = []
-    directories = 0
+    directories: list[Path] = []
     walk_errors: list[OSError] = []
     identity = _root_identity(root)
 
@@ -153,7 +154,7 @@ def discover_tree(root: Path, config: PymoConfig) -> TreeDiscovery:
                 ignored.append(path)
             else:
                 retained_directories.append(name)
-                directories += 1
+                directories.append(path)
         directory_names[:] = retained_directories
 
         for name in file_names:
@@ -189,7 +190,7 @@ def discover_tree(root: Path, config: PymoConfig) -> TreeDiscovery:
         root=root,
         root_identity=identity,
         entries=tuple(sorted(entries, key=_entry_key)),
-        directories=directories,
+        directories=tuple(sorted(directories, key=_path_key)),
         ignored=tuple(sorted(ignored, key=_path_key)),
         tool_state=tuple(sorted(tool_state, key=_path_key)),
         symbolic_links=tuple(sorted(symbolic_links, key=_path_key)),
@@ -243,6 +244,7 @@ def hash_tree(
         root_changed = True
     return TreeInventory(
         root=discovery.root,
+        root_identity=discovery.root_identity,
         files=tuple(files),
         directories=discovery.directories,
         ignored=discovery.ignored,
@@ -253,4 +255,103 @@ def hash_tree(
         changed=tuple(sorted(changed, key=_issue_key)),
         traversal_errors=discovery.traversal_errors,
         root_changed=root_changed,
+    )
+
+
+@dataclass(frozen=True)
+class StabilityEvidence:
+    changed: tuple[InventoryIssue, ...]
+    root_changed: bool
+    traversal_errors: int
+    ignored_entry_points: int
+    tool_state_entries: int
+
+    @property
+    def complete(self) -> bool:
+        return not self.changed and not self.root_changed and not self.traversal_errors
+
+
+def revalidate_tree(inventory: TreeInventory, config: PymoConfig) -> StabilityEvidence:
+    """Require the declared namespace and every hashed path to remain unchanged."""
+
+    changed: list[InventoryIssue] = []
+    try:
+        current = discover_tree(inventory.root, config)
+    except OSError:
+        return StabilityEvidence(
+            changed=(),
+            root_changed=True,
+            traversal_errors=1,
+            ignored_entry_points=len(inventory.ignored),
+            tool_state_entries=len(inventory.tool_state),
+        )
+    original_files = {entry.path: entry for entry in inventory.files}
+    current_files = {entry.path: entry for entry in current.entries}
+    for path in sorted(set(original_files) | set(current_files), key=_path_key):
+        original = original_files.get(path)
+        refreshed = current_files.get(path)
+        if original is None:
+            changed.append(InventoryIssue(path, "appeared-after-analysis"))
+        elif refreshed is None:
+            changed.append(InventoryIssue(path, "missing-after-analysis"))
+        elif original.state != refreshed.state:
+            changed.append(InventoryIssue(path, "changed-after-analysis"))
+
+    original_categories = {
+        **{path: "symbolic-link" for path in inventory.symbolic_links},
+        **{path: "non-regular" for path in inventory.non_regular},
+        **{issue.path: issue.category for issue in inventory.unreadable},
+        **{issue.path: issue.category for issue in inventory.changed},
+    }
+    current_categories = {
+        **{path: "symbolic-link" for path in current.symbolic_links},
+        **{path: "non-regular" for path in current.non_regular},
+        **{issue.path: issue.category for issue in current.unreadable},
+        **{issue.path: issue.category for issue in current.changed},
+    }
+    for path in sorted(
+        {
+            path
+            for path in set(original_categories) | set(current_categories)
+            if original_categories.get(path) != current_categories.get(path)
+        },
+        key=_path_key,
+    ):
+        changed.append(InventoryIssue(path, "entry-category-changed-after-analysis"))
+
+    for path in sorted(
+        set(inventory.directories) ^ set(current.directories), key=_path_key
+    ):
+        changed.append(
+            InventoryIssue(path, "directory-namespace-changed-after-analysis")
+        )
+
+    for entry in inventory.files:
+        if entry.path not in current_files:
+            continue
+        try:
+            with open_stable_file(
+                inventory.root,
+                entry.path,
+                entry.state,
+                "migration final stability check",
+            ):
+                pass
+        except (FileChangedError, OSError):
+            changed.append(InventoryIssue(entry.path, "changed-after-analysis"))
+    try:
+        root_changed = _root_identity(inventory.root) != inventory.root_identity
+    except OSError:
+        root_changed = True
+    return StabilityEvidence(
+        changed=tuple(
+            sorted(
+                {(issue.path, issue.category): issue for issue in changed}.values(),
+                key=lambda issue: (_issue_key(issue), issue.category),
+            )
+        ),
+        root_changed=root_changed,
+        traversal_errors=current.traversal_errors,
+        ignored_entry_points=len(current.ignored),
+        tool_state_entries=len(current.tool_state),
     )
