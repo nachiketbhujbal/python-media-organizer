@@ -64,6 +64,8 @@ def test_dispatched_help_and_argument_errors_remain_unprefixed(
 
     assert help_result.returncode == 0
     assert help_result.stdout.startswith("usage: pymo cache")
+    assert "inspect cache health without writing state" in help_result.stdout
+    assert "deliberately populate reusable cache evidence" in help_result.stdout
     assert "Completed cache" not in help_result.stdout
     assert "Stopped cache" not in help_result.stdout
     assert help_result.stderr == ""

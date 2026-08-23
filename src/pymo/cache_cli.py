@@ -14,8 +14,15 @@ def build_parser() -> argparse.ArgumentParser:
         prog="pymo cache",
         description="Inspect or deliberately populate disposable derived cache state.",
     )
-    parser.add_argument("action", choices=("status", "warm"))
-    parser.add_argument("arguments", nargs=argparse.REMAINDER)
+    subcommands = parser.add_subparsers(dest="action", required=True)
+    for name, help_text in (
+        ("status", "inspect cache health without writing state"),
+        ("warm", "deliberately populate reusable cache evidence"),
+    ):
+        subcommand = subcommands.add_parser(name, add_help=False, help=help_text)
+        subcommand.add_argument(
+            "arguments", nargs=argparse.REMAINDER, help=argparse.SUPPRESS
+        )
     return parser
 
 

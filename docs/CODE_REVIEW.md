@@ -106,6 +106,7 @@ The same adversarial method was repeated after the first validation release.
 | OUT-002 | Low | Wall-clock correlation required an opt-in flag, so ordinary long-running console records lacked timestamps even though elapsed and stage durations were available. | 0.3.18 | Resolved in ADR 0055 |
 | OUT-003 | Low | Help and argument errors raised by a dispatched command parser were followed by the outer CLI's timestamped stopped-runtime message. | 0.4.4 | Resolved by recognizing parser exits and leaving their output plain |
 | OUT-004 | Medium | Global configuration options were inserted before nested cache arguments, which would make the cache dispatcher parse an option where it required the action verb. | 0.4.5 | Resolved by forwarding applicable global options immediately after the `warm` action and retaining status-option refusal |
+| OUT-005 | Low | The first nested cache dispatcher exposed a generic implementation-oriented remainder positional in top-level help instead of describing the supported operations. | 0.4.5 | Resolved with documented `status` and `warm` subparsers that delegate their own detailed help |
 
 ## Documentation review findings
 

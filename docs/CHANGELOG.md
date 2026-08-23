@@ -16,6 +16,8 @@ All notable changes to `python-media-organizer` will be recorded here.
   failure paths available only through explicit `--show-files`.
 - Recheck a cache's public entry after every descriptor-pinned read and forward
   global configuration options safely through the nested cache dispatcher.
+- Present documented `status` and `warm` operations in top-level cache help
+  while retaining operation-specific detailed help and parser errors.
 
 ## 0.4.4 - 2026-08-22
 
