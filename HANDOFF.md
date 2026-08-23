@@ -26,7 +26,7 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and includes the version 0.5.1 layered migration-evidence release.
+`pymo` command, and includes the version 0.5.2 layered migration-evidence release.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -191,6 +191,19 @@ The image layer does not claim metadata, encoding, container bytes, or original
 file bytes survived, and it does not yet replace the byte verdict or exit
 status. The shared normalization now lives in `src/pymo/image_content.py`
 because duplicate and migration domains both consume it.
+
+Version 0.5.2 adds the corresponding strict decoded-video layer for configured
+video-extension source identities whose bytes are absent. It freshly probes one
+representative per unique source and destination byte stream, then fully
+fingerprints every supported source and only structurally relevant destination
+stream through local FFmpeg. Supported remuxes can match under
+`exact-playback-v2`; different frames, normalized timing, or decoded audio do
+not. Schema-3 output keeps playback results separate from byte preservation and
+does not claim source containers, metadata, codec bitstreams, or original bytes
+survived. Native tools resolve only when video work is required, decoding is
+sequential and timeout-bounded, and migration comparison never uses or writes
+cache evidence. Shared probe/fingerprint primitives now live in
+`src/pymo/video_content.py`; duplicate and migration policy remain separate.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -368,6 +381,7 @@ python-media-organizer/
       images.py
       inventory.py
       report.py
+      videos.py
     action_log.py
     organize.py
     rename.py
@@ -375,6 +389,7 @@ python-media-organizer/
     validate.py
     verify_migration.py
     video.py
+    video_content.py
     duplicates/
       common.py
       images.py
@@ -781,7 +796,7 @@ organization, renaming, or duplicate isolation.
 `src/pymo/verify_migration.py` coordinates report-only
 `pymo verify-migration SOURCE DESTINATION`. The `src/pymo/migration/`
 subpackage owns fresh stable inventory, layered byte/image coverage and
-multiplicity accounting, and the root-free schema-2 report. The command never
+multiplicity accounting, and the root-free schema-3 report. The command never
 writes cache, locks, configuration, action history, duplicate trees, or media
 to either collection.
 
@@ -811,6 +826,15 @@ absent source bytes remain visible. Source decode failures make that layer
 unproven; destination decode failures make an otherwise missing match
 unproven. Schema 2 reports the layer independently and keeps command status
 tied to the byte verdict until version 0.5.3 defines combined sign-off.
+
+Version 0.5.2 adds strict decoded-video evidence for byte-missing configured
+video-extension identities. It freshly normalizes supported structure through
+ffprobe and streams complete displayed frames, timing, and decoded audio through
+FFmpeg under `exact-playback-v2`. Structurally incompatible destination streams
+are not fully decoded because they cannot match. Source inspection failures, or
+relevant destination failures that could hide a match, make the video layer
+unproven. Schema 3 reports exact playback independently and keeps command status
+tied to the byte verdict until the version 0.5.3 final-sign-off policy.
 
 ## Media validation
 
@@ -977,6 +1001,9 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   still images, genuinely different pixels, byte-represented no-op cases,
   source/destination decode failures, schema-2 privacy, and unchanged
   duplicate-finder semantics;
+- strict decoded-video migration coverage for supported remuxes, different
+  audio, invalid structure, native-tool demand, decode timeouts, schema-3
+  privacy, zero writes, and unchanged video-finder/cache behavior;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

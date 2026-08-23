@@ -83,6 +83,11 @@ The same adversarial method was repeated after the first validation release.
 | MIG-011 | Medium | Decoding only destination byte identities absent from the source misses a valid case where one retained source variant represents another removed metadata variant by pixels. | 0.5.1 | Resolved by inspecting one representative of every eligible destination byte identity |
 | MIG-012 | Medium | Copying the displayed-pixel algorithm into migration code would allow duplicate and preservation semantics to drift. | 0.5.1 | Resolved by a shared versioned `image_content.py` normalization boundary |
 | MIG-013 | Medium | A destination image decode failure can hide a representative for otherwise missing source pixels. | 0.5.1 | Resolved with an unproven image-layer verdict whenever an unmatched source pixel identity coexists with incomplete destination image evidence |
+| MIG-014 | High | Treating a remuxed video as byte-preserved would hide loss of its source container, metadata, codec bitstream, and complete file bytes. | 0.5.2 | Resolved with a separate strict decoded-playback layer that leaves the byte verdict unchanged |
+| MIG-015 | High | Recompressed, different-audio/timing, cropped, watermarked, ambiguous-stream, HDR/high-bit-depth, unreadable, or changing videos must not satisfy deterministic playback preservation. | 0.5.2 | Resolved by sharing the existing conservative `exact-playback-v2` probe and full-decode contract |
+| MIG-016 | Medium | Fingerprinting every destination video wastes full decodes when normalized structure already proves it cannot match any source playback candidate. | 0.5.2 | Resolved by probing unique streams first and decoding only structurally relevant destination identities |
+| MIG-017 | Medium | Copying probe and fingerprint logic into migration would let duplicate and preservation semantics drift. | 0.5.2 | Resolved with a shared `video_content.py` primitive boundary and independent domain policy |
+| MIG-018 | Medium | A failed relevant destination video probe or decode can hide a playback representative. | 0.5.2 | Resolved with an unproven video-layer verdict whenever unmatched source playback coexists with incomplete destination video evidence |
 
 ## CI portability findings
 
@@ -252,6 +257,8 @@ The same adversarial method was repeated after the first validation release.
 - `0.5.0`: establish fresh, path-independent directional byte coverage with
   explicit complete, incomplete, and unproven evidence states.
 - `0.5.1`: layer exact displayed-image coverage over byte-missing source
+  identities without weakening or relabeling the byte-preservation contract.
+- `0.5.2`: layer strict decoded-playback coverage over byte-missing source
   identities without weakening or relabeling the byte-preservation contract.
 
 ## Independent review evidence

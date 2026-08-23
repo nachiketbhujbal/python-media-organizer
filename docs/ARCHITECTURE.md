@@ -33,19 +33,22 @@ CLI dispatch
 - `migration/` owns path-independent preservation evidence. `inventory.py`
   owns fresh stable byte inventory, `coverage.py` owns directional identity and
   multiplicity accounting, `images.py` owns exact displayed-image coverage,
-  and `report.py` owns the root-free public schema. Later exact-video coverage
-  extends this domain without
+  `videos.py` owns strict decoded-playback coverage, and `report.py` owns the
+  root-free public schema. Final verdict policy extends this domain without
   moving command dispatch or cache ownership into it.
 - `action_log.py` owns the authoritative append-only mutation journal. It is
   deliberately outside `cache/` because journal evidence is portable and
   authoritative while cache state is derived and disposable.
 - `classification.py`, `collection.py`, `config.py`, `discovery.py`,
-  `file_safety.py`, `image_content.py`,
+  `file_safety.py`, `image_content.py`, `video_content.py`,
   `logging_config.py`, `progress.py`, and `video.py` are shared foundations.
   They may not depend on a specific command or duplicate-media implementation.
   `image_content.py` owns the versioned descriptor-to-displayed-pixel
   normalization shared by duplicate and migration domains, but neither
   domain's discovery, cache, report, or mutation policy.
+  `video_content.py` owns the equivalent descriptor-based probe, native-tool,
+  and exact-playback normalization shared by those domains under the same
+  ownership restriction.
 
 ## Review rules
 

@@ -2,6 +2,29 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.2 - 2026-08-23
+
+- Add a separate strict decoded-video layer to `verify-migration` for eligible
+  source byte identities without an exact destination byte representative.
+- Extract descriptor-based probe normalization, native-tool checks, streamed
+  frame/audio decoding, and `exact-playback-v2` fingerprinting into a shared
+  video-content boundary without coupling duplicate and migration policy.
+- Freshly probe one representative per eligible unique source and destination
+  byte stream, then fingerprint all supported source streams and structurally
+  relevant destination streams with sequential local FFmpeg decoding.
+- Distinguish playback `complete`, `incomplete`, `unproven`, and `not-needed`
+  results without rewriting the byte verdict or claiming source container,
+  metadata, codec bitstream, or complete file bytes are preserved.
+- Resolve FFmpeg and ffprobe only when video-content comparison is required;
+  add explicit native-tool and positive decode-timeout options while retaining
+  configured defaults, path-private progress, and the zero-cache/write boundary.
+- Advance migration JSON to schema 3 with aggregate playback eligibility,
+  represented, missing, runtime, and uninspectable evidence; keep relative
+  paths behind `--show-files`.
+- Add real-FFmpeg coverage for supported remuxes, different audio, invalid
+  video structure, native-tool demand, privacy, zero writes, and unchanged
+  exact-video duplicate behavior.
+
 ## 0.5.1 - 2026-08-23
 
 - Add a separate exact displayed-image layer to `verify-migration` for eligible

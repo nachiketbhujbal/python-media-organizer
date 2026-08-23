@@ -135,6 +135,11 @@ never duplicate the version in source or static project metadata.
   source-file bytes. Decode migration candidates freshly through the shared
   versioned algorithm; unsupported, unsafe, changing, or unreadable inputs do
   not receive an exact-image claim.
+- Keep strict decoded-video evidence equally separate from byte preservation.
+  A playback match does not prove source containers, metadata, codec bitstreams,
+  or file bytes. Use the shared versioned probe/fingerprint primitives, resolve
+  native tools only when required, and preserve every conservative unsupported
+  stream, decode, timeout, and concurrent-change boundary.
 
 ## Package layout and tools
 
@@ -159,6 +164,9 @@ never duplicate the version in source or static project metadata.
 - `src/pymo/image_content.py`: shared exact displayed-pixel normalization used
   by duplicate and migration domains; it owns no discovery, cache, reporting,
   or mutation policy.
+- `src/pymo/video_content.py`: shared descriptor-based probe normalization,
+  native-tool policy, and strict decoded-playback fingerprinting; it owns no
+  discovery, cache, reporting, grouping, or mutation policy.
 - `src/pymo/verify_migration.py`: thin coordinator for the public directional
   verification command.
 - `src/pymo/action_log.py`: shared append-only mutation journal and guarded

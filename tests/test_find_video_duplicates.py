@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from pymo import video_content
 from pymo.action_log import action_log_path
 from pymo.cache import service as cache_service
 from pymo.classification import Classifier
@@ -928,9 +929,9 @@ def test_video_inspection_rejects_a_file_changed_during_probe(
 
 
 def test_decimal_microseconds_rejects_non_finite_values() -> None:
-    assert video_duplicates.decimal_microseconds("NaN") is None
-    assert video_duplicates.decimal_microseconds("Infinity") is None
-    assert video_duplicates.decimal_microseconds("-Infinity") is None
+    assert video_content.decimal_microseconds("NaN") is None
+    assert video_content.decimal_microseconds("Infinity") is None
+    assert video_content.decimal_microseconds("-Infinity") is None
 
 
 def test_probe_rejects_non_object_stream_entries(tmp_path: Path, monkeypatch) -> None:
@@ -939,7 +940,7 @@ def test_probe_rejects_non_object_stream_entries(tmp_path: Path, monkeypatch) ->
     result = subprocess.CompletedProcess(
         args=[], returncode=0, stdout=json.dumps({"streams": [None]}), stderr=""
     )
-    monkeypatch.setattr(video_duplicates.subprocess, "run", lambda *_, **__: result)
+    monkeypatch.setattr(video_content.subprocess, "run", lambda *_, **__: result)
 
     descriptor = os.open(path, os.O_RDONLY)
     try:
@@ -976,7 +977,7 @@ def test_ffmpeg_decode_commands_only_use_pinned_local_file_inputs(
         else:
             consume_stdout(b"\x00\x01\x02\x03")
 
-    monkeypatch.setattr(video_duplicates, "_stream_command", fake_stream)
+    monkeypatch.setattr(video_content, "_stream_command", fake_stream)
     local_path = tmp_path / "local-video.mp4"
     local_path.write_bytes(b"local video")
     probe = ProbeInfo(
@@ -1075,7 +1076,7 @@ def test_video_inspection_pins_probe_during_path_swap(
             stderr="",
         )
 
-    monkeypatch.setattr(video_duplicates.subprocess, "run", swap_during_probe)
+    monkeypatch.setattr(video_content.subprocess, "run", swap_during_probe)
 
     with pytest.raises(
         video_duplicates.FileChangedError, match="changed during video inspection"

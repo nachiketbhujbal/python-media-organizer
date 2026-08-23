@@ -19,7 +19,18 @@ from pymo.migration.coverage import compare_byte_inventories
 from pymo.migration.images import compare_image_content
 from pymo.migration.inventory import discover_tree, hash_tree
 from pymo.migration.report import build_report, print_report
+from pymo.migration.videos import (
+    compare_video_content,
+    not_needed_video_content,
+    video_content_required,
+)
 from pymo.progress import StageTimer
+from pymo.video_content import (
+    VideoInspectionError,
+    ffmpeg_version,
+    ffprobe_version,
+    resolve_executable,
+)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -40,6 +51,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="include collection-relative missing and problem paths",
     )
+    parser.add_argument("--ffmpeg", type=Path, help="explicit ffmpeg executable path")
+    parser.add_argument("--ffprobe", type=Path, help="explicit ffprobe executable path")
+    parser.add_argument(
+        "--decode-timeout",
+        type=int,
+        help="maximum seconds allowed for each FFmpeg playback decode",
+    )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
     return parser.parse_args(argv)
@@ -59,6 +77,9 @@ def _discard_message(_message: str) -> None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.decode_timeout is not None and args.decode_timeout <= 0:
+        print("--decode-timeout must be a positive number", file=sys.stderr)
+        return 2
     source = args.source.expanduser().resolve()
     destination = args.destination.expanduser().resolve()
     if not source.is_dir():
@@ -141,11 +162,62 @@ def main(argv: Sequence[str] | None = None) -> int:
             ),
             show_progress=not args.json,
         )
+    video_extensions = (
+        source_config.classification.video_extensions
+        | destination_config.classification.video_extensions
+    )
+    if video_content_required(
+        source_inventory, destination_inventory, video_extensions
+    ):
+        try:
+            ffmpeg = resolve_executable(args.ffmpeg, "ffmpeg")
+            ffprobe = resolve_executable(args.ffprobe, "ffprobe")
+            ffmpeg_runtime = ffmpeg_version(ffmpeg)
+            ffprobe_runtime = ffprobe_version(ffprobe)
+        except VideoInspectionError:
+            print(
+                "Native video tools are unavailable for migration verification.",
+                file=sys.stderr,
+            )
+            return 2
+        if not args.json:
+            print(
+                "Inspecting strict decoded-video coverage for byte-missing "
+                "content..."
+            )
+        with timer.measure("video-content comparison"):
+            video_content = compare_video_content(
+                source_inventory,
+                destination_inventory,
+                video_extensions,
+                ffmpeg,
+                ffprobe,
+                ffmpeg_runtime,
+                ffprobe_runtime,
+                (
+                    args.decode_timeout
+                    if args.decode_timeout is not None
+                    else min(
+                        source_config.video_duplicates.decode_timeout_seconds,
+                        destination_config.video_duplicates.decode_timeout_seconds,
+                    )
+                ),
+                min(
+                    source_config.performance.progress_interval_seconds,
+                    destination_config.performance.progress_interval_seconds,
+                ),
+                show_progress=not args.json,
+            )
+    else:
+        video_content = not_needed_video_content(
+            destination_inventory, video_extensions
+        )
     report = build_report(
         source_inventory,
         destination_inventory,
         coverage,
         image_content,
+        video_content,
         show_files=args.show_files,
         show_ignored=args.show_ignored,
     )
