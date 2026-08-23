@@ -112,16 +112,12 @@ never duplicate the version in source or static project metadata.
   image/video analysis policy.
 - `src/pymo/action_log.py`: shared append-only mutation journal and guarded
   dependency-aware undo.
-- `src/pymo/cache.py`: versioned shared cache schema plus descriptor-pinned,
-  locked, atomically published disposable derived state.
-- `src/pymo/cache_status.py`: zero-write cache health, evidence coverage, and
-  stale-observation reporting for local or explicitly selected cache files.
-- `src/pymo/cache_cli.py`: nested cache-operation dispatch without weakening
-  status option boundaries.
-- `src/pymo/cache_warm.py`: explicit exact-video evidence warming for local or
-  separately writable caches.
-- `src/pymo/hash_cache.py`: path-private exact-state whole-file hash observation
-  policy over the shared cache service.
+- `src/pymo/cache/`: the disposable derived-cache subsystem. Its package facade
+  exposes the supported storage API while `service.py`, `hashes.py`,
+  `status.py`, `warm.py`, and `cli.py` own storage, observation policy,
+  reporting, deliberate population, and dispatch respectively.
+- `src/pymo/classification.py`: shared local content-signature and extension
+  fallback policy used by every media-processing command.
 - `src/pymo/collection.py`: immutable canonical paths for one collection.
 - `src/pymo/logging_config.py`: console logging plus explicitly requested local
   log files.

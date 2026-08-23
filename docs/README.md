@@ -11,6 +11,8 @@ needed by coding agents. Durable engineering documentation lives here:
   history.
 - [Contributing and releases](CONTRIBUTING.md) — local gates, branches, CI, and
   release procedure.
+- [Architecture](ARCHITECTURE.md) — package boundaries and allowed dependency
+  direction.
 - [Architecture decisions](adr/README.md) — one durable decision per record.
 
 A future license file will remain at the repository root so hosting sites and

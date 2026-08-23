@@ -99,6 +99,14 @@ The same adversarial method was repeated after the first validation release.
 | --- | --- | --- | --- | --- |
 | SCAN-004 | High | Checksum scan opened a pathname between state checks, allowing a transient parent or file substitution to redirect content reads outside the collection before the later change was noticed. | 0.4.6 | Resolved by hashing through the collection-anchored stable no-follow descriptor boundary |
 
+## Package architecture review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| ARCH-001 | Low | Cache schema, publication, observation policy, status, warming, and command-dispatch modules shared one derived-state lifecycle but were scattered across the package root without a discoverable subsystem boundary. | 0.4.7 | Resolved in ADR 0065 |
+| ARCH-002 | Low | Splitting modules by size alone would create new interfaces across cohesive action-journal and exact-media invariants without improving dependency direction or ownership. | 0.4.7 | Accepted and documented in ADR 0065 with explicit future extraction criteria |
+| ARCH-003 | Low | Scan, validation, rename, duplicate analysis, and cache warming imported media classification from the organizer command, giving shared policy misleading command ownership. | 0.4.7 | Resolved by the shared classification foundation in ADR 0065 |
+
 ## Progress and timing review findings
 
 | ID | Severity | Finding | Resolution target | Status |
@@ -187,6 +195,8 @@ The same adversarial method was repeated after the first validation release.
   including an explicitly external writable-cache boundary.
 - `0.4.6`: reuse exact-state whole-file hashes without making scan stateful,
   descriptor-pin checksum reads, and re-read cached content before mutation.
+- `0.4.7`: establish the cache subsystem facade and document the package-wide
+  ownership and dependency rules without changing behavior.
 
 ## Independent review evidence
 

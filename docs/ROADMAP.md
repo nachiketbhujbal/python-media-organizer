@@ -90,7 +90,7 @@ file, or action log on a source being preserved.
 | 0.4.4 | Cache status | Read-only cache health, coverage, version, and stale-record reporting. | Released |
 | 0.4.5 | Video cache warm | Explicitly precompute exact-video fingerprints without running duplicate planning. | Released |
 | 0.4.6 | Stable hashes | Reuse carefully keyed whole-file SHA records while rechecking content before an exact move. | Released |
-| 0.4.7 | Package architecture | Review package cohesion and dependency direction, establish durable subsystem boundaries—especially for cache services—and reorganize only where behavior-preserving ownership becomes clearer. | Planned |
+| 0.4.7 | Package architecture | Review package cohesion and dependency direction, establish durable subsystem boundaries—especially for cache services—and reorganize only where behavior-preserving ownership becomes clearer. | Released |
 | 0.4.8 | Probe cache | Reuse validated ffprobe structure records with tool-version invalidation. | Planned |
 | 0.4.9 | Image fingerprint cache | Persist deterministic displayed-pixel image fingerprints for safe rescans. | Planned |
 | 0.4.10 | Unified cache warm | Warm selected image/video records or all supported derived records explicitly. | Planned |
