@@ -248,6 +248,22 @@ report-only future work and must never silently enter the exact move path.
   GitHub API confirms it. Ordinary branch pushes and tags do not run CI
   automatically while the repository is private; use the manual workflow only
   when pre-PR platform evidence is worth the additional Actions usage.
+- Name an AI assistant's branch with its own prefix, `claude/<type>/<slug>` or
+  `codex/<type>/<slug>`, adding the target version as `<type>/v<x.y.z>-<slug>`
+  when the work is scheduled for a release. The merge commit preserves the
+  branch name, so attribution stays visible without changing the one-line,
+  maintainer-authored commit convention. See ADR 0077.
+- Claim the next free `docs/adr/` number in a branch's first commit and name it
+  in the pull request, so parallel assistant branches cannot collide on one
+  number.
+- Each assistant adversarially reviews the other's pull request before merge by
+  default, recording findings in `docs/CODE_REVIEW.md`. The maintainer may waive
+  a review; record a waived review as follow-up debt rather than skipping it
+  silently.
+- Treat `AGENTS.md` as the only authoritative instruction file. A tool-specific
+  entry point may point at it but must state no rule of its own. Instruct every
+  subagent to read `AGENTS.md` and `HANDOFF.md` completely before acting;
+  imported context is not inherited.
 - Run subprocess-aware coverage for release review with
   `uv run --locked pytest --cov=pymo --cov-report=term-missing`.
 - Run Ruff, Black, and mypy before the complete suite. Keep the installed

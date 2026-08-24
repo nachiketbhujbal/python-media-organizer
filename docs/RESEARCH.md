@@ -781,14 +781,21 @@ explicit-file INFO, with DEBUG enabled only deliberately.
 
 ## AI-tool repository coordination
 
-Multiple coding agents can share the project only through the same reviewed
-source, tests, roadmap, ADRs, and handoff boundaries. Tool-specific directories
-or a common `.ai` directory with `.claude`/`.codex` symlinks require research:
-symlink behavior, host-tool discovery conventions, POSIX portability, private
-local context, and conflicting generated settings all need consideration.
-Until then, the root `AGENTS.md` and project `HANDOFF.md` remain authoritative,
-and any tool-specific local handoff stays outside Git when it contains private
+**Resolved by [ADR 0077](adr/0077-multi-assistant-coordination.md).** `AGENTS.md`
+is the single authoritative instruction file; a tool-specific entry point may
+point at it but states no rule of its own. Assistant branches carry a `claude/`
+or `codex/` prefix, ADR numbers are claimed in a branch's first commit, each
+assistant adversarially reviews the other's pull request by default, and any
+tool-specific local handoff stays outside Git when it contains private
 acceptance data.
+
+One part was deliberately left unresolved rather than decided. A common `.ai`
+directory with `.claude`/`.codex` symlinks was considered and not adopted:
+symlink behavior, host-tool discovery conventions, POSIX portability, and
+conflicting generated settings are all unexamined, and none of them need to be
+settled while a delegating entry point per tool works. Revisit only if a future
+host tool cannot be served that way.
+
 ## Open research questions
 
 - Which exact decoded-video normalization is most stable across FFmpeg versions
