@@ -669,6 +669,128 @@ newly added category should treat files a previous release already left at the r
 
 ## Open research questions
 
+### Duplicate finalization and collection history
+
+Duplicate detection and isolation must remain non-deleting. A later
+finalization command may deliberately dispose of reviewed content, but it needs
+a stronger contract than an `--apply` option on either duplicate finder:
+
+- require a complete dry-run inventory and reject untracked additions or an
+  action-journal state that cannot explain the review tree;
+- prefer moving the review tree to an explicit quarantine outside the working
+  collection, leaving permanent deletion as a later and separately confirmed
+  boundary;
+- require fresh directional preservation evidence for the simulated
+  post-finalization collection, and define how that evidence is bound to the
+  exact baseline, working namespace, and time of finalization;
+- state prominently that disposal makes the corresponding duplicate move and
+  any dependent earlier runs impossible to undo unless the bytes are restored;
+- append a durable irreversible event to the portable journal even though it
+  has no inverse, recording what pymo established and did without implying that
+  journal replay can recover deleted bytes; and
+- support a path-private collection-history synopsis, similar in purpose to a
+  concise version-control log, which distinguishes committed reversible runs,
+  undo runs, quarantines, and irreversible finalization events.
+
+The journal schema, confirmation ceremony, quarantine portability across
+macOS/Linux/WSL, and preservation-evidence binding require an ADR before this
+work receives a release number.
+
+Ordinary migration verification must continue to describe the physical target
+that actually exists, including media under `dups`; silently excluding that
+tree by default could hide that it contains the only representative of unique
+content. A future explicit `--simulate-without-dups` mode should discover and
+inventory the destination review tree, report its files and bytes separately,
+exclude those files only from destination preservation evidence, perform no
+writes, and label the resulting verdict as a simulated post-finalization
+outcome. It must become non-complete when removing `dups` would leave any source
+content unaccounted and should provide the evidence gate consumed by a later
+duplicate-finalization command.
+
+### Persistent diagnostic logging
+
+Collection-local diagnostic logs are useful acceptance and operational
+evidence, but making them automatic would reverse the current privacy decision
+that persistent path-bearing output is opt-in. It would also create state for
+commands whose contract is report-only, complicate read-only collections and
+two-root migration verification, and require the log itself to be excluded
+consistently from scan, validation, mutation, and preservation scope.
+
+Research should compare the current explicit `--log-file PATH` behavior with a
+possible `{collection-name}-pymo.log` default plus `--no-log`. Any default must
+define append/rotation and locking behavior, failure policy, filename privacy,
+which root owns a two-collection command's log, and whether read-only commands
+may create it at all. A safer alternative may be an explicit configured log
+directory outside media collections while the append-only action journal and a
+future history command provide the durable collection audit record.
+
+Logging-level controls should also be normalized without proliferating
+ambiguous flags. Evaluate a conventional `--log-level
+{DEBUG,INFO,WARNING,ERROR,CRITICAL}` interface, a convenient `--debug` alias,
+separate console/file thresholds, and compatibility treatment for the current
+`--verbose` and `--quiet` options. The current default remains console INFO and
+explicit-file INFO, with DEBUG enabled only deliberately.
+
+### Validation remediation and guidance
+
+Validation should eventually answer “what can I safely do next?” without
+silently repairing, ignoring, or deleting evidence. The remediation design
+should classify findings by actionability:
+
+- an extension/content mismatch can support a separately reviewed, reversible
+  extension-normalization plan when decoder and signature evidence agree;
+- a decode failure may support reversible quarantine into a dedicated review
+  tree, but cannot be described as repaired and must remain represented in
+  subsequent baseline comparison;
+- an unsupported recognized format is unverified, not corrupt; resolving it
+  requires an explicit, locally installed decoder with reviewed provenance or
+  continued exact-byte preservation; and
+- informational stream findings need an explanation and usually no mutation.
+
+Remediation must remain dry-run-first, action-journaled, collision-safe, and
+separate from ordinary validation. It must define ordering with organization
+and renaming, retain the original finding and evidence, and recommend fresh
+validation plus migration verification afterward. Quarantine must never become
+an implicit ignore list.
+
+### Migration orchestration and queues
+
+A future orchestrator could own the proven manual sequence for one or more
+collections, but naive recursive copy and unconstrained collection-level
+parallelism are unsafe defaults. Research must cover:
+
+- a declarative local manifest of source, unchanged baseline, working target,
+  quarantine, and final destination rather than fragile positional queues;
+- capacity and case-folded collision preflight before copying between
+  case-sensitive and case-insensitive filesystems;
+- resumable, no-overwrite copying with retained copy evidence instead of
+  assuming `cp -R` or a Finder duplicate completed;
+- explicit checkpoints before transformation, duplicate finalization, baseline
+  removal, and final collection renaming;
+- sequential execution by default on one physical disk, with bounded
+  cross-collection parallelism only when storage topology and benchmarks show
+  it will not increase contention or recovery risk; and
+- restartable per-collection state whose reports remain path-private by
+  default and never treat a successful prior stage as proof that current files
+  are unchanged.
+
+Automatic creation of `_base` and `_target` trees may improve usability, but
+their names are policy rather than identity. The design must handle interrupted
+copies, insufficient space, existing destinations, external quarantine,
+cross-filesystem moves, and the fact that two copies on one device are not
+independent backups.
+
+### AI-tool repository coordination
+
+Multiple coding agents can share the project only through the same reviewed
+source, tests, roadmap, ADRs, and handoff boundaries. Tool-specific directories
+or a common `.ai` directory with `.claude`/`.codex` symlinks require research:
+symlink behavior, host-tool discovery conventions, POSIX portability, private
+local context, and conflicting generated settings all need consideration.
+Until then, the root `AGENTS.md` and project `HANDOFF.md` remain authoritative,
+and any tool-specific local handoff stays outside Git when it contains private
+acceptance data.
+
 - Which exact decoded-video normalization is most stable across FFmpeg versions
   and harmless container remuxing without collapsing meaningful timing or audio
   differences?
