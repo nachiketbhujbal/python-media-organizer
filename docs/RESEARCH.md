@@ -493,9 +493,12 @@ Constraints:
   collection journal, verified after apply, with existing collision naming.
 - Must not fight the deterministic renamer: normalization changes only the extension, never the
   generated stem, and the two must agree on ordering so a normalized file is not renamed back.
-- Open question: whether this belongs to `rename` as an option or to a separate remediation
-  command. A separate command keeps `rename` focused, but extension normalization *is* a rename
-  and duplicating journal handling would be worse.
+Extension correction is a **separate narrow command**, not an option on `rename`. The two change
+different kinds of truth: `rename` decides what a file is *called*, while extension correction
+decides what a file *claims to be*, and folding them together would let one silently perform the
+other. The safe order is validate, then correct extensions, then organize, then rename, so every
+later stage sees a file whose name no longer lies. `rename` continues to leave extensions
+untouched. The command's name is still open.
 
 ### Stage 4 — container remux as an irreversible transformation with preserved lineage
 
@@ -527,10 +530,23 @@ what lets a future collection-history view explain why two files with identical 
 and what lets a finalization command recognise that discarding the retained original is the
 irreversible step rather than a routine cleanup.
 
-A retained-originals tree fits the existing four-character folder convention as `orig`, alongside
-`pics`, `vids`, and `dups`. That is a durable layout decision and needs its own ADR; it should
-also be considered jointly with wherever duplicate finalization decides to quarantine, so the
-collection does not grow two competing holding areas.
+The retained originals live in `fixd`, a four-character tree beside `pics`, `vids`, and `dups`,
+mirroring the same `pics`/`vids` subfolder layout. `fixd` names the outcome of the event exactly
+as `dups` does: both trees hold the file that was set aside, and the name says why. A file is
+paired with its replacement by **stem**, not by full filename, because a remux legitimately
+changes the extension.
+
+`fixd` is deliberately scoped to originals superseded by a **repair**. The membership rule for the
+tree is that new bytes replaced old bytes, and repair is only a subset of that; a future
+convenience transformation such as a compatibility transcode would supersede an original that was
+never broken. If that capability is ever added, it takes its own tree rather than stretching this
+name, which also keeps "I repaired this" and "I converted this for convenience" distinguishable at
+a glance. The implementing ADR must record this scope explicitly.
+
+A rename never places anything in `fixd`. Renaming changes no bytes, so the journal alone can
+reconstruct the prior state exactly on undo, and copying the file would double storage to preserve
+a filename that is already recorded. The rule is that a tree holds only what the journal cannot
+reconstruct.
 
 Remuxing must remain opt-in per file or per finding. It must never run automatically, never be
 implied by validation, and never be applied to media whose streams the tool does not fully
@@ -558,8 +574,8 @@ unaccounted byte stream, which is a strictly worse outcome.
 
 Two candidate resolutions, both worth evaluating before implementation:
 
-1. **Retain the original**, exactly as remux does, using the same retained tree and journal
-   lineage. Simple, consistent, and requires no new evidence type.
+1. **Retain the original**, exactly as remux does, in `fixd` with the same journal lineage.
+   Simple, consistent, and requires no new evidence type.
 2. **Prefix containment as evidence.** A completed file contains the original byte stream as an
    exact leading prefix, which is provable cheaply and would let verification account for the
    original without retaining a second copy. This is a genuinely new evidence layer and would need
@@ -604,7 +620,7 @@ One per durable decision, numbered from the next free entry:
 - container family comparison, including the pairs it deliberately cannot distinguish;
 - remediation guidance as report-only advice that never becomes ignore policy;
 - reversible extension normalization and its ownership relative to `rename`;
-- the retained-originals tree and its relationship to duplicate quarantine;
+- the `fixd` and `errs` trees, their scope boundaries, and their relationship to `dups`;
 - container remux as a journaled, reversible-while-retained transformation whose irreversibility
   begins only at discard;
 - still-image terminator completion and the chosen preservation resolution.
@@ -612,14 +628,88 @@ One per durable decision, numbered from the next free entry:
 ### Open questions
 
 - Should extension normalization be an option on `rename` or a separate remediation command?
-- Should `orig` and any duplicate-finalization quarantine be one tree or two, and does a retained
-  original belong in the collection at all rather than outside it?
+- Should a future non-repair transformation take its own tree, as the current scoping assumes, or
+  should `fixd` widen to cover every superseded original?
 - Is prefix containment worth adopting as a preservation evidence layer, or does retaining the
   original make it unnecessary?
 - Should a remux ever be offered for a container the tool can decode but whose streams it does not
   fully support, or is the conservative skip boundary absolute?
 - How should guidance describe a declared-but-empty metadata track, which is accurate to report
   yet carries no payload and is a strong candidate for safe automatic handling?
+
+## Reversible quarantine for unresolvable media
+
+### The problem it solves
+
+A collection containing permanently damaged media returns a health-error exit status on every
+validation, forever. That is honest, but it destroys the signal: once a collection always reports
+errors, a *newly* appearing corruption is indistinguishable from damage the maintainer already
+knows about and has already judged. Quarantine exists to restore that distinction, not to make
+findings disappear.
+
+### It is the existing isolation pattern, not a new one
+
+`dups` established the shape: move the file aside within the collection, never delete it, record
+the move in the append-only journal, keep it reversible, and keep reporting it. `fixd` reuses that
+shape for originals superseded by a repair. Quarantine reuses it a third time, in `errs`, for
+media that cannot be repaired and has no working replacement.
+
+The three trees are distinguished by one question — does a usable version of this content exist in
+the active folders?
+
+| Tree | Usable version exists? | Disposition |
+| --- | --- | --- |
+| `dups` | yes, byte-identical or content-identical | removable after evidence and ceremony |
+| `fixd` | yes, a repaired replacement | authentic bytes; removable only after ceremony |
+| `errs` | **no** | never removable automatically; needs human judgment |
+
+### Why it is not an ignore rule
+
+ADR 0058 forbids converting a health finding into ignore configuration, and quarantine must not
+become one by the back door. The distinction is precise: an ignore rule makes pymo **stop
+looking**, while quarantine makes pymo **keep looking and report separately**. A quarantined file
+is still discovered, still validated when asked, still hashed for preservation, and still carries
+the finding code that justified its isolation in the journal. Nothing is forgotten; the shelf is
+labelled.
+
+### Preservation is unaffected
+
+Because quarantine moves a file within the collection, directional verification continues to find
+and account for its bytes exactly as it does for `dups` today. No new evidence layer, no journal
+consultation, and no special verification logic is required.
+
+### Exit status
+
+Fresh validation of the active media reports what is true of the active media. Once damaged files
+are quarantined, the active set genuinely has no error-severity findings, so status 0 is accurate
+rather than generous. Two rules keep that honest:
+
+- every validation run prints a standing quarantine summary — how many files are held, and the
+  finding codes that put them there — whether or not anything else is reported;
+- an explicit strict mode re-validates the quarantined media and returns status 1 if any of it
+  still reports an error, so the stricter question remains askable at any time.
+
+The existing contract is otherwise unchanged: 0 means no error-severity finding in scope, 1 means
+health errors, 2 means the command could not run safely.
+
+### Command shape
+
+Quarantine follows every existing mutating command: dry run by default, `--apply` to act, `--undo`
+to restore, complete preflight before mutation, descriptor-relative atomic no-replace moves,
+post-apply verification, and one journal entry per action recording the finding code that
+justified it. Eligibility should require a **fresh** validation error rather than cached health,
+for the same reason migration sign-off requires fresh evidence: an old failure does not prove the
+bytes are still unreadable now.
+
+### Open questions
+
+- Should quarantine act only on files a fresh validation reports as errors, or should the
+  maintainer be able to nominate a specific file explicitly?
+- Should quarantining a file require that a repair was attempted and failed, or is it independent?
+- Should the standing quarantine summary appear in `scan` output as well, so a first-run report
+  discloses held media without a validation pass?
+- Does an `errs` file ever leave the collection, and if so, does that route through the same
+  irreversible finalization ceremony as duplicate disposal?
 
 ## Organizing files beyond pictures and video
 

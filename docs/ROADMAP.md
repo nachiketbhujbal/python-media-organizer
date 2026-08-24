@@ -207,7 +207,16 @@ Sequenced after detection, without release numbers yet, in this order:
   same evidence-gated finalization ceremony as duplicate disposal;
 - still-image terminator completion for images whose rows all decode and whose only defect is the
   absent end-of-image marker, with the preservation consequence of altered bytes resolved before
-  implementation rather than discovered afterwards.
+  implementation rather than discovered afterwards;
+- reversible quarantine of unresolvable media into `errs`, restoring the meaning of a clean
+  validation status without ever converting a finding into ignore policy, with a standing
+  quarantine summary on every run and a strict mode that re-checks held media.
+
+Two new four-character isolation trees accompany that sequence, each mirroring the `pics`/`vids`
+layout used by `dups`: `fixd` holds originals superseded by a repair, and `errs` holds media that
+could not be repaired and has no working replacement. Both stay inside the collection so
+directional verification keeps accounting for their bytes with no new machinery, and neither is
+ever emptied automatically.
 
 ## Later promoted work
 
