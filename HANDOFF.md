@@ -218,6 +218,16 @@ Completion is only eligible for human sign-off over stable namespace-visible
 collection content; it neither proves whole-device recovery nor authorizes
 automatic deletion.
 
+Version 0.5.4 records multi-assistant repository coordination in ADR 0077 and
+reconciles the overlapping research and roadmap planning records so each subject
+has one home. `AGENTS.md` remains the only authoritative instruction file, a
+tool-specific entry point states no rule of its own, an assistant branch carries
+a `claude/` or `codex/` prefix that the merge commit preserves, ADR numbers are
+claimed in a branch's first commit, each assistant adversarially reviews the
+other's pull request by default, and every subagent reads `AGENTS.md` and
+`HANDOFF.md` completely. Runtime behavior, packaging, configuration, and tests
+are unchanged.
+
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
 behavior. Version 0.3.18 prefixes every physical line of normal human-readable
@@ -1106,6 +1116,17 @@ key remains the scoped Git transport credential. GitHub's
 branches are removed automatically; local branch deletion and remote-tracking
 pruning remain local maintenance. See `docs/CONTRIBUTING.md` for the safe
 sole-maintainer ruleset.
+
+An AI assistant's branch carries its own prefix, `claude/<type>/<slug>` or
+`codex/<type>/<slug>`, adding the target version as `<type>/v<x.y.z>-<slug>`
+when the work is scheduled for a release. The merge commit preserves that name,
+so attribution stays visible without changing the one-line, maintainer-authored
+commit convention. A branch claims the next free `docs/adr/` number in its first
+commit and names it in the pull request so parallel assistant branches cannot
+collide. Each assistant adversarially reviews the other's pull request before
+merge by default; the maintainer may waive a review, and a waived review is
+recorded in `docs/CODE_REVIEW.md` as follow-up debt rather than skipped
+silently. ADR 0077 is the durable decision.
 
 GitHub's ruleset and classic branch-protection APIs currently return HTTP 403
 because the repository is private under GitHub Free. The repository must remain

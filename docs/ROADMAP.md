@@ -180,16 +180,19 @@ device avoids additional reads from degraded media but is not an independent
 backup and requires enough free capacity for both trees and derived cache
 state.
 
-### Planned 0.5 continuation
+### Version 0.5 continuation
 
-Version 0.5 delivered directional preservation verification. The remaining proposed 0.5 work is
-patch-level correctness over the same evidence, not a new subsystem.
+Version 0.5 delivered directional preservation verification. The remaining 0.5 work is one
+documentation release plus patch-level correctness over the same evidence, not a new subsystem.
 
 | Version | Primary purpose | Intended result | Status |
 | --- | --- | --- | --- |
-| 0.5.4 | Container and extension truthfulness | Report a video whose container family disagrees with its filename extension, comparing the ffprobe demuxer family against the family implied by the extension during standard validation and reusing the existing `extension_content_mismatch` warning at no extra probing cost. Recognize transport streams as ordinary supported video, with the local content signature authoritative for the `.ts` extension because it is also the conventional TypeScript extension. Compare families rather than exact names so shared-demuxer pairs do not false-positive, keep the finding a warning that does not change exit status, and state in the ADR which container pairs the method deliberately cannot distinguish. | Proposed |
+| 0.5.4 | Coordination and planning records | Record the multi-assistant repository coordination decision in one ADR, keep its conventions in the single authoritative instruction file rather than in a tool-specific entry point, and reconcile the overlapping research and roadmap planning records so each subject has one home. Runtime behavior, packaging, configuration, and tests are unchanged. | Released |
+| 0.5.5 | Media-extension classification severity | Stop reporting a non-media file that merely bears a configured media extension as a decode error at failing exit status. Let a meaningful non-media content signature outrank the extension where discovery currently trusts the extension alone, keep genuine media classified as media, and state the outcome for a machine where the local content-signature utility is unavailable. | Planned |
+| 0.5.6 | Container and extension truthfulness | Report a video whose container family disagrees with its filename extension, comparing the ffprobe demuxer family against the family implied by the extension during standard validation and reusing the existing `extension_content_mismatch` warning at no extra probing cost. Compare families rather than exact names so shared-demuxer pairs do not false-positive, require a confident probe so a raw elementary stream is not accused, keep the finding a warning that does not change exit status, and place it where a full-decode failure cannot discard it. Transport streams are already configured supported video; their classification rests on the extension unless a meaningful non-media signature contradicts it, because no reliable local content signature identifies them in practice, and ffprobe supplies the authoritative container identity at validation time. State in the ADR which container pairs the method deliberately cannot distinguish. | Planned |
 
-Release numbers are assigned by the maintainer; `0.5.4` above is a proposal, not a commitment.
+Release numbers are assigned by the maintainer. The 0.5.5 and 0.5.6 rows are planned work, not
+committed dates.
 
 Sequenced after detection, accepted in direction but without a release number:
 
@@ -223,7 +226,7 @@ These have an accepted product direction but no release number yet:
   actions, including reversible quarantine planning for media that cannot be
   decoded, while never converting damage into an ignore rule or claiming an
   unsupported format is corrupt; reversible extension correction is sequenced
-  separately under "Planned 0.5 continuation" above;
+  separately under "Version 0.5 continuation" above;
 - migration orchestration over a declared baseline/working-copy pair, followed
   later by a resumable queue manifest for multiple collections with capacity,
   case-collision, copy-completeness, validation, transformation, preservation,

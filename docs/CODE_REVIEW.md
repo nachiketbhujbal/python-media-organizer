@@ -267,6 +267,9 @@ The same adversarial method was repeated after the first validation release.
 - `0.5.3`: combine fresh exact-byte, displayed-image, and decoded-video
   evidence only after both declared namespaces remain stable through a final
   pass, without claiming whole-device recovery or authorizing deletion.
+- `0.5.4`: record the multi-assistant coordination decision in one ADR, keep
+  its conventions in the authoritative instruction file, and reconcile the
+  overlapping planning records without changing runtime behavior.
 
 ## Independent review evidence
 

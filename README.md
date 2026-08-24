@@ -838,4 +838,7 @@ See the [documentation index](docs/README.md) for the release
 [changelog](docs/CHANGELOG.md), [package architecture](docs/ARCHITECTURE.md),
 [architecture decisions](docs/adr/README.md), and
 [adversarial review ledger](docs/CODE_REVIEW.md). `HANDOFF.md` records the
-current engineering state and compatibility details.
+current engineering state and compatibility details. `AGENTS.md` is the
+authoritative instruction file for coding agents; tool-specific entry points
+delegate to it and state no rule of their own, and ADR 0077 records the
+multi-assistant coordination model.

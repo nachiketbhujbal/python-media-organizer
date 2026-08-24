@@ -2,6 +2,36 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.4 - 2026-08-24
+
+- Record multi-assistant repository coordination in ADR 0077: `AGENTS.md` is the
+  only authoritative instruction file, a tool-specific entry point may point at
+  it but states no rule of its own, an assistant branch carries a `claude/` or
+  `codex/` prefix that the merge commit preserves, ADR numbers are claimed in a
+  branch's first commit, each assistant adversarially reviews the other's pull
+  request by default, and every subagent reads `AGENTS.md` and `HANDOFF.md`
+  completely because imported context is not inherited.
+- Add those conventions to the `AGENTS.md` development-workflow list and reduce
+  the repository `CLAUDE.md` to a delegating entry point, so the rules have one
+  home rather than two.
+- Record media truthfulness, damage, and remediation as one research subject,
+  covering terminology, validation-remediation actionability, container and
+  extension truthfulness, and the deliberately deferred repair, container
+  conversion, and quarantine directions.
+- Record duplicate finalization and collection history, migration orchestration
+  and queues, organizing files beyond pictures and video, and persistent
+  diagnostic logging as separate research subjects with one home each.
+- Reconcile those overlapping planning records to a single section level and
+  close the AI-tool repository coordination question with a pointer to ADR
+  0077, retaining only its unresolved shared-directory part.
+- Correct the container and extension truthfulness roadmap row, which described
+  a local content signature as authoritative for transport streams, and
+  retarget it to 0.5.6; schedule 0.5.5 for the media-extension classification
+  severity defect.
+- This release deliberately carries both the coordination decision and the
+  planning-record reconciliation as one documentation purpose; runtime
+  behavior, packaging, configuration, and tests are unchanged.
+
 ## 0.5.3 - 2026-08-23
 
 - Add the final `layered-exact-preservation` verdict that accounts for each
