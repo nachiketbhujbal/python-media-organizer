@@ -180,6 +180,29 @@ device avoids additional reads from degraded media but is not an independent
 backup and requires enough free capacity for both trees and derived cache
 state.
 
+### Planned 0.5 continuation
+
+Version 0.5 delivered directional preservation verification. The remaining proposed 0.5 work is
+patch-level correctness over the same evidence, not a new subsystem.
+
+| Version | Primary purpose | Intended result | Status |
+| --- | --- | --- | --- |
+| 0.5.4 | Container and extension truthfulness | Report a video whose container family disagrees with its filename extension, comparing the ffprobe demuxer family against the family implied by the extension during standard validation and reusing the existing `extension_content_mismatch` warning at no extra probing cost. Recognize transport streams as ordinary supported video, with the local content signature authoritative for the `.ts` extension because it is also the conventional TypeScript extension. Compare families rather than exact names so shared-demuxer pairs do not false-positive, keep the finding a warning that does not change exit status, and state in the ADR which container pairs the method deliberately cannot distinguish. | Proposed |
+
+Release numbers are assigned by the maintainer; `0.5.4` above is a proposal, not a commitment.
+
+Sequenced after detection, accepted in direction but without a release number:
+
+- a separate narrow command that corrects a false extension, changing no bytes, journaled as a
+  reversible rename distinguished from a deterministic rename, and ordered so that validation
+  reports the mismatch, correction fixes it, and only then do organization and renaming run. Its
+  placement in the command chain and its name are still open.
+
+Everything else explored alongside this work — isolation folders for damaged media, byte-changing
+repair, container conversion, quarantine, and the preservation consequences of each — remains
+**research rather than schedule** and is recorded under "Media truthfulness, damage, and
+remediation" in [RESEARCH.md](RESEARCH.md). None of it is approved for implementation.
+
 ## Later promoted work
 
 These have an accepted product direction but no release number yet:
@@ -205,6 +228,9 @@ These have an accepted product direction but no release number yet:
   later by a resumable queue manifest for multiple collections with capacity,
   case-collision, copy-completeness, validation, transformation, preservation,
   quarantine, and final naming checkpoints;
+- categorization of collection files beyond pictures and video, keeping tool-owned state and
+  unrecognized files untouched, with the open design questions recorded in
+  [RESEARCH.md](RESEARCH.md);
 - a task-oriented root README readability and information-architecture sweep,
   including a table of contents, linkable status and command sections, less
   repetition, and links to detailed version, roadmap, and research records

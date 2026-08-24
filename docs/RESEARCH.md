@@ -411,6 +411,262 @@ marketing setting.
 - Model licenses and datasets must be reviewed separately from inference
   runtime licenses before any AI feature ships.
 
+## Media truthfulness, damage, and remediation
+
+**Status: research only.** Nothing in this section is scheduled except the container and extension
+detection work promoted to the roadmap. Isolation folders, byte-changing repair, container
+conversion, and quarantine are recorded here for later evaluation and must not be implemented on
+the strength of this record alone. Several questions below are deliberately unresolved.
+
+### What prompted it
+
+Two observations from local acceptance work, stated generically.
+
+First, validation detects a still image whose decoded format disagrees with its filename extension
+and reports `extension_content_mismatch`, but the equivalent video check is only category-level:
+classification asks whether the detected content and the extension are both video, so an MPEG
+transport stream named `.mp4`, a Matroska named `.mp4`, or a QuickTime file named `.webm` are all
+accepted in silence. A real file of the first kind decoded without a single error and played
+correctly in any player supporting its true container. Nothing about it was damaged. The report was
+simply silent about the one thing that was untrue: its name.
+
+Second, two still images failed full decode with the same finding code and the same exit status
+despite being nothing alike. Both were truncated. One lost only its end-of-image terminator, so
+every row of pixel data decodes and the picture is visually complete. The other lost the terminator
+*and* a substantial share of its trailing scan data, so it renders a large flat region where image
+content used to be. The same two-byte repair would make either file conform to the format; only in
+the first case does that produce a file with nothing missing.
+
+### Two independent axes
+
+Damage resisted a single classification because two separate questions are being asked:
+
+| | Content complete | Content provably incomplete |
+| --- | --- | --- |
+| **Structurally valid** | healthy | valid but permanently lossy |
+| **Structurally invalid** | repairable to fully healthy | repairable only to valid-but-lossy |
+
+Structural validity is about conformance to the format specification, and is often repairable.
+Content completeness is about whether data is provably gone, and is never repairable. A file can be
+in any of the four states, and remediation only ever moves a file leftward along the structural
+axis; it can never move it upward.
+
+Any future taxonomy, folder, report, or command must keep these axes separate. Conflating them is
+what makes "corrupt" an unhelpful word.
+
+### Terminology
+
+- **Conversion** is the umbrella term for producing a new file in a different format. Both kinds
+  below are conversions.
+- **Remux** repackages: the encoded bitstreams are copied unchanged into a different container.
+  Decoded output is bit-for-bit identical, so a remuxed file can be *proven* equivalent under the
+  existing strict decoded-playback definition.
+- **Transcode** re-encodes: streams are decoded and recompressed. Decoded output is not identical
+  and quality is lost. A transcode can never satisfy the strict playback definition, so discarding
+  a transcode's original is genuine, unrecoverable loss.
+- **Repair** is distinct from conversion. A repair corrects a file that violates its own format so
+  that conforming decoders accept it. The container and encoding are unchanged.
+
+The distinction is load-bearing rather than pedantic. Correcting a false extension changes no
+bytes. A repair changes bytes to fix a defect in the file. A remux changes bytes while provably
+preserving essence. A transcode changes bytes and provably loses some. Those four operations carry
+four different risks and must never be offered through one undifferentiated interface.
+
+### Container and extension truthfulness
+
+Standard validation already runs ffprobe on every video, so the container family is available at no
+additional cost. The check compares the demuxer family ffprobe reports against the family implied
+by the extension, reusing the existing `extension_content_mismatch` code and warning severity.
+
+The comparison must be **family-level**, never exact-string, because several extensions
+legitimately share one demuxer:
+
+| Extension | Expected `format_name` family |
+| --- | --- |
+| `.mp4`, `.m4v`, `.mov`, `.3gp` | `mov,mp4,m4a,3gp,3g2,mj2` |
+| `.mkv`, `.webm` | `matroska,webm` |
+| `.ts`, `.m2ts`, `.mts` | `mpegts` |
+| `.avi` | `avi` |
+| `.wmv` | `asf` |
+| `.flv` | `flv` |
+| `.mpg`, `.mpeg` | `mpeg` |
+
+Consequences the implementing ADR must state rather than leave to be discovered:
+
+- MP4 versus MOV, and Matroska versus WebM, are **not distinguishable** by this method, and that is
+  acceptable — both pairs are genuinely one container family, and a name inside its own family is
+  not a lie worth reporting.
+- `.ts` versus `.m2ts`/`.mts` are also reported identically as `mpegts`, although BDAV streams use
+  192-byte packets with a timestamp prefix while plain transport streams use 188-byte packets.
+  Distinguishing them requires packet-level inspection and is out of scope; the detector must not
+  claim a precision it does not have.
+- A mismatch is a **warning**, never an error. A misdescribed container is not damage, the media is
+  not harmed, and exit status must not change.
+
+### Recognizing transport streams, and the `.ts` hazard
+
+Transport streams are ordinary, valid video. A collection may legitimately contain nothing else,
+and such files belong in the organized video folder like any other supported video. Recognition
+should therefore extend to them directly rather than treating them as an anomaly.
+
+One constraint makes this extension unlike the others: **`.ts` is also the conventional extension
+for TypeScript source files.** A tool that trusts the extension would sweep source code into a
+video folder. For this extension specifically, the local content signature must be authoritative
+and the extension itself must carry no classification weight on its own. Before implementation,
+confirm how the packaged classification policy and its content-signature-first fallback currently
+treat both an unlisted media extension and a text file bearing a media extension, because that
+determines whether adding `.ts` is a configuration change or a policy change.
+
+### Correcting a false extension
+
+Correcting an extension changes no bytes, is trivially reversible, and is the safest possible
+remediation. It should be a **separate narrow command**, not an option on the deterministic
+renamer: the two change different kinds of truth, since renaming decides what a file is *called*
+while correction decides what a file *claims to be*, and folding them together would let one
+silently perform the other.
+
+The safe order is validate, then correct extensions, then organize, then rename, so that every
+later stage sees a file whose name no longer lies and the deterministic renamer never has to
+preserve a false extension. Its exact placement in the command chain, and its name, remain open.
+
+Constraints: act only when the content signature is confident and the canonical extension is
+unambiguous; leave ambiguous or unrecognized detections alone; dry run by default with an explicit
+apply; record an ordinary reversible rename in the collection journal, distinguished from a
+deterministic rename so history can answer what was corrected as opposed to what was renamed;
+verify after apply; reuse existing collision naming.
+
+### What an isolation folder would mean
+
+`pics`, `vids`, and `dups` established a pattern: move a file aside within the collection, never
+delete it, record the move in the append-only journal, keep it reversible, and keep reporting it.
+Extending that pattern to damaged media is plausible but is **not decided**, and the naming
+exploration below is recorded so it is not repeated from scratch.
+
+The candidate principle is **one folder per disposition, not per operation.** `dups` is fed by two
+different commands with different matching rules and shares one folder, splitting by media type
+rather than by which finder produced the file, because both produce the same disposition:
+redundant, removable after evidence. Where dispositions genuinely differ — particularly in how
+dangerous it is to empty the folder — separate folders are justified on the same reasoning.
+
+A second candidate principle is that **isolation is only for files proven not-good.** Anything
+unproven should stay in the active folders with a standing warning, because removing possibly
+perfect media from active use is a worse error than a noisy report.
+
+Applying both principles, a folder asserting data loss would need to *exclude*:
+
+- **undecodable but unproven** files, such as a destroyed header or an unreadable index. The tool
+  can prove it cannot decode them; it cannot prove data is gone, and a specialist tool may recover
+  them entirely. Asserting loss here would be a false claim.
+- **unsupported formats**, where the format is recognized but the local runtime has no decoder.
+  Nothing is wrong with those files.
+- **merely mislabeled** files, which are healthy and need only a rename.
+
+If undecodable-but-unproven media should also be shelved, it requires its own folder and an honest
+name meaning *cannot be verified* rather than *is broken*. That is a separate decision.
+
+Names considered for the proven-loss folder, with the reasoning: `errs` and `fail` describe the
+event or the report rather than the file's condition; `bugs` belongs to software defects, not
+media; `warn` is a severity and the wrong one; `junk` implies worthlessness and invites deletion of
+files that must never be deleted automatically; `dead` implies unopenable, which is untrue of a
+file that still renders most of its content; `lost` reads as missing files rather than damaged
+ones; `gaps` fits truncation but not corruption. `loss` describes the condition itself, is accurate
+for both partial and total damage, claims nothing about worth, and carries permanence. It is the
+leading candidate but is not adopted.
+
+Names considered for a folder holding originals superseded by a byte-changing operation: `orig`,
+`prev`, `past`, `hist`, `asis`, `fixd`, `muxd`, and `redo`. `redo` must be rejected outright
+because the tool already exposes `--undo` on every mutating command and a `redo` folder would read
+as an operation queue. `fixd` and `muxd` are precise about the operation but narrow, and would
+multiply as operations are added. `prev` and `asis` stay accurate across any operation but say less
+about why the file was kept. No selection is made.
+
+### Byte-changing remediation and its preservation consequences
+
+Any operation that changes bytes creates a preservation question, and one case is easy to get
+wrong.
+
+Repairing a truncated image in place would be **strictly worse than leaving it broken**. The
+repaired file has different bytes, so under directional verification the original stream becomes
+absent — and it cannot be rescued by the exact displayed-image layer either, because the *source*
+file is precisely the one that fails to decode, and a source that cannot be decoded can never
+receive an exact-pixel claim. The result would convert a reported health finding into an
+unaccounted byte stream.
+
+Two candidate resolutions, neither adopted:
+
+1. **Retain the original** in a dedicated folder, with the journal recording the lineage. Simple,
+   consistent with the existing pattern, and requires no new evidence type.
+2. **Prefix containment as evidence.** A file repaired by appending a terminator contains the
+   original byte stream as an exact leading prefix, which is cheaply provable and would let
+   verification account for the original without retaining a second copy. This would be a genuinely
+   new evidence layer needing its own contract, algorithm identifier, and ADR, and should not be
+   adopted merely to save storage.
+
+For container conversion specifically, the existing layered contract already models the outcome
+correctly and needs no new machinery: if the original is retained its bytes are still present and
+the byte layer accounts for it, and if the original is discarded the strict decoded-playback layer
+represents it instead, separately and honestly, without claiming container bytes or metadata
+survived. The unresolved question is not verification but **primacy** — for a conversion the
+original is authentic and fully valid while the derivative merely plays in more software, so it is
+genuinely unclear which of the two belongs in the organized media folder and which belongs aside.
+That question does not arise for a repair, where the repaired file is unambiguously the better one.
+
+### Test expectations for the scheduled detection work
+
+Synthetic fixtures only, generated at test time and removed afterwards: a short clip muxed into a
+transport stream but named `.mp4`; the same clip in Matroska named `.mp4`; correctly named `.mp4`,
+`.mov`, `.mkv`, and `.ts` controls that must produce no finding, with the `.mov` control
+specifically proving the shared MP4/MOV family does not false-positive; a text file bearing a `.ts`
+extension proving source code is never classified as video. Fixtures must use FFmpeg's native
+encoders rather than `libx264`, which finding CI-004 established is absent from the Fedora CI
+image. Reporting must create no media, action history, duplicate tree, or cache state.
+
+### Open questions
+
+- Where exactly does extension correction sit in the command chain, and what is it called?
+- Is adding `.ts` recognition a configuration change or a classification-policy change, given the
+  TypeScript collision?
+- Should damaged media be isolated into a folder at all, or reported in place indefinitely?
+- If isolated, does undecodable-but-unproven media get its own folder separate from proven loss?
+- For a container conversion, is the authentic original or the widely playable derivative the
+  primary file in the organized folder?
+- Is prefix containment worth adopting as a preservation evidence layer, or does retaining an
+  original make it unnecessary?
+- Should a partially readable file whose surviving content is still viewable be isolated at all,
+  given that only the maintainer can judge whether the surviving portion is worth keeping?
+
+## Organizing files beyond pictures and video
+
+Organization currently sorts pictures into `pics`, videos into `vids`, and deliberately leaves
+every other file at the collection root untouched. That behavior is correct and must remain the
+safe default. Local use of rescued collections surfaced ordinary text and markup documents sitting
+at the root alongside media, which raises the question of whether categorization should eventually
+extend past the two media kinds.
+
+The direction is accepted as potentially useful. No design exists, and none should be invented
+before the maintainer has a clear picture of the categories worth having.
+
+Constraints any future design must satisfy:
+
+- **Tool-owned state is never categorized or moved.** The collection action log, the derived cache
+  and its lock, staging databases, collection configuration, and explicitly requested log files are
+  pymo's own artifacts. Packaged ignore defaults already protect them and must continue to.
+- The four-character folder convention would need a vocabulary for any additional category, and
+  each new folder inherits the same protection, collision, verification, and undo obligations that
+  `pics`, `vids`, and `dups` already carry.
+- Categorization must keep using content-signature-first classification with extension fallback,
+  never extension alone, exactly as media classification does today.
+- Files that remain unknown or ambiguous must keep their current behavior of staying at the root
+  untouched. A catch-all folder that silently absorbs anything unrecognized would be worse than
+  the present honest default.
+- Adding a category in a later release changes where an already organized file belongs. The undo
+  contract is driven by recorded actions rather than current policy, so recategorization must not
+  retroactively reinterpret history.
+
+Open questions: which categories genuinely earn a folder; whether documents belong in a media
+collection tool at all or are better left alone; whether a catch-all is ever desirable; and how a
+newly added category should treat files a previous release already left at the root.
+
 ## Open research questions
 
 ### Duplicate finalization and collection history
