@@ -182,41 +182,26 @@ state.
 
 ### Planned 0.5 continuation
 
-Version 0.5 delivered directional preservation verification. The remaining 0.5 work is patch-level
-correctness and remediation over the same evidence, not a new subsystem. Full design, family
-comparison table, ordering constraints, test plan, required ADRs, and open questions are recorded
-under "Container truthfulness, media remediation, and safe transformation" in
-[RESEARCH.md](RESEARCH.md).
+Version 0.5 delivered directional preservation verification. The remaining proposed 0.5 work is
+patch-level correctness over the same evidence, not a new subsystem.
 
 | Version | Primary purpose | Intended result | Status |
 | --- | --- | --- | --- |
-| 0.5.4 | Video container detection | Compare the ffprobe demuxer family against the family implied by the extension during standard validation, reusing the existing `extension_content_mismatch` warning at no extra probing cost. Compare families rather than exact names so shared-demuxer pairs do not false-positive, keep the finding a warning that does not change exit status, and state in the ADR which container pairs the method deliberately cannot distinguish. | Planned |
+| 0.5.4 | Container and extension truthfulness | Report a video whose container family disagrees with its filename extension, comparing the ffprobe demuxer family against the family implied by the extension during standard validation and reusing the existing `extension_content_mismatch` warning at no extra probing cost. Recognize transport streams as ordinary supported video, with the local content signature authoritative for the `.ts` extension because it is also the conventional TypeScript extension. Compare families rather than exact names so shared-demuxer pairs do not false-positive, keep the finding a warning that does not change exit status, and state in the ADR which container pairs the method deliberately cannot distinguish. | Proposed |
 
-The 0.5.4 number is proposed, not confirmed; release numbers are assigned by the maintainer.
+Release numbers are assigned by the maintainer; `0.5.4` above is a proposal, not a commitment.
 
-Sequenced after detection, without release numbers yet, in this order:
+Sequenced after detection, accepted in direction but without a release number:
 
-- actionable remediation guidance attached to findings, report-only and path-private, never
-  becoming ignore policy and never describing an unsupported format as corrupt;
-- reversible extension normalization, which changes no bytes, is journaled as an ordinary
-  reversible rename, and must precede any transformation so a mislabeled container is never baked
-  into organized layout or deterministic names;
-- container remux as a journaled transformation that never deletes: the original moves to a
-  retained tree, directional verification continues to account for its bytes with no new
-  machinery, and irreversibility begins only when the retained original is discarded through the
-  same evidence-gated finalization ceremony as duplicate disposal;
-- still-image terminator completion for images whose rows all decode and whose only defect is the
-  absent end-of-image marker, with the preservation consequence of altered bytes resolved before
-  implementation rather than discovered afterwards;
-- reversible quarantine of unresolvable media into `errs`, restoring the meaning of a clean
-  validation status without ever converting a finding into ignore policy, with a standing
-  quarantine summary on every run and a strict mode that re-checks held media.
+- a separate narrow command that corrects a false extension, changing no bytes, journaled as a
+  reversible rename distinguished from a deterministic rename, and ordered so that validation
+  reports the mismatch, correction fixes it, and only then do organization and renaming run. Its
+  placement in the command chain and its name are still open.
 
-Two new four-character isolation trees accompany that sequence, each mirroring the `pics`/`vids`
-layout used by `dups`: `fixd` holds originals superseded by a repair, and `errs` holds media that
-could not be repaired and has no working replacement. Both stay inside the collection so
-directional verification keeps accounting for their bytes with no new machinery, and neither is
-ever emptied automatically.
+Everything else explored alongside this work — isolation folders for damaged media, byte-changing
+repair, container conversion, quarantine, and the preservation consequences of each — remains
+**research rather than schedule** and is recorded under "Media truthfulness, damage, and
+remediation" in [RESEARCH.md](RESEARCH.md). None of it is approved for implementation.
 
 ## Later promoted work
 
