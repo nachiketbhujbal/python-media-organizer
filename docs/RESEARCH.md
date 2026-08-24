@@ -414,9 +414,10 @@ marketing setting.
 ## Media truthfulness, damage, and remediation
 
 **Status: research only.** Nothing in this section is scheduled except the container and extension
-detection work promoted to the roadmap. Isolation folders, byte-changing repair, container
-conversion, and quarantine are recorded here for later evaluation and must not be implemented on
-the strength of this record alone. Several questions below are deliberately unresolved.
+detection work promoted to the roadmap. Validation remediation guidance, isolation folders,
+byte-changing repair, container conversion, and quarantine are all recorded here for later
+evaluation and must not be implemented on the strength of this record alone. Several questions
+below are deliberately unresolved.
 
 ### What prompted it
 
@@ -471,6 +472,28 @@ The distinction is load-bearing rather than pedantic. Correcting a false extensi
 bytes. A repair changes bytes to fix a defect in the file. A remux changes bytes while provably
 preserving essence. A transcode changes bytes and provably loses some. Those four operations carry
 four different risks and must never be offered through one undifferentiated interface.
+
+### Validation remediation and guidance
+
+Validation should eventually answer “what can I safely do next?” without
+silently repairing, ignoring, or deleting evidence. The remediation design
+should classify findings by actionability:
+
+- an extension/content mismatch can support a separately reviewed, reversible
+  extension-normalization plan when decoder and signature evidence agree;
+- a decode failure may support reversible quarantine into a dedicated review
+  tree, but cannot be described as repaired and must remain represented in
+  subsequent baseline comparison;
+- an unsupported recognized format is unverified, not corrupt; resolving it
+  requires an explicit, locally installed decoder with reviewed provenance or
+  continued exact-byte preservation; and
+- informational stream findings need an explanation and usually no mutation.
+
+Remediation must remain dry-run-first, action-journaled, collision-safe, and
+separate from ordinary validation. It must define ordering with organization
+and renaming, retain the original finding and evidence, and recommend fresh
+validation plus migration verification afterward. Quarantine must never become
+an implicit ignore list.
 
 ### Container and extension truthfulness
 
@@ -635,41 +658,7 @@ image. Reporting must create no media, action history, duplicate tree, or cache 
 - Should a partially readable file whose surviving content is still viewable be isolated at all,
   given that only the maintainer can judge whether the surviving portion is worth keeping?
 
-## Organizing files beyond pictures and video
-
-Organization currently sorts pictures into `pics`, videos into `vids`, and deliberately leaves
-every other file at the collection root untouched. That behavior is correct and must remain the
-safe default. Local use of rescued collections surfaced ordinary text and markup documents sitting
-at the root alongside media, which raises the question of whether categorization should eventually
-extend past the two media kinds.
-
-The direction is accepted as potentially useful. No design exists, and none should be invented
-before the maintainer has a clear picture of the categories worth having.
-
-Constraints any future design must satisfy:
-
-- **Tool-owned state is never categorized or moved.** The collection action log, the derived cache
-  and its lock, staging databases, collection configuration, and explicitly requested log files are
-  pymo's own artifacts. Packaged ignore defaults already protect them and must continue to.
-- The four-character folder convention would need a vocabulary for any additional category, and
-  each new folder inherits the same protection, collision, verification, and undo obligations that
-  `pics`, `vids`, and `dups` already carry.
-- Categorization must keep using content-signature-first classification with extension fallback,
-  never extension alone, exactly as media classification does today.
-- Files that remain unknown or ambiguous must keep their current behavior of staying at the root
-  untouched. A catch-all folder that silently absorbs anything unrecognized would be worse than
-  the present honest default.
-- Adding a category in a later release changes where an already organized file belongs. The undo
-  contract is driven by recorded actions rather than current policy, so recategorization must not
-  retroactively reinterpret history.
-
-Open questions: which categories genuinely earn a folder; whether documents belong in a media
-collection tool at all or are better left alone; whether a catch-all is ever desirable; and how a
-newly added category should treat files a previous release already left at the root.
-
-## Open research questions
-
-### Duplicate finalization and collection history
+## Duplicate finalization and collection history
 
 Duplicate detection and isolation must remain non-deleting. A later
 finalization command may deliberately dispose of reviewed content, but it needs
@@ -707,53 +696,7 @@ outcome. It must become non-complete when removing `dups` would leave any source
 content unaccounted and should provide the evidence gate consumed by a later
 duplicate-finalization command.
 
-### Persistent diagnostic logging
-
-Collection-local diagnostic logs are useful acceptance and operational
-evidence, but making them automatic would reverse the current privacy decision
-that persistent path-bearing output is opt-in. It would also create state for
-commands whose contract is report-only, complicate read-only collections and
-two-root migration verification, and require the log itself to be excluded
-consistently from scan, validation, mutation, and preservation scope.
-
-Research should compare the current explicit `--log-file PATH` behavior with a
-possible `{collection-name}-pymo.log` default plus `--no-log`. Any default must
-define append/rotation and locking behavior, failure policy, filename privacy,
-which root owns a two-collection command's log, and whether read-only commands
-may create it at all. A safer alternative may be an explicit configured log
-directory outside media collections while the append-only action journal and a
-future history command provide the durable collection audit record.
-
-Logging-level controls should also be normalized without proliferating
-ambiguous flags. Evaluate a conventional `--log-level
-{DEBUG,INFO,WARNING,ERROR,CRITICAL}` interface, a convenient `--debug` alias,
-separate console/file thresholds, and compatibility treatment for the current
-`--verbose` and `--quiet` options. The current default remains console INFO and
-explicit-file INFO, with DEBUG enabled only deliberately.
-
-### Validation remediation and guidance
-
-Validation should eventually answer “what can I safely do next?” without
-silently repairing, ignoring, or deleting evidence. The remediation design
-should classify findings by actionability:
-
-- an extension/content mismatch can support a separately reviewed, reversible
-  extension-normalization plan when decoder and signature evidence agree;
-- a decode failure may support reversible quarantine into a dedicated review
-  tree, but cannot be described as repaired and must remain represented in
-  subsequent baseline comparison;
-- an unsupported recognized format is unverified, not corrupt; resolving it
-  requires an explicit, locally installed decoder with reviewed provenance or
-  continued exact-byte preservation; and
-- informational stream findings need an explanation and usually no mutation.
-
-Remediation must remain dry-run-first, action-journaled, collision-safe, and
-separate from ordinary validation. It must define ordering with organization
-and renaming, retain the original finding and evidence, and recommend fresh
-validation plus migration verification afterward. Quarantine must never become
-an implicit ignore list.
-
-### Migration orchestration and queues
+## Migration orchestration and queues
 
 A future orchestrator could own the proven manual sequence for one or more
 collections, but naive recursive copy and unconstrained collection-level
@@ -780,7 +723,63 @@ copies, insufficient space, existing destinations, external quarantine,
 cross-filesystem moves, and the fact that two copies on one device are not
 independent backups.
 
-### AI-tool repository coordination
+## Organizing files beyond pictures and video
+
+Organization currently sorts pictures into `pics`, videos into `vids`, and deliberately leaves
+every other file at the collection root untouched. That behavior is correct and must remain the
+safe default. Local use of rescued collections surfaced ordinary text and markup documents sitting
+at the root alongside media, which raises the question of whether categorization should eventually
+extend past the two media kinds.
+
+The direction is accepted as potentially useful. No design exists, and none should be invented
+before the maintainer has a clear picture of the categories worth having.
+
+Constraints any future design must satisfy:
+
+- **Tool-owned state is never categorized or moved.** The collection action log, the derived cache
+  and its lock, staging databases, collection configuration, and explicitly requested log files are
+  pymo's own artifacts. Packaged ignore defaults already protect them and must continue to.
+- The four-character folder convention would need a vocabulary for any additional category, and
+  each new folder inherits the same protection, collision, verification, and undo obligations that
+  `pics`, `vids`, and `dups` already carry.
+- Categorization must keep using content-signature-first classification with extension fallback,
+  never extension alone, exactly as media classification does today.
+- Files that remain unknown or ambiguous must keep their current behavior of staying at the root
+  untouched. A catch-all folder that silently absorbs anything unrecognized would be worse than
+  the present honest default.
+- Adding a category in a later release changes where an already organized file belongs. The undo
+  contract is driven by recorded actions rather than current policy, so recategorization must not
+  retroactively reinterpret history.
+
+Open questions: which categories genuinely earn a folder; whether documents belong in a media
+collection tool at all or are better left alone; whether a catch-all is ever desirable; and how a
+newly added category should treat files a previous release already left at the root.
+
+## Persistent diagnostic logging
+
+Collection-local diagnostic logs are useful acceptance and operational
+evidence, but making them automatic would reverse the current privacy decision
+that persistent path-bearing output is opt-in. It would also create state for
+commands whose contract is report-only, complicate read-only collections and
+two-root migration verification, and require the log itself to be excluded
+consistently from scan, validation, mutation, and preservation scope.
+
+Research should compare the current explicit `--log-file PATH` behavior with a
+possible `{collection-name}-pymo.log` default plus `--no-log`. Any default must
+define append/rotation and locking behavior, failure policy, filename privacy,
+which root owns a two-collection command's log, and whether read-only commands
+may create it at all. A safer alternative may be an explicit configured log
+directory outside media collections while the append-only action journal and a
+future history command provide the durable collection audit record.
+
+Logging-level controls should also be normalized without proliferating
+ambiguous flags. Evaluate a conventional `--log-level
+{DEBUG,INFO,WARNING,ERROR,CRITICAL}` interface, a convenient `--debug` alias,
+separate console/file thresholds, and compatibility treatment for the current
+`--verbose` and `--quiet` options. The current default remains console INFO and
+explicit-file INFO, with DEBUG enabled only deliberately.
+
+## AI-tool repository coordination
 
 Multiple coding agents can share the project only through the same reviewed
 source, tests, roadmap, ADRs, and handoff boundaries. Tool-specific directories
@@ -790,6 +789,7 @@ local context, and conflicting generated settings all need consideration.
 Until then, the root `AGENTS.md` and project `HANDOFF.md` remain authoritative,
 and any tool-specific local handoff stays outside Git when it contains private
 acceptance data.
+## Open research questions
 
 - Which exact decoded-video normalization is most stable across FFmpeg versions
   and harmless container remuxing without collapsing meaningful timing or audio

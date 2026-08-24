@@ -220,10 +220,10 @@ These have an accepted product direction but no release number yet:
   coverage, clearly labels the verdict as simulated, and reports whether
   finalization would discard unique content;
 - validation remediation guidance that turns findings into explicit next
-  actions, including reversible extension normalization where content identity
-  is certain and reversible quarantine planning for media that cannot be
+  actions, including reversible quarantine planning for media that cannot be
   decoded, while never converting damage into an ignore rule or claiming an
-  unsupported format is corrupt;
+  unsupported format is corrupt; reversible extension correction is sequenced
+  separately under "Planned 0.5 continuation" above;
 - migration orchestration over a declared baseline/working-copy pair, followed
   later by a resumable queue manifest for multiple collections with capacity,
   case-collision, copy-completeness, validation, transformation, preservation,
