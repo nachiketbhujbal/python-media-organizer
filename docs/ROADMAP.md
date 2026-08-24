@@ -180,6 +180,35 @@ device avoids additional reads from degraded media but is not an independent
 backup and requires enough free capacity for both trees and derived cache
 state.
 
+### Planned 0.5 continuation
+
+Version 0.5 delivered directional preservation verification. The remaining 0.5 work is patch-level
+correctness and remediation over the same evidence, not a new subsystem. Full design, family
+comparison table, ordering constraints, test plan, required ADRs, and open questions are recorded
+under "Container truthfulness, media remediation, and safe transformation" in
+[RESEARCH.md](RESEARCH.md).
+
+| Version | Primary purpose | Intended result | Status |
+| --- | --- | --- | --- |
+| 0.5.4 | Video container detection | Compare the ffprobe demuxer family against the family implied by the extension during standard validation, reusing the existing `extension_content_mismatch` warning at no extra probing cost. Compare families rather than exact names so shared-demuxer pairs do not false-positive, keep the finding a warning that does not change exit status, and state in the ADR which container pairs the method deliberately cannot distinguish. | Planned |
+
+The 0.5.4 number is proposed, not confirmed; release numbers are assigned by the maintainer.
+
+Sequenced after detection, without release numbers yet, in this order:
+
+- actionable remediation guidance attached to findings, report-only and path-private, never
+  becoming ignore policy and never describing an unsupported format as corrupt;
+- reversible extension normalization, which changes no bytes, is journaled as an ordinary
+  reversible rename, and must precede any transformation so a mislabeled container is never baked
+  into organized layout or deterministic names;
+- container remux as a journaled transformation that never deletes: the original moves to a
+  retained tree, directional verification continues to account for its bytes with no new
+  machinery, and irreversibility begins only when the retained original is discarded through the
+  same evidence-gated finalization ceremony as duplicate disposal;
+- still-image terminator completion for images whose rows all decode and whose only defect is the
+  absent end-of-image marker, with the preservation consequence of altered bytes resolved before
+  implementation rather than discovered afterwards.
+
 ## Later promoted work
 
 These have an accepted product direction but no release number yet:

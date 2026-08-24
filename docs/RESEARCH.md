@@ -411,6 +411,216 @@ marketing setting.
 - Model licenses and datasets must be reviewed separately from inference
   runtime licenses before any AI feature ships.
 
+## Container truthfulness, media remediation, and safe transformation
+
+### Why this is open
+
+Validation detects a still image whose decoded format disagrees with its filename extension and
+reports `extension_content_mismatch`. The equivalent video check is only category-level:
+classification asks whether the detected content and the extension are both video, so a transport
+stream named `.mp4`, a Matroska named `.mp4`, or a QuickTime file named `.webm` are all accepted
+in silence. Local acceptance work surfaced a real instance — a file whose bytes are an MPEG
+transport stream, whose name claims MP4, which decodes without a single error, and which the
+exact-video finder conservatively skipped because it declares an empty timed-metadata track.
+Nothing about that file is unsafe or damaged. The report was simply silent about the one thing
+that was untrue: its name.
+
+The same work surfaced two still images that fail full decode with the identical finding code and
+exit status, despite being nothing alike. In one, a large share of the image rows are genuinely
+absent and unrecoverable. In the other, every row decodes and only the two-byte end-of-image
+terminator is missing, so the picture is visually complete and strict decoders reject it on
+principle alone.
+
+Together these define one problem: pymo can prove what a file *is*, but has no vocabulary for
+telling the user what to *do* about it, and no mechanism for doing it safely.
+
+### Stage 1 — video container detection
+
+Standard validation already runs ffprobe on every video, so the container family is available at
+no additional cost. The check compares the demuxer family ffprobe reports against the family
+implied by the extension, reusing the existing `extension_content_mismatch` code and warning
+severity.
+
+The comparison must be **family-level**, never exact-string. Several extensions legitimately
+share one demuxer:
+
+| Extension | Expected `format_name` family |
+| --- | --- |
+| `.mp4`, `.m4v`, `.mov`, `.3gp` | `mov,mp4,m4a,3gp,3g2,mj2` |
+| `.mkv`, `.webm` | `matroska,webm` |
+| `.ts`, `.m2ts`, `.mts` | `mpegts` |
+| `.avi` | `avi` |
+| `.wmv` | `asf` |
+| `.flv` | `flv` |
+| `.mpg`, `.mpeg` | `mpeg` |
+
+An exact-name comparison would emit a mismatch for every legitimate `.mov`, because ffprobe
+reports the whole MP4/MOV family for all of them. Two consequences follow and should be stated in
+the implementing ADR rather than discovered later:
+
+- MP4 versus MOV, and Matroska versus WebM, are **not distinguishable** by this method. That is
+  acceptable: both pairs are genuinely the same container family, and a name inside its own family
+  is not a lie worth reporting.
+- `.ts` versus `.m2ts`/`.mts` are also reported identically as `mpegts`, even though BDAV streams
+  use 192-byte packets with a timestamp prefix while plain transport streams use 188-byte packets.
+  Distinguishing them requires packet-level inspection and is deliberately out of scope; the
+  detector should not claim a precision it does not have.
+
+A mismatch remains a **warning**, never an error. A misdescribed container is not corruption, the
+media is not damaged, and exit status must not change.
+
+### Stage 2 — actionable guidance
+
+Findings today state what is wrong. They should also state what can be done, without performing
+it. Each finding gains a short, deterministic remediation hint — for example, that a container
+mismatch can be corrected by renaming to the truthful extension, or that an image missing only its
+terminator is a candidate for completion. Guidance must never appear for cases where the safe
+action is unknown, and must never be phrased so that an unsupported format reads as corrupt.
+
+Guidance is report-only and path-private under the existing rules.
+
+### Stage 3 — reversible extension normalization
+
+Renaming a file to its truthful extension changes no bytes, is trivially reversible, and is
+already the kind of operation the renamer owns and journals. It is therefore the safest possible
+remediation and should ship before any transformation exists.
+
+Constraints:
+
+- Only when content identity is certain — a confidently detected container family with an
+  unambiguous canonical extension. An ambiguous or unrecognized detection is left alone.
+- Dry-run by default, `--apply` to act, recorded as an ordinary reversible `RENAME` action in the
+  collection journal, verified after apply, with existing collision naming.
+- Must not fight the deterministic renamer: normalization changes only the extension, never the
+  generated stem, and the two must agree on ordering so a normalized file is not renamed back.
+- Open question: whether this belongs to `rename` as an option or to a separate remediation
+  command. A separate command keeps `rename` focused, but extension normalization *is* a rename
+  and duplicating journal handling would be worse.
+
+### Stage 4 — container remux as an irreversible transformation with preserved lineage
+
+Remuxing rewrites a media stream into a different container without re-encoding. It is fast,
+loses no quality, and makes files playable in players that reject the original container. It also
+produces a **new byte stream**, which places it in a different safety class from renaming.
+
+The critical realisation is that **the existing layered preservation contract already models this
+correctly, and no new verification machinery is required**:
+
+- If the original file is retained, its byte stream is still physically present, so
+  `verify-migration` continues to account for it at the byte layer with no special knowledge.
+  The transformation is invisible to preservation, exactly as it should be.
+- If the original is later discarded, the byte layer legitimately loses that stream and the strict
+  decoded-playback layer represents it instead — which the tool already reports honestly and
+  separately, and which already refuses to describe container bytes or metadata as preserved.
+
+So the design is: **remux never deletes.** The original moves into a retained tree and the new
+file takes its place in the working layout. The operation stays fully reversible while the
+original exists — undo restores it and removes the derived file — and becomes irreversible only
+at the separate moment the retained original is discarded, which must route through the same
+quarantine-first, evidence-gated, explicitly confirmed finalization ceremony as duplicate
+disposal, and be recorded as an irreversible audit event.
+
+The action journal carries the lineage. A transformation action should record both file
+identities, the equivalence evidence that justified it (the shared versioned playback algorithm
+and the native tool runtimes that produced it), and the direction of derivation. That record is
+what lets a future collection-history view explain why two files with identical playback exist,
+and what lets a finalization command recognise that discarding the retained original is the
+irreversible step rather than a routine cleanup.
+
+A retained-originals tree fits the existing four-character folder convention as `orig`, alongside
+`pics`, `vids`, and `dups`. That is a durable layout decision and needs its own ADR; it should
+also be considered jointly with wherever duplicate finalization decides to quarantine, so the
+collection does not grow two competing holding areas.
+
+Remuxing must remain opt-in per file or per finding. It must never run automatically, never be
+implied by validation, and never be applied to media whose streams the tool does not fully
+support — the conservative unsupported-case boundaries that govern the exact-video finder apply
+unchanged.
+
+### Stage 5 — still-image terminator completion
+
+An image whose rows all decode but whose end-of-image marker is absent can be completed by
+appending the two-byte terminator. The result is a file that strict decoders accept, with pixel
+content identical to what the damaged file already produced.
+
+Eligibility must be narrow and provable: every row decodes under a permissive read, the only
+defect is the absent terminator, and the appended bytes are exactly the canonical marker. An image
+that is genuinely missing rows is **not** eligible — that damage is not repairable by completion,
+and offering it would be misleading.
+
+This carries a preservation subtlety that is easy to miss and must be handled explicitly. A
+completed file has different bytes from the original, so under directional verification the
+original byte stream becomes absent. It cannot be rescued by the exact displayed-image layer
+either, because the *source* file is precisely the one that fails to decode, and a source that
+cannot be decoded can never receive an exact-pixel claim — the layer would report unproven rather
+than covered. Repairing in place would therefore convert a reported health error into an
+unaccounted byte stream, which is a strictly worse outcome.
+
+Two candidate resolutions, both worth evaluating before implementation:
+
+1. **Retain the original**, exactly as remux does, using the same retained tree and journal
+   lineage. Simple, consistent, and requires no new evidence type.
+2. **Prefix containment as evidence.** A completed file contains the original byte stream as an
+   exact leading prefix, which is provable cheaply and would let verification account for the
+   original without retaining a second copy. This is a genuinely new evidence layer and would need
+   its own contract, algorithm identifier, and ADR; it should not be adopted merely to save space.
+
+### Ordering constraints
+
+These stages have real dependencies and should not be reordered for convenience:
+
+1. Detection precedes guidance — nothing can be advised about a condition that is never reported.
+2. Guidance precedes normalization — the user should see the finding before a command offers to
+   act on it.
+3. **Normalization precedes transformation.** A file must carry a truthful extension before it is
+   remuxed, so that a mislabeled container is never baked into organized layout, deterministic
+   names, or duplicate analysis under a name that lies about it.
+4. Transformation precedes any discard, and discard happens only through the finalization
+   ceremony, never as a side effect.
+
+### Test plan
+
+Synthetic fixtures only, generated at test time and removed afterwards:
+
+- A short clip muxed into a transport stream but named `.mp4`; the same clip in Matroska named
+  `.mp4`; correctly named `.mp4`, `.mov`, `.mkv`, and `.ts` controls that must produce **no**
+  finding; and a `.mov` control specifically proving the MP4/MOV family does not false-positive.
+- Fixtures must use FFmpeg's native encoders rather than `libx264`, which finding CI-004 already
+  established is absent from the Fedora CI image; the existing `mpeg4` fixture approach applies.
+- A still image truncated before its terminator with all rows intact, and a second truncated so
+  that rows are genuinely missing, proving the two are classified differently and that only the
+  first is offered completion.
+- Zero-mutation proofs for detection and guidance: no media, action history, duplicate tree, or
+  cache state may be created by reporting alone.
+- Round-trip proofs for normalization: apply, verify, undo, and confirm the original name and
+  identity return exactly.
+- Lineage proofs for transformation: after a remux with a retained original, a fresh directional
+  verification still accounts for every source byte stream with no reliance on the playback layer.
+
+### ADRs required
+
+One per durable decision, numbered from the next free entry:
+
+- container family comparison, including the pairs it deliberately cannot distinguish;
+- remediation guidance as report-only advice that never becomes ignore policy;
+- reversible extension normalization and its ownership relative to `rename`;
+- the retained-originals tree and its relationship to duplicate quarantine;
+- container remux as a journaled, reversible-while-retained transformation whose irreversibility
+  begins only at discard;
+- still-image terminator completion and the chosen preservation resolution.
+
+### Open questions
+
+- Should extension normalization be an option on `rename` or a separate remediation command?
+- Should `orig` and any duplicate-finalization quarantine be one tree or two, and does a retained
+  original belong in the collection at all rather than outside it?
+- Is prefix containment worth adopting as a preservation evidence layer, or does retaining the
+  original make it unnecessary?
+- Should a remux ever be offered for a container the tool can decode but whose streams it does not
+  fully support, or is the conservative skip boundary absolute?
+- How should guidance describe a declared-but-empty metadata track, which is accurate to report
+  yet carries no payload and is a strong candidate for safe automatic handling?
+
 ## Open research questions
 
 - Which exact decoded-video normalization is most stable across FFmpeg versions
