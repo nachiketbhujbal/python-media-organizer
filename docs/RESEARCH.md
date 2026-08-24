@@ -621,6 +621,38 @@ One per durable decision, numbered from the next free entry:
 - How should guidance describe a declared-but-empty metadata track, which is accurate to report
   yet carries no payload and is a strong candidate for safe automatic handling?
 
+## Organizing files beyond pictures and video
+
+Organization currently sorts pictures into `pics`, videos into `vids`, and deliberately leaves
+every other file at the collection root untouched. That behavior is correct and must remain the
+safe default. Local use of rescued collections surfaced ordinary text and markup documents sitting
+at the root alongside media, which raises the question of whether categorization should eventually
+extend past the two media kinds.
+
+The direction is accepted as potentially useful. No design exists, and none should be invented
+before the maintainer has a clear picture of the categories worth having.
+
+Constraints any future design must satisfy:
+
+- **Tool-owned state is never categorized or moved.** The collection action log, the derived cache
+  and its lock, staging databases, collection configuration, and explicitly requested log files are
+  pymo's own artifacts. Packaged ignore defaults already protect them and must continue to.
+- The four-character folder convention would need a vocabulary for any additional category, and
+  each new folder inherits the same protection, collision, verification, and undo obligations that
+  `pics`, `vids`, and `dups` already carry.
+- Categorization must keep using content-signature-first classification with extension fallback,
+  never extension alone, exactly as media classification does today.
+- Files that remain unknown or ambiguous must keep their current behavior of staying at the root
+  untouched. A catch-all folder that silently absorbs anything unrecognized would be worse than
+  the present honest default.
+- Adding a category in a later release changes where an already organized file belongs. The undo
+  contract is driven by recorded actions rather than current policy, so recategorization must not
+  retroactively reinterpret history.
+
+Open questions: which categories genuinely earn a folder; whether documents belong in a media
+collection tool at all or are better left alone; whether a catch-all is ever desirable; and how a
+newly added category should treat files a previous release already left at the root.
+
 ## Open research questions
 
 - Which exact decoded-video normalization is most stable across FFmpeg versions

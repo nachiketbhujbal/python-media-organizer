@@ -214,6 +214,9 @@ Sequenced after detection, without release numbers yet, in this order:
 These have an accepted product direction but no release number yet:
 
 - richer local collection statistics and historical comparisons;
+- categorization of collection files beyond pictures and video, keeping tool-owned state and
+  unrecognized files untouched, with the open design questions recorded in
+  [RESEARCH.md](RESEARCH.md);
 - a task-oriented root README readability and information-architecture sweep,
   including a table of contents, linkable status and command sections, less
   repetition, and links to detailed version, roadmap, and research records
