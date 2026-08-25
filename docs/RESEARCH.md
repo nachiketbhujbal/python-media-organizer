@@ -499,7 +499,10 @@ an implicit ignore list.
 
 Standard validation already runs ffprobe on every video, so the container family is available at no
 additional cost. The check compares the demuxer family ffprobe reports against the family implied
-by the extension, reusing the existing `extension_content_mismatch` code and warning severity.
+by the extension, reporting a distinct `container_extension_mismatch` code at warning severity.
+The code is deliberately separate from `extension_content_mismatch`: overloading one code with a
+fourth meaning would leave the aggregate report unable to distinguish a misnamed container from
+content that is not video at all, with only prose as the discriminator.
 
 The comparison must be **family-level**, never exact-string, because several extensions
 legitimately share one demuxer:
@@ -529,8 +532,9 @@ Consequences the implementing ADR must state rather than leave to be discovered:
 ### Recognizing transport streams, and the `.ts` hazard
 
 Transport streams are ordinary, valid video. A collection may legitimately contain nothing else,
-and such files belong in the organized video folder like any other supported video. Recognition
-should therefore extend to them directly rather than treating them as an anomaly.
+and such files belong in the organized video folder like any other supported video. Their
+extensions are already packaged video extensions, so they are already recognized and organized like
+any other supported video rather than treated as an anomaly.
 
 One constraint makes this extension unlike the others: **`.ts` is also the conventional extension
 for TypeScript source files.** A tool that trusts the extension alone would sweep source code into
@@ -539,8 +543,9 @@ a video folder.
 Measurement corrected three assumptions recorded here earlier, and the corrections matter more than
 the original wording did. Transport-stream extensions are **already** packaged video extensions, so
 recognizing them is neither a configuration change nor a classification-policy change. The local
-content signature cannot be made authoritative for this extension: the system content-signature
-utility carries a transport-stream magic rule but misses common encoder output that emits the
+content signature cannot be the sole positive authority for recognizing genuine transport-stream
+content: the system content-signature utility carries a transport-stream magic rule but misses
+common encoder output that emits the
 service description table ahead of the program association table, so a genuine transport stream is
 frequently unrecognized. The extension must therefore keep its classification weight, and the
 container prober supplies the authoritative container identity later, during validation.
@@ -799,12 +804,14 @@ explicit-file INFO, with DEBUG enabled only deliberately.
 ## AI-tool repository coordination
 
 **Resolved by [ADR 0077](adr/0077-multi-assistant-coordination.md).** `AGENTS.md`
-is the single authoritative instruction file; a tool-specific entry point may
-point at it but states no rule of its own. Assistant branches carry a `claude/`
-or `codex/` prefix, ADR numbers are claimed in a branch's first commit, each
-assistant adversarially reviews the other's pull request by default, and any
-tool-specific local handoff stays outside Git when it contains private
-acceptance data.
+is the single authoritative instruction file; a tool-specific entry point is
+navigational rather than normative. Assistant branches carry a `claude/` or
+`codex/` prefix; ADR numbers are reserved when a branch starts and re-checked
+against the target branch before merge; each release has one owner and one
+reviewer, with the reviewer reporting findings rather than committing to the
+branch; evidence and tests settle technical disputes while the maintainer is the
+final product and policy tiebreaker; and any tool-specific local handoff stays
+outside Git when it contains private acceptance data.
 
 One part was deliberately left unresolved rather than decided. A common `.ai`
 directory with `.claude`/`.codex` symlinks was considered and not adopted:

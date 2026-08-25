@@ -220,13 +220,17 @@ automatic deletion.
 
 Version 0.5.4 records multi-assistant repository coordination in ADR 0077 and
 reconciles the overlapping research and roadmap planning records so each subject
-has one home. `AGENTS.md` remains the only authoritative instruction file, a
-tool-specific entry point states no rule of its own, an assistant branch carries
-a `claude/` or `codex/` prefix that the merge commit preserves, ADR numbers are
-claimed in a branch's first commit, each assistant adversarially reviews the
-other's pull request by default, and every subagent reads `AGENTS.md` and
-`HANDOFF.md` completely. Runtime behavior, packaging, configuration, and tests
-are unchanged.
+has one home. `AGENTS.md` remains the only authoritative instruction file and a
+tool-specific entry point is navigational rather than normative. An assistant
+branch carries a `claude/` or `codex/` prefix that the merge commit preserves.
+ADR numbers are reserved when a branch starts, claimed in its first commit, and
+re-checked against the target branch before merge. Each release has one owner
+and one reviewer: the owner writes the branch and its review-ledger resolutions,
+while the reviewer reports findings through its own channel instead of
+committing. Evidence and tests settle technical disputes, the maintainer is the
+final product and policy tiebreaker, and unresolved dissent is recorded rather
+than averaged away. Every subagent reads `AGENTS.md` and `HANDOFF.md`
+completely. Runtime behavior, packaging, configuration, and tests are unchanged.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -1121,12 +1125,26 @@ An AI assistant's branch carries its own prefix, `claude/<type>/<slug>` or
 `codex/<type>/<slug>`, adding the target version as `<type>/v<x.y.z>-<slug>`
 when the work is scheduled for a release. The merge commit preserves that name,
 so attribution stays visible without changing the one-line, maintainer-authored
-commit convention. A branch claims the next free `docs/adr/` number in its first
-commit and names it in the pull request so parallel assistant branches cannot
-collide. Each assistant adversarially reviews the other's pull request before
-merge by default; the maintainer may waive a review, and a waived review is
-recorded in `docs/CODE_REVIEW.md` as follow-up debt rather than skipped
-silently. ADR 0077 is the durable decision.
+commit convention. A branch reserves the next free `docs/adr/` number when it
+starts, claims it in its first commit, names it in the pull request, and
+re-checks it against the target branch immediately before merge, renumbering on
+conflict; claiming alone cannot prevent two branches selecting the same number.
+
+Each release has one owner and one reviewer, never two co-owners. The owner
+writes implementation, tests, documentation, and review-ledger resolutions on
+the release branch; the reviewer does not commit there, but reports findings
+through its own channel for the owner to apply or dispute with evidence.
+Ownership follows the risk rather than a rotation, and one assistant coordinates
+the pull request, CI, merge-commit verification, tag, and installed-version
+proof after the maintainer authorizes each external boundary. The maintainer may
+waive a review, and a waived review is recorded in `docs/CODE_REVIEW.md` as
+follow-up debt rather than skipped silently.
+
+Evidence and tests settle technical disputes: a measured or traced result
+outranks an inferred or assumed one. The maintainer is the final product and
+policy tiebreaker, unresolved dissent is recorded rather than averaged away, and
+a third restatement of a position is an escalation rather than further review.
+ADR 0077 is the durable decision.
 
 GitHub's ruleset and classic branch-protection APIs currently return HTTP 403
 because the repository is private under GitHub Free. The repository must remain

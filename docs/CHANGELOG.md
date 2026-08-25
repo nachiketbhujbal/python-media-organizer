@@ -5,14 +5,24 @@ All notable changes to `python-media-organizer` will be recorded here.
 ## 0.5.4 - 2026-08-24
 
 - Record multi-assistant repository coordination in ADR 0077: `AGENTS.md` is the
-  only authoritative instruction file, a tool-specific entry point may point at
-  it but states no rule of its own, an assistant branch carries a `claude/` or
-  `codex/` prefix that the merge commit preserves, ADR numbers are claimed in a
-  branch's first commit, each assistant adversarially reviews the other's pull
-  request by default, and every subagent reads `AGENTS.md` and `HANDOFF.md`
-  completely because imported context is not inherited.
+  only authoritative instruction file and a tool-specific entry point is
+  navigational rather than normative, an assistant branch carries a `claude/` or
+  `codex/` prefix that the merge commit preserves, and every subagent reads
+  `AGENTS.md` and `HANDOFF.md` completely because imported context is not
+  inherited.
+- Reserve each `docs/adr/` number when a branch starts, claim it in that branch's
+  first commit, and re-check it against the target branch immediately before
+  merge, renumbering on conflict, because claiming alone cannot stop two
+  branches selecting the same number.
+- Give each release one owner and one reviewer rather than two co-owners: the
+  owner writes the branch and its review-ledger resolutions, and the reviewer
+  reports findings through its own channel instead of committing to that branch.
+- Settle technical disputes with evidence and tests, with a measured or traced
+  result outranking an inferred or assumed one; make the maintainer the final
+  product and policy tiebreaker, and record unresolved dissent rather than
+  averaging it away.
 - Add those conventions to the `AGENTS.md` development-workflow list and reduce
-  the repository `CLAUDE.md` to a delegating entry point, so the rules have one
+  the repository `CLAUDE.md` to a navigational entry point, so the rules have one
   home rather than two.
 - Record media truthfulness, damage, and remediation as one research subject,
   covering terminology, validation-remediation actionability, container and

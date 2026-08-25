@@ -253,16 +253,29 @@ report-only future work and must never silently enter the exact move path.
   when the work is scheduled for a release. The merge commit preserves the
   branch name, so attribution stays visible without changing the one-line,
   maintainer-authored commit convention. See ADR 0077.
-- Claim the next free `docs/adr/` number in a branch's first commit and name it
-  in the pull request, so parallel assistant branches cannot collide on one
-  number.
-- Each assistant adversarially reviews the other's pull request before merge by
-  default, recording findings in `docs/CODE_REVIEW.md`. The maintainer may waive
-  a review; record a waived review as follow-up debt rather than skipping it
-  silently.
+- Reserve the next free `docs/adr/` number when a branch starts, claim it in that
+  branch's first commit, and name it in the pull request. Re-check the number
+  against the target branch immediately before merge and renumber on conflict;
+  claiming alone does not prevent two branches selecting the same number.
+- Give each release one owner and one reviewer, never two co-owners. The owner
+  writes implementation, tests, documentation, and review-ledger resolutions on
+  the release branch. The reviewer does not commit to that branch: it reports
+  findings through its own channel, and the owner applies them or disputes them
+  with evidence. Assign ownership by where the risk sits, not by rotation.
+- Each assistant adversarially reviews the other's release before merge by
+  default, and the findings are recorded in `docs/CODE_REVIEW.md` on the branch
+  under review by its owner. The maintainer may waive a review; record a waived
+  review as follow-up debt rather than skipping it silently.
+- Settle technical disputes with evidence and tests: a measured or traced result
+  outranks an inferred or assumed one, so state which a contested claim is. The
+  maintainer is the final product and policy tiebreaker. Record unresolved
+  dissent rather than averaging it away, and treat a third restatement of a
+  position as an escalation to the maintainer rather than further review.
 - Treat `AGENTS.md` as the only authoritative instruction file. A tool-specific
-  entry point may point at it but must state no rule of its own. Instruct every
-  subagent to read `AGENTS.md` and `HANDOFF.md` completely before acting;
+  entry point may identify it as authoritative, state the reading order, and
+  link to relevant records, but must not introduce, alter, or duplicate a
+  normative requirement; the line is normative versus navigational. Instruct
+  every subagent to read `AGENTS.md` and `HANDOFF.md` completely before acting;
   imported context is not inherited.
 - Run subprocess-aware coverage for release review with
   `uv run --locked pytest --cov=pymo --cov-report=term-missing`.
