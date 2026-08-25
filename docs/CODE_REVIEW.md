@@ -140,6 +140,7 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-023 | Medium | Warming intentionally reuses compatible evidence, so it cannot prove that a selected derived record was recomputed after a tool/runtime concern or deliberate audit request. | 0.4.13 | Resolved with explicit image, video, standard-validation, and full-validation refresh targets that bypass reusable selected evidence |
 | CACHE-024 | Medium | A targeted refresh implemented as cache deletion would discard unrelated algorithms, profiles, runtimes, collection scopes, or media evidence and weaken resumability. | 0.4.13 | Resolved by atomic selected-key upserts with unrelated-record retention coverage |
 | CACHE-025 | Low | Reusing the validation cache-assisted mode for refresh would silently preserve old health rather than recording a current check. | 0.4.13 | Resolved by routing both validation refresh targets through the always-fresh validation path |
+| CACHE-026 | High | Validation evidence is keyed by content, profile, context, algorithm, and runtime, and none of those encode the validation logic itself, so adding a finding leaves prior evidence a valid hit and the new finding unreported under explicit reuse. Advancing the algorithm identifier alone does not fix it: targeted validation refresh runs through the ordinary validation entry point, which preflights the cache before doing fresh work, so every stored record becomes unusable and refresh exits before it can republish. | 0.5.6 | Open — recognize historical validation algorithms as structurally valid but stale and non-reusable, report them as stale, and let refresh republish current records without a fail-closed manual deletion step |
 
 ## Checksum-read review findings
 
@@ -179,6 +180,10 @@ The same adversarial method was repeated after the first validation release.
 | ID | Severity | Finding | Resolution target | Status |
 | --- | --- | --- | --- | --- |
 | DOC-001 | Low | The roadmap claimed released rows were removed even though it retained the stabilization ledger, while the README still described the completed validation review as future work. | 0.3.19 | Resolved in ADR 0056 |
+| DOC-002 | Medium | The planning records described a local content signature as authoritative for transport-stream extensions and carried the configuration-versus-policy question as open, after measurement established that those extensions are already packaged video extensions and that the signature utility misses common encoder output. | 0.5.4 | Resolved |
+| DOC-003 | Medium | The coordination decision's ADR-number rule could not prevent the collision it described, because two branches can independently select the same next free number and each believe it holds the claim. It also defined no arbitration for a disagreement between reviewers and did not say which branch receives review-ledger changes. | 0.5.4 | Resolved in ADR 0077 |
+| DOC-004 | Low | The tool-specific entry point retained a reading list and named the coordination conventions while the coordination decision required it to state no rule of its own, so the contract and its implementation disagreed. | 0.5.4 | Resolved in ADR 0077 |
+| DOC-005 | Low | The promoted roadmap row and the research record promised reuse of the existing extension/content finding code for container-family mismatches, while the accepted design used a distinct code, leaving the tracked records inconsistent with the accepted plan. | 0.5.4 | Resolved |
 
 ## Release groups
 
@@ -267,6 +272,9 @@ The same adversarial method was repeated after the first validation release.
 - `0.5.3`: combine fresh exact-byte, displayed-image, and decoded-video
   evidence only after both declared namespaces remain stable through a final
   pass, without claiming whole-device recovery or authorizing deletion.
+- `0.5.4`: record the multi-assistant coordination decision in one ADR, keep
+  its conventions in the authoritative instruction file, and reconcile the
+  overlapping planning records without changing runtime behavior.
 
 ## Independent review evidence
 

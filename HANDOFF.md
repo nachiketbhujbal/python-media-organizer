@@ -218,6 +218,20 @@ Completion is only eligible for human sign-off over stable namespace-visible
 collection content; it neither proves whole-device recovery nor authorizes
 automatic deletion.
 
+Version 0.5.4 records multi-assistant repository coordination in ADR 0077 and
+reconciles the overlapping research and roadmap planning records so each subject
+has one home. `AGENTS.md` remains the only authoritative instruction file and a
+tool-specific entry point is navigational rather than normative. An assistant
+branch carries a `claude/` or `codex/` prefix that the merge commit preserves.
+ADR numbers are reserved when a branch starts, claimed in its first commit, and
+re-checked against the target branch before merge. Each release has one owner
+and one reviewer: the owner writes the branch and its review-ledger resolutions,
+while the reviewer reports findings through its own channel instead of
+committing. Evidence and tests settle technical disputes, the maintainer is the
+final product and policy tiebreaker, and unresolved dissent is recorded rather
+than averaged away. Every subagent reads `AGENTS.md` and `HANDOFF.md`
+completely. Runtime behavior, packaging, configuration, and tests are unchanged.
+
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
 behavior. Version 0.3.18 prefixes every physical line of normal human-readable
@@ -503,6 +517,26 @@ each media-collection.
 This ordering is intentional. For example, if organization is followed by
 renaming, organization cannot be undone until renaming is undone. The same rule
 applies when a duplicate finder later moves a renamed file.
+
+The promoted future direction includes a path-private collection-history
+synopsis over this journal and a separate duplicate-finalization command. Any
+irreversible disposal must remain outside the duplicate finders, require fresh
+preservation evidence and explicit confirmation, and be recorded as an
+irreversible audit event without pretending it can be undone. Its journal
+schema and quarantine/deletion ceremony are not yet designed or implemented.
+Normal verification continues to include `dups` because it reports the real
+target namespace. Promoted future work adds an explicit zero-write
+`--simulate-without-dups` mode that inventories that tree but prevents it from
+satisfying coverage and clearly reports a simulated post-finalization verdict.
+
+Later promoted work also includes actionable validation guidance, reversible
+extension normalization and damaged-media quarantine designs, plus migration
+orchestration over explicit baseline and working-copy state. Multi-collection
+queues, copying, final naming, and cleanup remain research until capacity,
+case-collision, resumability, storage-contention, and evidence-checkpoint
+policies are designed. Existing organizer collisions are already resolved to
+Finder-style numbered names during planning and still protected by atomic
+no-replace moves during apply.
 
 Version 0.2.0 removed CSV organizer undo and `--manifest`, grouped image-output
 migration and its options, the image finder's no-op `--recursive` option, and
@@ -914,6 +948,12 @@ behavioral tests.
   never reveals them.
 - No persistent log is created by default.
 
+Automatic collection-local diagnostic logging, conventional log-level
+selection, and a `--debug` alias are research items rather than current
+behavior. Default logging would conflict with the present opt-in privacy rule,
+report-only command guarantees, read-only collections, and two-root migration
+verification unless those boundaries receive an explicit design and ADR.
+
 Do not put media bytes or unrelated metadata into exceptions or diagnostics.
 Scan JSON is the first machine-readable result contract; human command output
 continues to use logging. Every normal non-JSON CLI run ends with total elapsed
@@ -1080,6 +1120,31 @@ key remains the scoped Git transport credential. GitHub's
 branches are removed automatically; local branch deletion and remote-tracking
 pruning remain local maintenance. See `docs/CONTRIBUTING.md` for the safe
 sole-maintainer ruleset.
+
+An AI assistant's branch carries its own prefix, `claude/<type>/<slug>` or
+`codex/<type>/<slug>`, adding the target version as `<type>/v<x.y.z>-<slug>`
+when the work is scheduled for a release. The merge commit preserves that name,
+so attribution stays visible without changing the one-line, maintainer-authored
+commit convention. A branch reserves the next free `docs/adr/` number when it
+starts, claims it in its first commit, names it in the pull request, and
+re-checks it against the target branch immediately before merge, renumbering on
+conflict; claiming alone cannot prevent two branches selecting the same number.
+
+Each release has one owner and one reviewer, never two co-owners. The owner
+writes implementation, tests, documentation, and review-ledger resolutions on
+the release branch; the reviewer does not commit there, but reports findings
+through its own channel for the owner to apply or dispute with evidence.
+Ownership follows the risk rather than a rotation, and one assistant coordinates
+the pull request, CI, merge-commit verification, tag, and installed-version
+proof after the maintainer authorizes each external boundary. The maintainer may
+waive a review, and a waived review is recorded in `docs/CODE_REVIEW.md` as
+follow-up debt rather than skipped silently.
+
+Evidence and tests settle technical disputes: a measured or traced result
+outranks an inferred or assumed one. The maintainer is the final product and
+policy tiebreaker, unresolved dissent is recorded rather than averaged away, and
+a third restatement of a position is an escalation rather than further review.
+ADR 0077 is the durable decision.
 
 GitHub's ruleset and classic branch-protection APIs currently return HTTP 403
 because the repository is private under GitHub Free. The repository must remain

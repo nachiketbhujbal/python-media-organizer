@@ -2,6 +2,47 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.4 - 2026-08-24
+
+- Record multi-assistant repository coordination in ADR 0077: `AGENTS.md` is the
+  only authoritative instruction file and a tool-specific entry point is
+  navigational rather than normative, an assistant branch carries a `claude/` or
+  `codex/` prefix that the merge commit preserves, and every subagent reads
+  `AGENTS.md` and `HANDOFF.md` completely because imported context is not
+  inherited.
+- Reserve each `docs/adr/` number when a branch starts, claim it in that branch's
+  first commit, and re-check it against the target branch immediately before
+  merge, renumbering on conflict, because claiming alone cannot stop two
+  branches selecting the same number.
+- Give each release one owner and one reviewer rather than two co-owners: the
+  owner writes the branch and its review-ledger resolutions, and the reviewer
+  reports findings through its own channel instead of committing to that branch.
+- Settle technical disputes with evidence and tests, with a measured or traced
+  result outranking an inferred or assumed one; make the maintainer the final
+  product and policy tiebreaker, and record unresolved dissent rather than
+  averaging it away.
+- Add those conventions to the `AGENTS.md` development-workflow list and reduce
+  the repository `CLAUDE.md` to a navigational entry point, so the rules have one
+  home rather than two.
+- Record media truthfulness, damage, and remediation as one research subject,
+  covering terminology, validation-remediation actionability, container and
+  extension truthfulness, and the deliberately deferred repair, container
+  conversion, and quarantine directions.
+- Record duplicate finalization and collection history, migration orchestration
+  and queues, organizing files beyond pictures and video, and persistent
+  diagnostic logging as separate research subjects with one home each.
+- Reconcile those overlapping planning records to a single section level and
+  close the AI-tool repository coordination question with a pointer to ADR
+  0077, retaining only its unresolved shared-directory part.
+- Correct the container and extension truthfulness records, which described a
+  local content signature as authoritative for transport streams, treated their
+  extensions as not yet recognized, and left an already-answered question
+  standing as open; retarget the roadmap row to 0.5.6 and schedule 0.5.5 for the
+  media-extension classification severity defect.
+- This release deliberately carries both the coordination decision and the
+  planning-record reconciliation as one documentation purpose; runtime
+  behavior, packaging, configuration, and tests are unchanged.
+
 ## 0.5.3 - 2026-08-23
 
 - Add the final `layered-exact-preservation` verdict that accounts for each

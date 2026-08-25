@@ -82,3 +82,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0074](0074-layer-exact-displayed-image-coverage.md) | Layer exact displayed-image coverage |
 | [0075](0075-layer-strict-decoded-video-coverage.md) | Layer strict decoded-video coverage |
 | [0076](0076-final-layered-preservation-verdict.md) | Fresh final layered preservation verdict |
+| [0077](0077-multi-assistant-coordination.md) | Multi-assistant repository coordination |
