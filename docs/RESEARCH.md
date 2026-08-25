@@ -533,12 +533,24 @@ and such files belong in the organized video folder like any other supported vid
 should therefore extend to them directly rather than treating them as an anomaly.
 
 One constraint makes this extension unlike the others: **`.ts` is also the conventional extension
-for TypeScript source files.** A tool that trusts the extension would sweep source code into a
-video folder. For this extension specifically, the local content signature must be authoritative
-and the extension itself must carry no classification weight on its own. Before implementation,
-confirm how the packaged classification policy and its content-signature-first fallback currently
-treat both an unlisted media extension and a text file bearing a media extension, because that
-determines whether adding `.ts` is a configuration change or a policy change.
+for TypeScript source files.** A tool that trusts the extension alone would sweep source code into
+a video folder.
+
+Measurement corrected three assumptions recorded here earlier, and the corrections matter more than
+the original wording did. Transport-stream extensions are **already** packaged video extensions, so
+recognizing them is neither a configuration change nor a classification-policy change. The local
+content signature cannot be made authoritative for this extension: the system content-signature
+utility carries a transport-stream magic rule but misses common encoder output that emits the
+service description table ahead of the program association table, so a genuine transport stream is
+frequently unrecognized. The extension must therefore keep its classification weight, and the
+container prober supplies the authoritative container identity later, during validation.
+
+The hazard itself remains real, but it is an active defect rather than an open design question: a
+non-media file bearing one of these extensions is presently classified as video, probed, and
+reported as a decode error at failing exit status. Correcting that severity is scheduled as its own
+release, and container-family detection depends on it landing first. The narrow rule that fixes it
+is that a meaningful non-media content signature outranks a media extension; it does not require
+the extension to lose its weight for genuine media.
 
 ### Correcting a false extension
 
@@ -639,16 +651,21 @@ That question does not arise for a repair, where the repaired file is unambiguou
 Synthetic fixtures only, generated at test time and removed afterwards: a short clip muxed into a
 transport stream but named `.mp4`; the same clip in Matroska named `.mp4`; correctly named `.mp4`,
 `.mov`, `.mkv`, and `.ts` controls that must produce no finding, with the `.mov` control
-specifically proving the shared MP4/MOV family does not false-positive; a text file bearing a `.ts`
-extension proving source code is never classified as video. Fixtures must use FFmpeg's native
-encoders rather than `libx264`, which finding CI-004 established is absent from the Fedora CI
-image. Reporting must create no media, action history, duplicate tree, or cache state.
+specifically proving the shared MP4/MOV family does not false-positive; and a raw MPEG elementary
+stream named `.mpg`, which must also produce no finding because it probes as an elementary-stream
+format at low confidence and would otherwise be accused falsely. A non-media file bearing a media
+extension belongs to the separate classification-severity release that precedes this work, not to
+detection. Fixtures must use FFmpeg's native encoders rather than `libx264`, which finding CI-004
+established is absent from the Fedora CI image; `.webm` cannot be produced by a native encoder at
+all and must not be used as a fixture, so rename a Matroska instead. Reporting must create no
+media, action history, duplicate tree, or cache state.
 
 ### Open questions
 
 - Where exactly does extension correction sit in the command chain, and what is it called?
-- Is adding `.ts` recognition a configuration change or a classification-policy change, given the
-  TypeScript collision?
+- What is the honest reported outcome for a non-media file bearing a media extension: silence, or a
+  warning that its name disagrees with its content? Only the outcome is open; the failing exit
+  status it currently produces is a scheduled defect fix, not a question.
 - Should damaged media be isolated into a folder at all, or reported in place indefinitely?
 - If isolated, does undecodable-but-unproven media get its own folder separate from proven loss?
 - For a container conversion, is the authentic original or the widely playable derivative the

@@ -24,10 +24,11 @@ All notable changes to `python-media-organizer` will be recorded here.
 - Reconcile those overlapping planning records to a single section level and
   close the AI-tool repository coordination question with a pointer to ADR
   0077, retaining only its unresolved shared-directory part.
-- Correct the container and extension truthfulness roadmap row, which described
-  a local content signature as authoritative for transport streams, and
-  retarget it to 0.5.6; schedule 0.5.5 for the media-extension classification
-  severity defect.
+- Correct the container and extension truthfulness records, which described a
+  local content signature as authoritative for transport streams, treated their
+  extensions as not yet recognized, and left an already-answered question
+  standing as open; retarget the roadmap row to 0.5.6 and schedule 0.5.5 for the
+  media-extension classification severity defect.
 - This release deliberately carries both the coordination decision and the
   planning-record reconciliation as one documentation purpose; runtime
   behavior, packaging, configuration, and tests are unchanged.
