@@ -463,7 +463,10 @@ action history.
 Reports cover empty and invalid media, unreadable or changing entries,
 extension/content mismatches, unsupported recognized image formats, video
 stream layouts, missing codec names or dimensions, extra streams, and
-missing/invalid duration. Unreadable subtrees make the report unhealthy rather
+missing/invalid duration. A file whose extension claims media but whose content
+is positively something else is reported as a warning-severity naming mismatch
+and is never probed or decoded, so it does not make an otherwise healthy
+collection fail. Unreadable subtrees make the report unhealthy rather
 than being silently omitted. A damaged file becomes a finding without aborting
 validation of its healthy neighbors. Unsupported media remains explicitly
 unverified and visible as a warning; pymo never converts a health finding into

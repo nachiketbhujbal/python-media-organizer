@@ -83,3 +83,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0075](0075-layer-strict-decoded-video-coverage.md) | Layer strict decoded-video coverage |
 | [0076](0076-final-layered-preservation-verdict.md) | Fresh final layered preservation verdict |
 | [0077](0077-multi-assistant-coordination.md) | Multi-assistant repository coordination |
+| [0078](0078-non-media-content-outranks-media-extension.md) | Non-media content outranks a media extension |

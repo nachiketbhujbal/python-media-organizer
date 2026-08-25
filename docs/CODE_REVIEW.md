@@ -50,6 +50,8 @@ The same adversarial method was repeated after the first validation release.
 | VAL-013 | High | A file can change after a compatible cache row is selected but before its result enters the report. | 0.4.12 | Resolved by reopening every proposed hit through the stable collection descriptor boundary and treating change as a miss |
 | VAL-014 | Medium | Reusing cached error/warning results must preserve ordinary health counts, privacy, and exit status rather than treating cache hits as implicitly healthy. | 0.4.12 | Resolved by reconstructing the strict persisted findings into normal `ValidationResult` records |
 | VAL-015 | Medium | A cache-assisted full validation mode could accidentally become the default and weaken the current-read contract needed for preservation checks. | 0.4.12 | Resolved with the explicit `--reuse-validation` opt-in and always-fresh default regressions |
+| VAL-016 | High | Validation discovery fell back to the filename extension even after the content signature positively identified non-media content, so a healthy source file sharing an extension with a media container was probed as media and reported as a decode error at failing exit status. | 0.5.5 | Resolved in ADR 0078 |
+| VAL-017 | Medium | The packaged generic content types listed only the empty-result spelling produced when the utility reads a pathname, while descriptor-pinned callers read standard input and receive a different spelling, so an empty media file depended on the extension fallback that VAL-016 removed. | 0.5.5 | Resolved by packaging both spellings |
 
 ## Scan review findings
 
@@ -275,6 +277,9 @@ The same adversarial method was repeated after the first validation release.
 - `0.5.4`: record the multi-assistant coordination decision in one ADR, keep
   its conventions in the authoritative instruction file, and reconcile the
   overlapping planning records without changing runtime behavior.
+- `0.5.5`: stop validating a positively identified non-media file as media
+  because of its extension, report the naming mismatch as a warning instead,
+  and keep an empty media file an error.
 
 ## Independent review evidence
 

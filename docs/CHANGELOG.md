@@ -2,6 +2,30 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.5 - 2026-08-25
+
+- Stop reporting a healthy non-media file that merely bears a configured media
+  extension as damaged media. Validation discovery no longer promotes a file to
+  a media kind on the strength of its extension once the content signature has
+  positively identified non-media content, so such a file is never probed or
+  decoded and no longer returns a failing exit status for an otherwise healthy
+  collection.
+- Report that file as a warning-severity `extension_content_mismatch` entry
+  instead of dropping it silently, so the naming problem stays visible and
+  actionable, and count it as a non-media file rather than as a picture or
+  video.
+- Keep an empty media file an error: an empty stream is not a non-media content
+  signature but the absence of one, so the extension remains the only available
+  evidence. Package both spellings the content-signature utility uses for an
+  empty result, because descriptor-pinned callers read standard input and
+  receive the spelling that was not previously listed.
+- Leave classification unchanged where the content-signature utility is
+  unavailable, since no meaningful signature exists to outrank the extension;
+  that case already reports its own distinct fallback warning.
+- Record the precedence rule in ADR 0078, and add coverage for a text file under
+  video and picture extensions, a genuine transport stream that must still
+  validate as video, an empty media file, and the unavailable-utility boundary.
+
 ## 0.5.4 - 2026-08-24
 
 - Record multi-assistant repository coordination in ADR 0077: `AGENTS.md` is the

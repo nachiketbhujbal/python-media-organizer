@@ -232,6 +232,18 @@ final product and policy tiebreaker, and unresolved dissent is recorded rather
 than averaged away. Every subagent reads `AGENTS.md` and `HANDOFF.md`
 completely. Runtime behavior, packaging, configuration, and tests are unchanged.
 
+Version 0.5.5 makes a meaningful non-media content signature outrank a media
+extension during validation discovery. A file positively identified as non-media
+is no longer promoted to the kind its extension implies, is never probed or
+decoded, and is reported as a warning-severity `extension_content_mismatch`
+entry counted among other files rather than as a picture or video. An empty
+stream is the absence of a signature rather than a non-media one, so an empty
+media file is still validated and still an error; both spellings the signature
+utility produces for an empty result are now packaged as generic types, because
+descriptor-pinned callers read standard input. Where the utility is unavailable
+the rule does not apply and the existing fallback warning stands. ADR 0078 is
+the durable decision.
+
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
 behavior. Version 0.3.18 prefixes every physical line of normal human-readable
@@ -915,7 +927,10 @@ affected paths, while `--show-ignored` remains a separate opt-in. Status 0 means
 no error-severity finding, 1 means health errors or incomplete cache publication
 were reported, and 2 means the command could not run safely. Animated or
 multi-page images are counted, not
-classified as corrupt. Unsupported recognized formats remain warnings rather
+classified as corrupt. A file whose media extension carries a positively
+identified non-media content signature is reported as a warning-severity
+naming mismatch, is never probed or decoded, and is counted as a non-media
+file rather than as a picture or video. Unsupported recognized formats remain warnings rather
 than unverified claims of corruption. Unreadable subtrees are health errors,
 native-tool diagnostics are discarded, and concurrent changes supersede
 decoder conclusions. Known decoder failures become per-file findings and do not

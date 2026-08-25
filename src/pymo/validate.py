@@ -60,8 +60,19 @@ VALIDATION_REPORT_SCHEMA_VERSION = 2
 Severity = Literal["error", "warning", "info"]
 MediaKind = Literal["picture", "video"]
 DiscoveryDisposition = Literal[
-    "candidate", "ignored", "symlink", "unreadable", "changed", "other", "reserved"
+    "candidate",
+    "ignored",
+    "symlink",
+    "unreadable",
+    "changed",
+    "other",
+    "mismatched",
+    "reserved",
 ]
+
+MISMATCHED_EXTENSION_DESCRIPTION = (
+    "media extension has a meaningful non-media content signature"
+)
 
 
 @dataclass(frozen=True)
@@ -105,6 +116,11 @@ class DiscoveryResult:
     symlink_paths: tuple[Path, ...]
     unreadable_paths: tuple[Path, ...]
     changed_paths: tuple[Path, ...]
+    mismatched_paths: tuple[Path, ...] = ()
+
+    @property
+    def mismatched_count(self) -> int:
+        return len(self.mismatched_paths)
 
 
 @dataclass(frozen=True)
@@ -188,7 +204,11 @@ def _discover_file(
     if detected_kind in {"picture", "video"}:
         kind: MediaKind = detected_kind  # type: ignore[assignment]
     elif extension_kind is not None:
-        kind = extension_kind
+        # A meaningful non-media content signature outranks a media extension.
+        # Validating such a file as media would probe or decode content that is
+        # not media and report healthy content as damaged, so it is reported as
+        # a naming mismatch instead of being promoted or silently dropped.
+        return "mismatched", None
     else:
         return "other", None
     return (
@@ -212,6 +232,7 @@ def discover_candidates(root: Path, config: PymoConfig) -> DiscoveryResult:
     symlink_paths: list[Path] = []
     unreadable_paths: list[Path] = []
     changed_paths: list[Path] = []
+    mismatched_paths: list[Path] = []
 
     def record_walk_error(error: OSError) -> None:
         unreadable_paths.append(Path(error.filename) if error.filename else root)
@@ -240,6 +261,8 @@ def discover_candidates(root: Path, config: PymoConfig) -> DiscoveryResult:
                 unreadable_paths.append(path)
             elif disposition == "changed":
                 changed_paths.append(path)
+            elif disposition == "mismatched":
+                mismatched_paths.append(path)
             elif disposition == "other":
                 other_count += 1
     return DiscoveryResult(
@@ -255,6 +278,9 @@ def discover_candidates(root: Path, config: PymoConfig) -> DiscoveryResult:
         symlink_paths=tuple(symlink_paths),
         unreadable_paths=tuple(unreadable_paths),
         changed_paths=tuple(changed_paths),
+        mismatched_paths=tuple(
+            sorted(mismatched_paths, key=lambda item: str(item).casefold())
+        ),
     )
 
 
@@ -305,22 +331,15 @@ def _classification_findings(candidate: MediaCandidate) -> list[Finding]:
                 "content appears to be media but the extension is not recognized",
             )
         )
-    elif candidate.detected_kind not in {candidate.extension_kind, "other"}:
+    elif candidate.detected_kind != candidate.extension_kind:
+        # A candidate never carries a non-media detected kind: discovery reports
+        # that as a `mismatched` entry instead, so this compares two media kinds.
         findings.append(
             _finding(
                 candidate,
                 "warning",
                 "extension_content_mismatch",
                 "filename extension and detected content type disagree",
-            )
-        )
-    elif candidate.detected_kind == "other":
-        findings.append(
-            _finding(
-                candidate,
-                "warning",
-                "extension_content_mismatch",
-                "media extension has a meaningful non-media content signature",
             )
         )
     return findings
@@ -849,6 +868,14 @@ def build_report(
         by_code[
             ("warning", "symbolic_link_skipped", "symbolic link was not followed")
         ] += discovery.symlink_count
+    if discovery.mismatched_count:
+        by_code[
+            (
+                "warning",
+                "extension_content_mismatch",
+                MISMATCHED_EXTENSION_DESCRIPTION,
+            )
+        ] += discovery.mismatched_count
     if discovery.classifier_warning:
         by_code[
             (
@@ -895,6 +922,12 @@ def build_report(
                 "symbolic_link_skipped",
                 "symbolic link was not followed",
             ),
+            (
+                discovery.mismatched_paths,
+                "warning",
+                "extension_content_mismatch",
+                MISMATCHED_EXTENSION_DESCRIPTION,
+            ),
         ):
             finding_files.extend(
                 {
@@ -916,7 +949,10 @@ def build_report(
             "media_bytes": sum(result.candidate.state.size for result in results),
             "pictures": sum(result.candidate.kind == "picture" for result in results),
             "videos": sum(result.candidate.kind == "video" for result in results),
-            "other_files": discovery.other_count,
+            # A file whose media extension carries non-media content is a
+            # non-media file; the accompanying warning is what distinguishes it
+            # from one that never claimed to be media.
+            "other_files": discovery.other_count + discovery.mismatched_count,
             "ignored_entry_points": len(discovery.ignored),
             "symbolic_links_skipped": discovery.symlink_count,
             "unreadable_entries": discovery.unreadable_count,
@@ -928,6 +964,7 @@ def build_report(
                 len(warning_paths - error_paths)
                 + discovery.changed_count
                 + discovery.symlink_count
+                + discovery.mismatched_count
             ),
             "healthy_files": sum(
                 not any(
