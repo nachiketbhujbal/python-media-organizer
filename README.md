@@ -484,11 +484,12 @@ characteristics rather than corruption.
 
 A real video whose confidently probed container family disagrees with its
 extension receives the separate warning `container_extension_mismatch`. The
-check reuses the standard ffprobe result, requires integer probe score 100, and
-compares families so MOV/MP4, Matroska/WebM, and related shared demuxers do not
-false-positive. Weak, missing, malformed, or unmapped evidence produces no
-accusation. The warning remains visible alongside a later full-decode error and
-does not itself make validation fail.
+check reuses the standard extensionless ffprobe result, requires an integer
+content-probe score from 50 through 100, and compares families so MOV/MP4,
+Matroska/WebM, and related shared demuxers do not false-positive. Weak, missing,
+malformed, or unmapped evidence produces no accusation. The warning remains
+visible alongside a later full-decode error and does not itself make validation
+fail.
 
 Classification and decoding use stable, no-follow file descriptors anchored
 beneath the resolved collection root. If a file or parent path is replaced

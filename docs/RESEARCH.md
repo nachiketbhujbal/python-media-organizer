@@ -532,13 +532,24 @@ ADR 0079 records the resulting limits rather than leaving them implicit:
 - A mismatch is a **warning**, never an error. A misdescribed container is not damage, the media is
   not harmed, and exit status must not change.
 
-Local FFmpeg/ffprobe 9.0.1 measurements supported a strict confidence boundary: generated MP4,
-MPEG-TS, Matroska, AVI, ASF, and FLV fixtures reported their listed families with probe score 100;
-a raw MPEG-2 elementary stream reported `mpegvideo` at 51, and a generated MPEG program stream
-reported `mpeg` at 26. The implementation therefore requires integer score 100 and makes no claim
-for weak, missing, malformed, or unmapped evidence. These measurements motivate the policy but do
-not claim every FFmpeg build assigns identical scores; multi-platform integration tests enforce the
-observable safe boundary.
+Local FFmpeg/ffprobe 9.0.1 measurements initially made a maximum-score boundary look sufficient:
+generated MP4, MPEG-TS, Matroska, AVI, ASF, and FLV fixtures reported their listed families with
+probe score 100; a raw MPEG-2 elementary stream reported `mpegvideo` at 51, and a generated MPEG
+program stream reported `mpeg` at 26. The first three-platform run disproved that boundary. The
+FFmpeg builds on macOS, Ubuntu, and Fedora reported the same short valid MPEG-TS fixture as `mpegts`
+with score 50, while local FFmpeg 9 reported 100.
+
+FFmpeg's own MPEG-TS probe can return half of `AVPROBE_SCORE_MAX` for a valid short transport stream,
+and its public probing contract recommends retry only at scores at or below one quarter of the
+maximum. Pymo probes an extensionless descriptor path, so the separately defined filename-extension
+score of 50 cannot contribute. The implemented boundary is therefore an integer content score from
+50 through 100. Generic `.mpe`, `.mpeg`, and `.mpg` policy accepts both `mpeg` program streams and
+`mpegvideo` elementary streams; a raw elementary stream under an unrelated extension remains a
+truthful mismatch. Missing, malformed, below-50, above-maximum, or unmapped evidence makes no claim.
+The durable primary references are FFmpeg's
+[MPEG-TS probe implementation](https://www.ffmpeg.org/doxygen/8.0/mpegts_8c_source.html#l03057),
+[probe-score constants](https://ffmpeg.org/doxygen/8.0/avformat_8h.html#l00458), and
+[input-probing contract](https://ffmpeg.org/doxygen/8.0/group__lavf__decoding.html).
 
 ### Recognizing transport streams, and the `.ts` hazard
 

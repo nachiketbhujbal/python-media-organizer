@@ -8,10 +8,12 @@ All notable changes to `python-media-organizer` will be recorded here.
   video probe identifies a container family that disagrees with the filename
   extension, without changing validation exit status or running an additional
   probe.
-- Require ffprobe's maximum integer probe score, a non-empty demuxer family,
-  and an explicitly mapped packaged video extension before reporting a
-  mismatch. Treat MOV/MP4, Matroska/WebM, transport-stream, and other shared
-  demuxers as families so ambiguous names do not produce false accusations.
+- Require an integer content-probe score from 50 through ffprobe's maximum of
+  100, a non-empty demuxer family, and an explicitly mapped packaged video
+  extension before reporting a mismatch. The probe uses an extensionless
+  descriptor, so filename-extension scoring cannot satisfy that boundary.
+  Treat MOV/MP4, Matroska/WebM, transport-stream, raw/program MPEG, and other
+  shared demuxers as families so valid names do not produce false accusations.
 - Keep container findings distinct from non-media
   `extension_content_mismatch` findings and preserve probe, stream, duration,
   and container evidence when a later full decode fails.

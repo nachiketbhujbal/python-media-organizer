@@ -37,6 +37,7 @@ def test_packaged_defaults_cover_common_local_system_metadata(
         config.classification.video_extensions
     )
     assert config.validation.container_families[".mp4"] == {"3g2,3gp,m4a,mj2,mov,mp4"}
+    assert config.validation.container_families[".mpg"] == {"mpeg", "mpegvideo"}
     assert config.validation.container_families[".wmv"] == {"asf", "asf_o"}
     assert config.performance.scan_workers == 4
     assert config.performance.progress_interval_seconds == 15

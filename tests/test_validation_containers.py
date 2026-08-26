@@ -73,7 +73,19 @@ def make_muxed_video(path: Path, muxer: str) -> None:
         (
             "clip.mp4",
             "video",
-            {"format_name": "matroska,webm", "probe_score": 99},
+            {"format_name": "matroska,webm", "probe_score": 50},
+            True,
+        ),
+        (
+            "clip.mp4",
+            "video",
+            {"format_name": "matroska,webm", "probe_score": 49},
+            False,
+        ),
+        (
+            "clip.mp4",
+            "video",
+            {"format_name": "matroska,webm", "probe_score": 101},
             False,
         ),
         (
@@ -206,6 +218,7 @@ def test_full_decode_failure_preserves_probe_and_container_findings(
     [
         ("misnamed-transport.mp4", "mpegts", "mpegts", True),
         ("misnamed-matroska.mp4", "matroska", "matroska,webm", True),
+        ("misnamed-raw.mp4", "mpeg2video", "mpegvideo", True),
         ("correct.mp4", "mp4", "mov,mp4,m4a,3gp,3g2,mj2", False),
         ("correct.mov", "mov", "mov,mp4,m4a,3gp,3g2,mj2", False),
         ("correct.mkv", "matroska", "matroska,webm", False),
@@ -224,29 +237,29 @@ def test_real_muxers_apply_the_confident_container_family_boundary(
     assert FFPROBE
     path = tmp_path / filename
     make_muxed_video(path, muxer)
-    independent = subprocess.run(
-        [
-            FFPROBE,
-            "-v",
-            "error",
-            "-show_entries",
-            "format=format_name,probe_score",
-            "-of",
-            "json",
-            path,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
-    )
+    with path.open("rb") as stream:
+        descriptor = stream.fileno()
+        independent = subprocess.run(
+            [
+                FFPROBE,
+                "-v",
+                "error",
+                "-show_entries",
+                "format=format_name,probe_score",
+                "-of",
+                "json",
+                f"/dev/fd/{descriptor}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            pass_fds=(descriptor,),
+        )
     assert independent.returncode == 0, independent.stderr
     independent_format = json.loads(independent.stdout)["format"]
     assert independent_format["format_name"] == expected_family
-    if muxer == "mpeg2video":
-        assert independent_format["probe_score"] < 100
-    else:
-        assert independent_format["probe_score"] == 100
+    assert 50 <= independent_format["probe_score"] <= 100
 
     candidate = validate.MediaCandidate(
         root=tmp_path,

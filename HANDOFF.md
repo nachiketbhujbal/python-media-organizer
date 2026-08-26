@@ -246,9 +246,10 @@ the rule does not apply and the existing fallback warning stands. ADR 0078 is
 the durable decision.
 
 Version 0.5.6 reports a warning-severity `container_extension_mismatch` only
-when the existing ffprobe result has integer probe score 100, a non-empty
-demuxer family, and an explicitly mapped packaged extension whose accepted
-family does not match. Shared families such as MOV/MP4 and Matroska/WebM do not
+when the existing extensionless ffprobe result has an integer content-probe
+score from 50 through 100, a non-empty demuxer family, and an explicitly mapped
+packaged extension whose accepted family does not match. Shared families such
+as MOV/MP4 and Matroska/WebM do not
 false-positive; weak raw-stream probes, missing or malformed data, and custom
 unmapped extensions make no accusation. Probe findings survive a later full
 decode error. Standard and full validation evidence advance to version 2;
@@ -958,9 +959,10 @@ user-authored ignore policy.
 
 Video reports also distinguish a confidently misnamed real container from
 non-media content wearing a media extension. The former is
-`container_extension_mismatch`, requires ffprobe score 100 plus a mapped family,
-and is warning-only. It uses the standard probe already in progress and is
-retained even when a subsequent full decode produces `invalid_video`.
+`container_extension_mismatch`, requires an extensionless ffprobe content score
+from 50 through 100 plus a mapped family, and is warning-only. It uses the
+standard probe already in progress and is retained even when a subsequent full
+decode produces `invalid_video`.
 
 ## Logging
 

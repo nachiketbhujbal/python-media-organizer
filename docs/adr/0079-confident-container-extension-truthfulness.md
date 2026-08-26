@@ -29,13 +29,25 @@ Standard and full validation will report a distinct warning-severity
 `container_extension_mismatch` finding only when all of these conditions hold:
 
 - ffprobe completed successfully and returned a non-empty demuxer family;
-- ffprobe reported an integer probe score of 100;
+- the extensionless descriptor probe reported an integer content score from 50
+  through ffprobe's documented maximum of 100;
 - the configured video extension has an explicit packaged container-family
   policy; and
 - the returned demuxer family is outside that extension's accepted family.
 
-Shared demuxer families are treated as one accepted family. Missing, malformed,
-or weaker probe scores, missing family data, and unmapped extensions produce no
+Pymo gives ffprobe `/dev/fd/N`, not the media filename, so FFmpeg's
+extension-score constant cannot satisfy the score-50 boundary. That score is
+content evidence in this call path. Supported FFmpeg releases legitimately
+assign 50 to a short valid MPEG transport stream, while FFmpeg's public probing
+contract recommends retry only at scores of 25 or lower. A maximum-only boundary would
+therefore suppress a truthful mismatch based on the FFmpeg version rather than
+the bytes. Values below 50 or above the documented maximum produce no
+accusation.
+
+Shared demuxer families are treated as one accepted family. Generic MPEG
+filename extensions accept both program-stream `mpeg` and raw-video
+`mpegvideo`; `.vob` remains program-stream-only. Missing or malformed score or
+family data, weaker content evidence, and unmapped extensions produce no
 container accusation. The policy is packaged validation behavior, not a
 collection override: custom configuration remains unable to redefine it. The
 packaged policy must cover every packaged video extension exactly.
@@ -59,14 +71,14 @@ non-media file wearing a media extension. Warning severity keeps the collection
 health exit status successful while preserving actionable naming evidence.
 
 The confidence boundary deliberately misses some real mismatches. In
-particular, low-confidence raw or program-stream MPEG observations are not
-accused. Shared demuxer pairs such as MOV/MP4 and Matroska/WebM cannot always be
-distinguished by ffprobe's family alone. `.ts`, `.m2ts`, and `.mts` likewise
-report the same `mpegts` family; distinguishing their packet layouts would
-require separate packet-level analysis. Audio-only content inside a mapped
-video-family container also shares the container demuxer, so this filename check
-does not claim the presence of a video stream. Avoiding a false claim is
-preferred to exhaustive naming enforcement.
+particular, content observations below 50 are not accused. Shared demuxer pairs
+such as MOV/MP4 and Matroska/WebM cannot always be distinguished by ffprobe's
+family alone. `.ts`, `.m2ts`, and `.mts` likewise report the same `mpegts`
+family; distinguishing their packet layouts would require separate packet-level
+analysis. Audio-only content inside a mapped video-family container also shares
+the container demuxer, so this filename check does not claim the presence of a
+video stream. Avoiding a false claim is preferred to exhaustive naming
+enforcement.
 
 Existing validation cache data becomes stale rather than corrupt. Ordinary
 validation remains fresh by default, explicit reuse misses safely, cache status

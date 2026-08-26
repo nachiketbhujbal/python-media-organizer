@@ -616,10 +616,13 @@ def _container_extension_finding(
         return None
     probe_score = format_data.get("probe_score")
     format_name = format_data.get("format_name")
-    # ffprobe's maximum score is the conservative accusation boundary. Raw or
-    # ambiguous streams can select a demuxer at weaker scores, so treating any
-    # successful selection as authoritative would create false mismatches.
-    if type(probe_score) is not int or probe_score != 100:
+    # pymo probes an extensionless descriptor path, so FFmpeg's extension bonus
+    # cannot produce a score of 50 here. Supported FFmpeg releases legitimately
+    # return 50 for short, valid MPEG transport streams, while scores at or
+    # below its retry boundary (25) are explicitly weak. Keep the accusation
+    # boundary at the stronger content-only score of 50 and reject impossible
+    # values above FFmpeg's documented maximum of 100.
+    if type(probe_score) is not int or not 50 <= probe_score <= 100:
         return None
     if not isinstance(format_name, str):
         return None

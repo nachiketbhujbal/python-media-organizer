@@ -120,8 +120,9 @@ never duplicate the version in source or static project metadata.
   non-media file. An empty stream is the absence of a signature rather than a
   non-media one, so an empty media file is still validated and still an error.
 - Report a video container/extension mismatch only from a successful existing
-  ffprobe result with integer probe score 100, a non-empty demuxer family, and
-  an explicitly mapped packaged extension. Compare normalized families, keep
+  extensionless ffprobe result with an integer content-probe score from 50
+  through 100, a non-empty demuxer family, and an explicitly mapped packaged
+  extension. Compare normalized families, keep
   the finding warning-only, and make no accusation for weak, malformed,
   missing, or unmapped evidence.
 - Never use cached validation health to satisfy an ordinary standard or full
