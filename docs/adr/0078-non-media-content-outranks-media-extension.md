@@ -63,12 +63,24 @@ or videos and are counted as other files instead, because that is what they are.
 The report shape is unchanged, so the schema version is unchanged; only counts
 that were previously wrong become right.
 
-Damage detection is unaffected for genuinely damaged media. A truncated or
-corrupt media file still carries a media or generic content signature, so it is
-still validated and still reported as an error. Only content positively
-identified as something else is exempted, which is why synthetic fixtures
-standing in for damage must be damaged media rather than text wearing a media
-extension.
+Damage detection is unaffected for damaged media that retains a media or generic
+content signature. A file truncated or corrupted past its payload but still
+carrying recognizable container magic is still validated and still reported as
+an error. Only content positively identified as something else is exempted,
+which is why synthetic fixtures standing in for damage must be damaged media
+rather than text wearing a media extension.
+
+That claim is deliberately narrow, and the limit it leaves is worth stating. If
+damage destroys a file's header and its surviving bytes positively identify as
+text or as some other non-media type, the file is observationally identical to a
+non-media file that was misnamed on purpose. No local signature can separate the
+two, so this decision reports it as a warning rather than a decode error. That
+is an accepted trade rather than an oversight: the alternative is to keep
+reporting healthy misnamed files as damaged media, which is the defect this
+decision exists to correct. Damage severe enough to reach that state has already
+destroyed the evidence needed to classify the file, and a warning naming the
+disagreement is more truthful than an error asserting a decode that was never
+attempted.
 
 Container-family truthfulness, which reports a video whose container disagrees
 with its extension, depends on this correction landing first. Until a file that

@@ -413,11 +413,11 @@ marketing setting.
 
 ## Media truthfulness, damage, and remediation
 
-**Status: research only.** Nothing in this section is scheduled except the container and extension
-detection work promoted to the roadmap. Validation remediation guidance, isolation folders,
-byte-changing repair, container conversion, and quarantine are all recorded here for later
-evaluation and must not be implemented on the strength of this record alone. Several questions
-below are deliberately unresolved.
+**Status: research only, with two exceptions.** The classification-severity correction described
+below shipped in 0.5.5, and the container and extension detection work is promoted to the roadmap.
+Validation remediation guidance, isolation folders, byte-changing repair, container conversion, and
+quarantine are all recorded here for later evaluation and must not be implemented on the strength
+of this record alone. Several questions below are deliberately unresolved.
 
 ### What prompted it
 
@@ -550,12 +550,14 @@ service description table ahead of the program association table, so a genuine t
 frequently unrecognized. The extension must therefore keep its classification weight, and the
 container prober supplies the authoritative container identity later, during validation.
 
-The hazard itself remains real, but it is an active defect rather than an open design question: a
-non-media file bearing one of these extensions is presently classified as video, probed, and
-reported as a decode error at failing exit status. Correcting that severity is scheduled as its own
-release, and container-family detection depends on it landing first. The narrow rule that fixes it
-is that a meaningful non-media content signature outranks a media extension; it does not require
-the extension to lose its weight for genuine media.
+The hazard was real and was an active defect rather than an open design question: a non-media file
+bearing one of these extensions was classified as video, probed, and reported as a decode error at
+failing exit status. That defect is fixed. A meaningful non-media content signature now outranks a
+media extension during validation discovery, so such a file is reported as a warning-severity
+naming mismatch, is never probed or decoded, and does not fail the run. The rule is deliberately
+narrow and does not require the extension to lose its weight for genuine media, which is why a
+genuine transport stream named `.ts` is still classified and validated as video. ADR 0078 records
+the decision. Container-family detection builds on this corrected discovery behavior.
 
 ### Correcting a false extension
 
@@ -668,9 +670,6 @@ media, action history, duplicate tree, or cache state.
 ### Open questions
 
 - Where exactly does extension correction sit in the command chain, and what is it called?
-- What is the honest reported outcome for a non-media file bearing a media extension: silence, or a
-  warning that its name disagrees with its content? Only the outcome is open; the failing exit
-  status it currently produces is a scheduled defect fix, not a question.
 - Should damaged media be isolated into a folder at all, or reported in place indefinitely?
 - If isolated, does undecodable-but-unproven media get its own folder separate from proven loss?
 - For a container conversion, is the authentic original or the widely playable derivative the

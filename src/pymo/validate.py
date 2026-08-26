@@ -70,10 +70,6 @@ DiscoveryDisposition = Literal[
     "reserved",
 ]
 
-MISMATCHED_EXTENSION_DESCRIPTION = (
-    "media extension has a meaningful non-media content signature"
-)
-
 
 @dataclass(frozen=True)
 class MediaCandidate:
@@ -873,7 +869,7 @@ def build_report(
             (
                 "warning",
                 "extension_content_mismatch",
-                MISMATCHED_EXTENSION_DESCRIPTION,
+                "media extension has a meaningful non-media content signature",
             )
         ] += discovery.mismatched_count
     if discovery.classifier_warning:
@@ -926,7 +922,7 @@ def build_report(
                 discovery.mismatched_paths,
                 "warning",
                 "extension_content_mismatch",
-                MISMATCHED_EXTENSION_DESCRIPTION,
+                "media extension has a meaningful non-media content signature",
             ),
         ):
             finding_files.extend(

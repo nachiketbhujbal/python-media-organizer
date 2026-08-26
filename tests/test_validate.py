@@ -490,6 +490,7 @@ def test_non_media_content_with_media_extension_is_not_validated_as_media(
 ) -> None:
     root = tmp_path / "media-collection"
     root.mkdir()
+    (root / "caption.jpg").write_text("a caption, not a photograph\n")
     (root / "component.ts").write_text(
         "export const value: number = 1;\nconsole.log(value);\n"
     )
@@ -498,11 +499,12 @@ def test_non_media_content_with_media_extension_is_not_validated_as_media(
     discovery = validate.discover_candidates(root, load_config(root))
 
     assert discovery.candidates == ()
-    assert [path.name for path in discovery.mismatched_paths] == [
+    assert sorted(path.name for path in discovery.mismatched_paths) == [
+        "caption.jpg",
         "component.ts",
         "notes.mp4",
     ]
-    assert discovery.mismatched_count == 2
+    assert discovery.mismatched_count == 3
 
 
 @requires_file_command
