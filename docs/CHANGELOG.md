@@ -2,6 +2,32 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.6 - 2026-08-26
+
+- Report a warning-severity `container_extension_mismatch` when a successful
+  video probe identifies a container family that disagrees with the filename
+  extension, without changing validation exit status or running an additional
+  probe.
+- Require an integer content-probe score from 50 through ffprobe's maximum of
+  100, a non-empty demuxer family, and an explicitly mapped packaged video
+  extension before reporting a mismatch. The probe uses an extensionless
+  descriptor, so filename-extension scoring cannot satisfy that boundary.
+  Treat MOV/MP4, Matroska/WebM, transport-stream, raw/program MPEG, and other
+  shared demuxers as families so valid names do not produce false accusations.
+- Keep container findings distinct from non-media
+  `extension_content_mismatch` findings and preserve probe, stream, duration,
+  and container evidence when a later full decode fails.
+- Add immutable packaged family policy covering every packaged video extension;
+  collection and explicit configuration cannot redefine it, while custom video
+  extensions simply receive no container accusation.
+- Advance standard and full validation evidence algorithms to version 2.
+  Version-1 records remain structurally valid but stale and non-reusable, so
+  cache status remains usable and targeted refresh can publish version-2
+  evidence without deleting historical or unrelated records.
+- Record the confidence and cache-compatibility boundaries in ADR 0079 and add
+  synthetic plus real FFmpeg coverage for correct, shared, misnamed, weak,
+  missing, malformed, private-report, and full-decode-failure cases.
+
 ## 0.5.5 - 2026-08-25
 
 - Stop reporting a healthy non-media file that merely bears a configured media

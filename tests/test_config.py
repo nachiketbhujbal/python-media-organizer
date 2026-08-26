@@ -33,6 +33,12 @@ def test_packaged_defaults_cover_common_local_system_metadata(
     assert "photo" in config.rename.noise_tokens
     assert ".png" in config.image_duplicates.extensions
     assert config.video_duplicates.decode_timeout_seconds == 3600
+    assert set(config.validation.container_families) == set(
+        config.classification.video_extensions
+    )
+    assert config.validation.container_families[".mp4"] == {"3g2,3gp,m4a,mj2,mov,mp4"}
+    assert config.validation.container_families[".mpg"] == {"mpeg", "mpegvideo"}
+    assert config.validation.container_families[".wmv"] == {"asf", "asf_o"}
     assert config.performance.scan_workers == 4
     assert config.performance.progress_interval_seconds == 15
     assert config.performance.cache_publication_batch_size == 32
@@ -105,6 +111,28 @@ def test_collection_policy_extends_defaults_and_timeout_overrides(
     assert config.performance.scan_workers == 2
     assert config.performance.progress_interval_seconds == 5
     assert config.performance.cache_publication_batch_size == 8
+    assert ".city" not in config.validation.container_families
+
+
+def test_collection_configuration_cannot_redefine_packaged_validation_policy(
+    tmp_path: Path,
+) -> None:
+    CollectionLayout(tmp_path).config.write_text(
+        "version = 1\n"
+        "[validation.container_families]\n"
+        '".mp4" = ["matroska,webm"]\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigError, match=r"unknown top-level key.*validation"):
+        load_config(tmp_path)
+
+
+def test_packaged_validation_policy_is_immutable(tmp_path: Path) -> None:
+    config = load_config(tmp_path)
+
+    with pytest.raises(TypeError):
+        config.validation.container_families[".mp4"] = frozenset({"matroska"})  # type: ignore[index]
 
 
 @pytest.mark.parametrize(

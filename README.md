@@ -164,6 +164,11 @@ periodic status and long-operation heartbeat cadence from 1 to 3600 seconds.
 merged into each durable atomic cache publication; it must be between 1 and
 1000.
 
+Container-family validation policy is packaged and immutable rather than a
+collection preference. It covers every packaged video extension; custom video
+extensions remain valid classification fallbacks but receive no container-name
+accusation because pymo has no reviewed family policy for them.
+
 An alternate extension file can be selected for one command:
 
 ```bash
@@ -416,6 +421,10 @@ path-private unless `--show-files` or `--show-ignored` is explicit. An external
 `--cache` keeps derived writes off a read-only collection. Refresh is not a
 repair operation: invalid cache structure still fails closed, and validation
 findings remain health evidence rather than ignored content.
+Historical validation records remain structurally valid but stale after a
+validation-algorithm upgrade. They are never reused under newer semantics;
+standard or full validation refresh publishes current records while preserving
+the historical and unrelated rows.
 
 ### Validate collection health
 
@@ -472,6 +481,15 @@ validation of its healthy neighbors. Unsupported media remains explicitly
 unverified and visible as a warning; pymo never converts a health finding into
 an ignore rule. Animated and multi-page images are counted as valid
 characteristics rather than corruption.
+
+A real video whose confidently probed container family disagrees with its
+extension receives the separate warning `container_extension_mismatch`. The
+check reuses the standard extensionless ffprobe result, requires an integer
+content-probe score from 50 through 100, and compares families so MOV/MP4,
+Matroska/WebM, and related shared demuxers do not false-positive. Weak, missing,
+malformed, or unmapped evidence produces no accusation. The warning remains
+visible alongside a later full-decode error and does not itself make validation
+fail.
 
 Classification and decoding use stable, no-follow file descriptors anchored
 beneath the resolved collection root. If a file or parent path is replaced

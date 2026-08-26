@@ -27,10 +27,9 @@ from pymo.cache.probes import (
 )
 from pymo.cache.validation import (
     VALIDATION_EVIDENCE_TYPE,
-    VALIDATION_FULL_ALGORITHM,
-    VALIDATION_STANDARD_ALGORITHM,
     ValidationCacheError,
     validate_evidence_records,
+    validation_algorithm_is_current,
 )
 from pymo.collection import CollectionLayout
 from pymo.duplicates import videos
@@ -199,8 +198,7 @@ def inspect_cache_status(
                     record.algorithm == IMAGE_PIXEL_ALGORITHM for record in image_pixels
                 )
                 + sum(
-                    record.algorithm
-                    in {VALIDATION_STANDARD_ALGORITHM, VALIDATION_FULL_ALGORITHM}
+                    validation_algorithm_is_current(record.algorithm)
                     for record in validation_records
                 )
             )

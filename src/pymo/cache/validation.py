@@ -15,8 +15,10 @@ from pymo.cache.hashes import HashCacheError, build_hash_observations, matching_
 from pymo.file_safety import FileState
 
 VALIDATION_EVIDENCE_TYPE = "media-validation"
-VALIDATION_STANDARD_ALGORITHM = "media-validation-standard-v1"
-VALIDATION_FULL_ALGORITHM = "media-validation-full-v1"
+# These identifiers separate persisted results created before and after
+# container/extension truthfulness entered validation semantics.
+VALIDATION_STANDARD_ALGORITHM = "media-validation-standard-v2"
+VALIDATION_FULL_ALGORITHM = "media-validation-full-v2"
 
 ValidationProfile = Literal["standard", "full"]
 ValidationKind = Literal["picture", "video"]
@@ -70,6 +72,31 @@ def validation_algorithm(profile: ValidationProfile) -> str:
         if profile == "full"
         else VALIDATION_STANDARD_ALGORITHM
     )
+
+
+def validation_profile_for_algorithm(algorithm: str) -> ValidationProfile | None:
+    """Return the profile for structurally recognized current or historical data."""
+
+    if algorithm in {
+        "media-validation-standard-v1",
+        VALIDATION_STANDARD_ALGORITHM,
+    }:
+        return "standard"
+    if algorithm in {
+        "media-validation-full-v1",
+        VALIDATION_FULL_ALGORITHM,
+    }:
+        return "full"
+    return None
+
+
+def validation_algorithm_is_current(algorithm: str) -> bool:
+    """Return whether an algorithm carries the current validation semantics."""
+
+    return algorithm in {
+        VALIDATION_STANDARD_ALGORITHM,
+        VALIDATION_FULL_ALGORITHM,
+    }
 
 
 def validation_runtime(
@@ -216,15 +243,8 @@ def decode_validation_payload(payload_json: str, algorithm: str) -> dict[str, ob
     if not isinstance(payload, dict) or set(payload) != expected_keys:
         raise ValidationCacheError("cached media validation contains invalid evidence")
     profile = payload["profile"]
-    expected_profile = "full" if algorithm == VALIDATION_FULL_ALGORITHM else "standard"
-    if (
-        algorithm
-        not in {
-            VALIDATION_STANDARD_ALGORITHM,
-            VALIDATION_FULL_ALGORITHM,
-        }
-        or profile != expected_profile
-    ):
+    expected_profile = validation_profile_for_algorithm(algorithm)
+    if expected_profile is None or profile != expected_profile:
         raise ValidationCacheError("cached media validation contains invalid evidence")
     if payload["kind"] not in {"picture", "video"} or not isinstance(
         payload["animated_or_multipage"], bool

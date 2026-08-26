@@ -64,6 +64,10 @@ never duplicate the version in source or static project metadata.
   siblings, mutate media, create duplicate trees, or append action history.
   Validation refresh always performs a fresh check; it never consumes old
   health evidence.
+- Treat recognized historical validation algorithms as structurally valid but
+  stale and non-reusable. Cache status remains readable and targeted refresh
+  publishes current evidence while preserving historical and unrelated rows;
+  unknown or malformed algorithms still fail closed.
 - Bind exact-media analysis to a stable regular-file state. Revalidate complete
   duplicate groups before apply and retained originals through journal commit.
 - Keep exact-media classification, hashing, probing, and decoding pinned to
@@ -115,6 +119,12 @@ never duplicate the version in source or static project metadata.
   mismatch, invoke no decoder or native media tool for it, and count it as a
   non-media file. An empty stream is the absence of a signature rather than a
   non-media one, so an empty media file is still validated and still an error.
+- Report a video container/extension mismatch only from a successful existing
+  extensionless ffprobe result with an integer content-probe score from 50
+  through 100, a non-empty demuxer family, and an explicitly mapped packaged
+  extension. Compare normalized families, keep
+  the finding warning-only, and make no accusation for weak, malformed,
+  missing, or unmapped evidence.
 - Never use cached validation health to satisfy an ordinary standard or full
   validation request. Persist results only after a current descriptor-pinned
   read. Key them by exact content, profile, semantic classification context,
@@ -202,7 +212,8 @@ never duplicate the version in source or static project metadata.
 - `src/pymo/progress.py`: shared elapsed-time, observed-rate, ETA, and heartbeat
   formatting without filenames or persistent state.
 - `src/pymo/config.py` and `src/pymo/default_config.toml`: validated shared
-  configuration and immutable local safety defaults.
+  configuration and immutable local safety defaults, including packaged-only
+  validation container families that collection configuration cannot redefine.
 - `src/pymo/cli.py`: thin unified command dispatcher.
 
 Preserve the four-character collection folder convention: `pics`, `vids`, and
@@ -341,3 +352,6 @@ separation between the analyzed media root and the writable cache location.
 Version 0.5 then adds directional, report-only migration verification. It must
 never write to the source and must distinguish byte preservation from exact
 displayed-image or decoded-video preservation.
+Version 0.5.6 adds confidence-gated video container/extension warnings and
+advances validation evidence semantics while retaining historical cache records
+as stale, refreshable data.

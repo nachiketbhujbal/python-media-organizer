@@ -102,6 +102,33 @@ generic_mime_types = [
     "application/x-empty",
 ]
 
+# ffprobe reports shared demuxer families for containers it cannot distinguish
+# by family name alone. This packaged-only validation policy covers every
+# packaged video extension; collection configuration cannot redefine it.
+[validation.container_families]
+".3g2" = ["mov,mp4,m4a,3gp,3g2,mj2"]
+".3gp" = ["mov,mp4,m4a,3gp,3g2,mj2"]
+".asf" = ["asf", "asf_o"]
+".avi" = ["avi"]
+".divx" = ["avi"]
+".flv" = ["flv"]
+".m2ts" = ["mpegts"]
+".m4v" = ["mov,mp4,m4a,3gp,3g2,mj2"]
+".mkv" = ["matroska,webm"]
+".mov" = ["mov,mp4,m4a,3gp,3g2,mj2"]
+".mp4" = ["mov,mp4,m4a,3gp,3g2,mj2"]
+".mpe" = ["mpeg", "mpegvideo"]
+".mpeg" = ["mpeg", "mpegvideo"]
+".mpg" = ["mpeg", "mpegvideo"]
+".mts" = ["mpegts"]
+".ogv" = ["ogg"]
+".rm" = ["rm"]
+".rmvb" = ["rm"]
+".ts" = ["mpegts"]
+".vob" = ["mpeg"]
+".webm" = ["matroska,webm"]
+".wmv" = ["asf", "asf_o"]
+
 [rename]
 noise_tokens = [
     "copy",

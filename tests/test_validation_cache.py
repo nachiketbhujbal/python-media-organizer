@@ -332,6 +332,118 @@ def test_validation_payload_rejects_an_inconsistent_outcome(tmp_path: Path) -> N
         )
 
 
+@pytest.mark.parametrize(
+    ("profile", "algorithm"),
+    [
+        ("standard", "media-validation-standard-v1"),
+        ("full", "media-validation-full-v1"),
+    ],
+)
+def test_historical_validation_algorithms_remain_structurally_recognized(
+    tmp_path: Path, profile: str, algorithm: str
+) -> None:
+    value = ValidationEvidenceValue(
+        path=tmp_path / "fern.png",
+        state=validate.FileState(1, 2, 3, 4, 5),
+        byte_sha256="a" * 64,
+        kind="picture",
+        profile=profile,  # type: ignore[arg-type]
+        runtime="runtime",
+        completed_at="2026-08-23T00:00:00.000000+00:00",
+        findings=(),
+        animated_or_multipage=False,
+    )
+
+    payload = decode_validation_payload(encode_validation_payload(value), algorithm)
+
+    assert payload["profile"] == profile
+
+
+def test_unknown_validation_algorithm_remains_invalid(tmp_path: Path) -> None:
+    value = ValidationEvidenceValue(
+        path=tmp_path / "fern.png",
+        state=validate.FileState(1, 2, 3, 4, 5),
+        byte_sha256="a" * 64,
+        kind="picture",
+        profile="standard",
+        runtime="runtime",
+        completed_at="2026-08-23T00:00:00.000000+00:00",
+        findings=(),
+        animated_or_multipage=False,
+    )
+
+    with pytest.raises(ValidationCacheError, match="invalid evidence"):
+        decode_validation_payload(
+            encode_validation_payload(value), "media-validation-standard-v99"
+        )
+
+
+@pytest.mark.parametrize(
+    ("profile", "algorithm"),
+    [
+        ("standard", "media-validation-full-v1"),
+        ("full", "media-validation-standard-v1"),
+    ],
+)
+def test_historical_validation_algorithm_rejects_the_wrong_profile(
+    tmp_path: Path, profile: str, algorithm: str
+) -> None:
+    value = ValidationEvidenceValue(
+        path=tmp_path / "fern.png",
+        state=validate.FileState(1, 2, 3, 4, 5),
+        byte_sha256="a" * 64,
+        kind="picture",
+        profile=profile,  # type: ignore[arg-type]
+        runtime="runtime",
+        completed_at="2026-08-23T00:00:00.000000+00:00",
+        findings=(),
+        animated_or_multipage=False,
+    )
+
+    with pytest.raises(ValidationCacheError, match="invalid evidence"):
+        decode_validation_payload(encode_validation_payload(value), algorithm)
+
+
+def test_historical_validation_is_stale_not_reused_or_invalid(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    Image.new("RGB", (2, 2), "green").save(root / "fern.png")
+    database = CollectionLayout(root).derived_cache
+    seeded = run_script("validate.py", root)
+    assert seeded.returncode == 0, seeded.stdout + seeded.stderr
+    connection = sqlite3.connect(database)
+    connection.execute(
+        "UPDATE derived_evidence SET algorithm = ? WHERE algorithm = ?",
+        ("media-validation-standard-v1", VALIDATION_STANDARD_ALGORITHM),
+    )
+    connection.commit()
+    connection.close()
+
+    stale_report, stale_status = cache_status.inspect_cache_status(
+        root, database, location="collection-local"
+    )
+    reused = run_script("validate.py", root, "--reuse-validation", "--json")
+
+    assert stale_status == 0
+    assert stale_report["cache"]["evidence_compatibility"] == {
+        "algorithm_compatible": 0,
+        "stale_algorithm": 1,
+        "unknown_type": 0,
+        "runtime_checked": False,
+    }
+    assert reused.returncode == 0, reused.stdout + reused.stderr
+    cache_report = json.loads(reused.stdout)["cache"]
+    assert cache_report["records_reused"] == 0
+    assert cache_report["fresh_validation_files"] == 1
+    _contents, records = validation_records(database)
+    assert {record.algorithm for record in records} == {
+        "media-validation-standard-v1",
+        VALIDATION_STANDARD_ALGORITHM,
+    }
+
+
 def test_validation_publication_retains_completed_batches_after_later_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

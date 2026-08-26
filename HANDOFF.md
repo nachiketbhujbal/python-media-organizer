@@ -26,7 +26,8 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and includes the version 0.5.3 layered preservation release.
+`pymo` command, and includes layered preservation through version 0.5.3 plus
+validation truthfulness and cache compatibility through version 0.5.6.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -243,6 +244,18 @@ utility produces for an empty result are now packaged as generic types, because
 descriptor-pinned callers read standard input. Where the utility is unavailable
 the rule does not apply and the existing fallback warning stands. ADR 0078 is
 the durable decision.
+
+Version 0.5.6 reports a warning-severity `container_extension_mismatch` only
+when the existing extensionless ffprobe result has an integer content-probe
+score from 50 through 100, a non-empty demuxer family, and an explicitly mapped
+packaged extension whose accepted family does not match. Shared families such
+as MOV/MP4 and Matroska/WebM do not
+false-positive; weak raw-stream probes, missing or malformed data, and custom
+unmapped extensions make no accusation. Probe findings survive a later full
+decode error. Standard and full validation evidence advance to version 2;
+version-1 rows remain structurally valid but stale and non-reusable, so status
+can report them and targeted refresh can publish version-2 rows while retaining
+historical and unrelated evidence. ADR 0079 is the durable decision.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -476,7 +489,10 @@ timeout overrides the packaged value, while `--decode-timeout` has final
 command-line precedence.
 
 `src/pymo/config.py` validates schema version 1 into frozen, typed policy
-objects. A collection-root `.pymo.toml` extends packaged policy automatically.
+objects. Its immutable validation container-family map is packaged-only and
+must exactly cover the packaged video extensions; a collection cannot redefine
+it, and a custom added video extension receives no container accusation. A
+collection-root `.pymo.toml` extends the supported packaged policy automatically.
 `--config PATH` selects a different custom extension file for that command.
 Ignore patterns match case-insensitive basenames or collection-relative paths,
 and an ignored directory protects all descendants.
@@ -941,6 +957,13 @@ its result publishes afterward in bounded atomic batches. Old health never
 satisfies a normal current request. Health evidence remains distinct from
 user-authored ignore policy.
 
+Video reports also distinguish a confidently misnamed real container from
+non-media content wearing a media extension. The former is
+`container_extension_mismatch`, requires an extensionless ffprobe content score
+from 50 through 100 plus a mapped family, and is warning-only. It uses the
+standard probe already in progress and is retained even when a subsequent full
+decode produces `invalid_video`.
+
 ## Logging
 
 `src/pymo/logging_config.py` routes all command output through the standard
@@ -1066,6 +1089,12 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - explicit validation reuse for unchanged exact matches, changed/profile/runtime
   misses, external caches, cached error outcomes, decoder non-invocation on a
   hit, post-lookup replacement rejection, and real FFmpeg full-decode evidence;
+- confident container-family validation across mocked and real MP4, MOV,
+  Matroska/WebM, MPEG-TS, and raw MPEG evidence, including shared families,
+  weak/malformed probes, output privacy, and later full-decode failure;
+- historical validation evidence accepted as stale and non-reusable by
+  preflight/status, then upgraded through standard and full targeted refresh
+  without losing historical or unrelated records;
 - directional fresh-byte migration coverage across renamed and reorganized
   trees, duplicate reduction and destination extras, missing content, ignored
   and pymo-owned state, symbolic links, traversal/read/change failures, root

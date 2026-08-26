@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -11,7 +12,11 @@ from PIL import Image
 
 from pymo.cache import service as cache_service
 from pymo.cache.images import IMAGE_PIXEL_EVIDENCE_TYPE
-from pymo.cache.validation import VALIDATION_EVIDENCE_TYPE
+from pymo.cache.validation import (
+    VALIDATION_EVIDENCE_TYPE,
+    VALIDATION_FULL_ALGORITHM,
+    VALIDATION_STANDARD_ALGORITHM,
+)
 from pymo.collection import CollectionLayout
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -162,6 +167,62 @@ def test_validation_refresh_supports_external_cache_without_collection_state(
     assert not CollectionLayout(collection).derived_cache.exists()
     assert not CollectionLayout(collection).derived_cache_lock.exists()
     assert not CollectionLayout(collection).action_log.exists()
+
+
+def test_validation_refresh_upgrades_historical_algorithms_and_preserves_records(
+    tmp_path: Path,
+) -> None:
+    make_image(tmp_path / "willow.png")
+    layout = CollectionLayout(tmp_path)
+    standard = run_cache("refresh", "validation-standard", tmp_path)
+    full = run_cache("refresh", "validation-full", tmp_path)
+    assert standard.returncode == full.returncode == 0
+    connection = sqlite3.connect(layout.derived_cache)
+    connection.execute(
+        "UPDATE derived_evidence SET algorithm = ? WHERE algorithm = ?",
+        ("media-validation-standard-v1", VALIDATION_STANDARD_ALGORITHM),
+    )
+    connection.execute(
+        "UPDATE derived_evidence SET algorithm = ? WHERE algorithm = ?",
+        ("media-validation-full-v1", VALIDATION_FULL_ALGORITHM),
+    )
+    future = cache_service.DerivedEvidence(
+        file_sha256="0" * 64,
+        evidence_type="future-evidence",
+        algorithm="future-v1",
+        runtime="local",
+        payload_json='{"value":1}',
+    )
+    cache_service.upsert_derived_evidence(connection, (future,))
+    connection.commit()
+    connection.close()
+
+    refreshed_standard = run_cache("refresh", "validation-standard", tmp_path)
+    after_standard = cache_service.read_coordinated_cache(layout.derived_cache)
+    assert refreshed_standard.returncode == 0, (
+        refreshed_standard.stdout + refreshed_standard.stderr
+    )
+    assert after_standard is not None
+    assert {
+        (record.evidence_type, record.algorithm) for record in after_standard.evidence
+    } == {
+        (VALIDATION_EVIDENCE_TYPE, "media-validation-standard-v1"),
+        (VALIDATION_EVIDENCE_TYPE, VALIDATION_STANDARD_ALGORITHM),
+        (VALIDATION_EVIDENCE_TYPE, "media-validation-full-v1"),
+        ("future-evidence", "future-v1"),
+    }
+
+    refreshed_full = run_cache("refresh", "validation-full", tmp_path)
+    final = cache_service.read_coordinated_cache(layout.derived_cache)
+    assert refreshed_full.returncode == 0, refreshed_full.stdout + refreshed_full.stderr
+    assert final is not None
+    assert {(record.evidence_type, record.algorithm) for record in final.evidence} == {
+        (VALIDATION_EVIDENCE_TYPE, "media-validation-standard-v1"),
+        (VALIDATION_EVIDENCE_TYPE, VALIDATION_STANDARD_ALGORITHM),
+        (VALIDATION_EVIDENCE_TYPE, "media-validation-full-v1"),
+        (VALIDATION_EVIDENCE_TYPE, VALIDATION_FULL_ALGORITHM),
+        ("future-evidence", "future-v1"),
+    }
 
 
 def test_refresh_rejects_target_specific_options_before_writing_state(
