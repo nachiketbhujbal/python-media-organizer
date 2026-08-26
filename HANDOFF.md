@@ -27,7 +27,9 @@ absence, and they must not claim whole-device recovery.
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
 `pymo` command, and includes layered preservation through version 0.5.3 plus
-validation truthfulness and cache compatibility through version 0.5.6.
+validation truthfulness and cache compatibility through version 0.5.6. Version
+0.5.7 pluralizes the architecture-decision directory as `docs/adrs/` without
+changing runtime or package behavior.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -257,6 +259,11 @@ version-1 rows remain structurally valid but stale and non-reusable, so status
 can report them and targeted refresh can publish version-2 rows while retaining
 historical and unrelated evidence. ADR 0079 is the durable decision.
 
+Version 0.5.7 moves the complete architecture-decision set from `docs/adr/` to
+`docs/adrs/`, updates every tracked link and current path reference, and records
+the documentation-layout decision in ADR 0080. Source, tests, configuration,
+packaging, and command behavior are unchanged.
+
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
 behavior. Version 0.3.18 prefixes every physical line of normal human-readable
@@ -402,7 +409,7 @@ python-media-organizer/
     CONTRIBUTING.md
     RESEARCH.md
     ROADMAP.md
-    adr/
+    adrs/
   src/pymo/
     __init__.py
     __main__.py
@@ -1169,7 +1176,7 @@ An AI assistant's branch carries its own prefix, `claude/<type>/<slug>` or
 `codex/<type>/<slug>`, adding the target version as `<type>/v<x.y.z>-<slug>`
 when the work is scheduled for a release. The merge commit preserves that name,
 so attribution stays visible without changing the one-line, maintainer-authored
-commit convention. A branch reserves the next free `docs/adr/` number when it
+commit convention. A branch reserves the next free `docs/adrs/` number when it
 starts, claims it in its first commit, names it in the pull request, and
 re-checks it against the target branch immediately before merge, renumbering on
 conflict; claiming alone cannot prevent two branches selecting the same number.

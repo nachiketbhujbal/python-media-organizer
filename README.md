@@ -857,7 +857,7 @@ workloads without increasing contention or reducing safety.
 See the [documentation index](docs/README.md) for the release
 [roadmap](docs/ROADMAP.md), [research notebook](docs/RESEARCH.md),
 [changelog](docs/CHANGELOG.md), [package architecture](docs/ARCHITECTURE.md),
-[architecture decisions](docs/adr/README.md), and
+[architecture decisions](docs/adrs/README.md), and
 [adversarial review ledger](docs/CODE_REVIEW.md). `HANDOFF.md` records the
 current engineering state and compatibility details. `AGENTS.md` is the
 authoritative instruction file for coding agents; a tool-specific entry point

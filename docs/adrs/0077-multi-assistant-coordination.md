@@ -12,7 +12,7 @@ contributor following a stale copy would break a rule another file still
 states correctly.
 
 Parallel assistant branches also introduce two practical collisions. Two
-branches can claim the same `docs/adr/` number before either merges, and
+branches can claim the same `docs/adrs/` number before either merges, and
 attribution disappears once every commit is authored under the single
 maintainer identity required by the Git policy.
 
@@ -48,7 +48,7 @@ commit convention or the maintainer authorship those commits carry.
 
 ### ADR numbers
 
-Reserve the next free `docs/adr/` number in shared local coordination state when
+Reserve the next free `docs/adrs/` number in shared local coordination state when
 a branch starts, claim it in that branch's first commit, and name it in the pull
 request. **Re-check the number against the target branch immediately before
 merge, and renumber on conflict.**

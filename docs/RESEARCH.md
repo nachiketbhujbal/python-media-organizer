@@ -825,7 +825,7 @@ explicit-file INFO, with DEBUG enabled only deliberately.
 
 ## AI-tool repository coordination
 
-**Resolved by [ADR 0077](adr/0077-multi-assistant-coordination.md).** `AGENTS.md`
+**Resolved by [ADR 0077](adrs/0077-multi-assistant-coordination.md).** `AGENTS.md`
 is the single authoritative instruction file; a tool-specific entry point is
 navigational rather than normative. Assistant branches carry a `claude/` or
 `codex/` prefix; ADR numbers are reserved when a branch starts and re-checked

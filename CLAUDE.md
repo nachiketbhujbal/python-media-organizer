@@ -4,11 +4,11 @@
 exactly. This file is navigational only: it points at the authoritative records
 and states the reading order, and it deliberately introduces no project
 requirement of its own, so the two records cannot disagree. See
-[ADR 0077](docs/adr/0077-multi-assistant-coordination.md).
+[ADR 0077](docs/adrs/0077-multi-assistant-coordination.md).
 
 Before changing behavior, read `HANDOFF.md` completely, then the relevant
 source, tests, `docs/ROADMAP.md`, `docs/RESEARCH.md`, `docs/CHANGELOG.md`,
-`docs/CODE_REVIEW.md`, and `docs/adr/`.
+`docs/CODE_REVIEW.md`, and `docs/adrs/`.
 
 The assistant-coordination conventions — branch prefixes, ADR-number reservation,
 release ownership, cross-review, disagreement arbitration, and the subagent

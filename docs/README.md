@@ -13,7 +13,7 @@ needed by coding agents. Durable engineering documentation lives here:
   release procedure.
 - [Architecture](ARCHITECTURE.md) — package boundaries and allowed dependency
   direction.
-- [Architecture decisions](adr/README.md) — one durable decision per record.
+- [Architecture decisions](adrs/README.md) — one durable decision per record.
 
 A future license file will remain at the repository root so hosting sites and
 package consumers can discover it reliably.
