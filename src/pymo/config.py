@@ -7,10 +7,11 @@ import fnmatch
 import os
 import re
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 from pymo.collection import CollectionLayout
@@ -54,6 +55,11 @@ class VideoDuplicateConfig:
 
 
 @dataclass(frozen=True)
+class ValidationConfig:
+    container_families: Mapping[str, frozenset[str]]
+
+
+@dataclass(frozen=True)
 class PerformanceConfig:
     scan_workers: int
     progress_interval_seconds: int
@@ -67,6 +73,7 @@ class PymoConfig:
     rename: RenameConfig
     image_duplicates: ImageDuplicateConfig
     video_duplicates: VideoDuplicateConfig
+    validation: ValidationConfig
     performance: PerformanceConfig
     custom_path: Path | None = None
 
@@ -112,6 +119,7 @@ class _ConfigLayer:
     rename_noise_tokens: tuple[str, ...] = ()
     image_duplicate_extensions: tuple[str, ...] = ()
     decode_timeout_seconds: int | None = None
+    container_families: tuple[tuple[str, tuple[str, ...]], ...] = ()
     scan_workers: int | None = None
     progress_interval_seconds: int | None = None
     cache_publication_batch_size: int | None = None
@@ -200,18 +208,80 @@ def _noise_token(value: str) -> str:
     return token
 
 
-def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
-    sections = frozenset(
-        {
-            "version",
-            "ignore",
-            "classification",
-            "rename",
-            "image_duplicates",
-            "video_duplicates",
-            "performance",
-        }
-    )
+def canonical_container_family(value: str) -> str | None:
+    """Normalize one ffprobe demuxer family without guessing invalid labels."""
+
+    parts = value.strip().casefold().split(",")
+    if not parts or any(
+        not part or re.fullmatch(r"[a-z0-9][a-z0-9_]*", part) is None for part in parts
+    ):
+        return None
+    return ",".join(sorted(set(parts)))
+
+
+def _container_family_map(
+    value: Any,
+    qualified_key: str,
+    source: str,
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, dict):
+        raise ConfigError(f"{source}: {qualified_key} must be a TOML table")
+    result: list[tuple[str, tuple[str, ...]]] = []
+    seen: set[str] = set()
+    for raw_extension, raw_families in value.items():
+        if not isinstance(raw_extension, str):
+            raise ConfigError(f"{source}: {qualified_key} keys must be strings")
+        try:
+            extension = _extension(raw_extension)
+        except ConfigError as error:
+            raise ConfigError(f"{source}: {qualified_key}: {error}") from error
+        if extension in seen:
+            raise ConfigError(
+                f"{source}: {qualified_key} repeats extension {extension!r}"
+            )
+        if (
+            not isinstance(raw_families, list)
+            or not raw_families
+            or not all(isinstance(item, str) for item in raw_families)
+        ):
+            raise ConfigError(
+                f"{source}: {qualified_key}.{raw_extension} must be a non-empty "
+                "array of strings"
+            )
+        families: list[str] = []
+        for raw_family in raw_families:
+            family = canonical_container_family(raw_family)
+            if family is None:
+                raise ConfigError(
+                    f"{source}: {qualified_key}.{raw_extension} contains an "
+                    f"invalid container family: {raw_family!r}"
+                )
+            if family not in families:
+                families.append(family)
+        seen.add(extension)
+        result.append((extension, tuple(families)))
+    return tuple(result)
+
+
+def _parse(
+    document: dict[str, Any],
+    source: str,
+    *,
+    packaged_policy: bool = False,
+) -> _ConfigLayer:
+    sections = {
+        "version",
+        "ignore",
+        "classification",
+        "rename",
+        "image_duplicates",
+        "video_duplicates",
+        "performance",
+    }
+    if packaged_policy:
+        sections.add("validation")
     unknown = set(document).difference(sections)
     if unknown:
         names = ", ".join(sorted(unknown))
@@ -242,6 +312,12 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
         document,
         "video_duplicates",
         frozenset({"decode_timeout_seconds"}),
+        source,
+    )
+    validation = _table(
+        document,
+        "validation",
+        frozenset({"container_families"}),
         source,
     )
     performance = _table(
@@ -352,6 +428,11 @@ def _parse(document: dict[str, Any], source: str) -> _ConfigLayer:
             _extension,
         ),
         decode_timeout_seconds=timeout,
+        container_families=_container_family_map(
+            validation.get("container_families"),
+            "validation.container_families",
+            source,
+        ),
         scan_workers=scan_workers,
         progress_interval_seconds=progress_interval,
         cache_publication_batch_size=cache_batch_size,
@@ -387,7 +468,7 @@ def _packaged_defaults() -> _ConfigLayer:
             document = tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError) as error:
         raise ConfigError(f"cannot read packaged defaults: {error}") from error
-    defaults = _parse(document, "packaged defaults")
+    defaults = _parse(document, "packaged defaults", packaged_policy=True)
     required_arrays = {
         "ignore.files": defaults.ignore_files,
         "ignore.directories": defaults.ignore_directories,
@@ -408,6 +489,20 @@ def _packaged_defaults() -> _ConfigLayer:
     if defaults.decode_timeout_seconds is None:
         raise ConfigError(
             "packaged defaults: video_duplicates.decode_timeout_seconds is required"
+        )
+    family_extensions = {extension for extension, _ in defaults.container_families}
+    video_extensions = set(defaults.video_extensions)
+    if family_extensions != video_extensions:
+        missing = sorted(video_extensions - family_extensions)
+        unexpected = sorted(family_extensions - video_extensions)
+        details: list[str] = []
+        if missing:
+            details.append("missing " + ", ".join(missing))
+        if unexpected:
+            details.append("unexpected " + ", ".join(unexpected))
+        raise ConfigError(
+            "packaged defaults: validation.container_families must exactly cover "
+            "classification.video_extensions (" + "; ".join(details) + ")"
         )
     if defaults.scan_workers is None:
         raise ConfigError("packaged defaults: performance.scan_workers is required")
@@ -508,6 +603,14 @@ def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
             )
         ),
         video_duplicates=VideoDuplicateConfig(decode_timeout_seconds=timeout),
+        validation=ValidationConfig(
+            container_families=MappingProxyType(
+                {
+                    extension: frozenset(families)
+                    for extension, families in defaults.container_families
+                }
+            )
+        ),
         performance=PerformanceConfig(
             scan_workers=scan_workers,
             progress_interval_seconds=progress_interval,

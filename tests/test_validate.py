@@ -263,7 +263,13 @@ def test_video_change_takes_precedence_over_decoder_failure(
 
     monkeypatch.setattr(validate, "_probe_video", change_then_fail)
 
-    result = validate.validate_video(candidate, "ffprobe", None, 30)
+    result = validate.validate_video(
+        candidate,
+        "ffprobe",
+        None,
+        30,
+        container_families=load_config(tmp_path).validation.container_families,
+    )
 
     assert [finding.code for finding in result.findings] == [
         "changed_during_validation"
@@ -332,7 +338,13 @@ def test_video_validation_reports_missing_codec_and_dimensions(
         },
     )
 
-    result = validate.validate_video(candidate, "ffprobe", None, 30)
+    result = validate.validate_video(
+        candidate,
+        "ffprobe",
+        None,
+        30,
+        container_families=load_config(tmp_path).validation.container_families,
+    )
     codes = {finding.code for finding in result.findings}
 
     assert "missing_video_codec" in codes
@@ -366,6 +378,8 @@ def test_video_probe_selects_metadata_and_discards_tool_diagnostics(
     assert observed["kwargs"]["stdout"] is subprocess.PIPE
     assert observed["kwargs"]["stderr"] is subprocess.DEVNULL
     assert observed["kwargs"]["pass_fds"] == (descriptor,)
+    show_entries = observed["command"][observed["command"].index("-show_entries") + 1]
+    assert "probe_score" in show_entries
 
 
 @requires_ffmpeg

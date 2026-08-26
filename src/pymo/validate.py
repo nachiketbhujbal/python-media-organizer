@@ -10,7 +10,7 @@ import subprocess
 import sys
 import warnings
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,6 +40,7 @@ from pymo.config import (
     PymoConfig,
     add_config_argument,
     add_show_ignored_argument,
+    canonical_container_family,
     ignored_messages,
     load_config,
 )
@@ -129,6 +130,7 @@ class ValidationOptions:
     progress_interval_seconds: int
     show_progress: bool
     hash_content: bool
+    container_families: Mapping[str, frozenset[str]]
 
 
 @dataclass(frozen=True)
@@ -438,7 +440,7 @@ def _probe_video(descriptor: int, ffprobe: str) -> dict[str, Any]:
                 "-show_streams",
                 "-show_format",
                 "-show_entries",
-                "stream=codec_type,codec_name,width,height,pix_fmt,sample_rate,channels:format=duration,format_name",
+                "stream=codec_type,codec_name,width,height,pix_fmt,sample_rate,channels:format=duration,format_name,probe_score",
                 "-of",
                 "json",
                 f"/dev/fd/{descriptor}",
@@ -602,22 +604,59 @@ def _duration_finding(
     )
 
 
+def _container_extension_finding(
+    candidate: MediaCandidate,
+    payload: dict[str, Any],
+    container_families: Mapping[str, frozenset[str]],
+) -> Finding | None:
+    if candidate.kind != "video":
+        return None
+    format_data = payload.get("format")
+    if not isinstance(format_data, dict):
+        return None
+    probe_score = format_data.get("probe_score")
+    format_name = format_data.get("format_name")
+    # ffprobe's maximum score is the conservative accusation boundary. Raw or
+    # ambiguous streams can select a demuxer at weaker scores, so treating any
+    # successful selection as authoritative would create false mismatches.
+    if type(probe_score) is not int or probe_score != 100:
+        return None
+    if not isinstance(format_name, str):
+        return None
+    observed_family = canonical_container_family(format_name)
+    accepted_families = container_families.get(candidate.path.suffix.casefold())
+    if (
+        observed_family is None
+        or accepted_families is None
+        or observed_family in accepted_families
+    ):
+        return None
+    return _finding(
+        candidate,
+        "warning",
+        "container_extension_mismatch",
+        "video container does not match the filename extension",
+    )
+
+
 def _inspect_video(
     candidate: MediaCandidate,
     descriptor: int,
     ffprobe: str,
-    ffmpeg: str | None,
-    timeout: int,
-) -> list[Finding]:
+    container_families: Mapping[str, frozenset[str]],
+) -> tuple[list[Finding], bool]:
     payload = _probe_video(descriptor, ffprobe)
     videos, audios, others = _partition_streams(payload)
     findings = _stream_findings(candidate, videos, audios, others)
     duration_finding = _duration_finding(candidate, payload)
     if duration_finding is not None:
         findings.append(duration_finding)
-    if ffmpeg is not None and videos:
-        _full_video_decode(descriptor, ffmpeg, timeout)
-    return findings
+    container_finding = _container_extension_finding(
+        candidate, payload, container_families
+    )
+    if container_finding is not None:
+        findings.append(container_finding)
+    return findings, bool(videos)
 
 
 def validate_video(
@@ -626,6 +665,7 @@ def validate_video(
     ffmpeg: str | None,
     timeout: int,
     *,
+    container_families: Mapping[str, frozenset[str]],
     hash_content: bool = False,
 ) -> ValidationResult:
     findings = _classification_findings(candidate)
@@ -642,9 +682,15 @@ def validate_video(
                 return _validation_result(candidate, findings, byte_sha256=byte_sha256)
             if ffprobe is None:
                 raise VideoInspectionError("ffprobe is required for non-empty video")
-            findings.extend(
-                _inspect_video(candidate, descriptor, ffprobe, ffmpeg, timeout)
+            probe_findings, has_video = _inspect_video(
+                candidate,
+                descriptor,
+                ffprobe,
+                container_families,
             )
+            findings.extend(probe_findings)
+            if ffmpeg is not None and has_video:
+                _full_video_decode(descriptor, ffmpeg, timeout)
     except FileChangedError:
         findings = [_changed_finding(candidate)]
         byte_sha256 = None
@@ -686,6 +732,7 @@ def validate_candidates(
             options.ffprobe,
             options.ffmpeg,
             options.timeout,
+            container_families=options.container_families,
             hash_content=options.hash_content,
         )
 
@@ -1218,6 +1265,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             progress_interval_seconds=config.performance.progress_interval_seconds,
             show_progress=not args.json,
             hash_content=database is not None,
+            container_families=config.validation.container_families,
         ),
     )
     fresh_by_path = {result.candidate.path: result for result in fresh_results}
