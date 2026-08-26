@@ -43,7 +43,11 @@ def test_validation_reports_errors_without_paths_or_writes(
     root = tmp_path / "media-collection"
     root.mkdir()
     Image.new("RGB", (3, 2), "green").save(root / "healthy.png")
-    (root / "damaged.png").write_bytes(b"not an image")
+    # Genuinely damaged media: a real PNG truncated past its header. Plain text
+    # in a media-named file is a naming mismatch rather than damage, and is
+    # covered separately.
+    intact_png = root / "healthy.png"
+    (root / "damaged.png").write_bytes(intact_png.read_bytes()[:32])
     (root / "notes.txt").write_text("garden notes", encoding="utf-8")
     (root / ".DS_Store").write_bytes(b"view state")
     before = snapshot(root)
@@ -395,7 +399,10 @@ def test_video_validation_continues_after_a_corrupt_file(
     )
     assert generated.returncode == 0, generated.stderr
     damaged = root / "damaged.mp4"
-    damaged.write_bytes(b"not a video")
+    # Genuinely damaged media: a real container truncated past its header, so
+    # the content signature still identifies video and the decoder is what
+    # fails. Plain text in a media-named file is a naming mismatch, not damage.
+    damaged.write_bytes(Path(healthy).read_bytes()[:64])
     before = snapshot(root)
 
     result = run_script("validate.py", root, "--show-files", "--no-cache")
@@ -475,3 +482,169 @@ def test_validation_discovery_omits_a_changing_file(
 
     assert discovery.candidates == ()
     assert discovery.changed_count == 1
+
+
+@requires_file_command
+def test_non_media_content_with_media_extension_is_not_validated_as_media(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    (root / "caption.jpg").write_text("a caption, not a photograph\n")
+    (root / "component.ts").write_text(
+        "export const value: number = 1;\nconsole.log(value);\n"
+    )
+    (root / "notes.mp4").write_text("plain text, not a movie\n")
+
+    discovery = validate.discover_candidates(root, load_config(root))
+
+    assert discovery.candidates == ()
+    assert sorted(path.name for path in discovery.mismatched_paths) == [
+        "caption.jpg",
+        "component.ts",
+        "notes.mp4",
+    ]
+    assert discovery.mismatched_count == 3
+
+
+@requires_file_command
+def test_media_extension_mismatch_warns_without_failing_the_run(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    Image.new("RGB", (2, 2), "green").save(root / "healthy.png")
+    (root / "component.ts").write_text("export const value: number = 1;\n")
+
+    result = run_script("validate.py", root, "--show-files", "--no-cache")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "invalid_video" not in result.stdout
+    assert "WARNING extension_content_mismatch" in result.stdout
+    assert (
+        "component.ts: warning extension_content_mismatch" in result.stdout
+    ), result.stdout
+    assert "Files with errors: 0" in result.stdout
+
+
+@requires_file_command
+def test_media_extension_mismatch_json_counts_a_non_media_file(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    (root / "component.ts").write_text("export const value: number = 1;\n")
+
+    result = run_script("validate.py", root, "--json", "--no-cache")
+    report = json.loads(result.stdout)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert report["inventory"]["videos"] == 0
+    assert report["inventory"]["media_files"] == 0
+    assert report["inventory"]["other_files"] == 1
+    assert report["health"]["files_with_errors"] == 0
+    assert report["health"]["files_with_warnings"] == 1
+    codes = {finding["code"] for finding in report["findings"]}
+    assert codes == {"extension_content_mismatch"}
+
+
+@requires_ffmpeg
+@requires_file_command
+def test_genuine_transport_stream_named_ts_still_validates_as_video(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    clip = root / "broadcast.ts"
+    generated = subprocess.run(
+        [
+            FFMPEG,
+            "-v",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=32x24:rate=4:duration=0.5",
+            "-c:v",
+            "mpeg2video",
+            "-pix_fmt",
+            "yuv420p",
+            "-f",
+            "mpegts",
+            str(clip),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert generated.returncode == 0, generated.stderr
+
+    discovery = validate.discover_candidates(root, load_config(root))
+
+    assert discovery.mismatched_paths == ()
+    assert [candidate.path.name for candidate in discovery.candidates] == [
+        "broadcast.ts"
+    ]
+    assert discovery.candidates[0].kind == "video"
+
+
+def test_media_extension_precedence_needs_a_content_signature(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Without the content-signature utility there is no meaningful signature.
+
+    The classifier already warns that classification fell back to filenames, and
+    the configured extension is then the only available evidence. The filename
+    MIME guess that remains is derived from that same name, so it must not
+    outrank the extension policy. The guess is forced to a non-video type here
+    because platform MIME databases disagree about media extensions, and the
+    documented boundary must hold on every platform rather than only on those
+    whose database happens to agree.
+    """
+
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    (root / "component.ts").write_text("export const value: number = 1;\n")
+    monkeypatch.setattr("pymo.classification.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "pymo.classification.mimetypes.guess_type",
+        lambda _name, strict=True: ("text/vnd.trolltech.linguist", None),
+    )
+
+    discovery = validate.discover_candidates(root, load_config(root))
+
+    assert discovery.mismatched_paths == ()
+    assert [candidate.kind for candidate in discovery.candidates] == ["video"]
+    assert discovery.classifier_warning is not None
+
+
+@requires_file_command
+def test_failed_content_signature_does_not_outrank_a_media_extension(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A utility that fails on one file leaves only a filename guess.
+
+    The utility is present, so no fallback warning is raised, but nothing was
+    read from this file's content. The guess must still not be able to report
+    configured media as a naming mismatch.
+    """
+
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    (root / "clip.ts").write_bytes(b"\x47" + bytes(187))
+
+    def failing_run(*args: object, **kwargs: object) -> None:
+        raise OSError("content signature utility failed")
+
+    monkeypatch.setattr("pymo.classification.subprocess.run", failing_run)
+    monkeypatch.setattr(
+        "pymo.classification.mimetypes.guess_type",
+        lambda _name, strict=True: ("text/vnd.trolltech.linguist", None),
+    )
+
+    discovery = validate.discover_candidates(root, load_config(root))
+
+    assert discovery.mismatched_paths == ()
+    assert [candidate.kind for candidate in discovery.candidates] == ["video"]

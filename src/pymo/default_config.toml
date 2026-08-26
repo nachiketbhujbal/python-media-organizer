@@ -94,7 +94,12 @@ video_application_mime_types = [
 ]
 generic_mime_types = [
     "application/octet-stream",
+    # An empty stream carries no content signature at all, so the extension is
+    # the only available evidence. The utility spells this differently when it
+    # reads a pathname than when it reads standard input, and descriptor-pinned
+    # callers always use the latter; both spellings must stay listed.
     "inode/x-empty",
+    "application/x-empty",
 ]
 
 [rename]

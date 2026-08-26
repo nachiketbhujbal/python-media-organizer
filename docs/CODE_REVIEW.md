@@ -50,6 +50,8 @@ The same adversarial method was repeated after the first validation release.
 | VAL-013 | High | A file can change after a compatible cache row is selected but before its result enters the report. | 0.4.12 | Resolved by reopening every proposed hit through the stable collection descriptor boundary and treating change as a miss |
 | VAL-014 | Medium | Reusing cached error/warning results must preserve ordinary health counts, privacy, and exit status rather than treating cache hits as implicitly healthy. | 0.4.12 | Resolved by reconstructing the strict persisted findings into normal `ValidationResult` records |
 | VAL-015 | Medium | A cache-assisted full validation mode could accidentally become the default and weaken the current-read contract needed for preservation checks. | 0.4.12 | Resolved with the explicit `--reuse-validation` opt-in and always-fresh default regressions |
+| VAL-016 | High | Validation discovery fell back to the filename extension even after the content signature positively identified non-media content, so a healthy source file sharing an extension with a media container was probed as media and reported as a decode error at failing exit status. | 0.5.5 | Resolved in ADR 0078 |
+| VAL-017 | Medium | The packaged generic content types listed only the empty-result spelling produced when the utility reads a pathname, while descriptor-pinned callers read standard input and receive a different spelling, so an empty media file depended on the extension fallback that VAL-016 removed. | 0.5.5 | Resolved by packaging both spellings |
 
 ## Scan review findings
 
@@ -103,6 +105,7 @@ The same adversarial method was repeated after the first validation release.
 | CI-004 | Medium | Real-media tests generated H.264 with `libx264`, an encoder intentionally absent from Fedora's official free FFmpeg build even though the product only requires decoding. | 0.3.6 | Resolved by generating synthetic fixtures with FFmpeg's native `mpeg4` encoder |
 | CI-005 | Low | Branch, pull-request, mainline, and tag triggers repeated the complete three-platform matrix for the same private-repository release. | 0.3.7 | Resolved in ADR 0044 |
 | CI-006 | Medium | GitHub Free does not expose branch protection or rulesets for a private repository, so `main` cannot yet reject force pushes, deletion, unchecked direct pushes, or unresolved pull-request conversations at the server boundary. | 0.3.9 | Accepted with an explicit activation prerequisite in ADR 0046 |
+| CI-007 | High | Classification treated a filename MIME guess as a content signature whenever the signature utility was unavailable or failed for one file, so on a platform whose MIME database maps a configured video extension to a non-video type, genuine media was reported as a naming mismatch and never validated. macOS and Fedora agreed with the extension and passed; Ubuntu did not, and a configured extension whose guess is neither a video type nor a generic type failed the same way on every platform. | 0.5.5 | Resolved by taking configured image and video extensions before any filename guess is interpreted, and by forcing a non-video guess in the boundary tests so they hold independently of the platform database |
 
 ## Exact-media review findings
 
@@ -156,6 +159,7 @@ The same adversarial method was repeated after the first validation release.
 | ARCH-002 | Low | Splitting modules by size alone would create new interfaces across cohesive action-journal and exact-media invariants without improving dependency direction or ownership. | 0.4.7 | Accepted and documented in ADR 0065 with explicit future extraction criteria |
 | ARCH-003 | Low | Scan, validation, rename, duplicate analysis, and cache warming imported media classification from the organizer command, giving shared policy misleading command ownership. | 0.4.7 | Resolved by the shared classification foundation in ADR 0065 |
 | ARCH-004 | Low | Writable cache paths and complete descriptor hashing were implemented under the video duplicate command even though image and video producers share both policies. | 0.4.9 | Resolved by shared cache target and hash primitives in ADR 0068 |
+| ARCH-005 | Low | A finding description intended only for display was introduced as a module-level constant in validation, although module constants are reserved for explicit on-disk compatibility identifiers such as schema and algorithm versions, so the reserved set no longer described what it contained. | 0.5.5 | Resolved by inlining the description at its two report sites, matching every neighbouring finding description |
 
 ## Progress and timing review findings
 
@@ -184,6 +188,7 @@ The same adversarial method was repeated after the first validation release.
 | DOC-003 | Medium | The coordination decision's ADR-number rule could not prevent the collision it described, because two branches can independently select the same next free number and each believe it holds the claim. It also defined no arbitration for a disagreement between reviewers and did not say which branch receives review-ledger changes. | 0.5.4 | Resolved in ADR 0077 |
 | DOC-004 | Low | The tool-specific entry point retained a reading list and named the coordination conventions while the coordination decision required it to state no rule of its own, so the contract and its implementation disagreed. | 0.5.4 | Resolved in ADR 0077 |
 | DOC-005 | Low | The promoted roadmap row and the research record promised reuse of the existing extension/content finding code for container-family mismatches, while the accepted design used a distinct code, leaving the tracked records inconsistent with the accepted plan. | 0.5.4 | Resolved |
+| DOC-006 | Medium | The 0.5.5 records claimed more than the release implemented or proved: the authoritative instruction file said no native tool is invoked when a native utility makes the very determination, the roadmap marked the row released while still describing it as planned work, the decision record asserted that damaged media always retains a media or generic signature, the changelog claimed picture-extension coverage that no fixture provided, and the research record still presented the shipped behavior as scheduled work and an open question. | 0.5.5 | Resolved by narrowing each claim to what was implemented and measured, recording the epistemic limit on severely damaged media, adding the missing non-media picture-extension fixture, and closing the decided research question |
 
 ## Release groups
 
@@ -275,6 +280,9 @@ The same adversarial method was repeated after the first validation release.
 - `0.5.4`: record the multi-assistant coordination decision in one ADR, keep
   its conventions in the authoritative instruction file, and reconcile the
   overlapping planning records without changing runtime behavior.
+- `0.5.5`: stop validating a positively identified non-media file as media
+  because of its extension, report the naming mismatch as a warning instead,
+  and keep an empty media file an error.
 
 ## Independent review evidence
 

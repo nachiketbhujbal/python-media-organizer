@@ -175,7 +175,9 @@ def test_full_validation_never_uses_an_old_healthy_result_as_current_health(
     layout = CollectionLayout(root)
 
     healthy = run_script("validate.py", root, "--full")
-    media.write_bytes(b"damaged image content")
+    # Truncate the real PNG so the file is genuinely damaged media rather
+    # than text wearing a media extension, which is a naming mismatch.
+    media.write_bytes(media.read_bytes()[:32])
     damaged = run_script("validate.py", root, "--full")
 
     assert healthy.returncode == 0, healthy.stdout + healthy.stderr
@@ -440,7 +442,7 @@ def test_explicit_reuse_freshly_validates_a_changed_file(
     Image.new("RGB", (2, 2), "green").save(media)
 
     seed = run_script("validate.py", root)
-    media.write_bytes(b"damaged")
+    media.write_bytes(media.read_bytes()[:32])
     changed = run_script("validate.py", root, "--reuse-validation", "--json")
 
     assert seed.returncode == 0
@@ -474,7 +476,9 @@ def test_explicit_reuse_preserves_a_cached_error_and_exit_status(
 ) -> None:
     root = tmp_path / "media-collection"
     root.mkdir()
-    (root / "damaged.png").write_bytes(b"invalid image")
+    damaged = root / "damaged.png"
+    Image.new("RGB", (2, 2), "green").save(damaged)
+    damaged.write_bytes(damaged.read_bytes()[:32])
 
     seed = run_script("validate.py", root)
     reused = run_script("validate.py", root, "--reuse-validation", "--json")

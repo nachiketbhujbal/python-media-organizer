@@ -109,6 +109,12 @@ never duplicate the version in source or static project metadata.
   collection. Collection roots and filenames are private by default;
   filenames require explicit `--show-files`. An unreadable subtree is a health
   error, and changing input supersedes any decoder conclusion.
+- A meaningful non-media content signature outranks a media extension. Never
+  promote a file to a media kind on its extension once content has been
+  positively identified as non-media; report it as a warning-severity naming
+  mismatch, invoke no decoder or native media tool for it, and count it as a
+  non-media file. An empty stream is the absence of a signature rather than a
+  non-media one, so an empty media file is still validated and still an error.
 - Never use cached validation health to satisfy an ordinary standard or full
   validation request. Persist results only after a current descriptor-pinned
   read. Key them by exact content, profile, semantic classification context,
