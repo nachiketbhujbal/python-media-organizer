@@ -413,11 +413,11 @@ marketing setting.
 
 ## Media truthfulness, damage, and remediation
 
-**Status: research only, with two exceptions.** The classification-severity correction described
-below shipped in 0.5.5, and the container and extension detection work is promoted to the roadmap.
-Validation remediation guidance, isolation folders, byte-changing repair, container conversion, and
-quarantine are all recorded here for later evaluation and must not be implemented on the strength
-of this record alone. Several questions below are deliberately unresolved.
+**Status: research only, with two shipped exceptions.** The classification-severity correction
+described below shipped in 0.5.5, and confidence-gated container and extension detection shipped in
+0.5.6. Validation remediation guidance, isolation folders, byte-changing repair, container
+conversion, and quarantine are all recorded here for later evaluation and must not be implemented
+on the strength of this record alone. Several questions below are deliberately unresolved.
 
 ### What prompted it
 
@@ -497,9 +497,10 @@ an implicit ignore list.
 
 ### Container and extension truthfulness
 
-Standard validation already runs ffprobe on every video, so the container family is available at no
-additional cost. The check compares the demuxer family ffprobe reports against the family implied
-by the extension, reporting a distinct `container_extension_mismatch` code at warning severity.
+Version 0.5.6 uses the ffprobe result standard validation already obtains for every non-empty video,
+so container-family comparison adds no probe invocation. The check compares a confidently reported
+demuxer family against the family implied by the extension and reports a distinct
+`container_extension_mismatch` code at warning severity.
 The code is deliberately separate from `extension_content_mismatch`: overloading one code with a
 fourth meaning would leave the aggregate report unable to distinguish a misnamed container from
 content that is not video at all, with only prose as the discriminator.
@@ -509,15 +510,17 @@ legitimately share one demuxer:
 
 | Extension | Expected `format_name` family |
 | --- | --- |
-| `.mp4`, `.m4v`, `.mov`, `.3gp` | `mov,mp4,m4a,3gp,3g2,mj2` |
+| `.3g2`, `.3gp`, `.m4v`, `.mov`, `.mp4` | `mov,mp4,m4a,3gp,3g2,mj2` |
 | `.mkv`, `.webm` | `matroska,webm` |
 | `.ts`, `.m2ts`, `.mts` | `mpegts` |
-| `.avi` | `avi` |
-| `.wmv` | `asf` |
+| `.avi`, `.divx` | `avi` |
+| `.asf`, `.wmv` | `asf` or `asf_o` |
 | `.flv` | `flv` |
-| `.mpg`, `.mpeg` | `mpeg` |
+| `.mpe`, `.mpeg`, `.mpg`, `.vob` | `mpeg` |
+| `.rm`, `.rmvb` | `rm` |
+| `.ogv` | `ogg` |
 
-Consequences the implementing ADR must state rather than leave to be discovered:
+ADR 0079 records the resulting limits rather than leaving them implicit:
 
 - MP4 versus MOV, and Matroska versus WebM, are **not distinguishable** by this method, and that is
   acceptable — both pairs are genuinely one container family, and a name inside its own family is
@@ -528,6 +531,14 @@ Consequences the implementing ADR must state rather than leave to be discovered:
   claim a precision it does not have.
 - A mismatch is a **warning**, never an error. A misdescribed container is not damage, the media is
   not harmed, and exit status must not change.
+
+Local FFmpeg/ffprobe 9.0.1 measurements supported a strict confidence boundary: generated MP4,
+MPEG-TS, Matroska, AVI, ASF, and FLV fixtures reported their listed families with probe score 100;
+a raw MPEG-2 elementary stream reported `mpegvideo` at 51, and a generated MPEG program stream
+reported `mpeg` at 26. The implementation therefore requires integer score 100 and makes no claim
+for weak, missing, malformed, or unmapped evidence. These measurements motivate the policy but do
+not claim every FFmpeg build assigns identical scores; multi-platform integration tests enforce the
+observable safe boundary.
 
 ### Recognizing transport streams, and the `.ts` hazard
 
@@ -547,8 +558,8 @@ content signature cannot be the sole positive authority for recognizing genuine 
 content: the system content-signature utility carries a transport-stream magic rule but misses
 common encoder output that emits the
 service description table ahead of the program association table, so a genuine transport stream is
-frequently unrecognized. The extension must therefore keep its classification weight, and the
-container prober supplies the authoritative container identity later, during validation.
+frequently unrecognized. The extension must therefore keep its classification weight, and a
+confidence-gated container probe supplies stronger evidence later during validation.
 
 The hazard was real and was an active defect rather than an open design question: a non-media file
 bearing one of these extensions was classified as video, probed, and reported as a decode error at

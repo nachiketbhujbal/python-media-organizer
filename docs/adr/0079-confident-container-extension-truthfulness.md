@@ -1,6 +1,6 @@
 # ADR 0079: Report confident container and extension mismatches
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-26
 
 ## Context
@@ -60,9 +60,13 @@ health exit status successful while preserving actionable naming evidence.
 
 The confidence boundary deliberately misses some real mismatches. In
 particular, low-confidence raw or program-stream MPEG observations are not
-accused, and shared demuxer pairs such as MOV/MP4 and Matroska/WebM cannot always
-be distinguished by ffprobe's family alone. Avoiding a false claim is preferred
-to exhaustive naming enforcement.
+accused. Shared demuxer pairs such as MOV/MP4 and Matroska/WebM cannot always be
+distinguished by ffprobe's family alone. `.ts`, `.m2ts`, and `.mts` likewise
+report the same `mpegts` family; distinguishing their packet layouts would
+require separate packet-level analysis. Audio-only content inside a mapped
+video-family container also shares the container demuxer, so this filename check
+does not claim the presence of a video stream. Avoiding a false claim is
+preferred to exhaustive naming enforcement.
 
 Existing validation cache data becomes stale rather than corrupt. Ordinary
 validation remains fresh by default, explicit reuse misses safely, cache status
