@@ -21,7 +21,11 @@ All notable changes to `python-media-organizer` will be recorded here.
   receive the spelling that was not previously listed.
 - Leave classification unchanged where the content-signature utility is
   unavailable, since no meaningful signature exists to outrank the extension;
-  that case already reports its own distinct fallback warning.
+  that case already reports its own distinct fallback warning. Take configured
+  image and video extensions before interpreting the filename MIME guess that
+  remains, so a platform database that does not recognize a configured
+  extension cannot report genuine media as a naming mismatch, and apply the
+  same rule when the utility is present but fails for one file.
 - Record the precedence rule in ADR 0078, and add coverage for a text file under
   video and picture extensions, a genuine transport stream that must still
   validate as video, an empty media file, and the unavailable-utility boundary.

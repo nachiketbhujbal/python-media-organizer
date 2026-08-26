@@ -52,6 +52,15 @@ Where the content-signature utility is unavailable, there is no meaningful
 signature and this precedence rule does not apply. Classification falls back to
 the extension and already reports a distinct warning that it did so.
 
+The filename MIME guess that remains in that situation is not a content
+signature. It is derived from the same name the rule exists to check, and
+platform MIME databases disagree about which media extensions they recognize.
+Configured image and video extensions are therefore taken before any such guess
+is interpreted, whether the utility is missing entirely or merely failed for one
+file. Otherwise a machine whose database does not recognize a configured
+extension would report genuine media as a naming mismatch without reading a byte
+of it.
+
 ## Consequences
 
 A healthy non-media file bearing a media extension no longer fails a collection.

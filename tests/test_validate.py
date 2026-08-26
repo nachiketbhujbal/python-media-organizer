@@ -596,17 +596,55 @@ def test_media_extension_precedence_needs_a_content_signature(
     """Without the content-signature utility there is no meaningful signature.
 
     The classifier already warns that classification fell back to filenames, and
-    the extension is then the only available evidence. This locks that documented
-    boundary rather than implying the precedence rule still applies.
+    the configured extension is then the only available evidence. The filename
+    MIME guess that remains is derived from that same name, so it must not
+    outrank the extension policy. The guess is forced to a non-video type here
+    because platform MIME databases disagree about media extensions, and the
+    documented boundary must hold on every platform rather than only on those
+    whose database happens to agree.
     """
 
     root = tmp_path / "media-collection"
     root.mkdir()
     (root / "component.ts").write_text("export const value: number = 1;\n")
     monkeypatch.setattr("pymo.classification.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "pymo.classification.mimetypes.guess_type",
+        lambda _name, strict=True: ("text/vnd.trolltech.linguist", None),
+    )
 
     discovery = validate.discover_candidates(root, load_config(root))
 
     assert discovery.mismatched_paths == ()
     assert [candidate.kind for candidate in discovery.candidates] == ["video"]
     assert discovery.classifier_warning is not None
+
+
+@requires_file_command
+def test_failed_content_signature_does_not_outrank_a_media_extension(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A utility that fails on one file leaves only a filename guess.
+
+    The utility is present, so no fallback warning is raised, but nothing was
+    read from this file's content. The guess must still not be able to report
+    configured media as a naming mismatch.
+    """
+
+    root = tmp_path / "media-collection"
+    root.mkdir()
+    (root / "clip.ts").write_bytes(b"\x47" + bytes(187))
+
+    def failing_run(*args: object, **kwargs: object) -> None:
+        raise OSError("content signature utility failed")
+
+    monkeypatch.setattr("pymo.classification.subprocess.run", failing_run)
+    monkeypatch.setattr(
+        "pymo.classification.mimetypes.guess_type",
+        lambda _name, strict=True: ("text/vnd.trolltech.linguist", None),
+    )
+
+    discovery = validate.discover_candidates(root, load_config(root))
+
+    assert discovery.mismatched_paths == ()
+    assert [candidate.kind for candidate in discovery.candidates] == ["video"]
