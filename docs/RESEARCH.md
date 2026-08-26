@@ -516,7 +516,8 @@ legitimately share one demuxer:
 | `.avi`, `.divx` | `avi` |
 | `.asf`, `.wmv` | `asf` or `asf_o` |
 | `.flv` | `flv` |
-| `.mpe`, `.mpeg`, `.mpg`, `.vob` | `mpeg` |
+| `.mpe`, `.mpeg`, `.mpg` | `mpeg` or `mpegvideo` |
+| `.vob` | `mpeg` |
 | `.rm`, `.rmvb` | `rm` |
 | `.ogv` | `ogg` |
 

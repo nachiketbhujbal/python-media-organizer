@@ -154,6 +154,31 @@ def test_container_extension_finding_requires_confident_mapped_video_evidence(
         )
 
 
+@pytest.mark.parametrize("payload", [{}, {"format": []}])
+def test_container_extension_finding_ignores_malformed_format_payload(
+    tmp_path: Path, payload: dict[str, object]
+) -> None:
+    path = tmp_path / "clip.mp4"
+    path.write_bytes(b"synthetic media")
+    candidate = validate.MediaCandidate(
+        root=tmp_path,
+        path=path,
+        state=validate.FileState.capture(path),
+        kind="video",
+        extension_kind="video",
+        detected_kind="video",
+    )
+
+    assert (
+        validate._container_extension_finding(
+            candidate,
+            payload,
+            load_config(tmp_path).validation.container_families,
+        )
+        is None
+    )
+
+
 @pytest.mark.parametrize(
     "failure",
     ["synthetic full-decode failure", "synthetic full-decode timeout"],
