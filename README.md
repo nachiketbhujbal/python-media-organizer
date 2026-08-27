@@ -799,10 +799,15 @@ integration tests. Development-tool versions are resolved in `uv.lock`.
 Coverage is configured to include the real child-process CLI tests; the normal
 test command stays fast, while the coverage form is a release review gate.
 GitHub Actions runs the same locked quality, coverage, native-FFmpeg, and build
-gate automatically for pull requests targeting `main` and pushes to `main`.
-Ordinary branch pushes and release tags do not repeat the matrix while the
-repository is private; manual dispatch remains available when an additional
-remote run is warranted. See
+gate on Ubuntu and on the pinned Fedora container automatically for pull
+requests targeting `main` and pushes to `main`, and skips a change confined to
+documentation, Markdown, or the licence. Hosted macOS is deliberate rather than
+automatic, because it is billed at roughly ten times the hosted Linux rate and
+macOS is the platform the mandatory local gate already covers continuously;
+dispatch the workflow with the `hosted_macos` input when clean-image macOS
+evidence is warranted. Every `v*` tag runs a Linux-only release workflow that
+builds both distributions and requires an isolated wheel installation to report
+exactly the tagged version. ADR 0081 records the separation. See
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for the branch and release
 workflow. GitHub Free does not offer server-side protection for private
 repositories, so the planned no-force-push, no-deletion, PR, status-check, and

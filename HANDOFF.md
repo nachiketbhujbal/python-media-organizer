@@ -257,6 +257,19 @@ descriptor-pinned callers read standard input. Where the utility is unavailable
 the rule does not apply and the existing fallback warning stands. ADR 0078 is
 the durable decision.
 
+Version 0.5.8 separates mainline validation, tag release, and hosted macOS.
+The Ubuntu job and the pinned Fedora container job run automatically for pull
+requests targeting `main` and pushes to `main`, and a change confined to
+documentation, Markdown, or the licence runs neither. The hosted macOS job runs
+only through deliberate dispatch with the `hosted_macos` input, because hosted
+macOS is billed at roughly ten times the hosted Linux rate and the mandatory
+local gate already covers macOS continuously. Every `v*` tag runs a Linux-only
+release workflow that builds both distributions, proves the artifact filenames
+carry the tagged version, and requires an isolated wheel installation to report
+exactly that version. Automatic post-merge validation is evidence, never branch
+protection. ADR 0081 is the durable decision and supersedes only the trigger
+and automatic-macOS portions of ADR 0044 and ADR 0041.
+
 Version 0.5.6 reports a warning-severity `container_extension_mismatch` only
 when the existing extensionless ffprobe result has an integer content-probe
 score from 50 through 100, a non-empty demuxer family, and an explicitly mapped
@@ -1214,10 +1227,11 @@ user explicitly approves that release. Confirm private collection data and
 generated state are absent before every commit.
 
 Ordinary changes now use one short-lived branch and pull request per cohesive
-release. The pull request and resulting `main` push run all GitHub `quality`
-checks automatically; ordinary branch pushes and tags do not. Manual dispatch
-is available when pre-PR platform evidence is worth the private-repository
-Actions usage. The v0.3.6 workflow merge was the one-time bootstrap because the
+release. The pull request and resulting `main` push run the Ubuntu and
+Fedora `quality` checks automatically unless the change is confined to
+documentation, Markdown, or the licence; ordinary branch pushes do not. Hosted
+macOS runs only through deliberate dispatch with the `hosted_macos` input, and
+a `v*` tag runs the Linux-only release workflow. See ADR 0081. The v0.3.6 workflow merge was the one-time bootstrap because the
 check could not be required until the workflow existed on `main`. GitHub CLI is
 authenticated for pull-request and Actions management; the repository deploy
 key remains the scoped Git transport credential. GitHub's

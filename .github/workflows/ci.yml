@@ -4,10 +4,23 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "LICENSE"
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "LICENSE"
   workflow_dispatch:
+    inputs:
+      hosted_macos:
+        description: "Also run the hosted macOS certification job"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,14 +31,8 @@ concurrency:
 
 jobs:
   quality:
-    name: quality (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-    runs-on: ${{ matrix.os }}
+    name: quality (ubuntu-latest)
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
@@ -41,13 +48,8 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Install native video tools on Linux
-        if: runner.os == 'Linux'
+      - name: Install native video tools
         run: sudo apt-get update && sudo apt-get install --yes ffmpeg
-
-      - name: Install native video tools on macOS
-        if: runner.os == 'macOS'
-        run: brew install ffmpeg
 
       - name: Install the locked Python environment
         run: |
@@ -88,6 +90,46 @@ jobs:
           version: "0.12.5"
           enable-cache: true
           cache-dependency-glob: uv.lock
+
+      - name: Install the locked Python environment
+        run: |
+          uv python install
+          uv sync --locked --all-groups
+
+      - name: Run committed quality checks
+        run: uv run --locked pre-commit run --all-files
+
+      - name: Run subprocess-aware tests and coverage
+        run: uv run --locked pytest --cov=pymo --cov-report=term-missing
+
+      - name: Build source and wheel distributions
+        run: uv build
+
+  quality-macos:
+    name: quality (macos-latest)
+    # Hosted macOS bills at roughly ten times the hosted Linux rate, so this
+    # job is deliberate rather than automatic. Request it for a release
+    # candidate or for a change that touches macOS filesystem behavior,
+    # descriptor handling, or native-tool integration.
+    if: github.event_name == 'workflow_dispatch' && inputs.hosted_macos
+    runs-on: macos-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install native video tools
+        run: brew install ffmpeg
 
       - name: Install the locked Python environment
         run: |
