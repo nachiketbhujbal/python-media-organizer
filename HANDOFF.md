@@ -27,9 +27,10 @@ absence, and they must not claim whole-device recovery.
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
 `pymo` command, and includes layered preservation through version 0.5.3 plus
-validation truthfulness and cache compatibility through version 0.5.6. Version
-0.5.7 pluralizes the architecture-decision directory as `docs/adrs/` without
-changing runtime or package behavior.
+validation truthfulness and cache compatibility through released version
+0.5.6. The unreleased 0.5.7 candidate pluralizes the architecture-decision
+directory as `docs/adrs/` without changing runtime or package behavior; its
+hosted checks remain blocked by the exhausted account allowance.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
