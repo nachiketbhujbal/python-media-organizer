@@ -8,7 +8,7 @@ import subprocess
 import warnings
 from dataclasses import dataclass
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageSequence, UnidentifiedImageError
 
 from pymo.config import canonical_container_family
 
@@ -24,7 +24,7 @@ class VideoContainerEvidence:
 
 
 def inspect_image_format(descriptor: int) -> str:
-    """Return one verified Pillow format from an already stable descriptor."""
+    """Return one fully decoded Pillow format from a stable descriptor."""
 
     try:
         os.lseek(descriptor, 0, os.SEEK_SET)
@@ -34,6 +34,13 @@ def inspect_image_format(descriptor: int) -> str:
                 with Image.open(handle) as opened:
                     format_name = opened.format
                     opened.verify()
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            with os.fdopen(os.dup(descriptor), "rb") as handle:
+                with Image.open(handle) as opened:
+                    if opened.format != format_name:
+                        raise ValueError("image format changed between decoder passes")
+                    for frame in ImageSequence.Iterator(opened):
+                        frame.load()
     except (
         Image.DecompressionBombError,
         Image.DecompressionBombWarning,

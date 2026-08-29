@@ -308,14 +308,21 @@ fresh descriptor-pinned Pillow or confidence-gated extensionless ffprobe
 evidence with immutable packaged canonical/synonym policy. It consumes no
 validation cache. It is preview-first, protects `dups`, uses collision-safe
 atomic no-replace renames under a distinct journal tool ID, rehashes applied
-targets, and supports dependency-aware undo. Valid synonyms, shared MOV/MP4/3GP
-and Matroska/WebM families, weak probes, unsupported or corrupt inputs,
-meaningful non-media content, and custom extensions remain untouched. ADR 0082
-is the durable decision. The local owner gate passes Ruff, Black, mypy,
-pre-commit, all 394 synthetic and real-FFmpeg tests with 88 percent
-subprocess-aware coverage, the package build, and an isolated wheel install.
-Independent review plus hosted PR, exact-main, tag, and installed-version
-evidence remain outstanding while the candidate is unreleased.
+targets, and supports dependency-aware undo. Images must verify and fully
+decode every frame. Exact packaged coverage protects TIFF-derived images and
+camera raw extensions; video policy protects shared MOV/MP4/3GP,
+Matroska/WebM, audio-capable ASF/Ogg/RealMedia, and raw MPEG elementary-stream
+families. Weak probes, unsupported or corrupt inputs, meaningful non-media
+content, and custom extensions remain untouched. Conclusive extensionless
+media receive a canonical suffix. ADR 0082 is the durable decision. The first
+local owner gate passed Ruff, Black, mypy, pre-commit, all 394 synthetic and
+real-FFmpeg tests with 88 percent subprocess-aware coverage, the package build,
+and an isolated wheel install. PR #41's initial three-platform hosted gate also
+passed. Its independent Opus review found six policy/evidence issues now
+resolved on the candidate. The post-resolution local gate passes pre-commit,
+all 409 tests at 88 percent coverage, and both package builds. Final
+post-resolution hosted evidence, exact-main, tag, and installed-version proof
+remain outstanding.
 
 Version 0.5.10 is planned to add zero-write
 `verify-migration --simulate-without-dups`. It inventories the destination
@@ -562,7 +569,9 @@ forward command. It contains the default ignore patterns, classification
 extensions and MIME policies, rename noise tokens, image-inspection
 extensions, video decode timeout, scan worker count, and progress interval.
 Packaged-only correction maps name one canonical extension followed by accepted
-synonyms for reviewed Pillow formats and unambiguous ffprobe families.
+synonyms for reviewed Pillow formats and unambiguous ffprobe families. Exact
+mapped-or-protected coverage prevents a newly classified extension or video
+family from silently gaining mutation authority.
 Collection
 or explicit custom arrays
 extend packaged arrays; they cannot remove safety defaults. A custom video
@@ -1130,11 +1139,12 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   names, configurable additive noise tokens, collisions, apply/undo, and
   `dups` protection;
 - truthful-extension preview/apply/undo for verified images and real MPEG
-  transport streams, valid synonym retention, shared-family ambiguity, weak and
-  malformed evidence, non-media `.ts` protection, packaged-only policy,
-  collision naming, `dups` and ignored-path protection, incomplete discovery,
-  descriptor path replacement, stable target rehashing, and cross-tool undo
-  dependencies;
+  transport streams, valid synonym retention, all-frame corruption refusal,
+  TIFF-derived raw protection, shared/audio-family ambiguity, raw elementary
+  streams, weak and malformed evidence, non-media `.ts` protection,
+  extensionless naming, exact packaged policy coverage, collision naming,
+  `dups` and ignored-path protection, incomplete discovery, descriptor path
+  replacement, stable target rehashing, and cross-tool undo dependencies;
 - action journal ordering, strict lifecycle grammar, no-follow opening,
   descriptor-relative atomic moves, late target collision refusal, interrupted
   run recovery, stable identity calculation, conflict refusal, cross-tool

@@ -108,8 +108,15 @@ fresh descriptor-pinned, confident, unambiguous packaged content evidence,
 will change no file bytes, and will journal collision-safe reversible renames.
 Valid synonyms, shared container families, weak probes, unsupported or corrupt
 media, meaningful non-media content, and custom extensions remain untouched.
-The command does not consume validation cache evidence. Re-run migration
-verification after apply.
+TIFF-derived image and camera-raw identities, audio-capable video families, and
+raw MPEG elementary streams are explicitly non-authoritative. Mapped images
+must fully decode every frame. The command does not consume validation cache
+evidence. An extensionless conclusive media file may receive its canonical
+suffix. Re-run migration verification after apply.
+
+Use the same released pymo version for every command touching the working
+collection. An older pymo that encounters the newer `correct_extensions` tool
+identifier in schema-1 action history fails closed rather than ignoring it.
 
 ## Stage 4: organize and rename
 

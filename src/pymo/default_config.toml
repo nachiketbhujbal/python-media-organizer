@@ -132,25 +132,45 @@ generic_mime_types = [
 # Extension correction is packaged-only. The first extension is canonical;
 # later entries are accepted synonyms that must remain unchanged. Formats and
 # shared demuxer families without one defensible canonical suffix are omitted.
+[extension_correction]
+protected_image_extensions = [
+    ".cr2",
+    ".cr3",
+    ".dng",
+    ".heic",
+    ".heif",
+    ".nef",
+    ".orf",
+    ".raf",
+    ".raw",
+    ".rw2",
+    ".svg",
+    ".tif",
+    ".tiff",
+]
+protected_video_families = [
+    "3g2,3gp,m4a,mj2,mov,mp4",
+    "asf",
+    "asf_o",
+    "matroska,webm",
+    "mpegvideo",
+    "ogg",
+    "rm",
+]
+
 [extension_correction.image_formats]
 AVIF = [".avif"]
 BMP = [".bmp"]
 GIF = [".gif"]
 JPEG = [".jpg", ".jpeg", ".jpe", ".jfif"]
 PNG = [".png"]
-TIFF = [".tif", ".tiff"]
 WEBP = [".webp"]
 
 [extension_correction.video_families]
-asf = [".asf", ".wmv"]
-asf_o = [".asf", ".wmv"]
 avi = [".avi", ".divx"]
 flv = [".flv"]
 mpeg = [".mpeg", ".mpe", ".mpg", ".vob"]
-mpegvideo = [".mpeg", ".mpe", ".mpg"]
 mpegts = [".ts", ".mts", ".m2ts"]
-ogg = [".ogv"]
-rm = [".rm", ".rmvb"]
 
 [rename]
 noise_tokens = [

@@ -69,6 +69,83 @@ def make_mp4(path: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
+def make_raw_mpeg_video(path: Path) -> None:
+    ffmpeg = shutil.which("ffmpeg")
+    assert ffmpeg is not None, "the release test environment requires FFmpeg"
+    result = subprocess.run(
+        [
+            ffmpeg,
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=yellow:s=16x16:d=0.25",
+            "-c:v",
+            "mpeg2video",
+            "-f",
+            "mpeg2video",
+            "-y",
+            str(path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def make_asf_audio_with_cover(path: Path) -> None:
+    ffmpeg = shutil.which("ffmpeg")
+    assert ffmpeg is not None, "the release test environment requires FFmpeg"
+    result = subprocess.run(
+        [
+            ffmpeg,
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=0.25",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=c=purple:s=16x16:d=0.25",
+            "-map",
+            "0:a",
+            "-map",
+            "1:v",
+            "-c:a",
+            "wmav2",
+            "-c:v",
+            "mjpeg",
+            "-f",
+            "asf",
+            "-y",
+            str(path),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def make_truncated_image(path: Path, format_name: str) -> None:
+    image = Image.new("RGB", (64, 64))
+    image.putdata(
+        [
+            ((index * 17) % 256, (index * 31) % 256, (index * 47) % 256)
+            for index in range(64 * 64)
+        ]
+    )
+    image.save(path, format=format_name)
+    payload = path.read_bytes()
+    path.write_bytes(payload[: len(payload) // 2])
+
+
 def test_image_correction_is_preview_first_logged_and_reversible(
     tmp_path: Path, run_script
 ) -> None:
@@ -110,21 +187,38 @@ def test_image_correction_is_preview_first_logged_and_reversible(
     assert not target.exists()
 
 
-def test_valid_image_synonyms_remain_unchanged(tmp_path: Path, run_script) -> None:
+def test_valid_jpeg_synonyms_remain_unchanged(tmp_path: Path, run_script) -> None:
     root = tmp_path / "collection"
     root.mkdir()
     jpeg = root / "photo.jpeg"
-    tiff = root / "scan.tiff"
     Image.new("RGB", (2, 2), "red").save(jpeg, format="JPEG")
-    Image.new("RGB", (2, 2), "green").save(tiff, format="TIFF")
 
     result = run_script("correct_extensions.py", root, "--apply")
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Corrected 0 media extension(s)" in result.stdout
-    assert "Already truthful: 2 media file(s)" in result.stdout
+    assert "Already truthful: 1 media file(s)" in result.stdout
     assert jpeg.exists()
-    assert tiff.exists()
+    assert not action_log_path(root).exists()
+
+
+@pytest.mark.parametrize("extension", [".dng", ".cr2", ".nef", ".tif", ".tiff"])
+def test_tiff_container_extensions_remain_ambiguous(
+    tmp_path: Path, run_script, extension: str
+) -> None:
+    root = tmp_path / "collection"
+    root.mkdir()
+    source = root / f"raw-shot{extension}"
+    Image.new("RGB", (3, 2), "green").save(source, format="TIFF")
+    original_bytes = source.read_bytes()
+
+    result = run_script("correct_extensions.py", root, "--apply")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Corrected 0 media extension(s)" in result.stdout
+    assert "Unsupported or ambiguous extension evidence: 1" in result.stdout
+    assert source.read_bytes() == original_bytes
+    assert not (root / "raw-shot (1).tif").exists()
     assert not action_log_path(root).exists()
 
 
@@ -159,6 +253,44 @@ def test_real_transport_stream_receives_canonical_ts_extension(
     assert result.returncode == 0, result.stdout + result.stderr
     assert target.read_bytes() == original_bytes
     assert not source.exists()
+
+
+def test_raw_mpeg_elementary_stream_remains_ambiguous(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "collection"
+    root.mkdir()
+    source = root / "clip.m2v"
+    make_raw_mpeg_video(source)
+    original_bytes = source.read_bytes()
+
+    result = run_script("correct_extensions.py", root, "--apply")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Corrected 0 media extension(s)" in result.stdout
+    assert "Unsupported or ambiguous extension evidence: 1" in result.stdout
+    assert source.read_bytes() == original_bytes
+    assert not (root / "clip.mpeg").exists()
+    assert not action_log_path(root).exists()
+
+
+def test_audio_primary_asf_with_cover_art_remains_ambiguous(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "collection"
+    root.mkdir()
+    source = root / "song.wma"
+    make_asf_audio_with_cover(source)
+    original_bytes = source.read_bytes()
+
+    result = run_script("correct_extensions.py", root, "--apply")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Corrected 0 media extension(s)" in result.stdout
+    assert "Unsupported or ambiguous extension evidence: 1" in result.stdout
+    assert source.read_bytes() == original_bytes
+    assert not (root / "song.asf").exists()
+    assert not action_log_path(root).exists()
 
 
 def test_missing_ffprobe_stops_before_state(tmp_path: Path, run_script) -> None:
@@ -248,6 +380,43 @@ def test_corrupt_media_is_counted_and_left_untouched(
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Corrected 0 media extension(s)" in result.stdout
     assert "could not be inspected conclusively: 1 file(s)" in result.stdout
+    assert source.exists()
+    assert not action_log_path(root).exists()
+
+
+@pytest.mark.parametrize("format_name", ["AVIF", "BMP", "GIF", "JPEG", "PNG", "WEBP"])
+def test_truncated_mapped_image_formats_remain_untouched(
+    tmp_path: Path, run_script, format_name: str
+) -> None:
+    root = tmp_path / "collection"
+    root.mkdir()
+    false_extension = ".png" if format_name == "JPEG" else ".jpg"
+    source = root / f"broken{false_extension}"
+    make_truncated_image(source, format_name)
+    original_bytes = source.read_bytes()
+
+    result = run_script("correct_extensions.py", root, "--apply")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Corrected 0 media extension(s)" in result.stdout
+    assert "could not be inspected conclusively: 1 file(s)" in result.stdout
+    assert source.read_bytes() == original_bytes
+    assert not action_log_path(root).exists()
+
+
+def test_extensionless_image_receives_canonical_extension(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "collection"
+    root.mkdir()
+    source = root / "photo"
+    Image.new("RGB", (2, 2), "blue").save(source, format="JPEG")
+
+    result = run_script("correct_extensions.py", root)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "would correct extension" in result.stdout
+    assert str(root / "photo.jpg") in result.stdout
     assert source.exists()
     assert not action_log_path(root).exists()
 

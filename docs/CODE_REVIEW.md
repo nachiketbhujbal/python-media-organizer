@@ -63,6 +63,12 @@ The same adversarial method was repeated after the first validation release.
 | EXT-001 | High | Inferring a canonical suffix from Pillow's runtime registry or every ffprobe family would make correction platform-dependent and would guess across shared MOV/MP4/3GP and Matroska/WebM evidence. | 0.5.9 | Resolved in ADR 0082 with immutable packaged canonical/synonym maps and no correction mapping for shared demuxer families |
 | EXT-002 | High | A file replaced after content inspection but before journal planning could receive a correction derived from the prior file unless the mutation identity is bound to the same descriptor-pinned evidence. | 0.5.9 | Resolved by hashing the evidenced stable descriptor, carrying its exact file state into action construction before journal creation, and refusing a changed source |
 | EXT-003 | Medium | Existence-only post-apply verification would prove that a target name exists without proving it still contains the evidenced bytes that authorized correction. | 0.5.9 | Resolved by reopening every target through the stable collection descriptor boundary and checking device, inode, size, and complete SHA-256 after apply |
+| EXT-R01 | High | Pillow reports TIFF-derived DNG, CR2, and NEF camera raw files as `TIFF`, so the initial map renamed irreplaceable raw identities to `.tif`. | 0.5.9 | Resolved by removing TIFF correction authority, explicitly protecting TIFF and TIFF-derived packaged extensions, and adding multi-extension raw regressions |
+| EXT-R02 | Medium | Packaged correction validation checked mapped membership but not complete mapped-or-protected coverage, so a future classified extension or video family could silently gain mutation authority. | 0.5.9 | Resolved with exact image-extension and video-family coverage, disjointness, synonym-consistency validation, and a negative unaccounted-extension regression |
+| EXT-R03 | Medium | Runtime ffprobe assigns raw MPEG elementary streams a score just above the generic threshold, allowing `.m2v` content to be mislabeled as the `.mpeg` program-stream container. | 0.5.9 | Resolved by making `mpegvideo` an explicitly protected non-authoritative family and retaining real-FFmpeg elementary-stream coverage |
+| EXT-R04 | Medium | Pillow `verify()` is plugin-dependent and did not reject truncated BMP, GIF, or JPEG inputs even though the release contract said corrupt mapped images remain untouched. | 0.5.9 | Resolved by reopening the pinned descriptor after verification, requiring the same format, fully decoding every frame, and testing truncation across every mapped format |
+| EXT-R05 | Medium | Audio-primary ASF with a still cover stream satisfies both content classification and the one-video-stream gate, so an ordinary `.wma` could be renamed `.asf`; Ogg and RealMedia share the same audio-capable ambiguity. | 0.5.9 | Resolved by protecting ASF, ASF-old, Ogg, and RealMedia families and adding a real-FFmpeg audio-primary ASF regression |
+| EXT-R06 | Low | Extensionless conclusive media receive a canonical suffix, but the initial README and ADR described only replacement of an existing final suffix. | 0.5.9 | Resolved by documenting the extensionless case and pinning it with a CLI regression |
 
 ## Scan review findings
 
@@ -314,11 +320,18 @@ The same adversarial method was repeated after the first validation release.
   with contained event-scoped CI, structured issues, private security guidance,
   and API-verified hosted controls.
 - `0.5.9`: correct only confidently evidenced false media extensions through
-  packaged canonical/synonym policy, with preview-first atomic journaled
-  renames, stable target verification, and dependency-aware undo.
+  exact mapped-or-protected packaged policy and full image-frame decoding, with
+  preview-first atomic journaled renames, stable target verification, and
+  dependency-aware undo.
 
 ## Independent review evidence
 
+- Opus independently reviewed PR #41 at exact head `ab6fd6a`, reran all 394
+  tests, reproduced six policy/evidence findings through the installed CLI, and
+  reported them in [the consolidated PR review comment](https://github.com/nachiketbhujbal/python-media-organizer/pull/41#issuecomment-5465272172).
+  EXT-R01 through EXT-R06 are resolved on the owner branch without changing the
+  reviewer-verified descriptor, journal, collision, undo, privacy, or
+  fail-before-state machinery.
 - The maintainer explicitly transferred the Claude-authored v0.5.8 branch to
   Codex and directed a review before adoption. At that transfer boundary Codex
   traced the draft's workflow triggers and identified CI-009 plus CI-010; the

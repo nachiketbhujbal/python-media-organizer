@@ -615,14 +615,17 @@ preserve a false extension. The maintainer promoted this work to version 0.5.9 a
 `pymo correct-extensions COLLECTION` command.
 
 The unreleased candidate implements those constraints through fresh stable-descriptor Pillow
-verification and extensionless ffprobe evidence, immutable packaged canonical/synonym maps,
-dry-run/apply/undo, a distinct journal tool ID carrying ordinary rename actions, existing collision
-naming, and stable target rehashing. Valid synonyms remain unchanged. Shared MOV/MP4/3GP and
-Matroska/WebM demuxer families, weak probes, unsupported or corrupt media, meaningful non-media
-content, and custom classification extensions have no correction authority. The command protects
-`dups`, consumes no validation cache evidence, and fails before state when discovery or evidenced
-file state changes. ADR 0082 owns the accepted implementation decision; release evidence remains
-outstanding until the candidate passes independent review, hosted checks, merge, and tag.
+verification plus full frame decoding, extensionless ffprobe evidence, immutable packaged
+canonical/synonym maps with exact mapped-or-protected coverage, dry-run/apply/undo, a distinct
+journal tool ID carrying ordinary rename actions, existing collision naming, and stable target
+rehashing. Valid synonyms remain unchanged. TIFF-derived and camera-raw images, shared
+MOV/MP4/3GP and Matroska/WebM demuxer families, audio-capable ASF/Ogg/RealMedia families, raw MPEG
+elementary streams, weak probes, unsupported or corrupt media, meaningful non-media content, and
+custom classification extensions have no correction authority. Extensionless conclusive media may
+receive a canonical suffix. The command protects `dups`, consumes no validation cache evidence,
+and fails before state when discovery or evidenced file state changes. ADR 0082 owns the accepted
+implementation decision; release evidence remains outstanding until the reviewed candidate passes
+hosted checks, merge, and tag.
 
 ### What an isolation folder would mean
 

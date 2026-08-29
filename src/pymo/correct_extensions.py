@@ -113,7 +113,7 @@ def analyze_corrections(
                     if (
                         kind in {"picture", "video"}
                         and path.suffix.casefold()
-                        in config.extension_correction.protected_custom_extensions
+                        in config.extension_correction.protected_source_extensions
                     ):
                         pass
                     elif kind == "picture":

@@ -172,8 +172,11 @@ accusation because pymo has no reviewed family policy for them.
 Truthful-extension correction policy is also packaged and immutable. It maps a
 verified Pillow format or confidence-gated ffprobe family to one canonical
 extension plus accepted synonyms. Collection configuration cannot add
-correction authority. Shared MOV/MP4/3GP and Matroska/WebM demuxer families are
-deliberately omitted because their evidence cannot select one truthful suffix.
+correction authority. Every packaged image extension and validation video
+family must be mapped or explicitly protected. TIFF-derived images, camera raw
+extensions, shared MOV/MP4/3GP and Matroska/WebM demuxers, audio-capable
+ASF/Ogg/RealMedia families, and raw MPEG elementary streams are protected
+because their evidence cannot select one truthful suffix.
 
 An alternate extension file can be selected for one command:
 
@@ -524,20 +527,24 @@ pymo correct-extensions "/path/to/media-collection" --undo
 pymo correct-extensions "/path/to/media-collection" --undo --apply
 ```
 
-`correct-extensions` changes only a filename's final suffix and never changes
-media bytes. It reclassifies each in-scope file from a stable,
-collection-anchored descriptor, verifies supported image formats through
+`correct-extensions` changes only a filename's final suffix, or adds the
+canonical suffix when a verified media file has none, and never changes media
+bytes. It reclassifies each in-scope file from a stable, collection-anchored
+descriptor, verifies and fully decodes every supported image frame through
 Pillow, and probes videos through an extensionless ffprobe descriptor. It
 consumes no validation cache evidence. Video correction requires at least one
 video stream, an integer content-probe score from 50 through 100, a well-formed
 family, and a packaged canonical mapping.
 
-Valid synonyms such as `.jpeg` and `.tiff` remain unchanged. Shared
-MOV/MP4/3GP and Matroska/WebM families, weak probes, unsupported or corrupt
-media, meaningful non-media content such as source text named `.ts`, and custom
-classification extensions remain untouched. A confidently identified MPEG
-transport stream under a false suffix can become `.ts`; a verified PNG named
-`.jpg` can become `.png`.
+Valid synonyms such as `.jpeg` remain unchanged. TIFF-derived image containers
+and camera raw extensions are protected because Pillow's TIFF identity cannot
+select a truthful suffix. Shared MOV/MP4/3GP and Matroska/WebM families,
+audio-capable ASF/Ogg/RealMedia families, raw MPEG elementary streams, weak
+probes, unsupported or corrupt media, meaningful non-media content such as
+source text named `.ts`, and custom classification extensions remain
+untouched. A confidently identified MPEG transport stream under a false suffix
+can become `.ts`; a fully decoded PNG named `.jpg` can become `.png`; and an
+extensionless fully decoded JPEG can receive `.jpg`.
 
 The command protects `dups`, packaged ignored paths, symbolic links, and
 pymo-owned state. Incomplete discovery or changing evidence stops before an
