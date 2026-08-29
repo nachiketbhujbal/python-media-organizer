@@ -9,6 +9,13 @@ All notable changes to `python-media-organizer` will be recorded here.
 - Update every tracked link, documentation map, instruction, handoff reference,
   and coordination path to the plural directory without changing the numbered
   decision files or their history.
+- Ignore repository-local `.pvt/` and `.worktrees/` state so private operational
+  records and linked worktrees cannot be added accidentally.
+- Remove a stale numeric inventory of module constants from the handoff and
+  retain the durable rule that module constants represent explicit on-disk
+  compatibility boundaries.
+- Record the maintainer's path-only independent-review waiver and its explicit
+  follow-up debt instead of silently omitting the review.
 - Record the documentation-layout decision in ADR 0080. Runtime behavior,
   package contents outside documentation, configuration, and tests are
   unchanged.

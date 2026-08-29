@@ -197,6 +197,12 @@ The same adversarial method was repeated after the first validation release.
 | DOC-008 | Low | The research quick-reference table grouped `.vob` with generic MPEG extensions even though the packaged policy accepts `mpegvideo` only for `.mpe`, `.mpeg`, and `.mpg`. | 0.5.6 | Resolved by splitting the table rows to match the packaged family map |
 | DOC-009 | Low | The architecture-decision directory used the singular name `docs/adr/` even though it contains and indexes a plural set of decision records. | 0.5.7 | Resolved by moving the complete set to `docs/adrs/` and updating every tracked link and current path reference |
 
+## Review waivers and follow-up debt
+
+| Release | Waiver | Follow-up debt | Status |
+| --- | --- | --- | --- |
+| 0.5.7 | The maintainer waived the independent Claude review on 2026-08-29 because the release changes documentation paths and repository-local ignore boundaries only. | The next completed adversarial release review must recheck the move-only ADR diff, tracked path references, and private-state ignore boundary. | Open |
+
 ## Release groups
 
 - `0.2.2`: establish ADRs and the locked Ruff, Black, mypy, pre-commit, and

@@ -30,7 +30,8 @@ The package is named `python-media-organizer`, imports as `pymo`, exposes the
 validation truthfulness and cache compatibility through released version
 0.5.6. The unreleased 0.5.7 candidate pluralizes the architecture-decision
 directory as `docs/adrs/` without changing runtime or package behavior; its
-hosted checks remain blocked by the exhausted account allowance.
+hosted checks remain pending while repository Actions are deliberately
+disabled until hosted capacity or a public-repository decision is available.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -262,8 +263,12 @@ historical and unrelated evidence. ADR 0079 is the durable decision.
 
 Version 0.5.7 moves the complete architecture-decision set from `docs/adr/` to
 `docs/adrs/`, updates every tracked link and current path reference, and records
-the documentation-layout decision in ADR 0080. Source, tests, configuration,
-packaging, and command behavior are unchanged.
+the documentation-layout decision in ADR 0080. It also ignores repository-local
+`.pvt/` and `.worktrees/` state so private operational records and linked
+worktrees cannot be added accidentally. Source, tests, configuration,
+packaging, and command behavior are unchanged. The maintainer waived the
+independent Claude review for this path-only release; `docs/CODE_REVIEW.md`
+records the resulting follow-up debt.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -525,13 +530,11 @@ them. `--verbose` does not relax that privacy default. Explicit
 absolute collection root. If the user also requests `--log-file`, those listed
 paths are deliberately included in that log.
 
-The source contains only eight assigned module constants: the config schema,
-action-log schema, shared cache schema, shared exact-video evidence type,
-video fingerprint algorithm, cache-status report schema, scan-report schema,
-and validation-report schema versions or identifiers. Each is an
-on-disk compatibility boundary and has an adjacent justification. Dispatch,
-logging, collection paths, tool identifiers, operation identifiers, timestamp
-patterns, and policy collections no longer use scattered mutable globals.
+Assigned module constants are reserved for explicit on-disk compatibility
+boundaries such as schema, report, and fingerprint algorithm versions, with an
+adjacent justification. Dispatch, logging, collection paths, tool identifiers,
+operation identifiers, timestamp patterns, and policy collections do not use
+scattered mutable globals.
 
 ## Shared action log
 
