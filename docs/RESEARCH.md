@@ -428,11 +428,10 @@ sole-maintainer boundary.
 
 ## Media truthfulness, damage, and remediation
 
-**Status: research only, with two shipped exceptions and one implemented release candidate.** The
+**Status: research only, with three shipped exceptions.** The
 classification-severity correction described below shipped in 0.5.5,
 confidence-gated container and extension detection shipped in 0.5.6, and the
-separate reversible correction command is implemented on the unreleased 0.5.9
-candidate under ADR 0082. Validation
+separate reversible correction command shipped in 0.5.9 under ADR 0082. Validation
 remediation guidance, damaged-media isolation folders, byte-changing repair,
 container conversion, and damaged-media quarantine are all recorded here for
 later evaluation and must not be implemented on the strength of this record

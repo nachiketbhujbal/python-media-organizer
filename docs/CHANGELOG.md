@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.5.9 - Unreleased
+## 0.5.9 - 2026-08-29
 
 - Add preview-first `pymo correct-extensions COLLECTION`, with explicit
   `--apply` and dependency-aware `--undo`, between fresh validation and

@@ -11,8 +11,7 @@ contract; it does not prove whole-device recovery.
 - Versions through 0.5.6 provide scan, validation, organization, deterministic
   renaming, exact image/video duplicate isolation, and layered migration
   verification.
-- The unreleased 0.5.9 candidate adds reversible `correct-extensions` behavior;
-  do not use it for production until the release tag and hosted checks pass.
+- Version 0.5.9 adds reversible `correct-extensions` behavior.
 - Version 0.5.10 is planned to add zero-write
   `verify-migration --simulate-without-dups`.
 - Version 0.5.11 is planned to coordinate this sequence for one declared

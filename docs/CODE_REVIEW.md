@@ -329,9 +329,12 @@ The same adversarial method was repeated after the first validation release.
 - Opus independently reviewed PR #41 at exact head `ab6fd6a`, reran all 394
   tests, reproduced six policy/evidence findings through the installed CLI, and
   reported them in [the consolidated PR review comment](https://github.com/nachiketbhujbal/python-media-organizer/pull/41#issuecomment-5465272172).
-  EXT-R01 through EXT-R06 are resolved on the owner branch without changing the
-  reviewer-verified descriptor, journal, collision, undo, privacy, or
-  fail-before-state machinery.
+  EXT-R01 through EXT-R06 were resolved without changing the reviewer-verified
+  descriptor, journal, collision, undo, privacy, or fail-before-state
+  machinery. At exact head `7f34524`, Opus independently reran all 409 tests,
+  verified hosted run `33280352968`, repeated every original reproduction, and
+  [closed all six findings](https://github.com/nachiketbhujbal/python-media-organizer/pull/41#issuecomment-5465477638)
+  without requesting another owner change.
 - The maintainer explicitly transferred the Claude-authored v0.5.8 branch to
   Codex and directed a review before adoption. At that transfer boundary Codex
   traced the draft's workflow triggers and identified CI-009 plus CI-010; the

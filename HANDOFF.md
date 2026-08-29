@@ -30,8 +30,8 @@ absence, and they must not claim whole-device recovery.
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
 `pymo` command, and includes layered preservation through version 0.5.3,
 validation truthfulness and cache compatibility through version 0.5.7, and
-public governance through released version 0.5.8. The unreleased version 0.5.9
-candidate adds reversible truthful-extension correction. Version 0.5.7 pluralizes the
+public governance through version 0.5.8, and reversible truthful-extension
+correction through released version 0.5.9. Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
 selects Apache-2.0 and completes the controlled public transition with contained
@@ -302,7 +302,7 @@ and wheel/source license-metadata inspection. Hosted pull-request,
 exact-`main`, tag, and installed-version evidence remain distinct release
 proofs.
 
-The version 0.5.9 candidate adds `pymo correct-extensions COLLECTION` between
+Version 0.5.9 adds `pymo correct-extensions COLLECTION` between
 fresh validation and organization. It changes no media bytes and acts only on
 fresh descriptor-pinned Pillow or confidence-gated extensionless ffprobe
 evidence with immutable packaged canonical/synonym policy. It consumes no
@@ -318,11 +318,12 @@ media receive a canonical suffix. ADR 0082 is the durable decision. The first
 local owner gate passed Ruff, Black, mypy, pre-commit, all 394 synthetic and
 real-FFmpeg tests with 88 percent subprocess-aware coverage, the package build,
 and an isolated wheel install. PR #41's initial three-platform hosted gate also
-passed. Its independent Opus review found six policy/evidence issues now
-resolved on the candidate. The post-resolution local gate passes pre-commit,
-all 409 tests at 88 percent coverage, and both package builds. Final
-post-resolution hosted evidence, exact-main, tag, and installed-version proof
-remain outstanding.
+passed. Its independent Opus review found six policy/evidence issues, all
+resolved and independently closed at exact head `7f34524`. The post-resolution
+local gate passes pre-commit, all 409 tests at 88 percent coverage, and both
+package builds; hosted run `33280352968` passes the classifier, Ubuntu,
+Fedora 42, macOS, and aggregate quality gate at that same head. Exact-main,
+tag, and installed-release proofs remain distinct release steps.
 
 Version 0.5.10 is planned to add zero-write
 `verify-migration --simulate-without-dups`. It inventories the destination

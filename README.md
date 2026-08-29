@@ -917,7 +917,7 @@ displayed-image evidence, version 0.5.2 adds strict decoded-video evidence, and
 version 0.5.3 adds the fresh layered final verdict. Corrupt, unreadable,
 changing, unsupported, and mismatched media remain visible findings rather than
 automatic ignore rules. The promoted continuation completed public governance
-in 0.5.8; the unreleased 0.5.9 candidate adds reversible
+in 0.5.8; version 0.5.9 adds reversible
 `correct-extensions` before organization,
 adds zero-write preservation simulation without `dups` in 0.5.10, and adds
 guided single-collection migration in 0.5.11. Rescue copying, irreversible
