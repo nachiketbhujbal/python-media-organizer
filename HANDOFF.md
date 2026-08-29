@@ -278,26 +278,27 @@ packaging, and command behavior are unchanged. The maintainer waived the
 independent Claude review for this path-only release; `docs/CODE_REVIEW.md`
 records the resulting follow-up debt.
 
-Version 0.5.8 is the unreleased public-readiness candidate. ADR 0081 selects
-Apache-2.0, keeps repository authority separate from recipients' source rights,
-and separates the versioned implementation from hosted activation. The branch
-adds the root license and package metadata, privacy-conscious issue forms,
+Version 0.5.8 is the public-governance and contained-CI release. ADR 0081
+selects Apache-2.0, keeps repository authority separate from recipients' source
+rights, and records the risk-managed public bootstrap. The release adds the
+root license and package metadata, privacy-conscious issue forms,
 `SECURITY.md`, a fail-closed change classifier, one unconditional aggregate
 gate, full Ubuntu/Fedora/macOS evidence for executable or workflow changes,
 applicable checks on the exact `main` commit, and non-redundant tag artifact and
 isolated-install proof. Documentation-only changes still run a lightweight
 documentation/privacy gate, and manual dispatch always requests the full
-platform set. The repository remains private until 0.5.8 itself is
-verified and tagged, the final privacy audit passes, and the maintainer
-separately authorizes visibility. Actions, external-contributor approvals,
-issue/security features, and branch/tag rulesets are then enabled and read back
-through the GitHub API before being described as active.
+platform set. Before Actions was enabled, the audited repository was made
+public with issue intake closed; no-bypass `main` and immutable-tag rulesets,
+read-only workflow tokens, immutable action references, a selected-action
+allowlist, and approval for every external contributor were installed and read
+back through the GitHub API. Issue intake and private vulnerability reporting
+remain the final post-merge activation steps.
 
-The stacked candidate passes Ruff, Black, mypy, pre-commit, all 372 synthetic
-and real-FFmpeg tests with 88 percent subprocess-aware coverage, the package
-build, and license-artifact inspection. These results predate the required
-rebase onto a released 0.5.7 and must be repeated afterward; they do not replace
-independent review or hosted pull-request and exact-`main` evidence.
+The candidate passed Ruff, Black, mypy, pre-commit, all 372 synthetic and
+real-FFmpeg tests with 88 percent subprocess-aware coverage, the package build,
+and license-artifact inspection before its rebase. The same complete gate is
+repeated against released 0.5.7; hosted pull-request, exact-`main`, tag, and
+installed-version evidence remain distinct release proofs.
 
 Version 0.5.9 is planned to add `pymo correct-extensions COLLECTION` between
 fresh validation and organization. It changes no media bytes and acts only on
@@ -1262,22 +1263,17 @@ policy tiebreaker, unresolved dissent is recorded rather than averaged away, and
 a third restatement of a position is an escalation rather than further review.
 ADR 0077 is the durable decision.
 
-GitHub's ruleset and classic branch-protection APIs currently return HTTP 403
-because the repository is private under GitHub Free. The repository must remain
-private unless the user explicitly changes that decision. Until GitHub Pro is
-enabled or the repository becomes public, PR review and the no-force-push,
-no-deletion policy are procedural rather than server-enforced. When eligible,
-activate the no-bypass `main` ruleset defined in ADR 0046 and verify it through
-the API before describing the branch as protected.
+The repository is public under GitHub Free. GitHub API readback confirms a
+no-bypass `main` ruleset that requires an up-to-date pull request, resolved
+conversations, the configured hosted checks, and blocks deletion and force
+pushes. A separate `refs/tags/v*` ruleset blocks tag update and deletion. These
+live controls supersede ADR 0046's former private-Free eligibility boundary.
 
-ADR 0081 records the accepted public transition that will supersede that
-eligibility boundary only after live verification. Version 0.5.8 first adopts
-Apache-2.0 and implements one unconditional GitHub-Actions-owned
-`quality-gate`, event-scoped platform work, tag artifact proof, issue forms,
-and security guidance while still private. After a separate maintainer
-authorization, public activation requires approval for every external
-contributor's workflow, a no-bypass `main` ruleset, an update/deletion-proof
-`v*` tag ruleset, structured issues, private vulnerability reporting, and an
-API readback plus public full-platform certification. Do not describe the
-repository as open source, public, protected, or externally gated before those
-respective steps are actually complete.
+ADR 0081 records the accepted risk-managed transition. Actions is enabled with
+read-only workflow tokens, immutable action references, GitHub-owned actions
+plus the selected uv setup action, and maintainer approval for every external
+contributor. Version 0.5.8 changes the required status interface to the
+unconditional GitHub-Actions-owned `quality-gate`, adds event-scoped platform
+work and tag artifact proof, and places issue forms plus security guidance on
+`main`. Structured issue intake and private vulnerability reporting are enabled
+only after those files land and are then verified by API readback.

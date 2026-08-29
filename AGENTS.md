@@ -258,18 +258,19 @@ report-only future work and must never silently enter the exact move path.
 - Run the complete suite before handoff.
 - Make ordinary changes on a short-lived branch based on `main`; do not place a
   feature or fix commit directly on `main`. Push the branch, open a pull
-  request, and require its unconditional CI `quality-gate` before merge. GitHub
-  Free does not provide server-side branch protection for this private
-  repository, so that boundary is procedural until the account gains Pro or the
-  repository becomes public. Never claim the planned `main` ruleset is active
-  before the GitHub API confirms it. Ordinary branch pushes do not run CI.
+  request, and require its unconditional CI `quality-gate` before merge. The
+  public repository uses an API-verified no-bypass `main` ruleset that blocks
+  deletion and force-pushes and requires an up-to-date pull request with
+  resolved conversations. Never weaken or claim a hosted control without GitHub
+  API readback. Ordinary branch pushes do not run CI.
   Pull requests and `main` pushes always classify the exact change and publish
   `quality-gate`: documentation-only changes run the lightweight documentation
   and privacy gate, while executable, packaging, toolchain, or workflow changes
   run Ubuntu, pinned Fedora, and macOS. Manual dispatch always runs the full
   platform set. A `v*` tag runs the narrower Linux release workflow only after
-  the exact `main` commit has passed. None of those runs occur while repository
-  Actions is disabled. See ADR 0081.
+  the exact `main` commit has passed. Keep Actions restricted to immutable
+  references, read-only tokens, approved actions, and maintainer approval for
+  every external contributor. See ADR 0081.
 - Name an AI assistant's branch with its own prefix, `claude/<type>/<slug>` or
   `codex/<type>/<slug>`, adding the target version as `<type>/v<x.y.z>-<slug>`
   when the work is scheduled for a release. The merge commit preserves the

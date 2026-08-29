@@ -20,9 +20,14 @@ All notable changes to `python-media-organizer` will be recorded here.
 - Add a production migration runbook that documents the current manual
   baseline/working-copy sequence, explicit opt-in logs, future command gates,
   quarantine semantics, and final human sign-off.
-- Change no package license, runtime behavior, configuration, or media state in
-  this planning commit. Hosted bootstrap is conducted and verified separately
-  before the release record is finalized.
+- Complete the maintainer-authorized public bootstrap after a clean history,
+  hosted-metadata, and workflow-log exposure audit. Keep issues closed while
+  installing and API-verifying no-bypass `main` protection, immutable `v*`
+  tags, read-only workflow tokens, immutable action references, a narrow action
+  allowlist, and approval for every external contributor before enabling
+  Actions. Enable structured issues and private vulnerability reporting only
+  after their versioned files reach `main`.
+- Change no runtime, configuration, or media behavior.
 
 ## 0.5.7 - 2026-08-29
 

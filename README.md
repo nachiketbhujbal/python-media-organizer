@@ -809,19 +809,19 @@ requires an isolated wheel installation to report exactly the tagged version.
 Ordinary branch pushes remain quiet, and no workflow runs while repository
 Actions is disabled. ADR 0081 records the separation. See
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for the branch and release
-workflow. GitHub Free does not offer server-side protection for private
-repositories, so the planned no-force-push, no-deletion, PR, status-check, and
-conversation-resolution rules remain procedural until the account gains Pro or
-the repository becomes public; ADR 0046 records the activation design.
+workflow. The public repository has API-verified no-bypass rules for `main` and
+immutable `v*` tags; `main` requires an up-to-date pull request, resolved
+conversations, and the configured hosted status checks.
 
 The unreleased version 0.5.8 candidate adopts Apache-2.0, adds structured issue
 forms and security guidance, and implements the contained workflow recorded in
 ADR 0081. Pull requests and exact `main` commits receive their applicable
 aggregate gate; tags prove ancestry, package versions, distributions, and an
 isolated installation without repeating an already required platform suite.
-Public visibility, Actions, external-contributor approvals, structured issues,
-private vulnerability reporting, and no-bypass branch/tag rulesets remain a
-separately authorized and API-verified activation.
+Public visibility, Actions, approval for every external contributor, and the
+no-bypass branch/tag rulesets were activated and verified before this release.
+Structured issues and private vulnerability reporting are enabled only after
+the corresponding 0.5.8 files reach `main`.
 
 The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,

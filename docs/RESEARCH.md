@@ -399,12 +399,13 @@ marketing setting.
 
 ## Licensing guidance
 
-**Decision promoted:** version 0.5.8 adopts Apache-2.0 and prepares the
-repository for a separately authorized public transition. ADR 0081 owns the
-license, workflow, branch/tag protection, issue, and security-reporting
-decision. Until that release and hosted activation complete, the repository
-remains private, has no shipped package license, and retains its current
-procedural controls.
+**Decision promoted:** version 0.5.8 adopts Apache-2.0 and completes the
+controlled public transition. ADR 0081 owns the license, workflow, branch/tag
+protection, issue, and security-reporting decision. The audited repository was
+made public early to restore standard-runner verification; server-enforced
+branch/tag protections and conservative Actions controls were installed before
+workflow execution, while versioned license, issue, and security files land in
+0.5.8.
 
 Apache-2.0 is permissive while making the copyright grant, patent grant and
 termination, notice retention, and lack of a trademark grant explicit. It does

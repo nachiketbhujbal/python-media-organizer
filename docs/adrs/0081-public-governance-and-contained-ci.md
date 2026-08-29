@@ -5,18 +5,21 @@
 
 ## Context
 
-The repository is private under GitHub Free. Hosted Actions are deliberately
-disabled after the private allowance was exhausted, and GitHub does not expose
-branch protection or rulesets for this private repository on the current plan.
-The project therefore has strong procedural release controls but cannot yet
-enforce them at the server boundary.
+The repository began this release private under GitHub Free. Hosted Actions
+were disabled after the private allowance was exhausted, and GitHub did not
+expose branch protection or rulesets on that plan. The project therefore had
+strong procedural release controls but could not enforce them at the server
+boundary.
 
-The maintainer intends to make the repository public only after its licensing,
-contribution, issue, security-reporting, workflow, branch, and tag policies are
-ready. Public standard GitHub-hosted runners remove the private-minute
-constraint, but unlimited minutes do not justify running redundant or
-unbounded workflows. Public pull requests also introduce untrusted workflow
-input and require an explicit approval and least-privilege policy.
+The maintainer accepted a controlled early public bootstrap so public standard
+GitHub-hosted runners could verify versions 0.5.7 and 0.5.8 without waiting for
+the private allowance to reset. This deliberately exposed the already-audited
+history before the 0.5.8 license and public-facing files reached `main`, while
+keeping issue intake and Actions disabled until branch, tag, workflow, and
+external-contributor controls were installed. Public runner availability does
+not justify redundant or unbounded workflows. Public pull requests also
+introduce untrusted workflow input and require explicit approval plus a
+least-privilege policy.
 
 Repository authority and source licensing are separate boundaries. A license
 governs what recipients may do with their copies; GitHub rules govern who may
@@ -33,11 +36,15 @@ notice-retention requirements, and absence of a trademark grant fit a
 permissive public utility while preserving clear project identity. No history
 rewrite is required before the visibility change.
 
-Keep the repository private until the versioned public-readiness changes have
-passed their release boundary and the maintainer separately authorizes the
-hosted visibility change. Changing visibility, enabling Actions, configuring
-issue/security features, and activating rulesets are external operations rather
-than effects of installing or tagging the package.
+Treat changing visibility, enabling Actions, configuring issue/security
+features, and activating rulesets as external operations rather than effects of
+installing or tagging the package. The accepted bootstrap may make visibility
+public before the versioned public-readiness files land only after a clean
+repository/history/hosted-log audit, with issue intake closed and Actions still
+disabled. Install and verify branch and tag rulesets plus conservative Actions
+permissions before enabling workflow execution. Enable issues and private
+vulnerability reporting only after version 0.5.8 places their corresponding
+files on `main`.
 
 When public, configure Actions with this event contract:
 
@@ -63,8 +70,8 @@ request code, and never attach a self-hosted runner to an untrusted public pull
 request. Require maintainer approval before workflows run for every external
 contributor, not merely a contributor's first pull request.
 
-After the repository becomes public, activate and verify through the GitHub API
-one no-bypass ruleset for `refs/heads/main` that:
+Activate and verify through the GitHub API one no-bypass ruleset for
+`refs/heads/main` that:
 
 - blocks force pushes and deletion;
 - requires a pull request, an up-to-date branch, resolved conversations, and
@@ -90,23 +97,24 @@ substitute for triage.
 
 ## Activation sequence
 
-1. Restore hosted capacity and re-enable Actions while the repository remains
-   private.
-2. Complete the exact pull-request and exact-`main` checks, merge, and tag
-   version 0.5.7.
-3. Rebase the implemented version 0.5.8 branch onto that verified `main` and
-   repeat its complete local gate so the stacked history does not substitute
-   for evidence against the release base.
-4. Complete independent review, the local gate, exact pull-request checks,
-   exact-`main` checks, tag verification, and installed-version proof for
-   version 0.5.8 while the repository is still private.
-5. Re-run the repository/history/privacy audit and obtain the maintainer's
-   explicit visibility authorization.
-6. Make the repository public, enable Actions, require approval for every
-   external contributor's workflow, configure issue and private-security
-   reporting, and activate the branch and tag rulesets.
-7. Read the hosted settings back through the API and run a deliberate public
-   full-platform certification before calling the transition complete.
+1. Audit reachable Git objects, pull-request and review metadata, and available
+   Actions logs for secrets, private workstation/device identifiers, private
+   collection data, oversized blobs, and media payloads.
+2. Disable issue intake, keep Actions disabled, obtain explicit maintainer
+   authorization, and change visibility to public.
+3. Install and read back a no-bypass `main` ruleset and immutable `v*` tag
+   ruleset. Restrict Actions to read-only tokens, immutable action references,
+   GitHub-owned actions plus the explicitly selected uv setup action, and
+   approval for every external contributor; only then enable Actions.
+4. Complete exact pull-request and exact-`main` checks, merge and tag version
+   0.5.7, and prove the tagged package version with a clean isolated install.
+5. Rebase version 0.5.8 onto that verified mainline and repeat its local review
+   and complete gate. Complete exact pull-request and exact-`main` evidence,
+   then switch the ruleset's required interface to `quality-gate`.
+6. Create the immutable annotated 0.5.8 tag, require its ancestry/artifact/
+   isolated-install workflow to pass, enable structured issue intake and
+   private vulnerability reporting, and read every hosted control back through
+   the API.
 
 ## Consequences
 
@@ -121,9 +129,10 @@ substitute for triage.
 - Public visibility exposes repository history, pull requests, issues, and
   available Actions logs. The final audit is therefore an activation gate, not
   a documentation formality.
-- This decision supersedes ADR 0046's eligibility prerequisite once the live
-  public rulesets are verified. Until then, ADR 0046's procedural boundary
-  remains current. It also supersedes the unshipped private-minute trigger
+- The verified public branch and tag rulesets supersede ADR 0046's eligibility
+  prerequisite. The required status interface changes from the three legacy
+  platform contexts to `quality-gate` when 0.5.8 reaches `main`. This decision
+  also supersedes the unshipped private-minute trigger
   design drafted for version 0.5.8; useful tag-verification and event-separation
   ideas survive only where they match this contained public contract.
 

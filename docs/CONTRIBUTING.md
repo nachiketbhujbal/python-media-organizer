@@ -45,22 +45,20 @@ tests. They are intentionally not bundled through a Python wrapper.
 
 Use manual workflow dispatch when full-platform evidence is needed outside a
 pull request. Each platform job has a ten-minute ceiling. Repository Actions is
-currently disabled, so no hosted workflow runs until it is explicitly enabled.
+enabled with read-only tokens, immutable action references, a narrow action
+allowlist, and approval required for every external contributor.
 
-GitHub Free exposes protected branches and rulesets only for public
-repositories. Its APIs return HTTP 403 for this private repository, so the
-following boundary is currently procedural: never force-push or delete `main`,
-never merge without a pull request and every configured `quality` check, and
-resolve every review conversation first. ADR 0046 remains current until a live
-public ruleset is verified.
+GitHub API readback confirms active no-bypass rulesets for public `main` and
+`refs/tags/v*`. Never force-push or delete `main`, never merge without an
+up-to-date pull request and the configured required check, and resolve every
+review conversation first. Release tags cannot be updated or deleted. ADR 0081
+supersedes ADR 0046's former private-Free eligibility boundary.
 
 ## Versioned public controls
 
-Version 0.5.8 prepares a separately authorized public transition under ADR
-0081. It adopts Apache-2.0 and replaces individual platform checks as the
-ruleset interface with one repository-owned, unconditional `quality-gate`.
-The workflow is versioned, but it does not run while Actions is disabled and no
-hosted governance control is active merely because it is documented:
+Version 0.5.8 completes the controlled public transition under ADR 0081. It
+adopts Apache-2.0 and replaces individual platform checks as the ruleset
+interface with one repository-owned, unconditional `quality-gate`:
 
 | Event | Versioned evidence |
 | --- | --- |
@@ -80,8 +78,8 @@ runtime, no pull-request secrets, and no self-hosted execution of untrusted
 code. Every external contributor requires maintainer approval before a workflow
 runs.
 
-After the versioned preparation and an explicit visibility authorization,
-activate one ruleset targeting only `refs/heads/main`, with no bypass actors:
+The active ruleset targets only `refs/heads/main`, with no bypass actors, and
+must continue to:
 
 - block force pushes and branch deletion;
 - require a pull request, current branch, resolved conversations, and the
@@ -90,11 +88,10 @@ activate one ruleset targeting only `refs/heads/main`, with no bypass actors:
   required approval would make legitimate self-merges impossible; and
 - retain merge commits as the explicit release boundary.
 
-Add a second ruleset for `refs/tags/v*` that prevents updates and deletion.
-Do not require linear history or signed commits under the current policy. Once
-the no-bypass ruleset is active, merge through GitHub instead of pushing a
-locally created merge commit to `main`. Read both rulesets back through the API
-before describing `main` or release tags as protected.
+The second active ruleset for `refs/tags/v*` prevents updates and deletion. Do
+not require linear history or signed commits under the current policy. Merge
+through GitHub instead of pushing a locally created merge commit to `main`.
+Read both rulesets back through the API after any hosted policy change.
 
 Public issues use structured privacy-conscious forms with blank issues disabled.
 Security reports use `SECURITY.md` plus GitHub private vulnerability reporting.
