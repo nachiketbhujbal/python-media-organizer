@@ -52,6 +52,7 @@ def test_cli_help_and_argument_errors_remain_unprefixed(tmp_path: Path) -> None:
     assert "--timestamps" in help_result.stdout
     assert "--no-timestamps" in help_result.stdout
     assert "verify-migration" in help_result.stdout
+    assert "correct-extensions" in help_result.stdout
     assert help_result.stdout.startswith("usage: pymo")
     assert conflict_result.returncode == 2
     assert conflict_result.stderr.startswith("usage: pymo")

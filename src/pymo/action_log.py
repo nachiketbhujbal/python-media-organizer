@@ -22,6 +22,7 @@ from typing import TextIO, cast
 
 from pymo.collection import CollectionLayout
 from pymo.discovery import walk_complete, walk_entry_kind_complete
+from pymo.file_safety import FileChangedError, FileState
 
 # This constant identifies the current on-disk journal schema and must remain
 # stable while collection-named action histories use it.
@@ -48,6 +49,7 @@ class ToolId(StrEnum):
     RENAME = "rename_media"
     IMAGE_DUPLICATES = "find_image_duplicates"
     VIDEO_DUPLICATES = "find_video_duplicates"
+    CORRECT_EXTENSIONS = "correct_extensions"
 
 
 def _tool_value(tool: str) -> str:
@@ -198,6 +200,46 @@ class Action:
             after=_relative_path(root, target),
             entry_type="file",
             identity=file_identity(source),
+        )
+
+    @classmethod
+    def for_evidenced_file(
+        cls,
+        root: Path,
+        source: Path,
+        target: Path,
+        operation: str,
+        state: FileState,
+        byte_sha256: str,
+    ) -> Action:
+        """Build a file action from descriptor-pinned content evidence."""
+
+        operation = operation.upper()
+        try:
+            parsed_operation = ActionOperation(operation)
+        except ValueError as error:
+            raise ActionLogError(f"not a file operation: {operation}") from error
+        if not parsed_operation.is_file:
+            raise ActionLogError(f"not a file operation: {operation}")
+        if len(byte_sha256) != 64 or any(
+            character not in "0123456789abcdef" for character in byte_sha256
+        ):
+            raise ActionLogError("invalid evidenced file SHA-256")
+        try:
+            state.require_unchanged(source, "action planning")
+        except FileChangedError as error:
+            raise ActionConflict("evidenced file changed before planning") from error
+        return cls(
+            operation=operation,
+            before=_relative_path(root, source),
+            after=_relative_path(root, target),
+            entry_type="file",
+            identity={
+                "size": state.size,
+                "sha256": byte_sha256,
+                "device": state.device,
+                "inode": state.inode,
+            },
         )
 
     @classmethod

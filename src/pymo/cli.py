@@ -8,7 +8,15 @@ import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from pymo import __version__, organize, rename, scan, validate, verify_migration
+from pymo import (
+    __version__,
+    correct_extensions,
+    organize,
+    rename,
+    scan,
+    validate,
+    verify_migration,
+)
 from pymo.cache import cli as cache_cli
 from pymo.config import add_show_ignored_argument
 from pymo.duplicates import images, videos
@@ -23,6 +31,7 @@ def _commands() -> dict[str, Callable[[Sequence[str] | None], int]]:
         "cache": cache_cli.main,
         "validate": validate.main,
         "verify-migration": verify_migration.main,
+        "correct-extensions": correct_extensions.main,
         "organize": organize.main,
         "rename": rename.main,
         "find-image-duplicates": images.main,

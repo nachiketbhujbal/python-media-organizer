@@ -52,10 +52,12 @@ def test_fast_scan_reports_inventory_without_revealing_paths_or_writing_state(
     assert "Pictures: 1 same-size group(s)" in result.stdout
     assert "Exact-byte checks: not requested" in result.stdout
     assert "Run pymo validate" in result.stdout
+    assert "Run pymo correct-extensions" in result.stdout
     assert "Run pymo organize" in result.stdout
     assert "Run pymo rename" in result.stdout
     assert (
         result.stdout.index("Run pymo validate")
+        < result.stdout.index("Run pymo correct-extensions")
         < result.stdout.index("Run pymo organize")
         < result.stdout.index("Run pymo rename")
     )
@@ -92,8 +94,9 @@ def test_checksum_scan_emits_stable_json_and_opt_in_ignored_paths(
     assert exact["computed_hashes"] == exact["hashed_files"]
     assert report["derived_state"]["action_log_present"] is False
     assert report["derived_state"]["video_cache_present"] is False
-    assert report["recommendations"][:3] == [
+    assert report["recommendations"][:4] == [
         "Run pymo validate before applying changes.",
+        "Run pymo correct-extensions after reviewing its dry run.",
         "Run pymo organize after reviewing its dry run.",
         "Run pymo rename after reviewing its dry run.",
     ]

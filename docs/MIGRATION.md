@@ -11,7 +11,8 @@ contract; it does not prove whole-device recovery.
 - Versions through 0.5.6 provide scan, validation, organization, deterministic
   renaming, exact image/video duplicate isolation, and layered migration
   verification.
-- Version 0.5.9 is planned to add reversible `correct-extensions` behavior.
+- The unreleased 0.5.9 candidate adds reversible `correct-extensions` behavior;
+  do not use it for production until the release tag and hosted checks pass.
 - Version 0.5.10 is planned to add zero-write
   `verify-migration --simulate-without-dups`.
 - Version 0.5.11 is planned to coordinate this sequence for one declared
@@ -92,8 +93,8 @@ metadata, encoding, container, or original bytes.
 
 ## Stage 3: correct truthful extensions
 
-This stage becomes available in version 0.5.9 and runs before organization or
-deterministic renaming:
+This stage becomes available in released version 0.5.9 and runs before
+organization or deterministic renaming:
 
 ```bash
 pymo --log-file "/path/to/private-logs/06-extension-preview.log" \
@@ -103,9 +104,12 @@ pymo --log-file "/path/to/private-logs/07-extension-apply.log" \
 ```
 
 Review the complete preview first. The command will change names only from
-confident, unambiguous packaged content evidence, will change no file bytes,
-and will journal collision-safe reversible renames. Ambiguous families remain
-untouched. Re-run migration verification after apply.
+fresh descriptor-pinned, confident, unambiguous packaged content evidence,
+will change no file bytes, and will journal collision-safe reversible renames.
+Valid synonyms, shared container families, weak probes, unsupported or corrupt
+media, meaningful non-media content, and custom extensions remain untouched.
+The command does not consume validation cache evidence. Re-run migration
+verification after apply.
 
 ## Stage 4: organize and rename
 

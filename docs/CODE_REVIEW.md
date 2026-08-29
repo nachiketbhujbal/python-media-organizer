@@ -56,6 +56,14 @@ The same adversarial method was repeated after the first validation release.
 | VAL-019 | Medium | Full video decoding occurred inside the probe-inspection helper, so a later decode exception discarded already established stream, duration, and container findings before the generic invalid-video result was built. | 0.5.6 | Resolved by committing probe findings before the optional full-decode stage, with a combined-failure regression |
 | VAL-020 | Low | The container mismatch helper's fail-silent path for missing or malformed top-level ffprobe format evidence was documented but had no direct regression test. | 0.5.6 | Resolved with focused missing-key and non-object payload coverage |
 
+## Truthful-extension correction review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| EXT-001 | High | Inferring a canonical suffix from Pillow's runtime registry or every ffprobe family would make correction platform-dependent and would guess across shared MOV/MP4/3GP and Matroska/WebM evidence. | 0.5.9 | Resolved in ADR 0082 with immutable packaged canonical/synonym maps and no correction mapping for shared demuxer families |
+| EXT-002 | High | A file replaced after content inspection but before journal planning could receive a correction derived from the prior file unless the mutation identity is bound to the same descriptor-pinned evidence. | 0.5.9 | Resolved by hashing the evidenced stable descriptor, carrying its exact file state into action construction before journal creation, and refusing a changed source |
+| EXT-003 | Medium | Existence-only post-apply verification would prove that a target name exists without proving it still contains the evidenced bytes that authorized correction. | 0.5.9 | Resolved by reopening every target through the stable collection descriptor boundary and checking device, inode, size, and complete SHA-256 after apply |
+
 ## Scan review findings
 
 | ID | Severity | Finding | Resolution target | Status |
@@ -305,6 +313,9 @@ The same adversarial method was repeated after the first validation release.
 - `0.5.8`: adopt Apache-2.0 and complete a tightly controlled public transition
   with contained event-scoped CI, structured issues, private security guidance,
   and API-verified hosted controls.
+- `0.5.9`: correct only confidently evidenced false media extensions through
+  packaged canonical/synonym policy, with preview-first atomic journaled
+  renames, stable target verification, and dependency-aware undo.
 
 ## Independent review evidence
 

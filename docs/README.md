@@ -22,3 +22,6 @@ hosting sites and package consumers can discover it reliably. ADR 0081 records
 the public-governance and contained-CI decision plus the controlled early public
 bootstrap. Branch, tag, workflow, and external-contributor controls are active;
 issue and private-security intake follow the versioned files onto `main`.
+The unreleased 0.5.9 candidate adds reversible truthful-extension correction;
+ADR 0082 records its fresh-evidence, packaged-policy, journal, and ambiguity
+boundaries.

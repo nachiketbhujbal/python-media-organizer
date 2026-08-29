@@ -169,6 +169,12 @@ collection preference. It covers every packaged video extension; custom video
 extensions remain valid classification fallbacks but receive no container-name
 accusation because pymo has no reviewed family policy for them.
 
+Truthful-extension correction policy is also packaged and immutable. It maps a
+verified Pillow format or confidence-gated ffprobe family to one canonical
+extension plus accepted synonyms. Collection configuration cannot add
+correction authority. Shared MOV/MP4/3GP and Matroska/WebM demuxer families are
+deliberately omitted because their evidence cannot select one truthful suffix.
+
 An alternate extension file can be selected for one command:
 
 ```bash
@@ -222,9 +228,10 @@ same-size duplicate candidates; estimated expensive work; existing local pymo
 state; and recommended next steps.
 
 Recommendations form an ordered plan rather than only naming the next command.
-`scan` recommends fresh `validate` before any mutating command. When
-layout and filenames both need work, it then recommends `organize` before
-`rename`, followed by the applicable exact-duplicate finders.
+`scan` recommends fresh `validate` before any mutating command, then
+`correct-extensions` for a collection containing media. When layout and
+filenames both need work, it then recommends `organize` before `rename`,
+followed by the applicable exact-duplicate finders.
 
 Same-size candidates are only an upper bound, not duplicate proof.
 `--checksums` additionally hashes those candidates to report exact-byte copies
@@ -508,6 +515,37 @@ and 2 when the command cannot run safely. Warnings alone return 0. Standard
 validation uses bounded workers; full validation containing video uses one
 worker to avoid unmeasured competing FFmpeg decodes.
 
+### Correct truthful media extensions
+
+```bash
+pymo correct-extensions "/path/to/media-collection"
+pymo correct-extensions "/path/to/media-collection" --apply
+pymo correct-extensions "/path/to/media-collection" --undo
+pymo correct-extensions "/path/to/media-collection" --undo --apply
+```
+
+`correct-extensions` changes only a filename's final suffix and never changes
+media bytes. It reclassifies each in-scope file from a stable,
+collection-anchored descriptor, verifies supported image formats through
+Pillow, and probes videos through an extensionless ffprobe descriptor. It
+consumes no validation cache evidence. Video correction requires at least one
+video stream, an integer content-probe score from 50 through 100, a well-formed
+family, and a packaged canonical mapping.
+
+Valid synonyms such as `.jpeg` and `.tiff` remain unchanged. Shared
+MOV/MP4/3GP and Matroska/WebM families, weak probes, unsupported or corrupt
+media, meaningful non-media content such as source text named `.ts`, and custom
+classification extensions remain untouched. A confidently identified MPEG
+transport stream under a false suffix can become `.ts`; a verified PNG named
+`.jpg` can become `.png`.
+
+The command protects `dups`, packaged ignored paths, symbolic links, and
+pymo-owned state. Incomplete discovery or changing evidence stops before an
+action log is created. Preview is the default; `--apply` uses collision-safe
+numbering plus the descriptor-relative atomic no-replace journal boundary.
+Applied targets are rehashed from stable descriptors, and `--undo` participates
+in the same later-operation dependency checks as every other mutation.
+
 ### Organize a collection
 
 ```bash
@@ -697,6 +735,7 @@ For a mixed collection, preview and then apply:
 ```bash
 pymo scan "/path/to/media-collection"
 pymo validate "/path/to/media-collection"
+pymo correct-extensions "/path/to/media-collection" --apply
 pymo organize "/path/to/media-collection" --apply
 pymo rename "/path/to/media-collection" --apply
 pymo find-image-duplicates "/path/to/media-collection" --apply
@@ -731,7 +770,9 @@ audit trail.
 Before changing anything, undo verifies all expected paths and identities. A
 missing, changed, renamed, or occupied path stops the operation safely. This is
 why a rename must be undone before undoing an earlier organizer run that moved
-the same files.
+the same files. An extension correction is a distinct tool run using ordinary
+rename actions, so history can distinguish truth correction from deterministic
+naming and require the same reverse dependency order.
 
 Journal records are parsed as a strict lifecycle: malformed, unknown,
 duplicated, out-of-order, or inconsistent events stop all mutation and undo.
@@ -868,8 +909,9 @@ adds fresh directional exact-byte coverage, version 0.5.1 adds exact
 displayed-image evidence, version 0.5.2 adds strict decoded-video evidence, and
 version 0.5.3 adds the fresh layered final verdict. Corrupt, unreadable,
 changing, unsupported, and mismatched media remain visible findings rather than
-automatic ignore rules. The promoted continuation prepares public governance
-in 0.5.8, adds reversible `correct-extensions` before organization in 0.5.9,
+automatic ignore rules. The promoted continuation completed public governance
+in 0.5.8; the unreleased 0.5.9 candidate adds reversible
+`correct-extensions` before organization,
 adds zero-write preservation simulation without `dups` in 0.5.10, and adds
 guided single-collection migration in 0.5.11. Rescue copying, irreversible
 duplicate finalization, damaged-media remediation, richer metadata, and

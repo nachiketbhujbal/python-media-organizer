@@ -129,6 +129,29 @@ generic_mime_types = [
 ".webm" = ["matroska,webm"]
 ".wmv" = ["asf", "asf_o"]
 
+# Extension correction is packaged-only. The first extension is canonical;
+# later entries are accepted synonyms that must remain unchanged. Formats and
+# shared demuxer families without one defensible canonical suffix are omitted.
+[extension_correction.image_formats]
+AVIF = [".avif"]
+BMP = [".bmp"]
+GIF = [".gif"]
+JPEG = [".jpg", ".jpeg", ".jpe", ".jfif"]
+PNG = [".png"]
+TIFF = [".tif", ".tiff"]
+WEBP = [".webp"]
+
+[extension_correction.video_families]
+asf = [".asf", ".wmv"]
+asf_o = [".asf", ".wmv"]
+avi = [".avi", ".divx"]
+flv = [".flv"]
+mpeg = [".mpeg", ".mpe", ".mpg", ".vob"]
+mpegvideo = [".mpeg", ".mpe", ".mpg"]
+mpegts = [".ts", ".mts", ".m2ts"]
+ogg = [".ogv"]
+rm = [".rm", ".rmvb"]
+
 [rename]
 noise_tokens = [
     "copy",

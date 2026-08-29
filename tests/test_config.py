@@ -39,6 +39,19 @@ def test_packaged_defaults_cover_common_local_system_metadata(
     assert config.validation.container_families[".mp4"] == {"3g2,3gp,m4a,mj2,mov,mp4"}
     assert config.validation.container_families[".mpg"] == {"mpeg", "mpegvideo"}
     assert config.validation.container_families[".wmv"] == {"asf", "asf_o"}
+    assert config.extension_correction.image_formats["JPEG"] == (
+        ".jpg",
+        ".jpeg",
+        ".jpe",
+        ".jfif",
+    )
+    assert config.extension_correction.video_families["mpegts"] == (
+        ".ts",
+        ".mts",
+        ".m2ts",
+    )
+    assert "3g2,3gp,m4a,mj2,mov,mp4" not in (config.extension_correction.video_families)
+    assert not config.extension_correction.protected_custom_extensions
     assert config.performance.scan_workers == 4
     assert config.performance.progress_interval_seconds == 15
     assert config.performance.cache_publication_batch_size == 32
@@ -128,11 +141,47 @@ def test_collection_configuration_cannot_redefine_packaged_validation_policy(
         load_config(tmp_path)
 
 
+def test_collection_configuration_cannot_redefine_extension_correction_policy(
+    tmp_path: Path,
+) -> None:
+    CollectionLayout(tmp_path).config.write_text(
+        "version = 1\n" "[extension_correction.image_formats]\n" 'JPEG = [".garden"]\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ConfigError, match=r"unknown top-level key.*extension_correction"
+    ):
+        load_config(tmp_path)
+
+
+def test_custom_classification_extensions_are_marked_correction_protected(
+    tmp_path: Path,
+) -> None:
+    CollectionLayout(tmp_path).config.write_text(
+        "version = 1\n"
+        "[classification]\n"
+        'image_extensions = [".garden"]\n'
+        'video_extensions = [".cinema"]\n',
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert config.extension_correction.protected_custom_extensions == {
+        ".garden",
+        ".cinema",
+    }
+
+
 def test_packaged_validation_policy_is_immutable(tmp_path: Path) -> None:
     config = load_config(tmp_path)
 
     with pytest.raises(TypeError):
         config.validation.container_families[".mp4"] = frozenset({"matroska"})  # type: ignore[index]
+
+    with pytest.raises(TypeError):
+        config.extension_correction.image_formats["JPEG"] = (".garden",)  # type: ignore[index]
 
 
 @pytest.mark.parametrize(

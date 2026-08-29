@@ -125,6 +125,13 @@ never duplicate the version in source or static project metadata.
   extension. Compare normalized families, keep
   the finding warning-only, and make no accusation for weak, malformed,
   missing, or unmapped evidence.
+- `correct-extensions` must use fresh collection-anchored descriptor evidence,
+  never cached validation, and only packaged canonical/synonym policy. Keep
+  meaningful non-media signatures, valid synonyms, shared container families,
+  weak probes, unsupported formats, corrupt inputs, and custom extensions
+  untouched. Protect `dups`, preview by default, hash every planned source from
+  the evidenced descriptor, use the atomic action-log rename boundary, and
+  rehash applied targets during final verification.
 - Never use cached validation health to satisfy an ordinary standard or full
   validation request. Persist results only after a current descriptor-pinned
   read. Key them by exact content, profile, semantic classification context,
@@ -193,6 +200,12 @@ never duplicate the version in source or static project metadata.
   discovery, cache, reporting, grouping, or mutation policy.
 - `src/pymo/verify_migration.py`: thin coordinator for the public directional
   verification command.
+- `src/pymo/correct_extensions.py`: complete discovery, fresh evidence,
+  collision planning, reversible apply/undo, and verified truthful-extension
+  correction.
+- `src/pymo/extension_truth.py`: shared descriptor-based Pillow format and
+  confidence-gated ffprobe container evidence without discovery, policy,
+  reporting, or mutation ownership.
 - `src/pymo/action_log.py`: shared append-only mutation journal and guarded
   dependency-aware undo.
 - `src/pymo/cache/`: the disposable derived-cache subsystem. Its package facade
@@ -367,7 +380,8 @@ contained event-scoped CI, structured issues and private security reporting,
 and API-verified no-bypass branch plus immutable-release-tag controls; none of
 those hosted settings is active until the separately authorized transition is
 verified. Version 0.5.9 adds reversible truthful-extension correction between
-fresh validation and organization. Version 0.5.10 adds zero-write migration
+fresh validation and organization from packaged canonical/synonym policy, with
+shared or weak evidence left untouched. Version 0.5.10 adds zero-write migration
 simulation without `dups`, and version 0.5.11 coordinates the documented
 single-collection baseline/working workflow without rescue copying or automatic
 deletion. Full copy and multi-collection queue orchestration remain later
