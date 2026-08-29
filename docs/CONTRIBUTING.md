@@ -1,5 +1,9 @@
 # Contributing and release workflow
 
+Unless explicitly stated otherwise, a contribution intentionally submitted for
+inclusion in this project is accepted under the Apache License, Version 2.0,
+without additional terms or conditions.
+
 This project favors small, auditable changes and conservative media safety.
 Read the root `AGENTS.md`, `HANDOFF.md`, and relevant ADRs before changing
 behavior.
@@ -30,19 +34,18 @@ tests. They are intentionally not bundled through a Python wrapper.
    ```
 
 5. Push the branch and open a pull request targeting `main`. Ordinary branch
-   pushes do not run CI automatically while the repository is private.
-6. Require all pull-request `quality` platform checks to pass before a
+   pushes do not run CI automatically.
+6. Require the unconditional pull-request `quality-gate` to pass before a
    no-fast-forward or GitHub pull-request merge into `main`.
-7. Confirm the automatic `main` checks pass on the resulting merge commit.
+7. Confirm the automatic `quality-gate` passes on the resulting merge commit.
 8. GitHub automatically deletes the merged remote head branch. Delete the
    corresponding local branch and prune stale remote-tracking refs as local
    maintenance.
 9. Do not place an ordinary feature or fix commit directly on `main`.
 
-Use manual workflow dispatch when platform evidence is needed before opening a
-pull request or for an exceptional tag investigation. Each platform job has a
-ten-minute ceiling. Version tags do not rerun the matrix automatically while
-the repository is private.
+Use manual workflow dispatch when full-platform evidence is needed outside a
+pull request. Each platform job has a ten-minute ceiling. Repository Actions is
+currently disabled, so no hosted workflow runs until it is explicitly enabled.
 
 GitHub Free exposes protected branches and rulesets only for public
 repositories. Its APIs return HTTP 403 for this private repository, so the
@@ -51,14 +54,15 @@ never merge without a pull request and every configured `quality` check, and
 resolve every review conversation first. ADR 0046 remains current until a live
 public ruleset is verified.
 
-## Planned public controls
+## Versioned public controls
 
 Version 0.5.8 prepares a separately authorized public transition under ADR
 0081. It adopts Apache-2.0 and replaces individual platform checks as the
 ruleset interface with one repository-owned, unconditional `quality-gate`.
-None of the following is active merely because it is documented:
+The workflow is versioned, but it does not run while Actions is disabled and no
+hosted governance control is active merely because it is documented:
 
-| Event | Planned evidence |
+| Event | Versioned evidence |
 | --- | --- |
 | Ordinary branch push | None; a pull request owns pre-merge evidence. |
 | Pull request | Always classify the change and publish `quality-gate`. Documentation-only changes run documentation/privacy checks; runtime, packaging, toolchain, and workflow changes run Ubuntu, pinned Fedora, and macOS. |
@@ -117,8 +121,7 @@ the tag count small.
    commit.
 4. Create an annotated `vX.Y.Z` tag on the verified merge commit.
 5. Push the tag. The tag is the authoritative package version through
-   hatch-vcs; it does not rerun CI automatically while the repository is
-   private.
+   hatch-vcs and runs the narrower release workflow when Actions is enabled.
 6. Force-refresh the local editable installation and verify the exact CLI
    version after creating the tag:
 
@@ -129,13 +132,12 @@ the tag count small.
    ```
 
 The CLI version must equal the tag without a development suffix, and both
-distributions must build from the tagged commit. A manual workflow dispatch on
-the tag is available when remote tag verification is specifically warranted.
+distributions must build from the tagged commit.
 
 The package is not currently published to PyPI. A release means a verified Git
 tag plus locally buildable source and wheel artifacts.
 
-After version 0.5.8 activates its public workflow, tag pushes run the narrower
-artifact and isolated-install proof recorded in ADR 0081. That post-tag job is
-additional evidence; it never authorizes creating a tag before the exact
-`main` commit has passed its applicable gate.
+Version 0.5.8 tag pushes run the narrower ancestry, artifact, and
+isolated-install proof recorded in ADR 0081 whenever Actions is enabled. That
+post-tag job is additional evidence; it never authorizes creating a tag before
+the exact `main` commit has passed its applicable gate.

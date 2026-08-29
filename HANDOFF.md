@@ -257,19 +257,6 @@ descriptor-pinned callers read standard input. Where the utility is unavailable
 the rule does not apply and the existing fallback warning stands. ADR 0078 is
 the durable decision.
 
-Version 0.5.8 separates mainline validation, tag release, and hosted macOS.
-The Ubuntu job and the pinned Fedora container job run automatically for pull
-requests targeting `main` and pushes to `main`, and a change confined to
-documentation, Markdown, or the licence runs neither. The hosted macOS job runs
-only through deliberate dispatch with the `hosted_macos` input, because hosted
-macOS is billed at roughly ten times the hosted Linux rate and the mandatory
-local gate already covers macOS continuously. Every `v*` tag runs a Linux-only
-release workflow that builds both distributions, proves the artifact filenames
-carry the tagged version, and requires an isolated wheel installation to report
-exactly that version. Automatic post-merge validation is evidence, never branch
-protection. ADR 0081 is the durable decision and supersedes only the trigger
-and automatic-macOS portions of ADR 0044 and ADR 0041.
-
 Version 0.5.6 reports a warning-severity `container_extension_mismatch` only
 when the existing extensionless ffprobe result has an integer content-probe
 score from 50 through 100, a non-empty demuxer family, and an explicitly mapped
@@ -291,18 +278,26 @@ packaging, and command behavior are unchanged. The maintainer waived the
 independent Claude review for this path-only release; `docs/CODE_REVIEW.md`
 records the resulting follow-up debt.
 
-Version 0.5.8 is planned as the public-readiness release. ADR 0081 selects
+Version 0.5.8 is the unreleased public-readiness candidate. ADR 0081 selects
 Apache-2.0, keeps repository authority separate from recipients' source rights,
-and specifies the implementation and activation sequence. The versioned work
+and separates the versioned implementation from hosted activation. The branch
 adds the root license and package metadata, privacy-conscious issue forms,
 `SECURITY.md`, a fail-closed change classifier, one unconditional aggregate
 gate, full Ubuntu/Fedora/macOS evidence for executable or workflow changes,
 applicable checks on the exact `main` commit, and non-redundant tag artifact and
-isolated-install proof. The repository remains private until 0.5.8 itself is
+isolated-install proof. Documentation-only changes still run a lightweight
+documentation/privacy gate, and manual dispatch always requests the full
+platform set. The repository remains private until 0.5.8 itself is
 verified and tagged, the final privacy audit passes, and the maintainer
 separately authorizes visibility. Actions, external-contributor approvals,
 issue/security features, and branch/tag rulesets are then enabled and read back
 through the GitHub API before being described as active.
+
+The stacked candidate passes Ruff, Black, mypy, pre-commit, all 372 synthetic
+and real-FFmpeg tests with 88 percent subprocess-aware coverage, the package
+build, and license-artifact inspection. These results predate the required
+rebase onto a released 0.5.7 and must be repeated afterward; they do not replace
+independent review or hosted pull-request and exact-`main` evidence.
 
 Version 0.5.9 is planned to add `pymo correct-extensions COLLECTION` between
 fresh validation and organization. It changes no media bytes and acts only on
@@ -1227,14 +1222,16 @@ user explicitly approves that release. Confirm private collection data and
 generated state are absent before every commit.
 
 Ordinary changes now use one short-lived branch and pull request per cohesive
-release. The pull request and resulting `main` push run the Ubuntu and
-Fedora `quality` checks automatically unless the change is confined to
-documentation, Markdown, or the licence; ordinary branch pushes do not. Hosted
-macOS runs only through deliberate dispatch with the `hosted_macos` input, and
-a `v*` tag runs the Linux-only release workflow. See ADR 0081. The v0.3.6 workflow merge was the one-time bootstrap because the
-check could not be required until the workflow existed on `main`. GitHub CLI is
-authenticated for pull-request and Actions management; the repository deploy
-key remains the scoped Git transport credential. GitHub's
+release. The pull request and resulting `main` push always publish one
+`quality-gate`: documentation-only changes run the lightweight gate, while
+executable, packaging, toolchain, and workflow changes run Ubuntu, pinned
+Fedora, and macOS. Ordinary branch pushes do not run CI, manual dispatch runs
+the full platform set, and a `v*` tag runs the narrower Linux release workflow.
+No workflow runs while repository Actions is disabled. See ADR 0081. The v0.3.6
+workflow merge was the one-time bootstrap because the check could not be
+required until the workflow existed on `main`. GitHub CLI is authenticated for
+pull-request and Actions management; the repository deploy key remains the
+scoped Git transport credential. GitHub's
 `delete_branch_on_merge` repository setting is enabled, so merged remote head
 branches are removed automatically; local branch deletion and remote-tracking
 pruning remain local maintenance. See `docs/CONTRIBUTING.md` for the safe

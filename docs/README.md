@@ -17,8 +17,8 @@ needed by coding agents. Durable engineering documentation lives here:
   direction.
 - [Architecture decisions](adrs/README.md) — one durable decision per record.
 
-Version 0.5.8 is planned to add the selected Apache-2.0 license at the
-repository root so hosting sites and package consumers can discover it
+The unreleased version 0.5.8 candidate adds the selected Apache-2.0 license at
+the repository root so hosting sites and package consumers can discover it
 reliably. ADR 0081 records the public-governance and contained-CI decision; the
-repository remains private and those hosted controls remain inactive until its
+repository remains private and hosted settings remain inactive until its
 explicit activation sequence completes.

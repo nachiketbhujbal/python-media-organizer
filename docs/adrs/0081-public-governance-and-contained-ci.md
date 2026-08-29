@@ -90,12 +90,13 @@ substitute for triage.
 
 ## Activation sequence
 
-1. Restore hosted capacity while the repository remains private.
+1. Restore hosted capacity and re-enable Actions while the repository remains
+   private.
 2. Complete the exact pull-request and exact-`main` checks, merge, and tag
    version 0.5.7.
-3. Rebase the version 0.5.8 branch onto that verified `main`, reconcile the
-   prior CI draft, and implement this ADR, including the license, metadata,
-   workflow, issue, security, and documentation files.
+3. Rebase the implemented version 0.5.8 branch onto that verified `main` and
+   repeat its complete local gate so the stacked history does not substitute
+   for evidence against the release base.
 4. Complete independent review, the local gate, exact pull-request checks,
    exact-`main` checks, tag verification, and installed-version proof for
    version 0.5.8 while the repository is still private.

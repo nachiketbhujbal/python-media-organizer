@@ -4,13 +4,15 @@ All notable changes to `python-media-organizer` will be recorded here.
 
 ## Unreleased — 0.5.8
 
-- Select Apache-2.0 for the planned public source release and record the
-  separate licensing, repository-authority, visibility, branch, tag, issue,
-  security-reporting, and external-workflow approval boundaries in ADR 0081.
-- Replace the earlier unshipped private-minute CI direction with a contained
-  public workflow contract: an unconditional aggregate gate, fail-closed change
-  classification, full three-platform evidence for executable or workflow
-  changes, applicable exact-`main` checks, and non-redundant tag artifact proof.
+- Add the complete Apache-2.0 root license, SPDX package metadata, contribution
+  terms, privacy-conscious issue forms with blank issues disabled, and private
+  security-reporting guidance. Record the separate source-rights and hosted
+  repository-authority boundaries in ADR 0081.
+- Replace the earlier private-minute CI draft with a contained workflow: a
+  trusted fail-closed change classifier, lightweight documentation/privacy
+  checks, full Ubuntu/Fedora/macOS evidence for executable or workflow changes,
+  one unconditional aggregate `quality-gate`, applicable exact-`main` checks,
+  and a narrower annotated-mainline tag artifact and isolated-install proof.
 - Promote reversible truthful-extension correction to 0.5.9, zero-write
   preservation simulation without `dups` to 0.5.10, and guided
   single-collection migration to 0.5.11 while leaving rescue copying,

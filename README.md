@@ -798,27 +798,26 @@ build remain release gates so normal commits do not repeatedly run FFmpeg
 integration tests. Development-tool versions are resolved in `uv.lock`.
 Coverage is configured to include the real child-process CLI tests; the normal
 test command stays fast, while the coverage form is a release review gate.
-GitHub Actions runs the same locked quality, coverage, native-FFmpeg, and build
-gate on Ubuntu and on the pinned Fedora container automatically for pull
-requests targeting `main` and pushes to `main`, and skips a change confined to
-documentation, Markdown, or the licence. Hosted macOS is deliberate rather than
-automatic, because it is billed at roughly ten times the hosted Linux rate and
-macOS is the platform the mandatory local gate already covers continuously;
-dispatch the workflow with the `hosted_macos` input when clean-image macOS
-evidence is warranted. Every `v*` tag runs a Linux-only release workflow that
-builds both distributions and requires an isolated wheel installation to report
-exactly the tagged version. ADR 0081 records the separation. See
+GitHub Actions always classifies pull requests and `main` pushes and publishes
+one stable `quality-gate`. Documentation-only changes run a lightweight
+documentation/privacy gate; executable, packaging, toolchain, and workflow
+changes run the same locked quality, coverage, native-FFmpeg, and build gate on
+Ubuntu, the pinned Fedora container, and macOS. Manual dispatch also runs that
+full platform set. Every annotated `v*` tag runs a narrower Linux release
+workflow that verifies mainline ancestry, builds both distributions, and
+requires an isolated wheel installation to report exactly the tagged version.
+Ordinary branch pushes remain quiet, and no workflow runs while repository
+Actions is disabled. ADR 0081 records the separation. See
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for the branch and release
 workflow. GitHub Free does not offer server-side protection for private
 repositories, so the planned no-force-push, no-deletion, PR, status-check, and
 conversation-resolution rules remain procedural until the account gains Pro or
 the repository becomes public; ADR 0046 records the activation design.
 
-Version 0.5.8 is planned to adopt Apache-2.0 and prepare the contained public
-workflow recorded in ADR 0081. Ordinary branch pushes remain quiet; pull
-requests always publish one aggregate gate; executable and workflow changes run
-Ubuntu, pinned Fedora, and macOS; exact `main` commits receive their applicable
-checks; and tags prove ancestry, package versions, distributions, and an
+The unreleased version 0.5.8 candidate adopts Apache-2.0, adds structured issue
+forms and security guidance, and implements the contained workflow recorded in
+ADR 0081. Pull requests and exact `main` commits receive their applicable
+aggregate gate; tags prove ancestry, package versions, distributions, and an
 isolated installation without repeating an already required platform suite.
 Public visibility, Actions, external-contributor approvals, structured issues,
 private vulnerability reporting, and no-bypass branch/tag rulesets remain a
@@ -854,6 +853,11 @@ there is no second version string to update by hand. Untagged development
 commits receive a PEP 440 development version containing their Git revision.
 uv manages the environment and `uv.lock`, while ordinary standards-compatible
 installers can still build and install the package.
+
+## License
+
+`python-media-organizer` is licensed under the
+[Apache License, Version 2.0](LICENSE).
 
 ## Roadmap and research
 
