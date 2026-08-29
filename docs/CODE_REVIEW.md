@@ -195,6 +195,13 @@ The same adversarial method was repeated after the first validation release.
 | DOC-006 | Medium | The 0.5.5 records claimed more than the release implemented or proved: the authoritative instruction file said no native tool is invoked when a native utility makes the very determination, the roadmap marked the row released while still describing it as planned work, the decision record asserted that damaged media always retains a media or generic signature, the changelog claimed picture-extension coverage that no fixture provided, and the research record still presented the shipped behavior as scheduled work and an open question. | 0.5.5 | Resolved by narrowing each claim to what was implemented and measured, recording the epistemic limit on severely damaged media, adding the missing non-media picture-extension fixture, and closing the decided research question |
 | DOC-007 | Medium | The 0.5.6 roadmap attributed raw elementary-stream protection to the probe-confidence gate even though measured evidence passed that gate and the packaged generic-MPEG family mapping supplied the protection. | 0.5.6 | Resolved by crediting the confidence gate only with suppressing weak evidence and the family map with accepting raw and program MPEG streams |
 | DOC-008 | Low | The research quick-reference table grouped `.vob` with generic MPEG extensions even though the packaged policy accepts `mpegvideo` only for `.mpe`, `.mpeg`, and `.mpg`. | 0.5.6 | Resolved by splitting the table rows to match the packaged family map |
+| DOC-009 | Low | The architecture-decision directory used the singular name `docs/adr/` even though it contains and indexes a plural set of decision records. | 0.5.7 | Resolved by moving the complete set to `docs/adrs/` and updating every tracked link and current path reference |
+
+## Review waivers and follow-up debt
+
+| Release | Waiver | Follow-up debt | Status |
+| --- | --- | --- | --- |
+| 0.5.7 | The maintainer waived the independent Claude review on 2026-08-29 because the release changes documentation paths and repository-local ignore boundaries only. | The next completed adversarial release review must recheck the move-only ADR diff, tracked path references, and private-state ignore boundary. | Open |
 
 ## Release groups
 
@@ -289,6 +296,10 @@ The same adversarial method was repeated after the first validation release.
 - `0.5.5`: stop validating a positively identified non-media file as media
   because of its extension, report the naming mismatch as a warning instead,
   and keep an empty media file an error.
+- `0.5.6`: report confidence-gated container/extension mismatches while keeping
+  historical validation evidence readable, stale, and refreshable.
+- `0.5.7`: pluralize the architecture-decision directory and update every
+  tracked link and current path reference without changing runtime behavior.
 
 ## Independent review evidence
 

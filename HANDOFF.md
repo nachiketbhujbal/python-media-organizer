@@ -27,7 +27,9 @@ absence, and they must not claim whole-device recovery.
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
 `pymo` command, and includes layered preservation through version 0.5.3 plus
-validation truthfulness and cache compatibility through version 0.5.6.
+validation truthfulness and cache compatibility through released version
+0.5.7. Version 0.5.7 pluralizes the architecture-decision directory as
+`docs/adrs/` without changing runtime or package behavior.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -257,6 +259,15 @@ version-1 rows remain structurally valid but stale and non-reusable, so status
 can report them and targeted refresh can publish version-2 rows while retaining
 historical and unrelated evidence. ADR 0079 is the durable decision.
 
+Version 0.5.7 moves the complete architecture-decision set from `docs/adr/` to
+`docs/adrs/`, updates every tracked link and current path reference, and records
+the documentation-layout decision in ADR 0080. It also ignores repository-local
+`.pvt/` and `.worktrees/` state so private operational records and linked
+worktrees cannot be added accidentally. Source, tests, configuration,
+packaging, and command behavior are unchanged. The maintainer waived the
+independent Claude review for this path-only release; `docs/CODE_REVIEW.md`
+records the resulting follow-up debt.
+
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
 behavior. Version 0.3.18 prefixes every physical line of normal human-readable
@@ -402,7 +413,7 @@ python-media-organizer/
     CONTRIBUTING.md
     RESEARCH.md
     ROADMAP.md
-    adr/
+    adrs/
   src/pymo/
     __init__.py
     __main__.py
@@ -517,13 +528,11 @@ them. `--verbose` does not relax that privacy default. Explicit
 absolute collection root. If the user also requests `--log-file`, those listed
 paths are deliberately included in that log.
 
-The source contains only eight assigned module constants: the config schema,
-action-log schema, shared cache schema, shared exact-video evidence type,
-video fingerprint algorithm, cache-status report schema, scan-report schema,
-and validation-report schema versions or identifiers. Each is an
-on-disk compatibility boundary and has an adjacent justification. Dispatch,
-logging, collection paths, tool identifiers, operation identifiers, timestamp
-patterns, and policy collections no longer use scattered mutable globals.
+Assigned module constants are reserved for explicit on-disk compatibility
+boundaries such as schema, report, and fingerprint algorithm versions, with an
+adjacent justification. Dispatch, logging, collection paths, tool identifiers,
+operation identifiers, timestamp patterns, and policy collections do not use
+scattered mutable globals.
 
 ## Shared action log
 
@@ -1169,7 +1178,7 @@ An AI assistant's branch carries its own prefix, `claude/<type>/<slug>` or
 `codex/<type>/<slug>`, adding the target version as `<type>/v<x.y.z>-<slug>`
 when the work is scheduled for a release. The merge commit preserves that name,
 so attribution stays visible without changing the one-line, maintainer-authored
-commit convention. A branch reserves the next free `docs/adr/` number when it
+commit convention. A branch reserves the next free `docs/adrs/` number when it
 starts, claims it in its first commit, names it in the pull request, and
 re-checks it against the target branch immediately before merge, renumbering on
 conflict; claiming alone cannot prevent two branches selecting the same number.

@@ -270,7 +270,7 @@ report-only future work and must never silently enter the exact move path.
   when the work is scheduled for a release. The merge commit preserves the
   branch name, so attribution stays visible without changing the one-line,
   maintainer-authored commit convention. See ADR 0077.
-- Reserve the next free `docs/adr/` number when a branch starts, claim it in that
+- Reserve the next free `docs/adrs/` number when a branch starts, claim it in that
   branch's first commit, and name it in the pull request. Re-check the number
   against the target branch immediately before merge and renumber on conflict;
   claiming alone does not prevent two branches selecting the same number.
@@ -316,7 +316,7 @@ report-only future work and must never silently enter the exact move path.
 - Keep `README.md`, `HANDOFF.md`, `docs/ROADMAP.md`, `docs/RESEARCH.md`, and
   `docs/CHANGELOG.md` current when a decision changes their claims.
 - Record each durable architecture or product decision in one numbered file
-  under `docs/adr/`. Add a superseding ADR instead of rewriting accepted
+  under `docs/adrs/`. Add a superseding ADR instead of rewriting accepted
   history.
 - Keep `docs/CODE_REVIEW.md` finding statuses synchronized with the release
   that resolves or explicitly accepts them.

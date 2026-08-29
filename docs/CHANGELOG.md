@@ -2,6 +2,24 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.7 - 2026-08-29
+
+- Rename the architecture-decision directory from `docs/adr/` to `docs/adrs/`
+  so its name describes the plural set of records it contains.
+- Update every tracked link, documentation map, instruction, handoff reference,
+  and coordination path to the plural directory without changing the numbered
+  decision files or their history.
+- Ignore repository-local `.pvt/` and `.worktrees/` state so private operational
+  records and linked worktrees cannot be added accidentally.
+- Remove a stale numeric inventory of module constants from the handoff and
+  retain the durable rule that module constants represent explicit on-disk
+  compatibility boundaries.
+- Record the maintainer's path-only independent-review waiver and its explicit
+  follow-up debt instead of silently omitting the review.
+- Record the documentation-layout decision in ADR 0080. Runtime behavior,
+  package contents outside documentation, configuration, and tests are
+  unchanged.
+
 ## 0.5.6 - 2026-08-26
 
 - Report a warning-severity `container_extension_mismatch` when a successful
@@ -64,7 +82,7 @@ All notable changes to `python-media-organizer` will be recorded here.
   `codex/` prefix that the merge commit preserves, and every subagent reads
   `AGENTS.md` and `HANDOFF.md` completely because imported context is not
   inherited.
-- Reserve each `docs/adr/` number when a branch starts, claim it in that branch's
+- Reserve each `docs/adrs/` number when a branch starts, claim it in that branch's
   first commit, and re-check it against the target branch immediately before
   merge, renumbering on conflict, because claiming alone cannot stop two
   branches selecting the same number.
