@@ -314,9 +314,10 @@ The same adversarial method was repeated after the first validation release.
   rebased commit `35acf85` preserves the draft's authorship and subject, and the
   later owner commit resolves both findings. This requested transfer-boundary
   review closes the former straggler without leaving separate review debt.
-- The pre-rebase candidate passed all 372 tests at 88 percent
-  subprocess-aware coverage plus Ruff, Black, mypy, pre-commit, build, exact
-  Apache-license comparison, and wheel/source license-metadata inspection.
+- After rebasing onto released 0.5.7, the candidate passes all 372 tests at 88
+  percent subprocess-aware coverage plus Ruff, Black, mypy, pre-commit, build,
+  exact Apache-license comparison, and wheel/source license-metadata
+  inspection.
 - Baseline: 103 tests passed under the locked Python 3.11 environment.
 - Ruff found import, modernization, closure-binding, and unused-import issues;
   its optional complexity pass identified the orchestration hotspots in

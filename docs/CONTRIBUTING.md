@@ -113,7 +113,7 @@ the tag count small.
 
 1. Ensure the roadmap target, changelog entry, handoff, tests, and any ADR are
    complete on the release branch.
-2. Pass the local gate, open the pull request, and pass its `quality` checks.
+2. Pass the local gate, open the pull request, and pass its `quality-gate`.
 3. Merge the branch into `main` and verify the automatic checks on the merge
    commit.
 4. Create an annotated `vX.Y.Z` tag on the verified merge commit.

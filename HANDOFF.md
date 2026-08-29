@@ -28,14 +28,15 @@ absence, and they must not claim whole-device recovery.
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
-`pymo` command, and includes layered preservation through version 0.5.3 plus
-validation truthfulness and cache compatibility through released version
-0.5.7. Version 0.5.7 pluralizes the architecture-decision directory as
+`pymo` command, and includes layered preservation through version 0.5.3,
+validation truthfulness and cache compatibility through version 0.5.7, and
+public governance through released version 0.5.8. Version 0.5.7 pluralizes the
+architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
 selects Apache-2.0 and completes the controlled public transition with contained
 CI, structured issues, private vulnerability reporting, and API-verified
 no-bypass branch and immutable-release-tag rules. The repository is public
-under the bootstrap protections; issue intake stays disabled until the 0.5.8
+under the bootstrap protections; issue intake is enabled only after the 0.5.8
 public-facing files land. Versions 0.5.9 through 0.5.11 then add reversible
 truthful-extension correction, zero-write preservation simulation without
 `dups`, and a guided single-collection migration workflow. Those planned
@@ -292,13 +293,14 @@ public with issue intake closed; no-bypass `main` and immutable-tag rulesets,
 read-only workflow tokens, immutable action references, a selected-action
 allowlist, and approval for every external contributor were installed and read
 back through the GitHub API. Issue intake and private vulnerability reporting
-remain the final post-merge activation steps.
+are activated and verified only after the versioned files reach `main`.
 
-The candidate passed Ruff, Black, mypy, pre-commit, all 372 synthetic and
-real-FFmpeg tests with 88 percent subprocess-aware coverage, the package build,
-and license-artifact inspection before its rebase. The same complete gate is
-repeated against released 0.5.7; hosted pull-request, exact-`main`, tag, and
-installed-version evidence remain distinct release proofs.
+After rebasing onto released 0.5.7, the candidate passes Ruff, Black, mypy,
+pre-commit, all 372 synthetic and real-FFmpeg tests with 88 percent
+subprocess-aware coverage, the package build, exact Apache-license comparison,
+and wheel/source license-metadata inspection. Hosted pull-request,
+exact-`main`, tag, and installed-version evidence remain distinct release
+proofs.
 
 Version 0.5.9 is planned to add `pymo correct-extensions COLLECTION` between
 fresh validation and organization. It changes no media bytes and acts only on

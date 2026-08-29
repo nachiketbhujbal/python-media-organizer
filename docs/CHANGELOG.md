@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## Unreleased — 0.5.8
+## 0.5.8 - 2026-08-29
 
 - Add the complete Apache-2.0 root license, SPDX package metadata, contribution
   terms, privacy-conscious issue forms with blank issues disabled, and private

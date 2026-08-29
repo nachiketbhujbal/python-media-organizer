@@ -813,7 +813,7 @@ workflow. The public repository has API-verified no-bypass rules for `main` and
 immutable `v*` tags; `main` requires an up-to-date pull request, resolved
 conversations, and the configured hosted status checks.
 
-The unreleased version 0.5.8 candidate adopts Apache-2.0, adds structured issue
+Version 0.5.8 adopts Apache-2.0, adds structured issue
 forms and security guidance, and implements the contained workflow recorded in
 ADR 0081. Pull requests and exact `main` commits receive their applicable
 aggregate gate; tags prove ancestry, package versions, distributions, and an
