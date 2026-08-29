@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
+from pymo import config as config_module
 from pymo.collection import CollectionLayout
 from pymo.config import ConfigError, ignored_messages, load_config
 
@@ -39,6 +41,50 @@ def test_packaged_defaults_cover_common_local_system_metadata(
     assert config.validation.container_families[".mp4"] == {"3g2,3gp,m4a,mj2,mov,mp4"}
     assert config.validation.container_families[".mpg"] == {"mpeg", "mpegvideo"}
     assert config.validation.container_families[".wmv"] == {"asf", "asf_o"}
+    assert config.extension_correction.image_formats["JPEG"] == (
+        ".jpg",
+        ".jpeg",
+        ".jpe",
+        ".jfif",
+    )
+    assert config.extension_correction.video_families["mpegts"] == (
+        ".ts",
+        ".mts",
+        ".m2ts",
+    )
+    mapped_image_extensions = {
+        extension
+        for extensions in config.extension_correction.image_formats.values()
+        for extension in extensions
+    }
+    assert (
+        mapped_image_extensions
+        | config.extension_correction.protected_source_extensions
+        == config.classification.image_extensions
+    )
+    assert not mapped_image_extensions.intersection(
+        config.extension_correction.protected_source_extensions
+    )
+    assert "TIFF" not in config.extension_correction.image_formats
+    assert {".dng", ".cr2", ".nef", ".tif", ".tiff"}.issubset(
+        config.extension_correction.protected_source_extensions
+    )
+    all_video_families = {
+        family
+        for families in config.validation.container_families.values()
+        for family in families
+    }
+    assert (
+        set(config.extension_correction.video_families)
+        | config.extension_correction.protected_video_families
+        == all_video_families
+    )
+    assert not set(config.extension_correction.video_families).intersection(
+        config.extension_correction.protected_video_families
+    )
+    assert {"asf", "asf_o", "mpegvideo", "ogg", "rm"}.issubset(
+        config.extension_correction.protected_video_families
+    )
     assert config.performance.scan_workers == 4
     assert config.performance.progress_interval_seconds == 15
     assert config.performance.cache_publication_batch_size == 32
@@ -128,11 +174,61 @@ def test_collection_configuration_cannot_redefine_packaged_validation_policy(
         load_config(tmp_path)
 
 
+def test_collection_configuration_cannot_redefine_extension_correction_policy(
+    tmp_path: Path,
+) -> None:
+    CollectionLayout(tmp_path).config.write_text(
+        "version = 1\n" "[extension_correction.image_formats]\n" 'JPEG = [".garden"]\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ConfigError, match=r"unknown top-level key.*extension_correction"
+    ):
+        load_config(tmp_path)
+
+
+def test_packaged_correction_policy_rejects_an_unaccounted_image_extension() -> None:
+    defaults = config_module._packaged_defaults()
+    incomplete = replace(
+        defaults,
+        correction_protected_image_extensions=tuple(
+            extension
+            for extension in defaults.correction_protected_image_extensions
+            if extension != ".dng"
+        ),
+    )
+
+    with pytest.raises(ConfigError, match=r"missing \.dng"):
+        config_module._validate_extension_correction(incomplete)
+
+
+def test_custom_classification_extensions_are_marked_correction_protected(
+    tmp_path: Path,
+) -> None:
+    CollectionLayout(tmp_path).config.write_text(
+        "version = 1\n"
+        "[classification]\n"
+        'image_extensions = [".garden"]\n'
+        'video_extensions = [".cinema"]\n',
+        encoding="utf-8",
+    )
+
+    config = load_config(tmp_path)
+
+    assert {".garden", ".cinema"}.issubset(
+        config.extension_correction.protected_source_extensions
+    )
+
+
 def test_packaged_validation_policy_is_immutable(tmp_path: Path) -> None:
     config = load_config(tmp_path)
 
     with pytest.raises(TypeError):
         config.validation.container_families[".mp4"] = frozenset({"matroska"})  # type: ignore[index]
+
+    with pytest.raises(TypeError):
+        config.extension_correction.image_formats["JPEG"] = (".garden",)  # type: ignore[index]
 
 
 @pytest.mark.parametrize(

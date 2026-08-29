@@ -428,10 +428,10 @@ sole-maintainer boundary.
 
 ## Media truthfulness, damage, and remediation
 
-**Status: research only, with two shipped exceptions and one promoted next step.** The
+**Status: research only, with three shipped exceptions.** The
 classification-severity correction described below shipped in 0.5.5,
 confidence-gated container and extension detection shipped in 0.5.6, and the
-separate reversible correction command is promoted to 0.5.9. Validation
+separate reversible correction command shipped in 0.5.9 under ADR 0082. Validation
 remediation guidance, damaged-media isolation folders, byte-changing repair,
 container conversion, and damaged-media quarantine are all recorded here for
 later evaluation and must not be implemented on the strength of this record
@@ -613,11 +613,18 @@ later stage sees a file whose name no longer lies and the deterministic renamer 
 preserve a false extension. The maintainer promoted this work to version 0.5.9 as the separate
 `pymo correct-extensions COLLECTION` command.
 
-Constraints: act only when the content signature is confident and the canonical extension is
-unambiguous; leave ambiguous or unrecognized detections alone; dry run by default with an explicit
-apply; record an ordinary reversible rename in the collection journal, distinguished from a
-deterministic rename so history can answer what was corrected as opposed to what was renamed;
-verify after apply; reuse existing collision naming.
+The unreleased candidate implements those constraints through fresh stable-descriptor Pillow
+verification plus full frame decoding, extensionless ffprobe evidence, immutable packaged
+canonical/synonym maps with exact mapped-or-protected coverage, dry-run/apply/undo, a distinct
+journal tool ID carrying ordinary rename actions, existing collision naming, and stable target
+rehashing. Valid synonyms remain unchanged. TIFF-derived and camera-raw images, shared
+MOV/MP4/3GP and Matroska/WebM demuxer families, audio-capable ASF/Ogg/RealMedia families, raw MPEG
+elementary streams, weak probes, unsupported or corrupt media, meaningful non-media content, and
+custom classification extensions have no correction authority. Extensionless conclusive media may
+receive a canonical suffix. The command protects `dups`, consumes no validation cache evidence,
+and fails before state when discovery or evidenced file state changes. ADR 0082 owns the accepted
+implementation decision; release evidence remains outstanding until the reviewed candidate passes
+hosted checks, merge, and tag.
 
 ### What an isolation folder would mean
 

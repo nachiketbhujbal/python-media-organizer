@@ -487,6 +487,10 @@ def build_report(
     recommendations = ["Run pymo validate before applying changes."]
     if walk.symlink_count or walk.unreadable_count:
         recommendations.append("Review symbolic links and unreadable entries first.")
+    if summary.source_picture_count or summary.source_video_count:
+        recommendations.append(
+            "Run pymo correct-extensions after reviewing its dry run."
+        )
     if (
         summary.layout["pics"] != "ready"
         or summary.layout["vids"] != "ready"

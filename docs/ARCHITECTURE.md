@@ -15,9 +15,10 @@ CLI dispatch
 ```
 
 - `cli.py` and `__main__.py` select a command and own no media policy.
-- `organize.py`, `rename.py`, `scan.py`, and `validate.py` are user-facing
-  command coordinators. `verify_migration.py` coordinates the directional
-  preservation report. Their staged functions remain directly testable.
+- `organize.py`, `rename.py`, `correct_extensions.py`, `scan.py`, and
+  `validate.py` are user-facing command coordinators. `verify_migration.py`
+  coordinates the directional preservation report. Their staged functions
+  remain directly testable.
 - `duplicates/` owns exact duplicate policy. Images and videos remain separate
   because their definitions of equivalent content and their native dependencies
   differ; `common.py` contains only shared layout and move-plan policy.
@@ -41,7 +42,7 @@ CLI dispatch
   deliberately outside `cache/` because journal evidence is portable and
   authoritative while cache state is derived and disposable.
 - `classification.py`, `collection.py`, `config.py`, `discovery.py`,
-  `file_safety.py`, `image_content.py`, `video_content.py`,
+  `file_safety.py`, `extension_truth.py`, `image_content.py`, `video_content.py`,
   `logging_config.py`, `progress.py`, and `video.py` are shared foundations.
   They may not depend on a specific command or duplicate-media implementation.
   `image_content.py` owns the versioned descriptor-to-displayed-pixel
@@ -50,6 +51,9 @@ CLI dispatch
   `video_content.py` owns the equivalent descriptor-based probe, native-tool,
   and exact-playback normalization shared by those domains under the same
   ownership restriction.
+  `extension_truth.py` owns fresh Pillow format and confidence-gated ffprobe
+  container evidence; the correction command retains discovery, packaged
+  policy selection, collision, reporting, and mutation ownership.
 
 ## Review rules
 

@@ -60,6 +60,14 @@ class ValidationConfig:
 
 
 @dataclass(frozen=True)
+class ExtensionCorrectionConfig:
+    image_formats: Mapping[str, tuple[str, ...]]
+    video_families: Mapping[str, tuple[str, ...]]
+    protected_source_extensions: frozenset[str]
+    protected_video_families: frozenset[str]
+
+
+@dataclass(frozen=True)
 class PerformanceConfig:
     scan_workers: int
     progress_interval_seconds: int
@@ -74,6 +82,7 @@ class PymoConfig:
     image_duplicates: ImageDuplicateConfig
     video_duplicates: VideoDuplicateConfig
     validation: ValidationConfig
+    extension_correction: ExtensionCorrectionConfig
     performance: PerformanceConfig
     custom_path: Path | None = None
 
@@ -120,6 +129,10 @@ class _ConfigLayer:
     image_duplicate_extensions: tuple[str, ...] = ()
     decode_timeout_seconds: int | None = None
     container_families: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    correction_image_formats: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    correction_video_families: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    correction_protected_image_extensions: tuple[str, ...] = ()
+    correction_protected_video_families: tuple[str, ...] = ()
     scan_workers: int | None = None
     progress_interval_seconds: int | None = None
     cache_publication_batch_size: int | None = None
@@ -219,6 +232,13 @@ def canonical_container_family(value: str) -> str | None:
     return ",".join(sorted(set(parts)))
 
 
+def _container_family(value: str) -> str:
+    family = canonical_container_family(value)
+    if family is None:
+        raise ConfigError(f"invalid container family: {value!r}")
+    return family
+
+
 def _container_family_map(
     value: Any,
     qualified_key: str,
@@ -265,6 +285,66 @@ def _container_family_map(
     return tuple(result)
 
 
+def _image_format(value: str) -> str:
+    format_name = value.strip().upper()
+    if not format_name or re.fullmatch(r"[A-Z0-9]+", format_name) is None:
+        raise ConfigError(f"invalid image format: {value!r}")
+    return format_name
+
+
+def _extension_correction_map(
+    value: Any,
+    qualified_key: str,
+    source: str,
+    normalize_key: Callable[[str], str | None],
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, dict):
+        raise ConfigError(f"{source}: {qualified_key} must be a TOML table")
+    result: list[tuple[str, tuple[str, ...]]] = []
+    seen: set[str] = set()
+    for raw_key, raw_extensions in value.items():
+        if not isinstance(raw_key, str):
+            raise ConfigError(f"{source}: {qualified_key} keys must be strings")
+        try:
+            key = normalize_key(raw_key)
+        except ConfigError as error:
+            raise ConfigError(f"{source}: {qualified_key}: {error}") from error
+        if key is None:
+            raise ConfigError(
+                f"{source}: {qualified_key} contains an invalid key: {raw_key!r}"
+            )
+        if key in seen:
+            raise ConfigError(f"{source}: {qualified_key} repeats key {key!r}")
+        if (
+            not isinstance(raw_extensions, list)
+            or not raw_extensions
+            or not all(isinstance(item, str) for item in raw_extensions)
+        ):
+            raise ConfigError(
+                f"{source}: {qualified_key}.{raw_key} must be a non-empty "
+                "array of extensions"
+            )
+        extensions: list[str] = []
+        for raw_extension in raw_extensions:
+            try:
+                extension = _extension(raw_extension)
+            except ConfigError as error:
+                raise ConfigError(
+                    f"{source}: {qualified_key}.{raw_key}: {error}"
+                ) from error
+            if extension in extensions:
+                raise ConfigError(
+                    f"{source}: {qualified_key}.{raw_key} repeats extension "
+                    f"{extension!r}"
+                )
+            extensions.append(extension)
+        seen.add(key)
+        result.append((key, tuple(extensions)))
+    return tuple(result)
+
+
 def _parse(
     document: dict[str, Any],
     source: str,
@@ -281,7 +361,7 @@ def _parse(
         "performance",
     }
     if packaged_policy:
-        sections.add("validation")
+        sections.update({"validation", "extension_correction"})
     unknown = set(document).difference(sections)
     if unknown:
         names = ", ".join(sorted(unknown))
@@ -318,6 +398,19 @@ def _parse(
         document,
         "validation",
         frozenset({"container_families"}),
+        source,
+    )
+    extension_correction = _table(
+        document,
+        "extension_correction",
+        frozenset(
+            {
+                "image_formats",
+                "video_families",
+                "protected_image_extensions",
+                "protected_video_families",
+            }
+        ),
         source,
     )
     performance = _table(
@@ -433,6 +526,30 @@ def _parse(
             "validation.container_families",
             source,
         ),
+        correction_image_formats=_extension_correction_map(
+            extension_correction.get("image_formats"),
+            "extension_correction.image_formats",
+            source,
+            _image_format,
+        ),
+        correction_video_families=_extension_correction_map(
+            extension_correction.get("video_families"),
+            "extension_correction.video_families",
+            source,
+            canonical_container_family,
+        ),
+        correction_protected_image_extensions=_strings(
+            extension_correction.get("protected_image_extensions"),
+            "extension_correction.protected_image_extensions",
+            source,
+            _extension,
+        ),
+        correction_protected_video_families=_strings(
+            extension_correction.get("protected_video_families"),
+            "extension_correction.protected_video_families",
+            source,
+            _container_family,
+        ),
         scan_workers=scan_workers,
         progress_interval_seconds=progress_interval,
         cache_publication_batch_size=cache_batch_size,
@@ -459,6 +576,124 @@ def _deduplicate(*groups: tuple[str, ...]) -> tuple[str, ...]:
             seen.add(key)
             result.append(value)
     return tuple(result)
+
+
+def _coverage_error(label: str, actual: set[str], expected: set[str]) -> ConfigError:
+    missing = sorted(expected - actual)
+    unexpected = sorted(actual - expected)
+    details: list[str] = []
+    if missing:
+        details.append("missing " + ", ".join(missing))
+    if unexpected:
+        details.append("unexpected " + ", ".join(unexpected))
+    return ConfigError(
+        f"packaged defaults: {label} must exactly cover its policy domain ("
+        + "; ".join(details)
+        + ")"
+    )
+
+
+def _validate_extension_correction(defaults: _ConfigLayer) -> None:
+    if not defaults.correction_image_formats:
+        raise ConfigError(
+            "packaged defaults: extension_correction.image_formats is required"
+        )
+    if not defaults.correction_video_families:
+        raise ConfigError(
+            "packaged defaults: extension_correction.video_families is required"
+        )
+    if not defaults.correction_protected_image_extensions:
+        raise ConfigError(
+            "packaged defaults: extension_correction.protected_image_extensions "
+            "is required"
+        )
+    if not defaults.correction_protected_video_families:
+        raise ConfigError(
+            "packaged defaults: extension_correction.protected_video_families "
+            "is required"
+        )
+
+    image_extension_owners: dict[str, str] = {}
+    for format_name, extensions in defaults.correction_image_formats:
+        for extension in extensions:
+            if extension not in set(defaults.image_extensions):
+                raise ConfigError(
+                    "packaged defaults: extension correction image extension "
+                    f"is not classified as an image: {extension}"
+                )
+            prior = image_extension_owners.get(extension)
+            if prior is not None:
+                raise ConfigError(
+                    "packaged defaults: extension correction image extension "
+                    f"{extension} belongs to both {prior} and {format_name}"
+                )
+            image_extension_owners[extension] = format_name
+    protected_images = set(defaults.correction_protected_image_extensions)
+    if len(protected_images) != len(defaults.correction_protected_image_extensions):
+        raise ConfigError(
+            "packaged defaults: extension correction repeats a protected image "
+            "extension"
+        )
+    overlap = set(image_extension_owners).intersection(protected_images)
+    if overlap:
+        raise ConfigError(
+            "packaged defaults: extension correction maps and protects image "
+            "extension(s): " + ", ".join(sorted(overlap))
+        )
+    image_coverage = set(image_extension_owners) | protected_images
+    classified_images = set(defaults.image_extensions)
+    if image_coverage != classified_images:
+        raise _coverage_error(
+            "extension correction image extensions",
+            image_coverage,
+            classified_images,
+        )
+
+    accepted_video_families = {
+        extension: frozenset(families)
+        for extension, families in defaults.container_families
+    }
+    correction_videos = {
+        family: extensions for family, extensions in defaults.correction_video_families
+    }
+    protected_video_families = set(defaults.correction_protected_video_families)
+    if len(protected_video_families) != len(
+        defaults.correction_protected_video_families
+    ):
+        raise ConfigError(
+            "packaged defaults: extension correction repeats a protected video "
+            "family"
+        )
+    overlap = set(correction_videos).intersection(protected_video_families)
+    if overlap:
+        raise ConfigError(
+            "packaged defaults: extension correction maps and protects video "
+            "family or families: " + ", ".join(sorted(overlap))
+        )
+    known_video_families = {
+        family for families in accepted_video_families.values() for family in families
+    }
+    video_coverage = set(correction_videos) | protected_video_families
+    if video_coverage != known_video_families:
+        raise _coverage_error(
+            "extension correction video families",
+            video_coverage,
+            known_video_families,
+        )
+    for family, extensions in correction_videos.items():
+        for extension in extensions:
+            if family not in accepted_video_families.get(extension, frozenset()):
+                raise ConfigError(
+                    "packaged defaults: extension correction video family "
+                    f"{family} is not accepted for {extension}"
+                )
+    for extension, families in accepted_video_families.items():
+        for family in families.intersection(correction_videos):
+            if extension not in correction_videos[family]:
+                raise ConfigError(
+                    "packaged defaults: mapped extension correction video family "
+                    f"{family} does not accept classified extension {extension}"
+                )
 
 
 def _packaged_defaults() -> _ConfigLayer:
@@ -504,6 +739,7 @@ def _packaged_defaults() -> _ConfigLayer:
             "packaged defaults: validation.container_families must exactly cover "
             "classification.video_extensions (" + "; ".join(details) + ")"
         )
+    _validate_extension_correction(defaults)
     if defaults.scan_workers is None:
         raise ConfigError("packaged defaults: performance.scan_workers is required")
     if defaults.progress_interval_seconds is None:
@@ -610,6 +846,28 @@ def load_config(root: Path, explicit_path: Path | None = None) -> PymoConfig:
                     for extension, families in defaults.container_families
                 }
             )
+        ),
+        extension_correction=ExtensionCorrectionConfig(
+            image_formats=MappingProxyType(
+                {
+                    format_name: extensions
+                    for format_name, extensions in defaults.correction_image_formats
+                }
+            ),
+            video_families=MappingProxyType(
+                {
+                    family: extensions
+                    for family, extensions in defaults.correction_video_families
+                }
+            ),
+            protected_source_extensions=frozenset(
+                set(defaults.correction_protected_image_extensions)
+                | set(custom.image_extensions).difference(defaults.image_extensions)
+                | set(custom.video_extensions).difference(defaults.video_extensions)
+            ),
+            protected_video_families=frozenset(
+                defaults.correction_protected_video_families
+            ),
         ),
         performance=PerformanceConfig(
             scan_workers=scan_workers,

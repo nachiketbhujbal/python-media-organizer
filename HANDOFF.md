@@ -30,17 +30,17 @@ absence, and they must not claim whole-device recovery.
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
 `pymo` command, and includes layered preservation through version 0.5.3,
 validation truthfulness and cache compatibility through version 0.5.7, and
-public governance through released version 0.5.8. Version 0.5.7 pluralizes the
+public governance through version 0.5.8, and reversible truthful-extension
+correction through released version 0.5.9. Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
 selects Apache-2.0 and completes the controlled public transition with contained
 CI, structured issues, private vulnerability reporting, and API-verified
 no-bypass branch and immutable-release-tag rules. The repository is public
 under the bootstrap protections; issue intake is enabled only after the 0.5.8
-public-facing files land. Versions 0.5.9 through 0.5.11 then add reversible
-truthful-extension correction, zero-write preservation simulation without
-`dups`, and a guided single-collection migration workflow. Those planned
-product behaviors are not active yet.
+public-facing files land. Versions 0.5.10 and 0.5.11 then add zero-write
+preservation simulation without `dups` and a guided single-collection migration
+workflow. Those later planned product behaviors are not active yet.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -302,12 +302,28 @@ and wheel/source license-metadata inspection. Hosted pull-request,
 exact-`main`, tag, and installed-version evidence remain distinct release
 proofs.
 
-Version 0.5.9 is planned to add `pymo correct-extensions COLLECTION` between
+Version 0.5.9 adds `pymo correct-extensions COLLECTION` between
 fresh validation and organization. It changes no media bytes and acts only on
-fresh descriptor-pinned evidence with an unambiguous packaged canonical
-extension. It is preview-first, collision-safe, separately journaled,
-verified, and dependency-aware on undo; ambiguity and already-valid synonyms
-remain untouched.
+fresh descriptor-pinned Pillow or confidence-gated extensionless ffprobe
+evidence with immutable packaged canonical/synonym policy. It consumes no
+validation cache. It is preview-first, protects `dups`, uses collision-safe
+atomic no-replace renames under a distinct journal tool ID, rehashes applied
+targets, and supports dependency-aware undo. Images must verify and fully
+decode every frame. Exact packaged coverage protects TIFF-derived images and
+camera raw extensions; video policy protects shared MOV/MP4/3GP,
+Matroska/WebM, audio-capable ASF/Ogg/RealMedia, and raw MPEG elementary-stream
+families. Weak probes, unsupported or corrupt inputs, meaningful non-media
+content, and custom extensions remain untouched. Conclusive extensionless
+media receive a canonical suffix. ADR 0082 is the durable decision. The first
+local owner gate passed Ruff, Black, mypy, pre-commit, all 394 synthetic and
+real-FFmpeg tests with 88 percent subprocess-aware coverage, the package build,
+and an isolated wheel install. PR #41's initial three-platform hosted gate also
+passed. Its independent Opus review found six policy/evidence issues, all
+resolved and independently closed at exact head `7f34524`. The post-resolution
+local gate passes pre-commit, all 409 tests at 88 percent coverage, and both
+package builds; hosted run `33280352968` passes the classifier, Ubuntu,
+Fedora 42, macOS, and aggregate quality gate at that same head. Exact-main,
+tag, and installed-release proofs remain distinct release steps.
 
 Version 0.5.10 is planned to add zero-write
 `verify-migration --simulate-without-dups`. It inventories the destination
@@ -483,6 +499,7 @@ python-media-organizer/
     progress.py
     discovery.py
     file_safety.py
+    extension_truth.py
     image_content.py
     cache/
       __init__.py
@@ -503,6 +520,7 @@ python-media-organizer/
       report.py
       videos.py
     action_log.py
+    correct_extensions.py
     organize.py
     rename.py
     scan.py
@@ -528,11 +546,12 @@ pymo cache warm {images,videos,all} COLLECTION
 pymo cache refresh {images,videos,validation-standard,validation-full} COLLECTION
 pymo validate COLLECTION
 pymo verify-migration SOURCE DESTINATION
+pymo correct-extensions COLLECTION
 pymo find-image-duplicates COLLECTION
 pymo find-video-duplicates COLLECTION
 ```
 
-The four mutating tools support dry-run/apply behavior and `--undo`, which is
+The five mutating tools support dry-run/apply behavior and `--undo`, which is
 also a preview unless combined with `--apply`. `scan` and `cache status` are
 strictly read-only. `validate` may write fresh disposable evidence unless
 `--no-cache` is explicit; `cache warm` and `cache refresh` write only
@@ -550,6 +569,10 @@ to `cache status` and are rejected rather than silently ignored.
 forward command. It contains the default ignore patterns, classification
 extensions and MIME policies, rename noise tokens, image-inspection
 extensions, video decode timeout, scan worker count, and progress interval.
+Packaged-only correction maps name one canonical extension followed by accepted
+synonyms for reviewed Pillow formats and unambiguous ffprobe families. Exact
+mapped-or-protected coverage prevents a newly classified extension or video
+family from silently gaining mutation authority.
 Collection
 or explicit custom arrays
 extend packaged arrays; they cannot remove safety defaults. A custom video
@@ -560,6 +583,8 @@ command-line precedence.
 objects. Its immutable validation container-family map is packaged-only and
 must exactly cover the packaged video extensions; a collection cannot redefine
 it, and a custom added video extension receives no container accusation. A
+separate immutable extension-correction map cannot be redefined by a collection,
+so a custom classification extension receives no rename authority. A
 collection-root `.pymo.toml` extends the supported packaged policy automatically.
 `--config PATH` selects a different custom extension file for that command.
 Ignore patterns match case-insensitive basenames or collection-relative paths,
@@ -929,8 +954,9 @@ File state is captured at discovery and checked around classification and
 checksumming. Detected changes are omitted from inventory and duplicate facts
 and reported as an aggregate `changed_entries` count without revealing paths.
 Directory traversal failures are counted and warned about instead of silently
-omitted. Recommendations begin with fresh, non-mutating validation before
-organization, renaming, or duplicate isolation.
+omitted. Recommendations begin with fresh, non-mutating validation, then
+truthful-extension correction when media is present, before organization,
+renaming, or duplicate isolation.
 
 ## Directional migration verification
 
@@ -1113,6 +1139,13 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - renamer parsing and cleanup across varied filename structures, deterministic
   names, configurable additive noise tokens, collisions, apply/undo, and
   `dups` protection;
+- truthful-extension preview/apply/undo for verified images and real MPEG
+  transport streams, valid synonym retention, all-frame corruption refusal,
+  TIFF-derived raw protection, shared/audio-family ambiguity, raw elementary
+  streams, weak and malformed evidence, non-media `.ts` protection,
+  extensionless naming, exact packaged policy coverage, collision naming,
+  `dups` and ignored-path protection, incomplete discovery, descriptor path
+  replacement, stable target rehashing, and cross-tool undo dependencies;
 - action journal ordering, strict lifecycle grammar, no-follow opening,
   descriptor-relative atomic moves, late target collision refusal, interrupted
   run recovery, stable identity calculation, conflict refusal, cross-tool

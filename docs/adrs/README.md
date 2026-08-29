@@ -87,3 +87,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0079](0079-confident-container-extension-truthfulness.md) | Confident container and extension truthfulness |
 | [0080](0080-plural-architecture-decision-directory.md) | Plural architecture-decision directory |
 | [0081](0081-public-governance-and-contained-ci.md) | Public governance and contained continuous integration |
+| [0082](0082-reversible-truthful-extension-correction.md) | Reversible truthful-extension correction |

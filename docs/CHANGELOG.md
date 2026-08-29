@@ -2,6 +2,41 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.9 - 2026-08-29
+
+- Add preview-first `pymo correct-extensions COLLECTION`, with explicit
+  `--apply` and dependency-aware `--undo`, between fresh validation and
+  organization or deterministic renaming.
+- Correct fully decoded image formats and confidently probed video containers
+  only through immutable packaged canonical/synonym policy. Keep valid JPEG
+  and video synonyms unchanged; leave TIFF-derived images, camera raw files,
+  shared MOV/MP4/3GP and Matroska/WebM families, audio-capable ASF/Ogg/RealMedia
+  families, raw MPEG elementary streams, weak probes, unsupported formats,
+  corrupt inputs, meaningful non-media content, and custom extensions
+  untouched. Add the canonical suffix to conclusive extensionless media.
+- Read classification, Pillow, ffprobe, and SHA-256 evidence through stable
+  collection-anchored descriptors without consuming validation cache state.
+  Fully decode every image frame. Require an extensionless video content-probe
+  score from 50 through 100 and at least one video stream before a mapped
+  family can authorize correction.
+- Require packaged policy to account exactly for every classified image
+  extension and every validation video family as mapped or protected; reject
+  overlap, omissions, and inconsistent accepted synonyms before analysis.
+- Reuse Finder-style collision naming and the descriptor-relative atomic
+  no-replace journal boundary. Record correction runs under their own tool ID,
+  preserve ordinary rename action semantics, hash planned sources before any
+  mutation, and rehash stable targets during final verification.
+- Protect packaged ignored paths, pymo-owned state, symbolic links, and the
+  complete `dups` tree. Fail before state on incomplete discovery, unsafe
+  entries, changing evidence, invalid configuration, or missing required
+  ffprobe; report inconclusive media without renaming it.
+- Place the preview command in scan recommendations after fresh validation and
+  before organization or deterministic renaming.
+- Record the decision in ADR 0082 and add synthetic, concurrency, journal,
+  privacy, collision, dependency-order, all-mapped-image corruption,
+  TIFF-derived raw, extensionless-image, and real-FFmpeg transport-stream,
+  raw-elementary-stream, and audio-primary ASF coverage.
+
 ## 0.5.8 - 2026-08-29
 
 - Add the complete Apache-2.0 root license, SPDX package metadata, contribution

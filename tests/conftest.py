@@ -13,6 +13,7 @@ SOURCE_ROOT = PROJECT_ROOT / "src"
 SCRIPT_COMMANDS = {
     "scan.py": "scan",
     "validate.py": "validate",
+    "correct_extensions.py": "correct-extensions",
     "organize_media.py": "organize",
     "rename_media.py": "rename",
     "find_image_duplicates.py": "find-image-duplicates",

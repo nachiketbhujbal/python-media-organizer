@@ -125,6 +125,15 @@ never duplicate the version in source or static project metadata.
   extension. Compare normalized families, keep
   the finding warning-only, and make no accusation for weak, malformed,
   missing, or unmapped evidence.
+- `correct-extensions` must use fresh collection-anchored descriptor evidence,
+  never cached validation, fully decode every image frame, and use only
+  packaged canonical/synonym policy with exact mapped-or-protected coverage.
+  Keep meaningful non-media signatures, valid synonyms, TIFF-derived image
+  containers, shared or audio-capable video families, raw elementary streams,
+  weak probes, unsupported formats, corrupt inputs, and custom extensions
+  untouched. Protect `dups`, preview by default, hash every planned source from
+  the evidenced descriptor, use the atomic action-log rename boundary, and
+  rehash applied targets during final verification.
 - Never use cached validation health to satisfy an ordinary standard or full
   validation request. Persist results only after a current descriptor-pinned
   read. Key them by exact content, profile, semantic classification context,
@@ -193,6 +202,12 @@ never duplicate the version in source or static project metadata.
   discovery, cache, reporting, grouping, or mutation policy.
 - `src/pymo/verify_migration.py`: thin coordinator for the public directional
   verification command.
+- `src/pymo/correct_extensions.py`: complete discovery, fresh evidence,
+  collision planning, reversible apply/undo, and verified truthful-extension
+  correction.
+- `src/pymo/extension_truth.py`: shared descriptor-based Pillow format and
+  confidence-gated ffprobe container evidence without discovery, policy,
+  reporting, or mutation ownership.
 - `src/pymo/action_log.py`: shared append-only mutation journal and guarded
   dependency-aware undo.
 - `src/pymo/cache/`: the disposable derived-cache subsystem. Its package facade
@@ -362,12 +377,12 @@ Version 0.5.6 adds confidence-gated video container/extension warnings and
 advances validation evidence semantics while retaining historical cache records
 as stale, refreshable data.
 Version 0.5.7 pluralizes the architecture-decision directory without changing
-runtime behavior. Version 0.5.8 prepares Apache-2.0 public governance,
+runtime behavior. Version 0.5.8 completes Apache-2.0 public governance,
 contained event-scoped CI, structured issues and private security reporting,
-and API-verified no-bypass branch plus immutable-release-tag controls; none of
-those hosted settings is active until the separately authorized transition is
-verified. Version 0.5.9 adds reversible truthful-extension correction between
-fresh validation and organization. Version 0.5.10 adds zero-write migration
+and API-verified no-bypass branch plus immutable-release-tag controls. Version
+0.5.9 adds reversible truthful-extension correction between fresh validation
+and organization from exact mapped-or-protected packaged policy, with full
+image-frame decoding and ambiguous evidence left untouched. Version 0.5.10 adds zero-write migration
 simulation without `dups`, and version 0.5.11 coordinates the documented
 single-collection baseline/working workflow without rescue copying or automatic
 deletion. Full copy and multi-collection queue orchestration remain later
