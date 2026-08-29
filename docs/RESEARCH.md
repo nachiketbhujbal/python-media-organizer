@@ -5,7 +5,7 @@ privacy standards, licensing cautions, and open questions. Work with an
 accepted delivery target is promoted into [ROADMAP.md](ROADMAP.md); shipped
 behavior is recorded in [CHANGELOG.md](CHANGELOG.md).
 
-Research snapshot: **2026-08-21**
+Research snapshot: **2026-08-29**
 
 ## Current decision
 
@@ -399,6 +399,21 @@ marketing setting.
 
 ## Licensing guidance
 
+**Decision promoted:** version 0.5.8 adopts Apache-2.0 and completes the
+controlled public transition. ADR 0081 owns the license, workflow, branch/tag
+protection, issue, and security-reporting decision. The audited repository was
+made public early to restore standard-runner verification; server-enforced
+branch/tag protections and conservative Actions controls were installed before
+workflow execution, while versioned license, issue, and security files land in
+0.5.8.
+
+Apache-2.0 is permissive while making the copyright grant, patent grant and
+termination, notice retention, and lack of a trademark grant explicit. It does
+not grant a fork authority over this repository, its `main` branch, releases,
+or project identity. Accepted contributions will use the same license; no
+history rewrite or contributor license agreement is planned for the current
+sole-maintainer boundary.
+
 - Home Media Organizer, Czkawka core/CLI, organize, and Phockup provide
   MIT-licensed source or components. Preserve copyright and license notices
   when code—not merely an idea—is reused.
@@ -413,11 +428,14 @@ marketing setting.
 
 ## Media truthfulness, damage, and remediation
 
-**Status: research only, with two shipped exceptions.** The classification-severity correction
-described below shipped in 0.5.5, and confidence-gated container and extension detection shipped in
-0.5.6. Validation remediation guidance, isolation folders, byte-changing repair, container
-conversion, and quarantine are all recorded here for later evaluation and must not be implemented
-on the strength of this record alone. Several questions below are deliberately unresolved.
+**Status: research only, with two shipped exceptions and one promoted next step.** The
+classification-severity correction described below shipped in 0.5.5,
+confidence-gated container and extension detection shipped in 0.5.6, and the
+separate reversible correction command is promoted to 0.5.9. Validation
+remediation guidance, damaged-media isolation folders, byte-changing repair,
+container conversion, and damaged-media quarantine are all recorded here for
+later evaluation and must not be implemented on the strength of this record
+alone. Several questions below are deliberately unresolved.
 
 ### What prompted it
 
@@ -592,7 +610,8 @@ silently perform the other.
 
 The safe order is validate, then correct extensions, then organize, then rename, so that every
 later stage sees a file whose name no longer lies and the deterministic renamer never has to
-preserve a false extension. Its exact placement in the command chain, and its name, remain open.
+preserve a false extension. The maintainer promoted this work to version 0.5.9 as the separate
+`pymo correct-extensions COLLECTION` command.
 
 Constraints: act only when the content signature is confident and the canonical extension is
 unambiguous; leave ambiguous or unrecognized detections alone; dry run by default with an explicit
@@ -676,7 +695,7 @@ original is authentic and fully valid while the derivative merely plays in more 
 genuinely unclear which of the two belongs in the organized media folder and which belongs aside.
 That question does not arise for a repair, where the repaired file is unambiguously the better one.
 
-### Test expectations for the scheduled detection work
+### Test evidence for the shipped detection work
 
 Synthetic fixtures only, generated at test time and removed afterwards: a short clip muxed into a
 transport stream but named `.mp4`; the same clip in Matroska named `.mp4`; correctly named `.mp4`,
@@ -692,7 +711,6 @@ media, action history, duplicate tree, or cache state.
 
 ### Open questions
 
-- Where exactly does extension correction sit in the command chain, and what is it called?
 - Should damaged media be isolated into a folder at all, or reported in place indefinitely?
 - If isolated, does undecodable-but-unproven media get its own folder separate from proven loss?
 - For a container conversion, is the authentic original or the widely playable derivative the
@@ -732,8 +750,9 @@ work receives a release number.
 Ordinary migration verification must continue to describe the physical target
 that actually exists, including media under `dups`; silently excluding that
 tree by default could hide that it contains the only representative of unique
-content. A future explicit `--simulate-without-dups` mode should discover and
-inventory the destination review tree, report its files and bytes separately,
+content. Version 0.5.10 is promoted to add an explicit
+`--simulate-without-dups` mode that discovers and inventories the destination
+review tree, reports its files and bytes separately,
 exclude those files only from destination preservation evidence, perform no
 writes, and label the resulting verdict as a simulated post-finalization
 outcome. It must become non-complete when removing `dups` would leave any source
@@ -742,9 +761,18 @@ duplicate-finalization command.
 
 ## Migration orchestration and queues
 
-A future orchestrator could own the proven manual sequence for one or more
-collections, but naive recursive copy and unconstrained collection-level
-parallelism are unsafe defaults. Research must cover:
+The single-collection coordination boundary is promoted to version 0.5.11. It
+owns one declared unchanged baseline and one working collection, the staged
+sequence in [MIGRATION.md](MIGRATION.md), restartable stage state, explicit
+human checkpoints, and one opt-in private log directory. It does not
+rescue-copy media, create baseline/working trees automatically, quarantine or
+delete media, hide a child command's status, or treat prior evidence as
+current. Each mutating stage retains its own preview and explicit apply
+boundary.
+
+Full copying and multi-collection queues remain research. Naive recursive copy
+and unconstrained collection-level parallelism are unsafe defaults. That later
+work must cover:
 
 - a declarative local manifest of source, unchanged baseline, working target,
   quarantine, and final destination rather than fragile positional queues;

@@ -2,6 +2,33 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.8 - 2026-08-29
+
+- Add the complete Apache-2.0 root license, SPDX package metadata, contribution
+  terms, privacy-conscious issue forms with blank issues disabled, and private
+  security-reporting guidance. Record the separate source-rights and hosted
+  repository-authority boundaries in ADR 0081.
+- Replace the earlier private-minute CI draft with a contained workflow: a
+  trusted fail-closed change classifier, lightweight documentation/privacy
+  checks, full Ubuntu/Fedora/macOS evidence for executable or workflow changes,
+  one unconditional aggregate `quality-gate`, applicable exact-`main` checks,
+  and a narrower annotated-mainline tag artifact and isolated-install proof.
+- Promote reversible truthful-extension correction to 0.5.9, zero-write
+  preservation simulation without `dups` to 0.5.10, and guided
+  single-collection migration to 0.5.11 while leaving rescue copying,
+  irreversible duplicate finalization, and damaged-media remediation later.
+- Add a production migration runbook that documents the current manual
+  baseline/working-copy sequence, explicit opt-in logs, future command gates,
+  quarantine semantics, and final human sign-off.
+- Complete the maintainer-authorized public bootstrap after a clean history,
+  hosted-metadata, and workflow-log exposure audit. Keep issues closed while
+  installing and API-verifying no-bypass `main` protection, immutable `v*`
+  tags, read-only workflow tokens, immutable action references, a narrow action
+  allowlist, and approval for every external contributor before enabling
+  Actions. Enable structured issues and private vulnerability reporting only
+  after their versioned files reach `main`.
+- Change no runtime, configuration, or media behavior.
+
 ## 0.5.7 - 2026-08-29
 
 - Rename the architecture-decision directory from `docs/adr/` to `docs/adrs/`

@@ -17,22 +17,55 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  quality:
-    name: quality (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+  classify:
+    name: classify change
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      scope: ${{ steps.scope.outputs.scope }}
 
     steps:
-      - name: Check out complete history
+      - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Classify the candidate
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          TRUSTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if test "${{ github.event_name }}" = "workflow_dispatch"; then
+            echo "scope=full" >> "$GITHUB_OUTPUT"
+          elif git show "${TRUSTED_SHA}:.github/scripts/classify_ci.py" \
+              > "$RUNNER_TEMP/classify_ci.py"; then
+            python "$RUNNER_TEMP/classify_ci.py" \
+              --repository . \
+              --base "$BASE_SHA" \
+              --head "$HEAD_SHA" \
+              --output "$GITHUB_OUTPUT"
+          else
+            echo "trusted classifier unavailable; requiring full scope"
+            echo "scope=full" >> "$GITHUB_OUTPUT"
+          fi
+
+  documentation:
+    name: documentation and privacy
+    needs: classify
+    if: needs.classify.outputs.scope == 'docs'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
@@ -41,13 +74,37 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
-      - name: Install native video tools on Linux
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+      - name: Install the locked Python environment
+        run: |
+          uv python install
+          uv sync --locked --all-groups
 
-      - name: Install native video tools on macOS
-        if: runner.os == 'macOS'
-        run: brew install ffmpeg
+      - name: Run committed documentation and privacy checks
+        run: uv run --locked pre-commit run --all-files
+
+  quality:
+    name: quality (ubuntu-latest)
+    needs: classify
+    if: needs.classify.outputs.scope == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install native video tools
+        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
 
       - name: Install the locked Python environment
         run: |
@@ -65,6 +122,8 @@ jobs:
 
   quality-redhat:
     name: quality (fedora-42)
+    needs: classify
+    if: needs.classify.outputs.scope == 'full'
     runs-on: ubuntu-latest
     container:
       image: fedora:42@sha256:99e203b80b1c3d8f7e161ec10a68fd02b081ef83a3963553e513c82846b97814
@@ -74,10 +133,11 @@ jobs:
       - name: Install native and checkout prerequisites
         run: dnf install --assumeyes ffmpeg-free file git
 
-      - name: Check out complete history
+      - name: Check out the exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          ref: ${{ github.sha }}
 
       - name: Trust the container worktree
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -102,3 +162,84 @@ jobs:
 
       - name: Build source and wheel distributions
         run: uv build
+
+  quality-macos:
+    name: quality (macos-latest)
+    needs: classify
+    if: needs.classify.outputs.scope == 'full'
+    runs-on: macos-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install native video tools
+        run: brew install ffmpeg
+
+      - name: Install the locked Python environment
+        run: |
+          uv python install
+          uv sync --locked --all-groups
+
+      - name: Run committed quality checks
+        run: uv run --locked pre-commit run --all-files
+
+      - name: Run subprocess-aware tests and coverage
+        run: uv run --locked pytest --cov=pymo --cov-report=term-missing
+
+      - name: Build source and wheel distributions
+        run: uv build
+
+  quality-gate:
+    name: quality-gate
+    needs:
+      - classify
+      - documentation
+      - quality
+      - quality-redhat
+      - quality-macos
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Require every applicable job
+        env:
+          CLASSIFY_RESULT: ${{ needs.classify.result }}
+          SCOPE: ${{ needs.classify.outputs.scope }}
+          DOCUMENTATION_RESULT: ${{ needs.documentation.result }}
+          UBUNTU_RESULT: ${{ needs.quality.result }}
+          FEDORA_RESULT: ${{ needs.quality-redhat.result }}
+          MACOS_RESULT: ${{ needs.quality-macos.result }}
+        run: |
+          set -euo pipefail
+          test "$CLASSIFY_RESULT" = success
+          case "$SCOPE" in
+            docs)
+              test "$DOCUMENTATION_RESULT" = success
+              test "$UBUNTU_RESULT" = skipped
+              test "$FEDORA_RESULT" = skipped
+              test "$MACOS_RESULT" = skipped
+              ;;
+            full)
+              test "$DOCUMENTATION_RESULT" = skipped
+              test "$UBUNTU_RESULT" = success
+              test "$FEDORA_RESULT" = success
+              test "$MACOS_RESULT" = success
+              ;;
+            *)
+              echo "invalid or missing CI scope: $SCOPE" >&2
+              exit 1
+              ;;
+          esac

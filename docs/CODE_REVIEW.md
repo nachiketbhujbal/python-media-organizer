@@ -110,6 +110,8 @@ The same adversarial method was repeated after the first validation release.
 | CI-006 | Medium | GitHub Free does not expose branch protection or rulesets for a private repository, so `main` cannot yet reject force pushes, deletion, unchecked direct pushes, or unresolved pull-request conversations at the server boundary. | 0.3.9 | Accepted with an explicit activation prerequisite in ADR 0046 |
 | CI-007 | High | Classification treated a filename MIME guess as a content signature whenever the signature utility was unavailable or failed for one file, so on a platform whose MIME database maps a configured video extension to a non-video type, genuine media was reported as a naming mismatch and never validated. macOS and Fedora agreed with the extension and passed; Ubuntu did not, and a configured extension whose guess is neither a video type nor a generic type failed the same way on every platform. | 0.5.5 | Resolved by taking configured image and video extensions before any filename guess is interpreted, and by forcing a non-video guess in the boundary tests so they hold independently of the platform database |
 | CI-008 | High | A probe-score-100-only container rule depended on FFmpeg version: local FFmpeg 9 assigned 100 to a short valid MPEG transport stream, while the macOS, Ubuntu, and Fedora integration builds assigned 50, suppressing a real mismatch on all release platforms. Raw MPEG video also scored 51 and would be falsely accused under a generic MPEG extension if the boundary alone were relaxed. | 0.5.6 | Resolved by using the extensionless content-score range 50 through 100, accepting both program and raw MPEG families for generic MPEG extensions, and exercising the same descriptor path on all three platforms |
+| CI-009 | High | The unshipped private-minute v0.5.8 draft used trigger-level path filters for pull requests even though a future ruleset needs one stable required check. A filtered required workflow can remain pending, GitHub diff limits can misclassify a large change, and making macOS manual would discard automatic platform evidence after public standard runners remove the minute constraint. | 0.5.8 | Resolved in the versioned workflow with a trusted exact-commit classifier that fails closed, an unconditional `quality-gate`, lightweight documentation work, and automatic three-platform work for executable changes; live trigger results remain an activation proof rather than an implementation assumption |
+| CI-010 | Medium | A public transition without a root license, package license metadata, structured privacy-conscious issues, private security reporting, external-workflow approval, and verified branch/tag rules would expose the repository without its intended legal and governance boundaries. | 0.5.8 | Resolved through the accepted controlled bootstrap: the history/metadata/log audit passed, issue intake stayed closed, visibility changed while Actions was disabled, no-bypass branch and immutable-tag rules plus conservative Actions and external-approval settings were installed and verified before workflows ran, and Apache-2.0, SPDX metadata, contribution terms, issue forms, and `SECURITY.md` land in the versioned release; issues and private reporting remain closed until those files reach `main` |
 
 ## Exact-media review findings
 
@@ -201,7 +203,7 @@ The same adversarial method was repeated after the first validation release.
 
 | Release | Waiver | Follow-up debt | Status |
 | --- | --- | --- | --- |
-| 0.5.7 | The maintainer waived the independent Claude review on 2026-08-29 because the release changes documentation paths and repository-local ignore boundaries only. | The next completed adversarial release review must recheck the move-only ADR diff, tracked path references, and private-state ignore boundary. | Open |
+| 0.5.7 | The maintainer waived the independent Claude review on 2026-08-29 because the release changes documentation paths and repository-local ignore boundaries only. | The next completed adversarial release review must recheck the move-only ADR diff, tracked path references, and private-state ignore boundary. | Resolved during the 0.5.8 adoption review: unchanged ADR blobs remain exact renames, intentional path-reference edits account for the modified coordination record and index, tracked references use `docs/adrs/`, both private roots are anchored in `.gitignore`, and neither root is tracked |
 
 ## Release groups
 
@@ -300,9 +302,22 @@ The same adversarial method was repeated after the first validation release.
   historical validation evidence readable, stale, and refreshable.
 - `0.5.7`: pluralize the architecture-decision directory and update every
   tracked link and current path reference without changing runtime behavior.
+- `0.5.8`: adopt Apache-2.0 and complete a tightly controlled public transition
+  with contained event-scoped CI, structured issues, private security guidance,
+  and API-verified hosted controls.
 
 ## Independent review evidence
 
+- The maintainer explicitly transferred the Claude-authored v0.5.8 branch to
+  Codex and directed a review before adoption. At that transfer boundary Codex
+  traced the draft's workflow triggers and identified CI-009 plus CI-010; the
+  rebased commit `35acf85` preserves the draft's authorship and subject, and the
+  later owner commit resolves both findings. This requested transfer-boundary
+  review closes the former straggler without leaving separate review debt.
+- After rebasing onto released 0.5.7, the candidate passes all 372 tests at 88
+  percent subprocess-aware coverage plus Ruff, Black, mypy, pre-commit, build,
+  exact Apache-license comparison, and wheel/source license-metadata
+  inspection.
 - Baseline: 103 tests passed under the locked Python 3.11 environment.
 - Ruff found import, modernization, closure-binding, and unused-import issues;
   its optional complexity pass identified the orchestration hotspots in

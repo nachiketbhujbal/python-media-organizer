@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tagged-distributions:
+    name: tagged distributions (ubuntu-latest)
+    # A published tag is immutable, so this job is post-tag evidence rather
+    # than authorization. A failure here is fixed by a new patch and a new
+    # tag; it never justifies moving or recreating the published tag.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out complete history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Verify the immutable mainline tag boundary
+        run: |
+          set -euo pipefail
+          test "$(git cat-file -t "$GITHUB_REF_NAME")" = tag
+          target="$(git rev-parse "${GITHUB_REF_NAME}^{commit}")"
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$target" origin/main
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Build source and wheel distributions
+        run: uv build
+
+      - name: Verify the built artifacts carry the tagged version
+        run: |
+          set -euo pipefail
+          expected="${GITHUB_REF_NAME#v}"
+          wheel="$(ls dist/python_media_organizer-*.whl)"
+          sdist="$(ls dist/python_media_organizer-*.tar.gz)"
+          echo "tag ${GITHUB_REF_NAME} expects version ${expected}"
+          echo "built wheel: ${wheel}"
+          echo "built sdist: ${sdist}"
+          case "${wheel}" in
+            "dist/python_media_organizer-${expected}-"*) ;;
+            *) echo "wheel filename does not carry ${expected}" >&2; exit 1 ;;
+          esac
+          case "${sdist}" in
+            "dist/python_media_organizer-${expected}.tar.gz") ;;
+            *) echo "sdist filename does not carry ${expected}" >&2; exit 1 ;;
+          esac
+
+      - name: Install the tagged wheel in isolation and report its version
+        run: |
+          set -euo pipefail
+          expected="${GITHUB_REF_NAME#v}"
+          wheel="$(ls dist/python_media_organizer-*.whl)"
+          uv venv "${RUNNER_TEMP}/tagged"
+          uv pip install --python "${RUNNER_TEMP}/tagged/bin/python" "${wheel}"
+          reported="$("${RUNNER_TEMP}/tagged/bin/pymo" --version)"
+          echo "installed wheel reports: ${reported}"
+          test "${reported}" = "pymo ${expected}"

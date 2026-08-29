@@ -798,16 +798,30 @@ build remain release gates so normal commits do not repeatedly run FFmpeg
 integration tests. Development-tool versions are resolved in `uv.lock`.
 Coverage is configured to include the real child-process CLI tests; the normal
 test command stays fast, while the coverage form is a release review gate.
-GitHub Actions runs the same locked quality, coverage, native-FFmpeg, and build
-gate automatically for pull requests targeting `main` and pushes to `main`.
-Ordinary branch pushes and release tags do not repeat the matrix while the
-repository is private; manual dispatch remains available when an additional
-remote run is warranted. See
+GitHub Actions always classifies pull requests and `main` pushes and publishes
+one stable `quality-gate`. Documentation-only changes run a lightweight
+documentation/privacy gate; executable, packaging, toolchain, and workflow
+changes run the same locked quality, coverage, native-FFmpeg, and build gate on
+Ubuntu, the pinned Fedora container, and macOS. Manual dispatch also runs that
+full platform set. Every annotated `v*` tag runs a narrower Linux release
+workflow that verifies mainline ancestry, builds both distributions, and
+requires an isolated wheel installation to report exactly the tagged version.
+Ordinary branch pushes remain quiet, and no workflow runs while repository
+Actions is disabled. ADR 0081 records the separation. See
 [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) for the branch and release
-workflow. GitHub Free does not offer server-side protection for private
-repositories, so the planned no-force-push, no-deletion, PR, status-check, and
-conversation-resolution rules remain procedural until the account gains Pro or
-the repository becomes public; ADR 0046 records the activation design.
+workflow. The public repository has API-verified no-bypass rules for `main` and
+immutable `v*` tags; `main` requires an up-to-date pull request, resolved
+conversations, and the configured hosted status checks.
+
+Version 0.5.8 adopts Apache-2.0, adds structured issue
+forms and security guidance, and implements the contained workflow recorded in
+ADR 0081. Pull requests and exact `main` commits receive their applicable
+aggregate gate; tags prove ancestry, package versions, distributions, and an
+isolated installation without repeating an already required platform suite.
+Public visibility, Actions, approval for every external contributor, and the
+no-bypass branch/tag rulesets were activated and verified before this release.
+Structured issues and private vulnerability reporting are enabled only after
+the corresponding 0.5.8 files reach `main`.
 
 The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,
@@ -840,6 +854,11 @@ commits receive a PEP 440 development version containing their Git revision.
 uv manages the environment and `uv.lock`, while ordinary standards-compatible
 installers can still build and install the package.
 
+## License
+
+`python-media-organizer` is licensed under the
+[Apache License, Version 2.0](LICENSE).
+
 ## Roadmap and research
 
 `pymo scan COLLECTION` provides the fast local overview and recommends
@@ -847,16 +866,22 @@ installers can still build and install the package.
 corruption-tolerant discovery and the shared cache foundation; version 0.5.0
 adds fresh directional exact-byte coverage, version 0.5.1 adds exact
 displayed-image evidence, version 0.5.2 adds strict decoded-video evidence, and
-version 0.5.3 adds the fresh layered final verdict. Corrupt, unreadable, changing,
-unsupported, and mismatched media remain visible findings rather than automatic
-ignore rules. Richer metadata and similarity tooling remain later roadmap or
-research work. Full video decoding remains sequential until representative
-benchmarks show that bounded process concurrency improves real external-drive
-workloads without increasing contention or reducing safety.
+version 0.5.3 adds the fresh layered final verdict. Corrupt, unreadable,
+changing, unsupported, and mismatched media remain visible findings rather than
+automatic ignore rules. The promoted continuation prepares public governance
+in 0.5.8, adds reversible `correct-extensions` before organization in 0.5.9,
+adds zero-write preservation simulation without `dups` in 0.5.10, and adds
+guided single-collection migration in 0.5.11. Rescue copying, irreversible
+duplicate finalization, damaged-media remediation, richer metadata, and
+similarity tooling remain later roadmap or research work. Full video decoding
+remains sequential until representative benchmarks show that bounded process
+concurrency improves real external-drive workloads without increasing
+contention or reducing safety.
 
 See the [documentation index](docs/README.md) for the release
 [roadmap](docs/ROADMAP.md), [research notebook](docs/RESEARCH.md),
-[changelog](docs/CHANGELOG.md), [package architecture](docs/ARCHITECTURE.md),
+[changelog](docs/CHANGELOG.md), [production migration runbook](docs/MIGRATION.md),
+[package architecture](docs/ARCHITECTURE.md),
 [architecture decisions](docs/adrs/README.md), and
 [adversarial review ledger](docs/CODE_REVIEW.md). `HANDOFF.md` records the
 current engineering state and compatibility details. `AGENTS.md` is the
