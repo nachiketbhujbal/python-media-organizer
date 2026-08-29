@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## Unreleased — 0.5.7
+## 0.5.7 - 2026-08-29
 
 - Rename the architecture-decision directory from `docs/adr/` to `docs/adrs/`
   so its name describes the plural set of records it contains.
