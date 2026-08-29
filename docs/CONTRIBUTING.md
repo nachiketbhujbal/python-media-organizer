@@ -47,25 +47,55 @@ the repository is private.
 GitHub Free exposes protected branches and rulesets only for public
 repositories. Its APIs return HTTP 403 for this private repository, so the
 following boundary is currently procedural: never force-push or delete `main`,
-never merge without a pull request and all three `quality` checks, and resolve
-every review conversation first.
+never merge without a pull request and every configured `quality` check, and
+resolve every review conversation first. ADR 0046 remains current until a live
+public ruleset is verified.
 
-After GitHub Pro is enabled or the repository deliberately becomes public,
+## Planned public controls
+
+Version 0.5.8 prepares a separately authorized public transition under ADR
+0081. It adopts Apache-2.0 and replaces individual platform checks as the
+ruleset interface with one repository-owned, unconditional `quality-gate`.
+None of the following is active merely because it is documented:
+
+| Event | Planned evidence |
+| --- | --- |
+| Ordinary branch push | None; a pull request owns pre-merge evidence. |
+| Pull request | Always classify the change and publish `quality-gate`. Documentation-only changes run documentation/privacy checks; runtime, packaging, toolchain, and workflow changes run Ubuntu, pinned Fedora, and macOS. |
+| Push to `main` | Repeat the applicable gate on the exact merge commit. |
+| `v*` tag | Check eligible `main` ancestry, versioned artifacts, and an isolated Linux installation without repeating the complete platform suite. |
+| Manual dispatch | Run an explicitly requested bounded full-platform diagnostic. |
+| Schedule | Nothing until a separate maintenance decision exists. |
+
+Required-check workflows must not use trigger path filters that can leave a
+required check pending. A repository-owned classifier fails closed, conditional
+jobs follow its outputs, and the aggregate job runs with `always()` semantics
+and fails unless every job required for that scope succeeded. Workflows retain
+read-only permissions, pinned third-party actions and containers, bounded
+runtime, no pull-request secrets, and no self-hosted execution of untrusted
+code. Every external contributor requires maintainer approval before a workflow
+runs.
+
+After the versioned preparation and an explicit visibility authorization,
 activate one ruleset targeting only `refs/heads/main`, with no bypass actors:
 
 - block force pushes and branch deletion;
-- require a pull request and resolved review conversations;
-- require `quality (ubuntu-latest)`, `quality (macos-latest)`, and
-  `quality (fedora-42)` with the branch current before merge; and
-- require zero approvals while there is only one maintainer, because a required
-  approval would make legitimate self-merges impossible.
+- require a pull request, current branch, resolved conversations, and the
+  GitHub-Actions-owned `quality-gate`;
+- require zero approvals while there is only one human maintainer, because a
+  required approval would make legitimate self-merges impossible; and
+- retain merge commits as the explicit release boundary.
 
-Do not require linear history because intentional merge commits preserve
-release boundaries. Do not require signed commits until commit signing is
-adopted separately. Once the no-bypass ruleset is active, merge through GitHub
-instead of pushing a locally created merge commit to `main`. Verify the active
-rules through the API before describing `main` as protected. ADR 0046 is the
-durable decision.
+Add a second ruleset for `refs/tags/v*` that prevents updates and deletion.
+Do not require linear history or signed commits under the current policy. Once
+the no-bypass ruleset is active, merge through GitHub instead of pushing a
+locally created merge commit to `main`. Read both rulesets back through the API
+before describing `main` or release tags as protected.
+
+Public issues use structured privacy-conscious forms with blank issues disabled.
+Security reports use `SECURITY.md` plus GitHub private vulnerability reporting.
+Discussions, the wiki, and other unused interaction surfaces remain disabled
+initially.
 
 ## Release classification
 
@@ -104,3 +134,8 @@ the tag is available when remote tag verification is specifically warranted.
 
 The package is not currently published to PyPI. A release means a verified Git
 tag plus locally buildable source and wheel artifacts.
+
+After version 0.5.8 activates its public workflow, tag pushes run the narrower
+artifact and isolated-install proof recorded in ADR 0081. That post-tag job is
+additional evidence; it never authorizes creating a tag before the exact
+`main` commit has passed its applicable gate.

@@ -355,3 +355,14 @@ displayed-image or decoded-video preservation.
 Version 0.5.6 adds confidence-gated video container/extension warnings and
 advances validation evidence semantics while retaining historical cache records
 as stale, refreshable data.
+Version 0.5.7 pluralizes the architecture-decision directory without changing
+runtime behavior. Version 0.5.8 prepares Apache-2.0 public governance,
+contained event-scoped CI, structured issues and private security reporting,
+and API-verified no-bypass branch plus immutable-release-tag controls; none of
+those hosted settings is active until the separately authorized transition is
+verified. Version 0.5.9 adds reversible truthful-extension correction between
+fresh validation and organization. Version 0.5.10 adds zero-write migration
+simulation without `dups`, and version 0.5.11 coordinates the documented
+single-collection baseline/working workflow without rescue copying or automatic
+deletion. Full copy and multi-collection queue orchestration remain later
+research.

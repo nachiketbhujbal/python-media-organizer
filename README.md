@@ -809,6 +809,16 @@ repositories, so the planned no-force-push, no-deletion, PR, status-check, and
 conversation-resolution rules remain procedural until the account gains Pro or
 the repository becomes public; ADR 0046 records the activation design.
 
+Version 0.5.8 is planned to adopt Apache-2.0 and prepare the contained public
+workflow recorded in ADR 0081. Ordinary branch pushes remain quiet; pull
+requests always publish one aggregate gate; executable and workflow changes run
+Ubuntu, pinned Fedora, and macOS; exact `main` commits receive their applicable
+checks; and tags prove ancestry, package versions, distributions, and an
+isolated installation without repeating an already required platform suite.
+Public visibility, Actions, external-contributor approvals, structured issues,
+private vulnerability reporting, and no-bypass branch/tag rulesets remain a
+separately authorized and API-verified activation.
+
 The suite uses temporary synthetic collections and tiny locally generated video
 fixtures. It covers dry runs, apply, undo, collision refusal, action ordering,
 content changes, strict folder ownership, exact image and video matching,
@@ -847,16 +857,22 @@ installers can still build and install the package.
 corruption-tolerant discovery and the shared cache foundation; version 0.5.0
 adds fresh directional exact-byte coverage, version 0.5.1 adds exact
 displayed-image evidence, version 0.5.2 adds strict decoded-video evidence, and
-version 0.5.3 adds the fresh layered final verdict. Corrupt, unreadable, changing,
-unsupported, and mismatched media remain visible findings rather than automatic
-ignore rules. Richer metadata and similarity tooling remain later roadmap or
-research work. Full video decoding remains sequential until representative
-benchmarks show that bounded process concurrency improves real external-drive
-workloads without increasing contention or reducing safety.
+version 0.5.3 adds the fresh layered final verdict. Corrupt, unreadable,
+changing, unsupported, and mismatched media remain visible findings rather than
+automatic ignore rules. The promoted continuation prepares public governance
+in 0.5.8, adds reversible `correct-extensions` before organization in 0.5.9,
+adds zero-write preservation simulation without `dups` in 0.5.10, and adds
+guided single-collection migration in 0.5.11. Rescue copying, irreversible
+duplicate finalization, damaged-media remediation, richer metadata, and
+similarity tooling remain later roadmap or research work. Full video decoding
+remains sequential until representative benchmarks show that bounded process
+concurrency improves real external-drive workloads without increasing
+contention or reducing safety.
 
 See the [documentation index](docs/README.md) for the release
 [roadmap](docs/ROADMAP.md), [research notebook](docs/RESEARCH.md),
-[changelog](docs/CHANGELOG.md), [package architecture](docs/ARCHITECTURE.md),
+[changelog](docs/CHANGELOG.md), [production migration runbook](docs/MIGRATION.md),
+[package architecture](docs/ARCHITECTURE.md),
 [architecture decisions](docs/adrs/README.md), and
 [adversarial review ledger](docs/CODE_REVIEW.md). `HANDOFF.md` records the
 current engineering state and compatibility details. `AGENTS.md` is the

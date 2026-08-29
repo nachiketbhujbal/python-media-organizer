@@ -2,6 +2,26 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## Unreleased — 0.5.8
+
+- Select Apache-2.0 for the planned public source release and record the
+  separate licensing, repository-authority, visibility, branch, tag, issue,
+  security-reporting, and external-workflow approval boundaries in ADR 0081.
+- Replace the earlier unshipped private-minute CI direction with a contained
+  public workflow contract: an unconditional aggregate gate, fail-closed change
+  classification, full three-platform evidence for executable or workflow
+  changes, applicable exact-`main` checks, and non-redundant tag artifact proof.
+- Promote reversible truthful-extension correction to 0.5.9, zero-write
+  preservation simulation without `dups` to 0.5.10, and guided
+  single-collection migration to 0.5.11 while leaving rescue copying,
+  irreversible duplicate finalization, and damaged-media remediation later.
+- Add a production migration runbook that documents the current manual
+  baseline/working-copy sequence, explicit opt-in logs, future command gates,
+  quarantine semantics, and final human sign-off.
+- Change no package license, runtime behavior, configuration, or media state in
+  this planning commit. Hosted bootstrap is conducted and verified separately
+  before the release record is finalized.
+
 ## 0.5.7 - 2026-08-29
 
 - Rename the architecture-decision directory from `docs/adr/` to `docs/adrs/`

@@ -191,21 +191,22 @@ retain that subsystem while tightening evidence behavior and repository records.
 | 0.5.5 | Media-extension classification severity | Stop reporting a non-media file that merely bears a configured media extension as a decode error at failing exit status. Let a meaningful non-media content signature outrank the extension where discovery trusted the extension alone, keep genuine media classified as media, and state the outcome for a machine where the local content-signature utility is unavailable. | Released |
 | 0.5.6 | Container and extension truthfulness | Report a video whose container family disagrees with its filename extension, comparing the ffprobe demuxer family against the family implied by the extension during standard validation and reporting a distinct `container_extension_mismatch` warning at no extra probing cost, kept separate from `extension_content_mismatch` so the aggregate report can tell a misnamed container from content that is not video at all. Compare families rather than exact names so shared-demuxer pairs do not false-positive, require a confident probe so evidence too weak to accuse is ignored, accept both program-stream and raw elementary-stream families for generic MPEG extensions, keep the finding a warning that does not change exit status, and place it where a full-decode failure cannot discard it. Transport streams are already configured supported video; their classification rests on the extension unless a meaningful non-media signature contradicts it, because no reliable local content signature identifies them in practice, and ffprobe supplies the authoritative container identity at validation time. Preserve historical validation algorithms as structurally valid but stale so targeted refresh is the supported upgrade path. | Released |
 | 0.5.7 | Plural architecture-decision directory | Rename `docs/adr/` to `docs/adrs/`, retain every numbered decision record unchanged, update all tracked links plus current path references, and ignore repository-local private operational state without changing runtime or package behavior. | Released |
+| 0.5.8 | Public governance and contained CI | Adopt Apache-2.0 in the root license and package metadata; add privacy-conscious issue forms, a security policy, and private vulnerability reporting guidance; replace trigger-level path skipping with a fail-closed classifier plus one unconditional aggregate gate; keep ordinary branch pushes quiet; run the complete Ubuntu, pinned Fedora, and macOS gates for runtime, packaging, toolchain, or workflow changes; use an applicable lightweight gate for documentation-only changes; repeat applicable checks on the exact `main` commit; and verify tag ancestry, artifacts, and an isolated install without redundantly rerunning the full platform suite. Complete and durably record the authorized public transition, conservative Actions permissions, external-contributor approvals, issue/security settings, and no-bypass branch/tag rulesets. | In progress; controlled public bootstrap active and issue intake held closed until release |
+| 0.5.9 | Reversible truthful-extension correction | Add `pymo correct-extensions COLLECTION`, sequenced after fresh validation and before organization or deterministic renaming. Act only on fresh descriptor-pinned content evidence with an unambiguous packaged canonical extension; leave valid synonyms, shared container families, weak probes, unsupported formats, and other ambiguity untouched. Change no media bytes, preview by default, require `--apply`, use atomic no-replace collision handling, append distinct journal actions, verify applied state, and support dependency-aware undo. | Planned after 0.5.8 |
+| 0.5.10 | Simulated preservation without `dups` | Add zero-write `verify-migration --simulate-without-dups`. Inventory the destination review tree and report its files and bytes separately, but prevent it from satisfying destination coverage; label every verdict simulated; retain distinct byte, exact-pixel, strict-playback, multiplicity, exclusion, and uncertainty accounting; and become non-complete whenever removing `dups` would leave the declared source contract unaccounted. Do not move, quarantine, delete, cache, lock, or action-log anything. | Planned after 0.5.9 |
+| 0.5.11 | Guided single-collection migration | Add a production coordinator over one declared baseline/working pair and the documented runbook. Carry common options and one explicit private log directory through scan, fresh validation, initial preservation proof, extension correction, organization, deterministic renaming, duplicate isolation, simulated duplicate removal, external-quarantine confirmation, and final fresh sign-off. Preserve previews, explicit apply boundaries, real exit statuses, restartable stage state, and human checkpoints. Do not rescue-copy media, delete content, silently continue after a failed stage, or enable persistent logs by default. | Planned after 0.5.10 |
 
 Release numbers are assigned by the maintainer; this ledger records the
-completed release sequence rather than committed delivery dates.
+accepted sequence rather than promised delivery dates. Each planned row remains
+unshipped until its implementation, tests, documentation, review, exact hosted
+checks, tag, and installed-version proof are complete. The operational order is
+captured in [MIGRATION.md](MIGRATION.md).
 
-Sequenced after detection, accepted in direction but without a release number:
-
-- a separate narrow command that corrects a false extension, changing no bytes, journaled as a
-  reversible rename distinguished from a deterministic rename, and ordered so that validation
-  reports the mismatch, correction fixes it, and only then do organization and renaming run. Its
-  placement in the command chain and its name are still open.
-
-Everything else explored alongside this work — isolation folders for damaged media, byte-changing
-repair, container conversion, quarantine, and the preservation consequences of each — remains
-**research rather than schedule** and is recorded under "Media truthfulness, damage, and
-remediation" in [RESEARCH.md](RESEARCH.md). None of it is approved for implementation.
+Everything else explored alongside this work — damaged-media isolation folders,
+byte-changing repair, container conversion, remediation quarantine, and the
+preservation consequences of each — remains **research rather than schedule**
+and is recorded under "Media truthfulness, damage, and remediation" in
+[RESEARCH.md](RESEARCH.md). None of it is approved for implementation.
 
 ## Later promoted work
 
@@ -216,22 +217,18 @@ These have an accepted product direction but no release number yet:
   the portable journal without exposing paths by default, including an explicit
   distinction between reversible operations and any future irreversible event;
 - deliberate duplicate finalization as a command separate from the duplicate
-  finders, dry-run by default and gated by fresh preservation evidence, with a
-  quarantine-first workflow and an unmistakable explicit boundary before any
-  irreversible deletion is recorded; add a zero-write
-  `verify-migration --simulate-without-dups` preview that inventories the
-  destination review tree but prevents it from satisfying preservation
-  coverage, clearly labels the verdict as simulated, and reports whether
-  finalization would discard unique content;
+  finders and the version 0.5.10 simulation, dry-run by default and gated by
+  fresh preservation evidence, with a quarantine-first workflow and an
+  unmistakable explicit boundary before any irreversible deletion is recorded;
 - validation remediation guidance that turns findings into explicit next
   actions, including reversible quarantine planning for media that cannot be
   decoded, while never converting damage into an ignore rule or claiming an
   unsupported format is corrupt; reversible extension correction is sequenced
   separately under "Version 0.5 continuation" above;
-- migration orchestration over a declared baseline/working-copy pair, followed
-  later by a resumable queue manifest for multiple collections with capacity,
-  case-collision, copy-completeness, validation, transformation, preservation,
-  quarantine, and final naming checkpoints;
+- resumable rescue copying and a queue manifest for multiple collections with
+  capacity, case-collision, copy-completeness, storage-contention, quarantine,
+  and final naming policy; this remains separate from the version 0.5.11
+  single-pair coordinator and requires a larger mutation boundary;
 - categorization of collection files beyond pictures and video, keeping tool-owned state and
   unrecognized files untouched, with the open design questions recorded in
   [RESEARCH.md](RESEARCH.md);

@@ -11,9 +11,14 @@ needed by coding agents. Durable engineering documentation lives here:
   history.
 - [Contributing and releases](CONTRIBUTING.md) — local gates, branches, CI, and
   release procedure.
+- [Production migration runbook](MIGRATION.md) — the collection-by-collection
+  baseline, transformation, verification, quarantine, and sign-off sequence.
 - [Architecture](ARCHITECTURE.md) — package boundaries and allowed dependency
   direction.
 - [Architecture decisions](adrs/README.md) — one durable decision per record.
 
-A future license file will remain at the repository root so hosting sites and
-package consumers can discover it reliably.
+Version 0.5.8 is planned to add the selected Apache-2.0 license at the
+repository root so hosting sites and package consumers can discover it
+reliably. ADR 0081 records the public-governance and contained-CI decision; the
+repository remains private and those hosted controls remain inactive until its
+explicit activation sequence completes.

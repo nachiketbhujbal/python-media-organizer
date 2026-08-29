@@ -13,10 +13,12 @@ logs, or Git history.
 The primary product outcome is safe, local preservation when a media
 collection is copied or rescued between storage locations and then reorganized,
 renamed, validated, or deduplicated. The roadmap now treats directional
-migration verification as the next product subsystem after the version 0.4
-corruption-tolerant evidence and shared-cache foundation. Optional metadata
-enrichment, perceptual similarity, and local AI remain secondary to proving
-that source content is accounted for.
+migration verification as delivered after the version 0.4 corruption-tolerant
+evidence and shared-cache foundation. The promoted continuation prepares public
+governance, corrects truthful extensions, simulates preservation without the
+duplicate review tree, and coordinates one collection's production workflow.
+Optional metadata enrichment, perceptual similarity, and local AI remain
+secondary to proving that source content is accounted for.
 
 Migration-verification reports must expose ignored and policy-excluded entry
 points and define their verdict relative to the declared media-collection
@@ -29,7 +31,15 @@ The package is named `python-media-organizer`, imports as `pymo`, exposes the
 `pymo` command, and includes layered preservation through version 0.5.3 plus
 validation truthfulness and cache compatibility through released version
 0.5.7. Version 0.5.7 pluralizes the architecture-decision directory as
-`docs/adrs/` without changing runtime or package behavior.
+`docs/adrs/` without changing runtime or package behavior. Version 0.5.8
+selects Apache-2.0 and completes the controlled public transition with contained
+CI, structured issues, private vulnerability reporting, and API-verified
+no-bypass branch and immutable-release-tag rules. The repository is public
+under the bootstrap protections; issue intake stays disabled until the 0.5.8
+public-facing files land. Versions 0.5.9 through 0.5.11 then add reversible
+truthful-extension correction, zero-write preservation simulation without
+`dups`, and a guided single-collection migration workflow. Those planned
+product behaviors are not active yet.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -268,6 +278,41 @@ packaging, and command behavior are unchanged. The maintainer waived the
 independent Claude review for this path-only release; `docs/CODE_REVIEW.md`
 records the resulting follow-up debt.
 
+Version 0.5.8 is planned as the public-readiness release. ADR 0081 selects
+Apache-2.0, keeps repository authority separate from recipients' source rights,
+and specifies the implementation and activation sequence. The versioned work
+adds the root license and package metadata, privacy-conscious issue forms,
+`SECURITY.md`, a fail-closed change classifier, one unconditional aggregate
+gate, full Ubuntu/Fedora/macOS evidence for executable or workflow changes,
+applicable checks on the exact `main` commit, and non-redundant tag artifact and
+isolated-install proof. The repository remains private until 0.5.8 itself is
+verified and tagged, the final privacy audit passes, and the maintainer
+separately authorizes visibility. Actions, external-contributor approvals,
+issue/security features, and branch/tag rulesets are then enabled and read back
+through the GitHub API before being described as active.
+
+Version 0.5.9 is planned to add `pymo correct-extensions COLLECTION` between
+fresh validation and organization. It changes no media bytes and acts only on
+fresh descriptor-pinned evidence with an unambiguous packaged canonical
+extension. It is preview-first, collision-safe, separately journaled,
+verified, and dependency-aware on undo; ambiguity and already-valid synonyms
+remain untouched.
+
+Version 0.5.10 is planned to add zero-write
+`verify-migration --simulate-without-dups`. It inventories the destination
+review tree while preventing that tree from satisfying coverage, labels its
+verdict simulated, and retains separate byte, displayed-pixel, decoded-playback,
+multiplicity, exclusion, and uncertainty evidence. It does not move,
+quarantine, delete, cache, lock, or action-log anything.
+
+Version 0.5.11 is planned to coordinate the documented production sequence for
+one unchanged baseline and one working collection. It carries common options
+and one explicit private log directory across restartable stages while
+preserving previews, apply boundaries, real exit statuses, fresh verification,
+and human checkpoints. It does not perform rescue copying, automatic
+quarantine, or deletion. `docs/MIGRATION.md` is the authoritative operational
+sequence; full copying and multi-collection queues remain later research.
+
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
 behavior. Version 0.3.18 prefixes every physical line of normal human-readable
@@ -411,6 +456,7 @@ python-media-organizer/
     CHANGELOG.md
     CODE_REVIEW.md
     CONTRIBUTING.md
+    MIGRATION.md
     RESEARCH.md
     ROADMAP.md
     adrs/
@@ -562,18 +608,18 @@ preservation evidence and explicit confirmation, and be recorded as an
 irreversible audit event without pretending it can be undone. Its journal
 schema and quarantine/deletion ceremony are not yet designed or implemented.
 Normal verification continues to include `dups` because it reports the real
-target namespace. Promoted future work adds an explicit zero-write
+target namespace. Version 0.5.10 is planned to add an explicit zero-write
 `--simulate-without-dups` mode that inventories that tree but prevents it from
 satisfying coverage and clearly reports a simulated post-finalization verdict.
 
-Later promoted work also includes actionable validation guidance, reversible
-extension normalization and damaged-media quarantine designs, plus migration
-orchestration over explicit baseline and working-copy state. Multi-collection
-queues, copying, final naming, and cleanup remain research until capacity,
-case-collision, resumability, storage-contention, and evidence-checkpoint
-policies are designed. Existing organizer collisions are already resolved to
-Finder-style numbered names during planning and still protected by atomic
-no-replace moves during apply.
+Version 0.5.9 promotes reversible extension correction, and version 0.5.11
+promotes guided orchestration over explicit baseline and working-copy state.
+Actionable damaged-media guidance and quarantine remain later work.
+Multi-collection queues, rescue copying, automatic final naming, and cleanup
+remain research until capacity, case-collision, resumability,
+storage-contention, and evidence-checkpoint policies are designed. Existing
+organizer collisions are already resolved to Finder-style numbered names
+during planning and still protected by atomic no-replace moves during apply.
 
 Version 0.2.0 removed CSV organizer undo and `--manifest`, grouped image-output
 migration and its options, the image finder's no-op `--recursive` option, and
@@ -1146,9 +1192,15 @@ cautions, and open design questions that are not committed to a release.
 `docs/ROADMAP.md` is the promoted delivery plan, with one primary purpose per
 patch through the version 0.1 foundation, version 0.2 inspection and hardening,
 version 0.3 stabilization, version 0.4 preservation and cache foundation, and
-version 0.5 migration-verification sequence.
+version 0.5 migration-verification and production-readiness sequence.
 `docs/CHANGELOG.md` is the shipped-behavior record. Keep these roles separate
 instead of maintaining duplicate feature inventories.
+
+`docs/MIGRATION.md` is the production collection-by-collection runbook. It
+distinguishes source, unchanged baseline, working collection, and retained
+quarantine; names every current and planned command boundary; keeps persistent
+logs opt-in; and requires fresh verification plus human sign-off after each
+applied stage.
 
 `scan` is implemented; do not rename it to `inspect`.
 
@@ -1206,3 +1258,15 @@ enabled or the repository becomes public, PR review and the no-force-push,
 no-deletion policy are procedural rather than server-enforced. When eligible,
 activate the no-bypass `main` ruleset defined in ADR 0046 and verify it through
 the API before describing the branch as protected.
+
+ADR 0081 records the accepted public transition that will supersede that
+eligibility boundary only after live verification. Version 0.5.8 first adopts
+Apache-2.0 and implements one unconditional GitHub-Actions-owned
+`quality-gate`, event-scoped platform work, tag artifact proof, issue forms,
+and security guidance while still private. After a separate maintainer
+authorization, public activation requires approval for every external
+contributor's workflow, a no-bypass `main` ruleset, an update/deletion-proof
+`v*` tag ruleset, structured issues, private vulnerability reporting, and an
+API readback plus public full-platform certification. Do not describe the
+repository as open source, public, protected, or externally gated before those
+respective steps are actually complete.
