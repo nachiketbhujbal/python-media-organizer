@@ -19,6 +19,7 @@ from pymo.migration.coverage import compare_byte_inventories
 from pymo.migration.images import compare_image_content
 from pymo.migration.inventory import discover_tree, hash_tree, revalidate_tree
 from pymo.migration.report import build_report, print_report
+from pymo.migration.simulation import without_duplicate_review_tree
 from pymo.migration.verdict import build_preservation_evidence
 from pymo.migration.videos import (
     compare_video_content,
@@ -58,6 +59,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--decode-timeout",
         type=int,
         help="maximum seconds allowed for each FFmpeg playback decode",
+    )
+    parser.add_argument(
+        "--simulate-without-dups",
+        action="store_true",
+        help=(
+            "simulate destination preservation without allowing its dups tree "
+            "to satisfy coverage"
+        ),
     )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
@@ -145,7 +154,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
 
-    coverage = compare_byte_inventories(source_inventory, destination_inventory)
+    comparison_destination = destination_inventory
+    simulation = None
+    if args.simulate_without_dups:
+        comparison_destination, simulation = without_duplicate_review_tree(
+            destination_inventory
+        )
+        if not args.json:
+            print(
+                "Simulating preservation without destination duplicate-review "
+                "content..."
+            )
+
+    coverage = compare_byte_inventories(source_inventory, comparison_destination)
     image_extensions = (
         source_config.image_duplicates.extensions
         | destination_config.image_duplicates.extensions
@@ -155,7 +176,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     with timer.measure("image-content comparison"):
         image_content = compare_image_content(
             source_inventory,
-            destination_inventory,
+            comparison_destination,
             image_extensions,
             min(
                 source_config.performance.progress_interval_seconds,
@@ -168,7 +189,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         | destination_config.classification.video_extensions
     )
     if video_content_required(
-        source_inventory, destination_inventory, video_extensions
+        source_inventory, comparison_destination, video_extensions
     ):
         try:
             ffmpeg = resolve_executable(args.ffmpeg, "ffmpeg")
@@ -189,7 +210,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         with timer.measure("video-content comparison"):
             video_content = compare_video_content(
                 source_inventory,
-                destination_inventory,
+                comparison_destination,
                 video_extensions,
                 ffmpeg,
                 ffprobe,
@@ -211,7 +232,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
     else:
         video_content = not_needed_video_content(
-            destination_inventory, video_extensions
+            comparison_destination, video_extensions
         )
     if not args.json:
         print("Revalidating both collection namespaces and file states...")
@@ -223,7 +244,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     preservation = build_preservation_evidence(
         source_inventory,
-        destination_inventory,
+        comparison_destination,
         coverage,
         image_content,
         video_content,
@@ -231,6 +252,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         destination_stability,
         source_config.classification.image_extensions,
         image_extensions,
+        simulated=args.simulate_without_dups,
     )
     report = build_report(
         source_inventory,
@@ -239,6 +261,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         image_content,
         video_content,
         preservation,
+        simulation=simulation,
         show_files=args.show_files,
         show_ignored=args.show_ignored,
     )

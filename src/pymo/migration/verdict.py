@@ -16,6 +16,7 @@ PreservationVerdict = Literal["complete", "incomplete", "unproven"]
 
 @dataclass(frozen=True)
 class PreservationEvidence:
+    simulated: bool
     verdict: PreservationVerdict
     reasons: tuple[str, ...]
     source_unique_streams: int
@@ -59,6 +60,8 @@ def build_preservation_evidence(
     destination_stability: StabilityEvidence,
     classification_image_extensions: frozenset[str],
     exact_image_extensions: frozenset[str],
+    *,
+    simulated: bool = False,
 ) -> PreservationEvidence:
     """Combine fresh byte and exact-media evidence without hiding its layers."""
 
@@ -126,6 +129,7 @@ def build_preservation_evidence(
     unaccounted_paths = _paths_for_identities(source, unaccounted)
     unsupported_paths = _paths_for_identities(source, unsupported)
     return PreservationEvidence(
+        simulated=simulated,
         verdict=verdict,
         reasons=tuple(reasons),
         source_unique_streams=len(source_identities),
@@ -151,8 +155,12 @@ def build_preservation_evidence(
             + destination_stability.tool_state_entries
         ),
         disposition=(
-            "eligible-for-human-signoff"
-            if verdict == "complete"
-            else "retain-source-and-resolve-findings"
+            "eligible-for-human-quarantine-review"
+            if verdict == "complete" and simulated
+            else (
+                "eligible-for-human-signoff"
+                if verdict == "complete"
+                else "retain-source-and-resolve-findings"
+            )
         ),
     )

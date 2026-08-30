@@ -12,8 +12,9 @@ contract; it does not prove whole-device recovery.
   renaming, exact image/video duplicate isolation, and layered migration
   verification.
 - Version 0.5.9 adds reversible `correct-extensions` behavior.
-- Version 0.5.10 is planned to add zero-write
-  `verify-migration --simulate-without-dups`.
+- The unreleased 0.5.10 candidate adds zero-write
+  `verify-migration --simulate-without-dups`; do not use it for production
+  quarantine decisions until its release tag and hosted checks pass.
 - Version 0.5.11 is planned to coordinate this sequence for one declared
   baseline/working pair. It will not perform rescue copying or automatic
   deletion.
@@ -161,7 +162,7 @@ explicit simulation or external quarantine removes it from the working root.
 
 ## Stage 6: simulate and quarantine duplicate review material
 
-Version 0.5.10 will provide the required zero-write preview:
+The version 0.5.10 candidate provides the required zero-write preview:
 
 ```bash
 pymo --log-file "/path/to/private-logs/16-without-dups-simulation.log" \
@@ -169,12 +170,19 @@ pymo --log-file "/path/to/private-logs/16-without-dups-simulation.log" \
   --simulate-without-dups
 ```
 
-The simulation must inventory `dups` but prevent it from satisfying destination
-coverage, label the result simulated, and keep byte preservation distinct from
-pixel/playback preservation. If acceptable, move the complete review tree to
-retained quarantine outside the working root using a separately reviewed
-procedure. Do not delete it. Then run ordinary fresh verification against the
-physical working collection and compare it with the simulation.
+The simulation freshly hashes the complete physical destination, inventories
+`dups` separately, and prevents its regular files from satisfying destination
+byte, pixel, or playback coverage. It also removes those files from simulated
+multiplicity and destination-only accounting while retaining fail-closed unsafe,
+unreadable, unstable, ignored, and other excluded evidence. Schema-5 JSON and
+human output label every layer and final verdict simulated. A simulated
+complete result is eligible only for human quarantine review.
+
+If acceptable after the release gate, move the complete review tree to retained
+quarantine outside the working root using a separately reviewed procedure. Do
+not delete it. Then run ordinary fresh verification against the physical
+working collection and compare it with the simulation. Only the ordinary
+post-move result can enter final sign-off.
 
 ## Stage 7: final sign-off
 

@@ -31,16 +31,17 @@ The package is named `python-media-organizer`, imports as `pymo`, exposes the
 `pymo` command, and includes layered preservation through version 0.5.3,
 validation truthfulness and cache compatibility through version 0.5.7, and
 public governance through version 0.5.8, and reversible truthful-extension
-correction through released version 0.5.9. Version 0.5.7 pluralizes the
+correction through released version 0.5.9. The unreleased version 0.5.10
+candidate adds zero-write preservation simulation without destination `dups`.
+Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
 selects Apache-2.0 and completes the controlled public transition with contained
 CI, structured issues, private vulnerability reporting, and API-verified
 no-bypass branch and immutable-release-tag rules. The repository is public
 under the bootstrap protections; issue intake is enabled only after the 0.5.8
-public-facing files land. Versions 0.5.10 and 0.5.11 then add zero-write
-preservation simulation without `dups` and a guided single-collection migration
-workflow. Those later planned product behaviors are not active yet.
+public-facing files land. Version 0.5.11 then adds a guided single-collection
+migration workflow; that later planned product behavior is not active yet.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -322,15 +323,25 @@ passed. Its independent Opus review found six policy/evidence issues, all
 resolved and independently closed at exact head `7f34524`. The post-resolution
 local gate passes pre-commit, all 409 tests at 88 percent coverage, and both
 package builds; hosted run `33280352968` passes the classifier, Ubuntu,
-Fedora 42, macOS, and aggregate quality gate at that same head. Exact-main,
-tag, and installed-release proofs remain distinct release steps.
+Fedora 42, macOS, and aggregate quality gate at that same head. PR #41 merged
+as `bee755a`; exact-main run `33281454347` and tag Release run `33281579793`
+passed, annotated tag v0.5.9 resolves to that merge, and isolated installation
+reports `pymo 0.5.9`.
 
-Version 0.5.10 is planned to add zero-write
-`verify-migration --simulate-without-dups`. It inventories the destination
-review tree while preventing that tree from satisfying coverage, labels its
-verdict simulated, and retains separate byte, displayed-pixel, decoded-playback,
-multiplicity, exclusion, and uncertainty evidence. It does not move,
-quarantine, delete, cache, lock, or action-log anything.
+The version 0.5.10 candidate adds zero-write
+`verify-migration --simulate-without-dups` under ADR 0083. It freshly hashes the
+complete physical destination, inventories the fixed review tree separately,
+and removes only its stable regular files from counterfactual byte,
+displayed-pixel, decoded-playback, multiplicity, and destination-only evidence.
+Unsafe or incomplete physical evidence remains fail-closed, final stability
+revalidates the complete namespaces, and schema-5 output labels every verdict
+simulated. Simulated completion is eligible only for human quarantine review;
+ordinary fresh post-move verification remains required. The command does not
+move, quarantine, delete, cache, lock, or action-log anything. The local
+candidate passes Ruff, Black, mypy, pre-commit, all 417 synthetic and real-
+FFmpeg tests with 88 percent subprocess-aware coverage, source and wheel
+builds, and isolated candidate installation. Independent review, hosted checks,
+merge, tag, and final installed-release proof remain outstanding.
 
 Version 0.5.11 is planned to coordinate the documented production sequence for
 one unchanged baseline and one working collection. It carries common options
@@ -518,6 +529,8 @@ python-media-organizer/
       images.py
       inventory.py
       report.py
+      simulation.py
+      verdict.py
       videos.py
     action_log.py
     correct_extensions.py
@@ -644,7 +657,7 @@ preservation evidence and explicit confirmation, and be recorded as an
 irreversible audit event without pretending it can be undone. Its journal
 schema and quarantine/deletion ceremony are not yet designed or implemented.
 Normal verification continues to include `dups` because it reports the real
-target namespace. Version 0.5.10 is planned to add an explicit zero-write
+target namespace. The version 0.5.10 candidate adds the explicit zero-write
 `--simulate-without-dups` mode that inventories that tree but prevents it from
 satisfying coverage and clearly reports a simulated post-finalization verdict.
 
@@ -963,7 +976,8 @@ renaming, or duplicate isolation.
 `src/pymo/verify_migration.py` coordinates report-only
 `pymo verify-migration SOURCE DESTINATION`. The `src/pymo/migration/`
 subpackage owns fresh stable inventory, layered byte/image coverage and
-multiplicity accounting, and the root-free schema-3 report. The command never
+multiplicity accounting, counterfactual review-tree partitioning, final
+preservation policy, and the root-free schema-5 report. The command never
 writes cache, locks, configuration, action history, duplicate trees, or media
 to either collection.
 
@@ -1007,6 +1021,14 @@ after all media work, and bases command status on the final preservation
 verdict. Exact bytes, pixels, and playback remain separately visible; missing
 unknown content is incomplete, while unsupported recognized media or uncertain
 filesystem evidence is unproven.
+
+The version 0.5.10 candidate adds the explicit
+`--simulate-without-dups` mode. It hashes the physical destination once, reports
+the fixed review tree separately, and prevents its regular files from entering
+any simulated destination evidence layer. Physical review-tree problems still
+block completion, the full physical destination is revalidated, and every
+schema-5 layer and final verdict is marked simulated. Ordinary verification
+continues to include `dups` and is required after retained external quarantine.
 
 ## Media validation
 
@@ -1205,6 +1227,10 @@ The suite is entirely synthetic and temporary. Current coverage includes:
 - strict decoded-video migration coverage for supported remuxes, different
   audio, invalid structure, native-tool demand, decode timeouts, schema-3
   privacy, zero writes, and unchanged video-finder/cache behavior;
+- simulated without-`dups` preservation across byte, exact-image, and real
+  strict-video representatives, separate review storage, physical multiplicity,
+  unsafe review entries, full physical final stability, path/ignore privacy,
+  a regular file named `dups`, and zero-write behavior;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

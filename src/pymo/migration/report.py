@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -9,12 +10,13 @@ from pymo.logging_config import emit as print
 from pymo.migration.coverage import ByteCoverage
 from pymo.migration.images import ImageContentCoverage, ImageInspectionIssue
 from pymo.migration.inventory import StabilityEvidence, TreeInventory
+from pymo.migration.simulation import ReviewTreeInventory
 from pymo.migration.verdict import PreservationEvidence
 from pymo.migration.videos import VideoContentCoverage, VideoInspectionIssue
 from pymo.progress import format_bytes
 
 # This value identifies the current layered migration-verification report.
-MIGRATION_REPORT_SCHEMA_VERSION = 4
+MIGRATION_REPORT_SCHEMA_VERSION = 5
 
 
 def _relative(root: Path, path: Path) -> str:
@@ -102,6 +104,68 @@ def _inventory_report(
     }
 
 
+def _review_tree_report(
+    destination: TreeInventory,
+    review: ReviewTreeInventory,
+    *,
+    show_files: bool,
+    show_ignored: bool,
+) -> dict[str, Any]:
+    identities = Counter(entry.identity for entry in review.files)
+    problems = [
+        {"path": _relative(destination.root, path), "category": "symbolic-link"}
+        for path in review.symbolic_links
+    ]
+    problems.extend(
+        {"path": _relative(destination.root, path), "category": "non-regular"}
+        for path in review.non_regular
+    )
+    problems.extend(
+        {
+            "path": _relative(destination.root, issue.path),
+            "category": issue.category,
+        }
+        for issue in (*review.unreadable, *review.changed)
+    )
+    return {
+        "present": review.present,
+        "excluded_from_destination_evidence": True,
+        "hashed_files": len(review.files),
+        "hashed_bytes": sum(entry.size for entry in review.files),
+        "unique_byte_streams": len(identities),
+        "unique_bytes": sum(identity[0] for identity in identities),
+        "duplicate_copies": sum(count - 1 for count in identities.values()),
+        "duplicate_bytes": sum(
+            identity[0] * (count - 1) for identity, count in identities.items()
+        ),
+        "directories": len(review.directories),
+        "ignored_entry_points": len(review.ignored),
+        "tool_state_entries": len(review.tool_state),
+        "symbolic_links": len(review.symbolic_links),
+        "non_regular_entries": len(review.non_regular),
+        "unreadable_entries": len(review.unreadable),
+        "changed_entries": len(review.changed),
+        "file_paths": (
+            [_relative(destination.root, entry.path) for entry in review.files]
+            if show_files
+            else []
+        ),
+        "ignored_paths": (
+            [_relative(destination.root, path) for path in review.ignored]
+            if show_ignored
+            else []
+        ),
+        "problem_paths": (
+            sorted(
+                problems,
+                key=lambda item: (item["path"].casefold(), item["category"]),
+            )
+            if show_files
+            else []
+        ),
+    }
+
+
 def build_report(
     source: TreeInventory,
     destination: TreeInventory,
@@ -110,9 +174,11 @@ def build_report(
     video_content: VideoContentCoverage,
     preservation: PreservationEvidence,
     *,
+    simulation: ReviewTreeInventory | None = None,
     show_files: bool,
     show_ignored: bool,
 ) -> dict[str, Any]:
+    simulated = simulation is not None
     source_stream_percentage = (
         coverage.represented_unique_streams / coverage.source_unique_streams * 100
         if coverage.source_unique_streams
@@ -127,6 +193,7 @@ def build_report(
         "schema_version": MIGRATION_REPORT_SCHEMA_VERSION,
         "direction": "source-to-destination",
         "contract": "layered-exact-preservation",
+        "result_kind": "simulated" if simulated else "observed",
         "scope": {
             "regular_files_only": True,
             "symbolic_links_followed": False,
@@ -139,6 +206,7 @@ def build_report(
             "filesystem_boundary": "stable-namespace-visible-content",
             "whole_device_recovery_proven": False,
             "cache_reused": False,
+            "destination_dups_included_in_evidence": not simulated,
         },
         "source": _inventory_report(
             source, show_files=show_files, show_ignored=show_ignored
@@ -146,7 +214,22 @@ def build_report(
         "destination": _inventory_report(
             destination, show_files=show_files, show_ignored=show_ignored
         ),
+        "simulation": {
+            "active": simulated,
+            "scenario": "destination-without-dups" if simulated else None,
+            "destination_review_tree": (
+                _review_tree_report(
+                    destination,
+                    simulation,
+                    show_files=show_files,
+                    show_ignored=show_ignored,
+                )
+                if simulation is not None
+                else None
+            ),
+        },
         "coverage": {
+            "simulated": simulated,
             "verdict": coverage.verdict,
             "reasons": list(coverage.reasons),
             "source_unique_streams": coverage.source_unique_streams,
@@ -177,6 +260,7 @@ def build_report(
             "added_copy_bytes": coverage.added_copy_bytes,
         },
         "image_content": {
+            "simulated": simulated,
             "verdict": image_content.verdict,
             "reasons": list(image_content.reasons),
             "algorithm": image_content.algorithm,
@@ -218,6 +302,7 @@ def build_report(
             ),
         },
         "video_content": {
+            "simulated": simulated,
             "verdict": video_content.verdict,
             "reasons": list(video_content.reasons),
             "algorithm": video_content.algorithm,
@@ -315,6 +400,7 @@ def _preservation_report(
     show_files: bool,
 ) -> dict[str, Any]:
     return {
+        "simulated": evidence.simulated,
         "verdict": evidence.verdict,
         "reasons": list(evidence.reasons),
         "disposition": evidence.disposition,
@@ -388,12 +474,64 @@ def _print_inventory(label: str, values: dict[str, Any]) -> None:
             print(f"    {issue['path']}: {issue['category']}")
 
 
+def _verdict_label(verdict: str, simulated: bool) -> str:
+    prefix = "SIMULATED " if simulated else ""
+    return f"{prefix}{verdict.upper()}"
+
+
+def _print_review_tree(values: dict[str, Any]) -> None:
+    print("\nDestination duplicate review tree excluded by simulation:")
+    print(f"  Present: {'yes' if values['present'] else 'no'}")
+    print(
+        f"  Hashed: {values['hashed_files']} file(s), "
+        f"{format_bytes(values['hashed_bytes'])}"
+    )
+    print(
+        f"  Unique byte streams: {values['unique_byte_streams']}, "
+        f"{format_bytes(values['unique_bytes'])}"
+    )
+    print(
+        f"  Exact duplicate copies within review tree: "
+        f"{values['duplicate_copies']}, {format_bytes(values['duplicate_bytes'])}"
+    )
+    print(f"  Directories: {values['directories']}")
+    print(f"  Ignored entry points: {values['ignored_entry_points']}")
+    print(f"  Excluded pymo state entries: {values['tool_state_entries']}")
+    print(f"  Symbolic links not followed: {values['symbolic_links']}")
+    print(f"  Non-regular entries: {values['non_regular_entries']}")
+    print(f"  Unreadable entries: {values['unreadable_entries']}")
+    print(f"  Changed entries: {values['changed_entries']}")
+    if values["file_paths"]:
+        print("  Review file paths:")
+        for path in values["file_paths"]:
+            print(f"    {path}")
+    if values["ignored_paths"]:
+        print("  Ignored review paths:")
+        for path in values["ignored_paths"]:
+            print(f"    {path}")
+    if values["problem_paths"]:
+        print("  Review problem paths:")
+        for issue in values["problem_paths"]:
+            print(f"    {issue['path']}: {issue['category']}")
+
+
 def print_report(report: dict[str, Any]) -> None:
-    print("Directional migration verification")
-    print("Contract: layered exact preservation (source to destination)")
+    simulated = report["simulation"]["active"]
+    print(
+        "Simulated directional migration verification"
+        if simulated
+        else "Directional migration verification"
+    )
+    print(
+        "Contract: simulated layered exact preservation without destination dups"
+        if simulated
+        else "Contract: layered exact preservation (source to destination)"
+    )
     print("Scope: stable namespace-visible regular files; links are not followed.")
     _print_inventory("Source", report["source"])
     _print_inventory("Destination", report["destination"])
+    if simulated:
+        _print_review_tree(report["simulation"]["destination_review_tree"])
 
     coverage = report["coverage"]
     print("\nByte-layer coverage:")
@@ -417,6 +555,10 @@ def print_report(report: dict[str, Any]) -> None:
         print("  Missing source paths:")
         for path in coverage["missing_source_paths"]:
             print(f"    {path}")
+    print(
+        f"  Layer verdict: "
+        f"{_verdict_label(coverage['verdict'], coverage['simulated'])}"
+    )
 
     multiplicity = report["multiplicity"]
     print("\nMultiplicity changes among represented content:")
@@ -464,7 +606,7 @@ def print_report(report: dict[str, Any]) -> None:
         f"  Uninspectable destination candidate streams: "
         f"{images['destination_uninspectable_unique_streams']}"
     )
-    print(f"  Layer verdict: {images['verdict'].upper()}")
+    print(f"  Layer verdict: {_verdict_label(images['verdict'], images['simulated'])}")
     if images["missing_source_paths"]:
         print("  Missing image-content paths:")
         for path in images["missing_source_paths"]:
@@ -505,7 +647,7 @@ def print_report(report: dict[str, Any]) -> None:
         f"  Uninspectable destination candidate streams: "
         f"{videos['destination_uninspectable_unique_streams']}"
     )
-    print(f"  Layer verdict: {videos['verdict'].upper()}")
+    print(f"  Layer verdict: {_verdict_label(videos['verdict'], videos['simulated'])}")
     if videos["missing_source_paths"]:
         print("  Missing video-content paths:")
         for path in videos["missing_source_paths"]:
@@ -559,16 +701,17 @@ def print_report(report: dict[str, Any]) -> None:
 
     verdict = preservation["verdict"]
     print("\nPreservation verdict:")
+    label = _verdict_label(verdict, preservation["simulated"])
     if verdict == "complete":
         print(
-            "  COMPLETE: every in-scope unique source stream is represented by "
+            f"  {label}: every in-scope unique source stream is represented by "
             "an exact supported evidence layer."
         )
     elif verdict == "incomplete":
-        print("  INCOMPLETE: readable supported source content is unaccounted.")
+        print(f"  {label}: readable supported source content is unaccounted.")
     else:
         print(
-            "  UNPROVEN: incomplete, unstable, or unsupported evidence prevents "
+            f"  {label}: incomplete, unstable, or unsupported evidence prevents "
             "a safe verdict."
         )
     print(
@@ -576,4 +719,9 @@ def print_report(report: dict[str, Any]) -> None:
         "media-collection scope; it does not prove whole-device recovery."
     )
     print(f"Disposition: {preservation['disposition']}")
+    if simulated:
+        print(
+            "Simulation changed nothing. Retain quarantine and run ordinary fresh "
+            "verification after any physical move."
+        )
     print("Verification wrote no media, cache, configuration, or action history.")

@@ -70,6 +70,17 @@ The same adversarial method was repeated after the first validation release.
 | EXT-R05 | Medium | Audio-primary ASF with a still cover stream satisfies both content classification and the one-video-stream gate, so an ordinary `.wma` could be renamed `.asf`; Ogg and RealMedia share the same audio-capable ambiguity. | 0.5.9 | Resolved by protecting ASF, ASF-old, Ogg, and RealMedia families and adding a real-FFmpeg audio-primary ASF regression |
 | EXT-R06 | Low | Extensionless conclusive media receive a canonical suffix, but the initial README and ADR described only replacement of an existing final suffix. | 0.5.9 | Resolved by documenting the extensionless case and pinning it with a CLI regression |
 
+## Without-dups simulation review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| SIM-001 | High | Excluding `dups` during ordinary discovery would hide its physical content and could let a stale or incomplete view masquerade as the destination that actually exists. | 0.5.10 | Resolved by hashing the complete physical destination first, then deriving an explicit opt-in comparison view while reporting the review inventory separately |
+| SIM-002 | High | A review-tree representative could continue to satisfy exact pixels or strict playback after being removed only from byte coverage. | 0.5.10 | Resolved by passing the same filtered destination inventory through byte, image, video, multiplicity, destination-only, and final layered accounting, with image and real-FFmpeg video regressions |
+| SIM-003 | High | Revalidating only the filtered comparison view could miss a concurrent change under the physical review tree and overstate the counterfactual evidence. | 0.5.10 | Resolved by retaining the complete physical destination inventory for final namespace and file-state revalidation |
+| SIM-004 | Medium | A complete counterfactual result could be mistaken for observed post-quarantine preservation or deletion authority. | 0.5.10 | Resolved by schema-5 observed/simulated mode, simulated labels on every verdict, a quarantine-review-only disposition, and required ordinary post-move verification |
+| SIM-005 | Medium | Treating any entry named `dups` as the review tree would incorrectly exclude a root-level regular file with that name. | 0.5.10 | Resolved by requiring the canonical path to be a discovered directory before excluding descendant regular files |
+| SIM-006 | Medium | Filtering review-tree problems together with its regular files would convert unsafe, unreadable, ignored, or unstable evidence into apparent absence. | 0.5.10 | Resolved by filtering only stable regular comparison files, retaining fail-closed physical evidence, and preserving independent `--show-files` and `--show-ignored` disclosure boundaries |
+
 ## Scan review findings
 
 | ID | Severity | Finding | Resolution target | Status |

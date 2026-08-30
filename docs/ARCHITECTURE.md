@@ -36,8 +36,10 @@ CLI dispatch
   multiplicity accounting, `images.py` owns exact displayed-image coverage,
   `videos.py` owns strict decoded-playback coverage, and `report.py` owns the
   root-free public schema. `verdict.py` owns final layered accounting and
-  disposition policy. Final namespace stability remains in `inventory.py`;
-  command dispatch and disposable cache ownership stay outside this domain.
+  disposition policy, while `simulation.py` owns the explicit counterfactual
+  destination view and separate duplicate-review inventory. Final namespace
+  stability remains in `inventory.py`; command dispatch and disposable cache
+  ownership stay outside this domain.
 - `action_log.py` owns the authoritative append-only mutation journal. It is
   deliberately outside `cache/` because journal evidence is portable and
   authoritative while cache state is derived and disposable.
