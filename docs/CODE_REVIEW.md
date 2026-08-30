@@ -339,6 +339,14 @@ The same adversarial method was repeated after the first validation release.
 
 ## Independent review evidence
 
+- Opus independently reviewed PR #42 at exact head `98183af`, reran all 417
+  tests, and reported SIM-R01 plus SIM-R02 in
+  [the consolidated review comment](https://github.com/nachiketbhujbal/python-media-organizer/pull/42#issuecomment-5465866835).
+  The owner resolved both at `9b0d39e`; Opus then reproduced all 418 tests,
+  verified hosted run `33284905006`, exercised both case-insensitive and real
+  case-sensitive APFS behavior, repeated the exit-status contract, and
+  [closed both findings](https://github.com/nachiketbhujbal/python-media-organizer/pull/42#issuecomment-5465979684)
+  without requesting another owner change.
 - Opus independently reviewed PR #41 at exact head `ab6fd6a`, reran all 394
   tests, reproduced six policy/evidence findings through the installed CLI, and
   reported them in [the consolidated PR review comment](https://github.com/nachiketbhujbal/python-media-organizer/pull/41#issuecomment-5465272172).

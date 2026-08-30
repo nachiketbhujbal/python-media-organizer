@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.5.10 - Unreleased
+## 0.5.10 - 2026-08-29
 
 - Add explicit zero-write
   `pymo verify-migration SOURCE DESTINATION --simulate-without-dups` while

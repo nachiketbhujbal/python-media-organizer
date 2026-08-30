@@ -757,7 +757,7 @@ work receives a release number.
 Ordinary migration verification continues to describe the physical target that
 actually exists, including media under `dups`; silently excluding that tree by
 default could hide that it contains the only representative of unique content.
-The unreleased version 0.5.10 candidate implements the separately promoted
+Version 0.5.10 implements the separately promoted
 `--simulate-without-dups` mode under ADR 0083. It freshly inventories the
 physical destination review tree, reports it separately, excludes those regular
 files only from counterfactual destination evidence, performs no writes, and

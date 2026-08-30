@@ -12,16 +12,16 @@ contract; it does not prove whole-device recovery.
   renaming, exact image/video duplicate isolation, and layered migration
   verification.
 - Version 0.5.9 adds reversible `correct-extensions` behavior.
-- The unreleased 0.5.10 candidate adds zero-write
-  `verify-migration --simulate-without-dups`; do not use it for production
-  quarantine decisions until its release tag and hosted checks pass.
+- Version 0.5.10 adds zero-write
+  `verify-migration --simulate-without-dups` for the human-reviewed quarantine
+  preview before ordinary fresh post-move verification.
 - Version 0.5.11 is planned to coordinate this sequence for one declared
   baseline/working pair. It will not perform rescue copying or automatic
   deletion.
 
-Until those releases ship, perform only stages supported by the installed
-version and keep every transition human-reviewed. Do not use a loose shell
-script as the production authority.
+Perform only stages supported by the installed version and keep every
+transition human-reviewed. Do not use a loose shell script as the production
+authority.
 
 ## Collection roles
 
@@ -162,7 +162,7 @@ explicit simulation or external quarantine removes it from the working root.
 
 ## Stage 6: simulate and quarantine duplicate review material
 
-The version 0.5.10 candidate provides the required zero-write preview:
+Version 0.5.10 provides the required zero-write preview:
 
 ```bash
 pymo --log-file "/path/to/private-logs/16-without-dups-simulation.log" \
@@ -180,11 +180,11 @@ complete result is eligible only for human quarantine review. Its status 0
 therefore does not mean observed final sign-off; machine consumers must require
 an ordinary observed result with `eligible-for-human-signoff` after the move.
 
-If acceptable after the release gate, move the complete review tree to retained
-quarantine outside the working root using a separately reviewed procedure. Do
-not delete it. Then run ordinary fresh verification against the physical
-working collection and compare it with the simulation. Only the ordinary
-post-move result can enter final sign-off.
+If the simulated evidence is acceptable after human review, move the complete
+review tree to retained quarantine outside the working root using a separately
+reviewed procedure. Do not delete it. Then run ordinary fresh verification
+against the physical working collection and compare it with the simulation.
+Only the ordinary post-move result can enter final sign-off.
 
 ## Stage 7: final sign-off
 

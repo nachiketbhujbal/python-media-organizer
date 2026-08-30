@@ -29,10 +29,10 @@ absence, and they must not claim whole-device recovery.
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the
 `pymo` command, and includes layered preservation through version 0.5.3,
-validation truthfulness and cache compatibility through version 0.5.7, and
-public governance through version 0.5.8, and reversible truthful-extension
-correction through released version 0.5.9. The unreleased version 0.5.10
-candidate adds zero-write preservation simulation without destination `dups`.
+validation truthfulness and cache compatibility through version 0.5.7, public
+governance through version 0.5.8, reversible truthful-extension correction
+through version 0.5.9, and zero-write preservation simulation without
+destination `dups` through released version 0.5.10.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -328,7 +328,7 @@ as `bee755a`; exact-main run `33281454347` and tag Release run `33281579793`
 passed, annotated tag v0.5.9 resolves to that merge, and isolated installation
 reports `pymo 0.5.9`.
 
-The version 0.5.10 candidate adds zero-write
+Version 0.5.10 adds zero-write
 `verify-migration --simulate-without-dups` under ADR 0083. It freshly hashes the
 complete physical destination, inventories the fixed review tree separately,
 and removes only its stable regular files from counterfactual byte,
@@ -337,11 +337,14 @@ Unsafe or incomplete physical evidence remains fail-closed, final stability
 revalidates the complete namespaces, and schema-5 output labels every verdict
 simulated. Simulated completion is eligible only for human quarantine review;
 ordinary fresh post-move verification remains required. The command does not
-move, quarantine, delete, cache, lock, or action-log anything. The local
-candidate passes Ruff, Black, mypy, pre-commit, all 417 synthetic and real-
-FFmpeg tests with 88 percent subprocess-aware coverage, source and wheel
-builds, and isolated candidate installation. Independent review, hosted checks,
-merge, tag, and final installed-release proof remain outstanding.
+move, quarantine, delete, cache, lock, or action-log anything. The final owner
+gate passes Ruff, Black, mypy, pre-commit, all 418 synthetic and real-FFmpeg
+tests with 88 percent subprocess-aware coverage, source and wheel builds, and
+isolated candidate installation. Opus independently reviewed the release,
+reported SIM-R01 and SIM-R02, then closed both without further owner change at
+exact head `9b0d39e`; hosted run `33284905006` passes Ubuntu, Fedora 42, macOS,
+and the aggregate quality gate at that same head. Exact-main, tag, and installed
+release proofs remain distinct release steps.
 
 Version 0.5.11 is planned to coordinate the documented production sequence for
 one unchanged baseline and one working collection. It carries common options
@@ -657,7 +660,7 @@ preservation evidence and explicit confirmation, and be recorded as an
 irreversible audit event without pretending it can be undone. Its journal
 schema and quarantine/deletion ceremony are not yet designed or implemented.
 Normal verification continues to include `dups` because it reports the real
-target namespace. The version 0.5.10 candidate adds the explicit zero-write
+target namespace. Version 0.5.10 adds the explicit zero-write
 `--simulate-without-dups` mode that inventories that tree but prevents it from
 satisfying coverage and clearly reports a simulated post-finalization verdict.
 
@@ -1022,7 +1025,7 @@ verdict. Exact bytes, pixels, and playback remain separately visible; missing
 unknown content is incomplete, while unsupported recognized media or uncertain
 filesystem evidence is unproven.
 
-The version 0.5.10 candidate adds the explicit
+Version 0.5.10 adds the explicit
 `--simulate-without-dups` mode. It hashes the physical destination once, reports
 the fixed review tree separately, and prevents its regular files from entering
 any simulated destination evidence layer. Physical review-tree problems still

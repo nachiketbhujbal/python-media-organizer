@@ -25,7 +25,6 @@ issue and private-security intake follow the versioned files onto `main`.
 Version 0.5.9 adds reversible truthful-extension correction;
 ADR 0082 records its fresh-evidence, packaged-policy, journal, and ambiguity
 boundaries.
-The unreleased 0.5.10 candidate adds zero-write preservation simulation without
-destination `dups`; ADR 0083 records its full physical inventory, filtered
-comparison, explicit simulated-verdict, and post-quarantine verification
-boundaries.
+Version 0.5.10 adds zero-write preservation simulation without destination
+`dups`; ADR 0083 records its full physical inventory, filtered comparison,
+explicit simulated-verdict, and post-quarantine verification boundaries.
