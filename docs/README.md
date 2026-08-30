@@ -28,3 +28,7 @@ boundaries.
 Version 0.5.10 adds zero-write preservation simulation without destination
 `dups`; ADR 0083 records its full physical inventory, filtered comparison,
 explicit simulated-verdict, and post-quarantine verification boundaries.
+Version 0.5.11 adds guided single-collection migration; ADR 0084 records its
+one-stage execution, private restart/log state, explicit apply and validation
+acknowledgement checkpoints, external-quarantine stop, and fresh final-proof
+boundaries.

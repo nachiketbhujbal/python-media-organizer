@@ -83,6 +83,17 @@ The same adversarial method was repeated after the first validation release.
 | SIM-R01 | High | Lexical path equality failed to recognize a canonically reachable review directory whose stored spelling differed on a case-insensitive filesystem, allowing its files to satisfy simulated preservation. | 0.5.10 | Resolved after independent review by matching the canonical no-follow directory identity to its discovered root-level path, with a filesystem-aware cross-platform regression |
 | SIM-R02 | Low | The README exit-status contract did not distinguish simulated status 0 from an observed result eligible for final sign-off. | 0.5.10 | Resolved after independent review by documenting status 0 as quarantine-review eligibility in simulated mode and requiring an ordinary observed sign-off result after the move |
 
+## Guided-migration review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| GUIDE-001 | High | An unattended coordinator could continue from a failed or warning-status child into mutation, hiding the actual command outcome behind a batch result. | 0.5.11 | Resolved in ADR 0084 by executing at most one child per invocation, returning its real status, stopping state advancement on failure, and permitting only reviewed validation status 1 through a separate recorded acknowledgement |
+| GUIDE-002 | High | Treating successful restart state as current scan, health, or preservation evidence would let a resumed migration skip reads after either collection changed. | 0.5.11 | Resolved by making state workflow bookkeeping only and retaining fresh child validation and ordinary directional verification at every required boundary |
+| GUIDE-003 | High | Collapsing preview and apply into one coordinator stage would remove the child command's dry-run review boundary. | 0.5.11 | Resolved with distinct preview and apply stages plus a second explicit coordinator `--apply` required only at the pending mutation checkpoint |
+| GUIDE-004 | Medium | Default or collection-local coordinator logs and state would expose private paths without opt-in and could contaminate migration evidence. | 0.5.11 | Resolved with a zero-write no-log-directory mode and one explicit private directory required to be distinct and non-nested with both collections; state and unique attempt logs use private permissions |
+| GUIDE-005 | High | Automating the removal or quarantine of `dups` would add an unreviewed cross-filesystem mutation/deletion boundary and could destroy undo prerequisites. | 0.5.11 | Resolved by stopping after simulation, performing no quarantine operation, and requiring an explicit human confirmation only after the working `dups` path is absent; fresh final observed proof still follows |
+| GUIDE-006 | Medium | Malformed, substituted, concurrent, cross-version, or out-of-order restart state could dispatch the wrong stage or options. | 0.5.11 | Resolved with a no-follow regular-file boundary, dedicated lock, strict exact-key schema and lifecycle validation, root/version/option binding, size limits, and atomic private publication |
+
 ## Scan review findings
 
 | ID | Severity | Finding | Resolution target | Status |
@@ -336,6 +347,12 @@ The same adversarial method was repeated after the first validation release.
   exact mapped-or-protected packaged policy and full image-frame decoding, with
   preview-first atomic journaled renames, stable target verification, and
   dependency-aware undo.
+- `0.5.10`: simulate all preservation layers without destination `dups` while
+  retaining complete physical evidence and requiring ordinary post-move proof.
+- `0.5.11`: guide one declared baseline/working pair through the production
+  runbook one child at a time, with private restart state, separate previews and
+  applies, exact statuses, external-quarantine confirmation, and fresh final
+  proof.
 
 ## Independent review evidence
 

@@ -58,6 +58,7 @@ def _option_overrides(args: argparse.Namespace) -> dict[str, object]:
         "timestamps",
         "config",
         "show_ignored",
+        "show_files",
         "ffmpeg",
         "ffprobe",
         "decode_timeout",
@@ -81,6 +82,7 @@ def _initial_options(args: argparse.Namespace) -> CoordinatorOptions:
         "timestamps": True,
         "config": None,
         "show_ignored": False,
+        "show_files": False,
         "ffmpeg": None,
         "ffprobe": None,
         "decode_timeout": None,
@@ -306,6 +308,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.set_defaults(timestamps=None)
     parser.add_argument("--config", type=Path)
     parser.add_argument("--show-ignored", action="store_true", default=None)
+    parser.add_argument("--show-files", action="store_true", default=None)
     parser.add_argument("--ffmpeg", type=Path)
     parser.add_argument("--ffprobe", type=Path)
     parser.add_argument("--decode-timeout", type=int)

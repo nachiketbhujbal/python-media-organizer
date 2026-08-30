@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from pymo import __version__, migrate
+from pymo.migration.workflow import child_command
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
@@ -96,6 +97,7 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
         "no_cache": True,
         "quiet": False,
         "show_ignored": True,
+        "show_files": False,
         "timestamps": True,
         "verbose": True,
         "workers": 2,
@@ -112,6 +114,44 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
     assert (
         json.loads(state_file(log_dir).read_text(encoding="utf-8"))["next_stage"] == 0
     )
+
+
+def test_child_options_are_forwarded_only_to_applicable_stages(tmp_path: Path) -> None:
+    baseline, working = collections(tmp_path)
+    options = migrate.CoordinatorOptions(
+        verbose=True,
+        quiet=False,
+        timestamps=False,
+        config=str(tmp_path / "settings.toml"),
+        show_ignored=True,
+        show_files=True,
+        ffmpeg=str(tmp_path / "ffmpeg"),
+        ffprobe=str(tmp_path / "ffprobe"),
+        decode_timeout=30,
+        workers=2,
+        no_cache=True,
+    )
+    commands = {
+        stage.identifier: child_command(
+            baseline, working, options, stage, tmp_path / f"{stage.identifier}.log"
+        )
+        for stage in migrate._stages()
+        if stage.command is not None
+    }
+
+    assert "--workers" in commands["baseline-scan"]
+    assert "--show-files" not in commands["baseline-scan"]
+    assert "--show-files" in commands["baseline-validation"]
+    assert "--no-cache" in commands["baseline-validation"]
+    assert "--show-files" in commands["initial-verification"]
+    assert "--ffmpeg" in commands["initial-verification"]
+    assert "--ffprobe" in commands["extension-preview"]
+    assert "--ffmpeg" not in commands["extension-preview"]
+    assert "--no-cache" in commands["image-duplicates-preview"]
+    assert "--decode-timeout" in commands["video-duplicates-preview"]
+    assert "--simulate-without-dups" in commands["without-dups-simulation"]
+    assert commands["extension-apply"][-1] == "--apply"
+    assert "--apply" not in commands["extension-preview"]
 
 
 def stat_mode(path: Path) -> int:
@@ -132,7 +172,7 @@ def _state_at(log_dir: Path, baseline: Path, working: Path, next_stage: int) -> 
         baseline.resolve(),
         working.resolve(),
         migrate.CoordinatorOptions(
-            False, False, True, None, False, None, None, None, None, False
+            False, False, True, None, False, False, None, None, None, None, False
         ),
         next_stage,
         attempts,

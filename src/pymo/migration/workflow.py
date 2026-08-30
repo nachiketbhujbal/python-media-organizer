@@ -15,6 +15,7 @@ class CoordinatorOptions:
     timestamps: bool
     config: str | None
     show_ignored: bool
+    show_files: bool
     ffmpeg: str | None
     ffprobe: str | None
     decode_timeout: int | None
@@ -28,6 +29,7 @@ class CoordinatorOptions:
             "timestamps": self.timestamps,
             "config": self.config,
             "show_ignored": self.show_ignored,
+            "show_files": self.show_files,
             "ffmpeg": self.ffmpeg,
             "ffprobe": self.ffprobe,
             "decode_timeout": self.decode_timeout,
@@ -259,6 +261,8 @@ def child_command(
         command.extend(("--workers", str(options.workers)))
     elif stage.command == "validate":
         command.append("--full")
+        if options.show_files:
+            command.append("--show-files")
         if stage.target == "baseline" or options.no_cache:
             command.append("--no-cache")
         if options.workers is not None:
@@ -272,6 +276,8 @@ def child_command(
             command.append("--no-cache")
         command.extend(_native_options(options, ffmpeg=True))
     elif stage.command == "verify-migration":
+        if options.show_files:
+            command.append("--show-files")
         command.extend(_native_options(options, ffmpeg=True))
         if stage.identifier == "without-dups-simulation":
             command.append("--simulate-without-dups")

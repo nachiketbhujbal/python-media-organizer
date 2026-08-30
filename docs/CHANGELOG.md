@@ -2,6 +2,41 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.11 - Unreleased
+
+- Add `pymo migrate BASELINE WORKING` as a one-stage-at-a-time coordinator over
+  the production runbook. With no explicit log directory it remains zero-write
+  and displays the full ordered plan.
+- Add explicit `--log-dir` plus `--start` to create private schema-1 restart
+  state and a distinct mode-0600 log for each child attempt outside both
+  collections. Bind state to the canonical pair, installed pymo version, and
+  fixed common configuration, privacy, native-tool, worker, timeout, cache,
+  verbosity, and timestamp options.
+- Sequence baseline and working scans, fresh full validations, initial
+  preservation proof, truthful extension correction, organization,
+  deterministic renaming, separate image/video duplicate isolation,
+  preservation rechecks after every apply, without-`dups` simulation, external
+  quarantine confirmation, and final fresh validation and ordinary proof.
+- Execute at most one child stage per `--run-next`, preserve its real exit
+  status, stop on every failure, and allow only an explicitly reviewed
+  validation status 1 to advance through the separate `--accept-status`
+  checkpoint. Prior state never satisfies current evidence work.
+- Preserve every mutation preview as a separate stage and require an additional
+  coordinator `--apply` at the pending apply checkpoint. Continue relying on
+  each child command's own dry-run, append-only action history, atomic moves,
+  and verification boundary.
+- Stop after successful duplicate-removal simulation for human-managed retained
+  quarantine. `--confirm-quarantine` requires the working `dups` path to be
+  absent but does not move, delete, or claim retention of that tree.
+- Lock, strictly validate, size-bound, and atomically publish private restart
+  state. Reject unknown schemas, malformed or out-of-order attempts, mismatched
+  roots/options/versions, unsafe lock or state paths, nested log directories,
+  and concurrent coordinators.
+- Record the decision in ADR 0084 and add unit plus installed-CLI coverage for
+  zero-write planning, option persistence, apply boundaries, exit-status
+  acknowledgement, quarantine confirmation, fail-closed state, private file
+  permissions, and the complete real empty-collection sequence.
+
 ## 0.5.10 - 2026-08-29
 
 - Add explicit zero-write

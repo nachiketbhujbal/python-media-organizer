@@ -32,7 +32,8 @@ The package is named `python-media-organizer`, imports as `pymo`, exposes the
 validation truthfulness and cache compatibility through version 0.5.7, public
 governance through version 0.5.8, reversible truthful-extension correction
 through version 0.5.9, and zero-write preservation simulation without
-destination `dups` through released version 0.5.10.
+destination `dups` through released version 0.5.10. The unreleased version
+0.5.11 candidate adds guided single-collection migration.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -40,8 +41,8 @@ selects Apache-2.0 and completes the controlled public transition with contained
 CI, structured issues, private vulnerability reporting, and API-verified
 no-bypass branch and immutable-release-tag rules. The repository is public
 under the bootstrap protections; issue intake is enabled only after the 0.5.8
-public-facing files land. Version 0.5.11 then adds a guided single-collection
-migration workflow; that later planned product behavior is not active yet.
+public-facing files land. Version 0.5.11 coordinates the manual production
+runbook without automating rescue copying, quarantine, or deletion.
 The package is a deliberately local-first tool for personal media collections.
 Git tags are the authoritative version source; package code and `[project]` do
 not contain a static version.
@@ -346,13 +347,21 @@ exact head `9b0d39e`; hosted run `33284905006` passes Ubuntu, Fedora 42, macOS,
 and the aggregate quality gate at that same head. Exact-main, tag, and installed
 release proofs remain distinct release steps.
 
-Version 0.5.11 is planned to coordinate the documented production sequence for
-one unchanged baseline and one working collection. It carries common options
-and one explicit private log directory across restartable stages while
-preserving previews, apply boundaries, real exit statuses, fresh verification,
-and human checkpoints. It does not perform rescue copying, automatic
-quarantine, or deletion. `docs/MIGRATION.md` is the authoritative operational
-sequence; full copying and multi-collection queues remain later research.
+The version 0.5.11 candidate adds `pymo migrate` over the documented production
+sequence for one unchanged baseline and one working collection. With no log
+directory it is zero-write and prints the complete plan. Explicit `--log-dir`
+and `--start` bind private schema-1 restart state to the canonical roots,
+installed pymo version, and common options. `--run-next` executes one child,
+returns its real status, and never advances after failure. Previews and applies
+remain separate, with a second coordinator `--apply`; only reviewed validation
+status 1 has an explicit acknowledgement. The successful without-`dups`
+simulation stops at a human external-quarantine checkpoint, whose confirmation
+requires the working `dups` path to be absent before final fresh validation and
+ordinary verification. The coordinator does not rescue-copy, automatically
+quarantine, delete, or treat state as evidence. `docs/MIGRATION.md` remains the
+operational authority; full copying and multi-collection queues remain later
+research. ADR 0084 records the decision. Independent review, hosted checks,
+merge, tag, and installed-release proof remain outstanding.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -528,6 +537,7 @@ python-media-organizer/
       warm.py
     migration/
       __init__.py
+      coordinator_state.py
       coverage.py
       images.py
       inventory.py
@@ -535,8 +545,10 @@ python-media-organizer/
       simulation.py
       verdict.py
       videos.py
+      workflow.py
     action_log.py
     correct_extensions.py
+    migrate.py
     organize.py
     rename.py
     scan.py
@@ -563,6 +575,7 @@ pymo cache refresh {images,videos,validation-standard,validation-full} COLLECTIO
 pymo validate COLLECTION
 pymo verify-migration SOURCE DESTINATION
 pymo correct-extensions COLLECTION
+pymo migrate BASELINE WORKING
 pymo find-image-duplicates COLLECTION
 pymo find-video-duplicates COLLECTION
 ```
@@ -578,6 +591,9 @@ disposable cache state. Neither changes media or action history. Global
 command-specific options are also accepted by the selected command after its
 collection argument. Configuration and ignored-path options are not applicable
 to `cache status` and are rejected rather than silently ignored.
+`migrate` coordinates the existing commands one checkpoint per invocation. It
+rejects the global single `--log-file`; its explicit `--log-dir` owns private
+restart state and one child log per attempt outside both collections.
 
 ## Shared configuration and collection layout
 
@@ -1043,6 +1059,34 @@ cross-platform regression. The same review's exit-status documentation gap is
 resolved by distinguishing simulated status 0 quarantine-review eligibility
 from an ordinary observed result eligible for final sign-off.
 
+## Guided single-collection migration
+
+`src/pymo/migrate.py` coordinates `pymo migrate BASELINE WORKING` while
+`migration/workflow.py` owns the fixed ordered stages and child arguments and
+`migration/coordinator_state.py` owns private schema-1 restart state. The
+command with no `--log-dir` prints a zero-write plan. `--start` creates one
+explicit external private directory, binds canonical roots, exact pymo version,
+and common options, and publishes mode-0600 state atomically under a dedicated
+lock. State is strictly parsed as an ordered lifecycle and is neither cache,
+action history, migration evidence, nor an external tracker.
+
+`--run-next` invokes the installed child CLI through the same interpreter and
+executes at most one checkpoint. Successful stages advance; a failure is
+recorded and its exact status returned. Validation status 1 alone can advance
+after separate `--accept-status`; other statuses must be resolved and rerun.
+Each mutating preview precedes a distinct apply stage that also requires the
+coordinator's `--apply`. Ordinary fresh verification follows every applied
+transformation. Common options are forwarded only to child commands that own
+them, and each attempt receives a unique private log.
+
+After the successful counterfactual simulation, the coordinator performs no
+quarantine operation. `--confirm-quarantine` requires the working `dups` path
+to be absent and records only the human checkpoint, not proof of external
+retention. Final full validation and ordinary observed verification remain
+separate fresh child stages. A completed sequence remains eligible for human
+sign-off only and does not authorize removal of source, baseline, quarantine,
+or working data.
+
 ## Media validation
 
 `src/pymo/validate.py` implements media-non-mutating
@@ -1244,6 +1288,12 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   strict-video representatives, separate review storage, physical multiplicity,
   unsafe review entries, full physical final stability, path/ignore privacy,
   a regular file named `dups`, and zero-write behavior;
+- guided migration zero-write planning, fixed common-option persistence,
+  schema/version/root binding, private state and log permissions, one-child
+  execution, separate apply authorization, exact exit-status stopping,
+  reviewed validation acknowledgement, absent-`dups` confirmation, malformed
+  and out-of-order state refusal, and a complete installed-CLI traversal of
+  every stage over temporary empty collections;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;
@@ -1281,9 +1331,10 @@ instead of maintaining duplicate feature inventories.
 
 `docs/MIGRATION.md` is the production collection-by-collection runbook. It
 distinguishes source, unchanged baseline, working collection, and retained
-quarantine; names every current and planned command boundary; keeps persistent
-logs opt-in; and requires fresh verification plus human sign-off after each
-applied stage.
+quarantine; names every current command boundary; keeps persistent logs opt-in;
+and requires fresh verification plus human sign-off after each applied stage.
+Version 0.5.11 coordinates that sequence, while the runbook remains the
+operational authority.
 
 `scan` is implemented; do not rename it to `inspect`.
 

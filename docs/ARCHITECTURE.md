@@ -17,8 +17,9 @@ CLI dispatch
 - `cli.py` and `__main__.py` select a command and own no media policy.
 - `organize.py`, `rename.py`, `correct_extensions.py`, `scan.py`, and
   `validate.py` are user-facing command coordinators. `verify_migration.py`
-  coordinates the directional preservation report. Their staged functions
-  remain directly testable.
+  coordinates the directional preservation report. `migrate.py` dispatches one
+  guided runbook checkpoint at a time without owning child media policy. Their
+  staged functions remain directly testable.
 - `duplicates/` owns exact duplicate policy. Images and videos remain separate
   because their definitions of equivalent content and their native dependencies
   differ; `common.py` contains only shared layout and move-plan policy.
@@ -37,9 +38,11 @@ CLI dispatch
   `videos.py` owns strict decoded-playback coverage, and `report.py` owns the
   root-free public schema. `verdict.py` owns final layered accounting and
   disposition policy, while `simulation.py` owns the explicit counterfactual
-  destination view and separate duplicate-review inventory. Final namespace
-  stability remains in `inventory.py`; command dispatch and disposable cache
-  ownership stay outside this domain.
+  destination view and separate duplicate-review inventory.
+  `workflow.py` owns the ordered single-pair runbook and child argument mapping;
+  `coordinator_state.py` owns its private fail-closed restart lifecycle. Final
+  namespace stability remains in `inventory.py`; media command policy and
+  disposable cache ownership stay outside this domain.
 - `action_log.py` owns the authoritative append-only mutation journal. It is
   deliberately outside `cache/` because journal evidence is portable and
   authoritative while cache state is derived and disposable.
