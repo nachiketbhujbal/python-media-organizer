@@ -59,6 +59,50 @@ def test_zero_write_plan_requires_explicit_private_state(tmp_path: Path) -> None
     assert sorted(path.name for path in tmp_path.iterdir()) == ["baseline", "working"]
 
 
+def test_collection_and_log_roots_use_filesystem_identity(tmp_path: Path) -> None:
+    stored = tmp_path / "collection"
+    alias = tmp_path / "COLLECTION"
+    stored.mkdir()
+
+    if alias.exists():
+        same_root = run_pymo("--no-timestamps", "migrate", stored, alias)
+        assert same_root.returncode == 2
+        assert "distinct, non-nested" in same_root.stderr
+
+        baseline = tmp_path / "baseline"
+        baseline.mkdir()
+        nested_log = run_pymo(
+            "--no-timestamps",
+            "migrate",
+            baseline,
+            stored,
+            "--log-dir",
+            alias / "private-logs",
+            "--start",
+        )
+        assert nested_log.returncode == 2
+        assert (
+            "private log directory must be distinct and non-nested" in nested_log.stderr
+        )
+        assert not (stored / "private-logs").exists()
+    else:
+        alias.mkdir()
+        distinct_roots = run_pymo("--no-timestamps", "migrate", stored, alias)
+        assert distinct_roots.returncode == 0
+        assert "Guided single-collection migration plan" in distinct_roots.stdout
+
+
+def test_coordinator_setup_errors_use_status_two(tmp_path: Path) -> None:
+    missing = tmp_path / "missing"
+    working = tmp_path / "working"
+    working.mkdir()
+
+    result = run_pymo("--no-timestamps", "migrate", missing, working)
+
+    assert result.returncode == 2
+    assert "baseline is not a readable directory" in result.stderr
+
+
 def test_start_records_private_options_and_refuses_mismatched_reuse(
     tmp_path: Path,
 ) -> None:
@@ -112,7 +156,7 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
     status = run_pymo(
         "migrate", baseline, working, "--log-dir", log_dir, "--workers", "3"
     )
-    assert status.returncode == 1
+    assert status.returncode == 2
     assert "workers differs from the recorded" in status.stderr
     assert (
         json.loads(state_file(log_dir).read_text(encoding="utf-8"))["next_stage"] == 0
@@ -314,7 +358,7 @@ def test_restart_state_fails_closed(tmp_path: Path, mutation, message: str) -> N
 
     result = run_pymo("migrate", baseline, working, "--log-dir", log_dir)
 
-    assert result.returncode == 1
+    assert result.returncode == 2
     assert message in result.stderr
     assert list(baseline.iterdir()) == []
     assert list(working.iterdir()) == []
@@ -328,13 +372,13 @@ def test_restart_state_and_lock_require_private_regular_files(tmp_path: Path) ->
 
     state_file(log_dir).chmod(0o644)
     state_result = run_pymo(*common)
-    assert state_result.returncode == 1
+    assert state_result.returncode == 2
     assert "restart state is not private" in state_result.stderr
 
     state_file(log_dir).chmod(0o600)
     (log_dir / "pymo-migration-state.lock").chmod(0o644)
     lock_result = run_pymo(*common)
-    assert lock_result.returncode == 1
+    assert lock_result.returncode == 2
     assert "state lock is not private" in lock_result.stderr
 
 

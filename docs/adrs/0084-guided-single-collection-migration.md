@@ -25,13 +25,20 @@ documented single-collection sequence. With no explicit private log directory,
 it is zero-write and prints the complete plan. `--log-dir` selects one private
 directory outside both collection roots; `--start` initializes schema-1
 restart state there, and later invocations bind that state to the same canonical
-baseline and working roots.
+baseline and working roots. Root separation uses device-and-inode ancestry
+rather than lexical path spelling, including for a not-yet-created log-directory
+leaf, so filesystem case or Unicode aliases cannot turn one collection into
+both roles or place coordinator state inside collection evidence. Genuinely
+distinct directories on a case-sensitive filesystem remain distinct.
 
 `--run-next` executes exactly one current child command. It never batches later
 steps, and it returns the child's real status. A nonzero status stops progress
 and remains recorded. Only a validation finding status may be advanced through
 a separate explicit acknowledgement; configuration, evidence, discovery,
 verification, or mutation failures cannot be waived.
+Coordinator setup, state, and invocation failures return status 2; an executed
+child retains its own status, and status 1 therefore remains reviewable child
+findings rather than an ambiguous coordinator error.
 
 Every mutating operation remains two distinct stages: the ordinary preview
 must succeed first, then the apply stage additionally requires the coordinator's

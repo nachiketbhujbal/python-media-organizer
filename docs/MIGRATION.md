@@ -263,3 +263,8 @@ Version 0.5.11 reduces repetition by carrying one declared baseline, working
 collection, and explicit private log directory through these stages. It
 preserves the same stop points, previews, exit statuses, fresh evidence, and
 human sign-off rather than turning the sequence into an unattended batch.
+It compares collection and log-directory ancestry by filesystem identity, so
+case or Unicode aliases cannot make one physical directory serve both
+collection roles or hide a log directory inside either collection. Coordinator
+setup, unsafe-state, and invocation errors return status 2; a `--run-next`
+attempt returns the child command's real status.

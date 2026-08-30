@@ -286,8 +286,16 @@ operator to retain the complete `dups` tree outside the working collection.
 `dups` path is absent, then fresh final validation and ordinary migration
 verification remain pending.
 
+Coordinator setup, unsafe-state, and invocation errors return status 2, keeping
+them distinct from a child's status-1 findings. A `--run-next` attempt otherwise
+returns the child command's actual status; status 1 from the external-quarantine
+confirmation means the working `dups` path is still present.
+
 The schema-1 restart file records canonical roots, the installed pymo version,
-fixed common options, attempts, statuses, and private log names. It is workflow
+fixed common options, attempts, statuses, and private log names. Collection and
+log-directory separation is checked by filesystem identity, so aliases on a
+case-insensitive or normalizing filesystem cannot collapse the baseline and
+working roots or place private logs inside either collection. It is workflow
 bookkeeping, not action history or preservation evidence. It cannot create the
 baseline or working copy, move quarantine, rescue-copy, delete, or authorize
 discarding any data. See the [production runbook](docs/MIGRATION.md) for the

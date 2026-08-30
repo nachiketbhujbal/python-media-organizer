@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import stat
 import subprocess
 import sys
 import uuid
@@ -32,10 +33,37 @@ from pymo.migration.workflow import (
 )
 
 
+def _directory_identity(path: Path) -> tuple[int, int] | None:
+    try:
+        value = os.stat(path, follow_symlinks=False)
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    except OSError as error:
+        raise MigrationCoordinatorError(
+            "directory identity could not be verified"
+        ) from error
+    if not stat.S_ISDIR(value.st_mode):
+        return None
+    return (value.st_dev, value.st_ino)
+
+
+def _within(child: Path, root: Path) -> bool:
+    """Return whether an existing ancestor of child is root by identity."""
+
+    root_identity = _directory_identity(root)
+    if root_identity is None:
+        return False
+    current = child
+    while True:
+        if _directory_identity(current) == root_identity:
+            return True
+        if current.parent == current:
+            return False
+        current = current.parent
+
+
 def _disjoint(first: Path, second: Path) -> bool:
-    return (
-        first != second and first not in second.parents and second not in first.parents
-    )
+    return not _within(first, second) and not _within(second, first)
 
 
 def _validate_roots(baseline: Path, working: Path) -> None:
@@ -409,7 +437,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             f"Migration coordinator cannot safely continue: {error}.", file=sys.stderr
         )
-        return 1
+        return 2
 
 
 if __name__ == "__main__":

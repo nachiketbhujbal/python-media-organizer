@@ -360,8 +360,16 @@ requires the working `dups` path to be absent before final fresh validation and
 ordinary verification. The coordinator does not rescue-copy, automatically
 quarantine, delete, or treat state as evidence. `docs/MIGRATION.md` remains the
 operational authority; full copying and multi-collection queues remain later
-research. ADR 0084 records the decision. Independent review, hosted checks,
-merge, tag, and installed-release proof remain outstanding. The exact local
+research. ADR 0084 records the decision. Initial hosted checks passed at
+`51749dd`; focused review closure, updated hosted checks, merge, tag, and
+installed-release proof remain outstanding. Root and
+log-directory separation now uses filesystem device-and-inode ancestry, so
+case or Unicode aliases cannot make one physical directory serve both
+collection roles or place private logs inside collection evidence. Coordinator
+setup and unsafe-state failures return status 2, distinct from real child
+status-1 findings. Independent review at candidate `51749dd` reported
+GUIDE-R01 and GUIDE-R02; both are resolved on the owner branch and await focused
+closure. The exact local
 candidate at `444b0d3` passes Ruff, Black, mypy, pre-commit, all 436 synthetic
 and real-FFmpeg tests with 88 percent subprocess-aware coverage, source and
 wheel builds, and isolated installed CLI proof at
@@ -1076,6 +1084,13 @@ explicit external private directory, binds canonical roots, exact pymo version,
 and common options, and publishes mode-0600 state atomically under a dedicated
 lock. State is strictly parsed as an ordered lifecycle and is neither cache,
 action history, migration evidence, nor an external tracker.
+
+The coordinator proves baseline, working, and private-log separation through
+device-and-inode ancestry rather than lexical spelling, including when the log
+directory leaf does not exist yet. This rejects aliases on case-insensitive or
+normalizing filesystems without rejecting genuinely distinct case-sensitive
+directories. Coordinator setup, state, and invocation errors return status 2;
+executed children retain their actual statuses.
 
 `--run-next` invokes the installed child CLI through the same interpreter and
 executes at most one checkpoint. Successful stages advance; a failure is

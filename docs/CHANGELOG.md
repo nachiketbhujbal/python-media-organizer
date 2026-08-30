@@ -32,6 +32,12 @@ All notable changes to `python-media-organizer` will be recorded here.
   state. Reject unknown schemas, malformed or out-of-order attempts, mismatched
   roots/options/versions, unsafe lock or state paths, nested log directories,
   and concurrent coordinators.
+- Compare collection roots and log-directory ancestry by filesystem device and
+  inode identity, preventing case or Unicode aliases from collapsing the
+  unchanged baseline into the working collection or hiding private state inside
+  collection evidence while preserving distinct case-sensitive directories.
+- Return status 2 for coordinator setup, unsafe-state, and invocation failures,
+  keeping them distinct from real child status-1 findings.
 - Record the decision in ADR 0084 and add unit plus installed-CLI coverage for
   zero-write planning, option persistence, apply boundaries, exit-status
   acknowledgement, quarantine confirmation, fail-closed state, private file
