@@ -262,6 +262,8 @@ paths are needed.
 pymo verify-migration "/path/to/baseline" "/path/to/working-copy"
 pymo verify-migration "/path/to/baseline" "/path/to/working-copy" --json
 pymo verify-migration "/path/to/baseline" "/path/to/working-copy" --show-files
+pymo verify-migration "/path/to/baseline" "/path/to/working-copy" \
+  --simulate-without-dups
 ```
 
 `verify-migration` is directional: every in-scope unique byte stream readable
@@ -326,6 +328,21 @@ incomplete evidence remains. Unknown missing non-media content is
 `incomplete`; recognized media without a supported exact evidence path is
 `unproven`.
 
+Version 0.5.10 advances JSON reporting to schema 5 and adds the explicit
+`--simulate-without-dups` counterfactual. The verifier still freshly hashes the
+complete physical destination, inventories the `dups` review tree separately,
+then prevents its regular files from satisfying byte, displayed-image, or
+decoded-video coverage. Simulated multiplicity and destination-only facts also
+exclude those files. Unsafe, unreadable, unstable, ignored, and other excluded
+review-tree evidence remains visible rather than being converted into a safe
+absence claim, and final stability still revalidates the complete physical
+destination namespace.
+
+Every byte, image, video, and final verdict is labeled simulated. A simulated
+complete result is only eligible for human quarantine review: it does not move
+or delete anything, does not prove the post-quarantine collection, and does not
+replace ordinary fresh verification after an external quarantine move.
+
 A complete verdict is eligible for human sign-off, not an instruction to
 delete a baseline. It covers stable namespace-visible content inside the two
 declared roots and cannot prove orphaned filesystem allocations or whole-drive
@@ -335,7 +352,9 @@ Normal text and JSON omit both roots and all filenames. `--show-files` exposes
 only relative missing, destination-only, and problem paths;
 `--show-ignored` separately exposes relative policy exclusions. Exit status 0
 means complete layered preservation, 1 means incomplete or unproven, and 2
-means invalid setup.
+means invalid setup. Under `--simulate-without-dups`, status 0 means simulated
+completion eligible only for human quarantine review; only an observed result
+with `eligible-for-human-signoff` can enter final migration sign-off.
 
 ### Inspect the derived cache
 
@@ -747,6 +766,8 @@ pymo organize "/path/to/media-collection" --apply
 pymo rename "/path/to/media-collection" --apply
 pymo find-image-duplicates "/path/to/media-collection" --apply
 pymo find-video-duplicates "/path/to/media-collection" --apply
+pymo verify-migration "/path/to/unchanged-baseline" "/path/to/working-copy" \
+  --simulate-without-dups
 pymo verify-migration "/path/to/unchanged-baseline" "/path/to/working-copy"
 ```
 
@@ -761,9 +782,12 @@ changes and before discarding that baseline. Version 0.5.0 proves exact
 in-scope bytes after byte-identical duplicate removal, version 0.5.1 separately
 accounts for exact displayed images after metadata-varied image deduplication,
 and version 0.5.2 separately accounts for supported strict-playback video
-remuxes. Version 0.5.3 combines them into the final preservation verdict. Do
-not discard a baseline unless that verdict is complete for the actual
-collection and all recovery evidence has been reviewed.
+remuxes. Version 0.5.3 combines them into the final preservation verdict.
+Version 0.5.10 can preview whether the same contract would remain satisfied
+without destination `dups`; after retained external quarantine, rerun the
+ordinary command against the physical collection. Do not discard a baseline
+unless that observed verdict is complete for the actual collection and all
+recovery evidence has been reviewed.
 
 ## Action history and undo
 

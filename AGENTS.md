@@ -150,6 +150,12 @@ never duplicate the version in source or static project metadata.
   root. Hash current content through stable collection-anchored descriptors;
   do not let names, paths, aggregate sizes, or cached historical health prove
   byte preservation.
+- `verify-migration --simulate-without-dups` must hash the complete physical
+  destination and inventory its `dups` tree separately before excluding those
+  regular files from every destination evidence layer. Keep unsafe or
+  incomplete review-tree evidence fail-closed, revalidate the complete physical
+  namespace, label every verdict simulated, and never present simulated
+  completion as observed post-quarantine sign-off or deletion authority.
 - A migration success claim is relative to its named evidence contract. Keep
   unique-byte coverage distinct from duplicate multiplicity and destination
   extras. Incomplete source evidence is `unproven`; missing identities are
@@ -194,6 +200,8 @@ never duplicate the version in source or static project metadata.
   coverage, multiplicity accounting, and path-private preservation reports.
 - `src/pymo/migration/verdict.py`: final layered accounting and human-signoff
   disposition after fresh namespace and file-state revalidation.
+- `src/pymo/migration/simulation.py`: counterfactual destination evidence and
+  separate review-tree inventory for the explicit without-`dups` mode.
 - `src/pymo/image_content.py`: shared exact displayed-pixel normalization used
   by duplicate and migration domains; it owns no discovery, cache, reporting,
   or mutation policy.

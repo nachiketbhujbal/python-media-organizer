@@ -2,6 +2,34 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.10 - 2026-08-29
+
+- Add explicit zero-write
+  `pymo verify-migration SOURCE DESTINATION --simulate-without-dups` while
+  leaving ordinary physical-destination verification unchanged.
+- Freshly hash the complete destination, inventory the fixed `dups` review tree
+  separately, and exclude only its stable regular files from simulated byte,
+  exact displayed-image, strict decoded-video, multiplicity, and
+  destination-only evidence.
+- Keep unsafe, unreadable, unstable, ignored, and other excluded review-tree
+  evidence visible and fail-closed. Revalidate the complete physical source and
+  destination namespaces after every content layer rather than validating only
+  the counterfactual view.
+- Advance migration JSON to schema 5 with observed-versus-simulated mode,
+  separate path-private review-tree accounting, and explicit simulated labels
+  on byte, image, video, and final preservation verdicts.
+- Make simulated completion eligible only for human quarantine review. It never
+  moves, quarantines, deletes, caches, locks, action-logs, replaces ordinary
+  post-move verification, or authorizes final migration sign-off.
+- Resolve the canonical review directory by no-follow filesystem identity so a
+  stored case variant on a case-insensitive destination cannot remain in the
+  simulated evidence, while preserving distinct case-sensitive directories.
+- Qualify status 0 as simulated quarantine-review eligibility in counterfactual
+  mode rather than observed final sign-off.
+- Record the decision in ADR 0083 and add byte, image, real-FFmpeg video,
+  privacy, unsafe-entry, physical-stability, regular-file-name, multiplicity,
+  filesystem-identity, and zero-write regressions.
+
 ## 0.5.9 - 2026-08-29
 
 - Add preview-first `pymo correct-extensions COLLECTION`, with explicit

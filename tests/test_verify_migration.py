@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from pymo import verify_migration as migration_verifier
 from pymo.collection import CollectionLayout
 from pymo.config import load_config
 from pymo.migration import images as migration_images
@@ -112,9 +113,19 @@ def test_verify_migration_is_path_independent_private_and_zero_write(
 
     assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads(result.stdout)
-    assert report["schema_version"] == 4
+    assert report["schema_version"] == 5
     assert report["direction"] == "source-to-destination"
     assert report["contract"] == "layered-exact-preservation"
+    assert report["result_kind"] == "observed"
+    assert report["simulation"] == {
+        "active": False,
+        "destination_review_tree": None,
+        "scenario": None,
+    }
+    assert report["coverage"]["simulated"] is False
+    assert report["image_content"]["simulated"] is False
+    assert report["video_content"]["simulated"] is False
+    assert report["preservation"]["simulated"] is False
     assert report["coverage"]["verdict"] == "complete"
     assert report["preservation"]["verdict"] == "complete"
     assert report["preservation"]["evidence"] == {
@@ -135,6 +146,237 @@ def test_verify_migration_is_path_independent_private_and_zero_write(
         assert not layout.derived_cache.exists()
         assert not layout.derived_cache_lock.exists()
         assert not layout.action_log.exists()
+
+
+def test_simulation_excludes_review_only_bytes_and_reports_them_privately(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    review_file = destination / "dups" / "pics" / "private-review-name.bin"
+    source.mkdir()
+    review_file.parent.mkdir(parents=True)
+    (source / "source.bin").write_bytes(b"same")
+    review_file.write_bytes(b"same")
+    (destination / "dups" / ".DS_Store").write_bytes(b"ignored")
+    before_source = files_under(source)
+    before_destination = files_under(destination)
+
+    ordinary = run_verify(source, destination, "--json")
+    simulated = run_verify(source, destination, "--simulate-without-dups", "--json")
+    human = run_verify(source, destination, "--simulate-without-dups")
+    disclosed = run_verify(
+        source,
+        destination,
+        "--simulate-without-dups",
+        "--show-files",
+        "--json",
+    )
+    ignored_disclosed = run_verify(
+        source,
+        destination,
+        "--simulate-without-dups",
+        "--show-ignored",
+        "--json",
+    )
+
+    assert ordinary.returncode == 0, ordinary.stdout + ordinary.stderr
+    assert (
+        simulated.returncode
+        == human.returncode
+        == disclosed.returncode
+        == ignored_disclosed.returncode
+        == 1
+    )
+    report = json.loads(simulated.stdout)
+    assert report["result_kind"] == "simulated"
+    assert report["scope"]["destination_dups_included_in_evidence"] is False
+    assert report["coverage"]["simulated"] is True
+    assert report["coverage"]["verdict"] == "incomplete"
+    assert report["image_content"]["simulated"] is True
+    assert report["video_content"]["simulated"] is True
+    assert report["preservation"]["simulated"] is True
+    assert report["preservation"]["verdict"] == "incomplete"
+    review = report["simulation"]["destination_review_tree"]
+    assert review["present"] is True
+    assert review["excluded_from_destination_evidence"] is True
+    assert review["hashed_files"] == 1
+    assert review["hashed_bytes"] == 4
+    assert review["unique_byte_streams"] == 1
+    assert review["ignored_entry_points"] == 1
+    assert review["file_paths"] == []
+    assert review["ignored_paths"] == []
+    assert "private-review-name.bin" not in simulated.stdout
+    assert "private-review-name.bin" not in human.stdout + human.stderr
+    assert "Layer verdict: SIMULATED INCOMPLETE" in human.stdout
+    assert "SIMULATED INCOMPLETE: readable supported source content" in human.stdout
+    assert "Simulation changed nothing" in human.stdout
+    assert json.loads(disclosed.stdout)["simulation"]["destination_review_tree"][
+        "file_paths"
+    ] == ["dups/pics/private-review-name.bin"]
+    assert json.loads(ignored_disclosed.stdout)["simulation"][
+        "destination_review_tree"
+    ]["ignored_paths"] == ["dups/.DS_Store"]
+    assert files_under(source) == before_source
+    assert files_under(destination) == before_destination
+    for root in (source, destination):
+        layout = CollectionLayout(root)
+        assert not layout.derived_cache.exists()
+        assert not layout.derived_cache_lock.exists()
+        assert not layout.action_log.exists()
+
+
+def test_simulation_uses_representative_outside_review_tree_and_recounts_copies(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    (destination / "dups" / "pics").mkdir(parents=True)
+    (source / "source.bin").write_bytes(b"same")
+    (destination / "retained.bin").write_bytes(b"same")
+    (destination / "dups" / "pics" / "review.bin").write_bytes(b"same")
+
+    result = run_verify(source, destination, "--simulate-without-dups", "--json")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    assert report["result_kind"] == "simulated"
+    assert report["destination"]["duplicate_copies"] == 1
+    assert report["multiplicity"]["destination_duplicate_copies"] == 0
+    assert report["coverage"]["verdict"] == "complete"
+    assert report["preservation"]["verdict"] == "complete"
+    assert report["preservation"]["disposition"] == (
+        "eligible-for-human-quarantine-review"
+    )
+
+
+def test_simulation_does_not_treat_regular_file_named_dups_as_review_tree(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    (source / "source.bin").write_bytes(b"same")
+    (destination / "dups").write_bytes(b"same")
+
+    result = run_verify(source, destination, "--simulate-without-dups", "--json")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    assert report["coverage"]["verdict"] == "complete"
+    assert report["simulation"]["destination_review_tree"]["present"] is False
+    assert report["simulation"]["destination_review_tree"]["hashed_files"] == 0
+
+
+def test_simulation_resolves_review_tree_by_filesystem_identity(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    stored_review = destination / "DUPS"
+    source.mkdir()
+    (stored_review / "pics").mkdir(parents=True)
+    (source / "source.bin").write_bytes(b"same")
+    (stored_review / "pics" / "review.bin").write_bytes(b"same")
+
+    result = run_verify(source, destination, "--simulate-without-dups", "--json")
+
+    assert result.returncode in {0, 1}, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    review = report["simulation"]["destination_review_tree"]
+    if (destination / "dups").exists():
+        assert result.returncode == 1
+        assert report["coverage"]["verdict"] == "incomplete"
+        assert report["preservation"]["verdict"] == "incomplete"
+        assert review["present"] is True
+        assert review["hashed_files"] == 1
+    else:
+        assert result.returncode == 0
+        assert report["coverage"]["verdict"] == "complete"
+        assert report["preservation"]["verdict"] == "complete"
+        assert review["present"] is False
+        assert review["hashed_files"] == 0
+
+
+def test_simulation_revalidates_complete_physical_destination(
+    tmp_path: Path, monkeypatch
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    (destination / "dups" / "pics").mkdir(parents=True)
+    (source / "source.bin").write_bytes(b"same")
+    review = destination / "dups" / "pics" / "review.bin"
+    review.write_bytes(b"same")
+    revalidated_paths: list[set[Path]] = []
+    real_revalidate = migration_verifier.revalidate_tree
+
+    def record_revalidation(inventory_value, config):
+        revalidated_paths.append({entry.path for entry in inventory_value.files})
+        return real_revalidate(inventory_value, config)
+
+    monkeypatch.setattr(migration_verifier, "revalidate_tree", record_revalidation)
+
+    result = migration_verifier.main(
+        [str(source), str(destination), "--simulate-without-dups", "--json"]
+    )
+
+    assert result == 1
+    assert len(revalidated_paths) == 2
+    assert review in revalidated_paths[1]
+
+
+def test_simulation_does_not_hide_unsafe_review_tree_evidence(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    outside = tmp_path / "outside.bin"
+    source.mkdir()
+    (destination / "dups").mkdir(parents=True)
+    outside.write_bytes(b"outside")
+    (source / "source.bin").write_bytes(b"same")
+    (destination / "retained.bin").write_bytes(b"same")
+    (destination / "dups" / "unsafe-link.bin").symlink_to(outside)
+
+    result = run_verify(
+        source,
+        destination,
+        "--simulate-without-dups",
+        "--show-files",
+        "--json",
+    )
+
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    assert report["coverage"]["verdict"] == "complete"
+    assert report["preservation"]["verdict"] == "unproven"
+    assert report["preservation"]["reasons"] == ["filesystem-evidence-incomplete"]
+    review = report["simulation"]["destination_review_tree"]
+    assert review["symbolic_links"] == 1
+    assert review["problem_paths"] == [
+        {"category": "symbolic-link", "path": "dups/unsafe-link.bin"}
+    ]
+
+
+def test_simulation_excludes_review_only_exact_displayed_image(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    (destination / "dups" / "pics").mkdir(parents=True)
+    write_image(source / "source.png", (12, 34, 56))
+    write_image(destination / "dups" / "pics" / "review.bmp", (12, 34, 56))
+
+    ordinary = run_verify(source, destination, "--json")
+    simulated = run_verify(source, destination, "--simulate-without-dups", "--json")
+
+    assert ordinary.returncode == 0, ordinary.stdout + ordinary.stderr
+    assert simulated.returncode == 1
+    report = json.loads(simulated.stdout)
+    assert report["image_content"]["eligible_source_unique_streams"] == 1
+    assert report["image_content"]["destination_candidate_unique_streams"] == 0
+    assert report["image_content"]["verdict"] == "incomplete"
+    assert report["preservation"]["verdict"] == "incomplete"
 
 
 def test_verify_migration_separates_unique_coverage_from_multiplicity_and_extras(
@@ -684,6 +926,41 @@ def test_remuxed_video_is_reported_as_strict_playback_coverage(
 
 
 @requires_ffmpeg
+def test_simulation_excludes_review_only_strict_video_playback(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    (destination / "dups" / "vids").mkdir(parents=True)
+    original = source / "source.mp4"
+    review = destination / "dups" / "vids" / "review.mp4"
+    write_video(original)
+    run_ffmpeg(
+        "-i",
+        original,
+        "-map",
+        "0",
+        "-c",
+        "copy",
+        "-metadata",
+        "title=synthetic",
+        review,
+    )
+
+    ordinary = run_verify(source, destination, "--json")
+    simulated = run_verify(source, destination, "--simulate-without-dups", "--json")
+
+    assert ordinary.returncode == 0, ordinary.stdout + ordinary.stderr
+    assert simulated.returncode == 1, simulated.stdout + simulated.stderr
+    report = json.loads(simulated.stdout)
+    assert report["video_content"]["eligible_source_unique_streams"] == 1
+    assert report["video_content"]["destination_candidate_unique_streams"] == 0
+    assert report["video_content"]["verdict"] == "incomplete"
+    assert report["preservation"]["verdict"] == "incomplete"
+
+
+@requires_ffmpeg
 def test_different_audio_is_missing_strict_video_playback(tmp_path: Path) -> None:
     source = tmp_path / "source"
     destination = tmp_path / "destination"
@@ -792,3 +1069,10 @@ def test_verify_migration_rejects_nonpositive_decode_timeout(tmp_path: Path) -> 
 
     assert result.returncode == 2
     assert "positive number" in result.stderr
+
+
+def test_verify_migration_help_names_without_dups_simulation() -> None:
+    result = run_verify("--help")
+
+    assert result.returncode == 0
+    assert "--simulate-without-dups" in result.stdout
