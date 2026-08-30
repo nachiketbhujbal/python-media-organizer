@@ -15,9 +15,9 @@ contract; it does not prove whole-device recovery.
 - Version 0.5.10 adds zero-write
   `verify-migration --simulate-without-dups` for the human-reviewed quarantine
   preview before ordinary fresh post-move verification.
-- Version 0.5.11 is planned to coordinate this sequence for one declared
-  baseline/working pair. It will not perform rescue copying or automatic
-  deletion.
+- Version 0.5.11 adds `pymo migrate` to coordinate this sequence for one
+  declared baseline/working pair. It does not perform rescue copying,
+  automatic quarantine, or deletion.
 
 Perform only stages supported by the installed version and keep every
 transition human-reviewed. Do not use a loose shell script as the production
@@ -52,6 +52,66 @@ copies on one physical device are not independent backups.
 5. Create a private log directory outside both collection roots if persistent
    logs are wanted. Logs remain opt-in because paths and filenames are
    sensitive.
+
+## Guided coordinator
+
+The v0.5.11 workflow keeps the manual stages below as its authority.
+First inspect the zero-write plan, then explicitly initialize one dedicated
+private directory outside and non-nested with both collections:
+
+```bash
+pymo migrate "/path/to/baseline" "/path/to/working-collection"
+pymo migrate "/path/to/baseline" "/path/to/working-collection" \
+  --log-dir "/path/to/private-logs" --start
+```
+
+Common `--config`, `--show-ignored`, `--show-files`, `--verbose`/`--quiet`, timestamp,
+`--workers`, `--no-cache`, ffmpeg/ffprobe, and decode-timeout choices supplied
+at `--start` are fixed in schema-1 restart state and carried only to applicable
+child commands. Later explicit options must agree with that state. Use the same
+released pymo version for the complete sequence.
+
+Inspect current state without advancing it, or execute exactly one pending
+stage:
+
+```bash
+pymo migrate "/path/to/baseline" "/path/to/working-collection" \
+  --log-dir "/path/to/private-logs"
+pymo migrate "/path/to/baseline" "/path/to/working-collection" \
+  --log-dir "/path/to/private-logs" --run-next
+```
+
+Successful previews advance to distinct mutation checkpoints. After reviewing
+the preview, authorize only that pending child command:
+
+```bash
+pymo migrate "/path/to/baseline" "/path/to/working-collection" \
+  --log-dir "/path/to/private-logs" --run-next --apply
+```
+
+A nonzero child status is recorded, returned unchanged, and stops progress.
+Rerun after resolving the cause. Status 1 from a validation checkpoint may be
+advanced only after human review with `--accept-status`; the original status
+remains in state. Verification, mutation, configuration, discovery, and native
+tool failures cannot be acknowledged away.
+
+After the successful without-`dups` simulation, the coordinator stops. Move or
+retain the complete review tree outside the working collection using a
+separately reviewed procedure; pymo performs no move. Once the working `dups`
+path is absent, record the human checkpoint:
+
+```bash
+pymo migrate "/path/to/baseline" "/path/to/working-collection" \
+  --log-dir "/path/to/private-logs" --confirm-quarantine
+```
+
+That confirmation proves only path absence plus the operator's acknowledgement,
+not quarantine retention. Final fresh validation and ordinary observed
+verification still run as separate later stages. Restart state and stage logs
+are private operational records, not the collection action journal, current
+media evidence, or deletion authority. An interrupted apply may have committed
+its own append-only action run even if coordinator state did not advance; review
+the child log and action history before rerunning.
 
 ## Stage 1: establish readable evidence
 
@@ -90,6 +150,13 @@ Require a complete result for the intended contract before transforming the
 working copy. Read the exact-byte, exact displayed-image, and strict
 decoded-video layers separately. Pixel or playback equivalence does not prove
 metadata, encoding, container, or original bytes.
+
+The v0.5.11 guided coordinator rejects aliased baseline and working roots by
+filesystem identity before dispatch. A direct standalone `verify-migration`
+invocation still has a lexical root gate until the promoted v0.5.12 correction;
+for a manual v0.5.11 sequence, independently confirm the two arguments are
+distinct physical directories rather than case or Unicode aliases of one
+directory.
 
 ## Stage 3: correct truthful extensions
 
@@ -199,7 +266,12 @@ Only the ordinary post-move result can enter final sign-off.
 6. Retain the baseline, source, and quarantine under the chosen backup policy.
    Pymo completion never authorizes automatic deletion of any of them.
 
-Version 0.5.11 will reduce repetition by carrying one declared baseline,
-working collection, and explicit private log directory through these stages.
-It will preserve the same stop points, previews, exit statuses, fresh evidence,
-and human sign-off rather than turning the sequence into an unattended batch.
+Version 0.5.11 reduces repetition by carrying one declared baseline, working
+collection, and explicit private log directory through these stages. It
+preserves the same stop points, previews, exit statuses, fresh evidence, and
+human sign-off rather than turning the sequence into an unattended batch.
+It compares collection and log-directory ancestry by filesystem identity, so
+case or Unicode aliases cannot make one physical directory serve both
+collection roles or hide a log directory inside either collection. Coordinator
+setup, unsafe-state, and invocation errors return status 2; a `--run-next`
+attempt returns the child command's real status.

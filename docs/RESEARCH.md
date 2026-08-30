@@ -768,14 +768,15 @@ journal/evidence binding remain research.
 
 ## Migration orchestration and queues
 
-The single-collection coordination boundary is promoted to version 0.5.11. It
-owns one declared unchanged baseline and one working collection, the staged
+Version 0.5.11 implements the promoted single-collection coordination boundary.
+It owns one declared unchanged baseline and one working collection, the staged
 sequence in [MIGRATION.md](MIGRATION.md), restartable stage state, explicit
 human checkpoints, and one opt-in private log directory. It does not
 rescue-copy media, create baseline/working trees automatically, quarantine or
 delete media, hide a child command's status, or treat prior evidence as
 current. Each mutating stage retains its own preview and explicit apply
-boundary.
+boundary. Its private restart state records workflow attempts but never replaces
+fresh evidence, action history, or the external migration tracker.
 
 Full copying and multi-collection queues remain research. Naive recursive copy
 and unconstrained collection-level parallelism are unsafe defaults. That later

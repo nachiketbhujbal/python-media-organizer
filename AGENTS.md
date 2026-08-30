@@ -177,6 +177,14 @@ never duplicate the version in source or static project metadata.
   filesystem evidence is unreadable, unstable, unsupported, or unaccounted.
   Completion is eligible for human sign-off only and never proves whole-device
   recovery or authorizes automatic deletion.
+- `migrate` must remain a one-stage-at-a-time coordinator. Without an explicit
+  private log directory it is zero-write. Restart state is bookkeeping rather
+  than evidence or action history; bind it to the exact roots, pymo version,
+  options, and ordered attempt lifecycle. Preserve every preview and explicit
+  apply boundary, return real child statuses, permit only reviewed validation
+  status 1 to be acknowledged, and require a human-managed absent-`dups`
+  checkpoint before fresh final evidence. Never rescue-copy, quarantine,
+  delete, batch past a checkpoint, or write persistent logs by default.
 
 ## Package layout and tools
 
@@ -210,6 +218,11 @@ never duplicate the version in source or static project metadata.
   discovery, cache, reporting, grouping, or mutation policy.
 - `src/pymo/verify_migration.py`: thin coordinator for the public directional
   verification command.
+- `src/pymo/migrate.py`: one-stage-at-a-time coordinator for a declared
+  baseline/working pair; it owns no child media analysis or mutation policy.
+- `src/pymo/migration/workflow.py` and
+  `src/pymo/migration/coordinator_state.py`: ordered guided-runbook arguments
+  and private fail-closed schema-1 restart state respectively.
 - `src/pymo/correct_extensions.py`: complete discovery, fresh evidence,
   collision planning, reversible apply/undo, and verified truthful-extension
   correction.

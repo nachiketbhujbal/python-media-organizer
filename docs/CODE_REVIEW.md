@@ -83,6 +83,19 @@ The same adversarial method was repeated after the first validation release.
 | SIM-R01 | High | Lexical path equality failed to recognize a canonically reachable review directory whose stored spelling differed on a case-insensitive filesystem, allowing its files to satisfy simulated preservation. | 0.5.10 | Resolved after independent review by matching the canonical no-follow directory identity to its discovered root-level path, with a filesystem-aware cross-platform regression |
 | SIM-R02 | Low | The README exit-status contract did not distinguish simulated status 0 from an observed result eligible for final sign-off. | 0.5.10 | Resolved after independent review by documenting status 0 as quarantine-review eligibility in simulated mode and requiring an ordinary observed sign-off result after the move |
 
+## Guided-migration review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| GUIDE-001 | High | An unattended coordinator could continue from a failed or warning-status child into mutation, hiding the actual command outcome behind a batch result. | 0.5.11 | Resolved in ADR 0084 by executing at most one child per invocation, returning its real status, stopping state advancement on failure, and permitting only reviewed validation status 1 through a separate recorded acknowledgement |
+| GUIDE-002 | High | Treating successful restart state as current scan, health, or preservation evidence would let a resumed migration skip reads after either collection changed. | 0.5.11 | Resolved by making state workflow bookkeeping only and retaining fresh child validation and ordinary directional verification at every required boundary |
+| GUIDE-003 | High | Collapsing preview and apply into one coordinator stage would remove the child command's dry-run review boundary. | 0.5.11 | Resolved with distinct preview and apply stages plus a second explicit coordinator `--apply` required only at the pending mutation checkpoint |
+| GUIDE-004 | Medium | Default or collection-local coordinator logs and state would expose private paths without opt-in and could contaminate migration evidence. | 0.5.11 | Resolved with a zero-write no-log-directory mode and one explicit private directory required to be distinct and non-nested with both collections; state and unique attempt logs use private permissions |
+| GUIDE-005 | High | Automating the removal or quarantine of `dups` would add an unreviewed cross-filesystem mutation/deletion boundary and could destroy undo prerequisites. | 0.5.11 | Resolved by stopping after simulation, performing no quarantine operation, and requiring an explicit human confirmation only after the working `dups` path is absent; fresh final observed proof still follows |
+| GUIDE-006 | Medium | Malformed, substituted, concurrent, cross-version, or out-of-order restart state could dispatch the wrong stage or options. | 0.5.11 | Resolved with a no-follow regular-file boundary, dedicated lock, strict exact-key schema and lifecycle validation, root/version/option binding, size limits, and atomic private publication |
+| GUIDE-R01 | High | Lexical root comparisons allowed one directory reached through case or Unicode aliases to serve as both baseline and working collection, or allowed private logs inside a collection, making the nominally unchanged baseline mutable and contaminating evidence. | 0.5.11 | Resolved with device-and-inode ancestry checks for existing roots and not-yet-created log-directory leaves, plus a filesystem-aware regression that preserves genuinely distinct case-sensitive directories; independently closed at `f073132` |
+| GUIDE-R02 | Low | Coordinator setup and unsafe-state failures returned status 1, colliding with real child findings and the established invalid-setup status 2. | 0.5.11 | Resolved by returning status 2 for every `MigrationCoordinatorError`, preserving real child status 1 and documenting the distinction; independently closed at `f073132` |
+
 ## Scan review findings
 
 | ID | Severity | Finding | Resolution target | Status |
@@ -124,6 +137,7 @@ The same adversarial method was repeated after the first validation release.
 | MIG-020 | High | Reopening only previously hashed files cannot detect a new entry or directory namespace change during long media decoding. | 0.5.3 | Resolved by a fresh final discovery plus exact file-state, directory, category, and root-identity comparison |
 | MIG-021 | High | Recognized source media without a supported deterministic equivalence path could otherwise be reported as definitely missing instead of unproven. | 0.5.3 | Resolved with explicit unsupported-media accounting and an unproven final disposition |
 | MIG-022 | Medium | A complete collection-level result could be misread as whole-device recovery or an automatic deletion instruction. | 0.5.3 | Resolved with a named namespace-visible contract, exclusion counts, and human-signoff-only disposition |
+| MIG-R01 | Medium | Standalone `verify-migration` compares resolved roots lexically, so one physical directory reached through case or Unicode aliases can produce a vacuous complete result eligible for human sign-off. The command is report-only, and the v0.5.11 guided coordinator rejects the pair before dispatch. | 0.5.12 | Planned after the v0.5.11 closure observation: use filesystem-identity ancestry with cross-platform alias, case-sensitive-distinct, nesting, fail-closed, privacy, and zero-write regressions |
 
 ## CI portability findings
 
@@ -336,6 +350,12 @@ The same adversarial method was repeated after the first validation release.
   exact mapped-or-protected packaged policy and full image-frame decoding, with
   preview-first atomic journaled renames, stable target verification, and
   dependency-aware undo.
+- `0.5.10`: simulate all preservation layers without destination `dups` while
+  retaining complete physical evidence and requiring ordinary post-move proof.
+- `0.5.11`: guide one declared baseline/working pair through the production
+  runbook one child at a time, with private restart state, separate previews and
+  applies, exact statuses, external-quarantine confirmation, and fresh final
+  proof.
 
 ## Independent review evidence
 

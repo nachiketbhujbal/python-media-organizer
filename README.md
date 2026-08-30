@@ -256,6 +256,51 @@ snapshot. Directory traversal failures are counted and warned about rather than
 silently omitted; run `validate --show-files` when collection-relative finding
 paths are needed.
 
+### Guide one collection migration
+
+Version 0.5.11 coordinates the production runbook for one unchanged baseline
+and one working collection without turning it into an unattended batch. With
+no log directory it writes nothing and prints the complete plan:
+
+```bash
+pymo migrate "/path/to/baseline" "/path/to/working-copy"
+```
+
+Select a dedicated private directory outside both collections to opt into
+restart state and one log per attempted child stage:
+
+```bash
+pymo migrate "/path/to/baseline" "/path/to/working-copy" \
+  --log-dir "/path/to/private-logs" --start --no-cache
+pymo migrate "/path/to/baseline" "/path/to/working-copy" \
+  --log-dir "/path/to/private-logs" --run-next
+```
+
+Each invocation runs at most one stage and returns that child command's actual
+status. A successful preview advances to a separate apply checkpoint, where
+both `--run-next` and `--apply` are required. A status-1 validation result stops
+until it is rerun or explicitly acknowledged with `--accept-status`; other
+failures cannot be waived. At the duplicate-review boundary, pymo stops for the
+operator to retain the complete `dups` tree outside the working collection.
+`--confirm-quarantine` records the human checkpoint only when the working
+`dups` path is absent, then fresh final validation and ordinary migration
+verification remain pending.
+
+Coordinator setup, unsafe-state, and invocation errors return status 2, keeping
+them distinct from a child's status-1 findings. A `--run-next` attempt otherwise
+returns the child command's actual status; status 1 from the external-quarantine
+confirmation means the working `dups` path is still present.
+
+The schema-1 restart file records canonical roots, the installed pymo version,
+fixed common options, attempts, statuses, and private log names. Collection and
+log-directory separation is checked by filesystem identity, so aliases on a
+case-insensitive or normalizing filesystem cannot collapse the baseline and
+working roots or place private logs inside either collection. It is workflow
+bookkeeping, not action history or preservation evidence. It cannot create the
+baseline or working copy, move quarantine, rescue-copy, delete, or authorize
+discarding any data. See the [production runbook](docs/MIGRATION.md) for the
+complete procedure and option examples.
+
 ### Verify a migration by exact bytes and media content
 
 ```bash
@@ -756,7 +801,9 @@ check still runs.
 
 ## Recommended workflow
 
-For a mixed collection, preview and then apply:
+For a production baseline/working pair, use the guided coordinator above. It
+preserves every preview, apply, verification, and quarantine stop in the
+following manual sequence:
 
 ```bash
 pymo scan "/path/to/media-collection"
@@ -943,13 +990,18 @@ changing, unsupported, and mismatched media remain visible findings rather than
 automatic ignore rules. The promoted continuation completed public governance
 in 0.5.8; version 0.5.9 adds reversible
 `correct-extensions` before organization,
-adds zero-write preservation simulation without `dups` in 0.5.10, and adds
-guided single-collection migration in 0.5.11. Rescue copying, irreversible
-duplicate finalization, damaged-media remediation, richer metadata, and
-similarity tooling remain later roadmap or research work. Full video decoding
-remains sequential until representative benchmarks show that bounded process
-concurrency improves real external-drive workloads without increasing
-contention or reducing safety.
+adds zero-write preservation simulation without `dups` in 0.5.10, and version
+0.5.11 coordinates the complete guided single-collection runbook. The guided
+coordinator rejects baseline/working aliases by filesystem identity. A planned
+v0.5.12 correction applies that same boundary to direct standalone
+`verify-migration` invocations, whose v0.5.11 root check is lexical; until then,
+use the guided coordinator for production runs or independently confirm that
+manually supplied verification roots are distinct physical directories. Rescue
+copying, irreversible duplicate finalization, damaged-media remediation, richer
+metadata, and similarity tooling remain later roadmap or research work. Full
+video decoding remains sequential until representative benchmarks show that
+bounded process concurrency improves real external-drive workloads without
+increasing contention or reducing safety.
 
 See the [documentation index](docs/README.md) for the release
 [roadmap](docs/ROADMAP.md), [research notebook](docs/RESEARCH.md),
