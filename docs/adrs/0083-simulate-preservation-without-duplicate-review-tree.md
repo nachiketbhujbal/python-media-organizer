@@ -26,6 +26,11 @@ including `dups`, then partitions regular files beneath that fixed review root
 out of the destination comparison inventory. Those files cannot satisfy exact
 byte, exact displayed-image, or strict decoded-video coverage and do not enter
 the simulated destination multiplicity or destination-only accounting.
+The fixed root is matched to the discovered root-level directory by no-follow
+device and inode identity, so its stored spelling is honored on case-insensitive
+filesystems without treating a distinct case-variant directory as canonical on
+a case-sensitive filesystem. A regular file or symbolic link at that path is
+never treated as the review directory.
 
 The report inventories the excluded review tree separately, including stable
 file and byte totals, unique streams, duplicate copies, directory and excluded

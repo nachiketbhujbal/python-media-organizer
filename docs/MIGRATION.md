@@ -176,7 +176,9 @@ byte, pixel, or playback coverage. It also removes those files from simulated
 multiplicity and destination-only accounting while retaining fail-closed unsafe,
 unreadable, unstable, ignored, and other excluded evidence. Schema-5 JSON and
 human output label every layer and final verdict simulated. A simulated
-complete result is eligible only for human quarantine review.
+complete result is eligible only for human quarantine review. Its status 0
+therefore does not mean observed final sign-off; machine consumers must require
+an ordinary observed result with `eligible-for-human-signoff` after the move.
 
 If acceptable after the release gate, move the complete review tree to retained
 quarantine outside the working root using a separately reviewed procedure. Do

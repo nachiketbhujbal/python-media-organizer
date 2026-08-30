@@ -21,9 +21,14 @@ All notable changes to `python-media-organizer` will be recorded here.
 - Make simulated completion eligible only for human quarantine review. It never
   moves, quarantines, deletes, caches, locks, action-logs, replaces ordinary
   post-move verification, or authorizes final migration sign-off.
+- Resolve the canonical review directory by no-follow filesystem identity so a
+  stored case variant on a case-insensitive destination cannot remain in the
+  simulated evidence, while preserving distinct case-sensitive directories.
+- Qualify status 0 as simulated quarantine-review eligibility in counterfactual
+  mode rather than observed final sign-off.
 - Record the decision in ADR 0083 and add byte, image, real-FFmpeg video,
   privacy, unsafe-entry, physical-stability, regular-file-name, multiplicity,
-  and zero-write regressions.
+  filesystem-identity, and zero-write regressions.
 
 ## 0.5.9 - 2026-08-29
 

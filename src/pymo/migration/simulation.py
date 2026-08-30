@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import stat
 from dataclasses import dataclass, replace
 from pathlib import Path
 
@@ -37,12 +39,43 @@ def _review_issues(
     return tuple(issue for issue in issues if _within(issue.path, root))
 
 
+def _directory_identity(path: Path) -> tuple[int, int] | None:
+    try:
+        value = os.stat(path, follow_symlinks=False)
+    except OSError:
+        return None
+    if not stat.S_ISDIR(value.st_mode):
+        return None
+    return (value.st_dev, value.st_ino)
+
+
+def _resolved_review_root(inventory: TreeInventory) -> Path:
+    """Return the discovered spelling of the canonical review directory."""
+
+    canonical = CollectionLayout(inventory.root).dups
+    identity = _directory_identity(canonical)
+    if identity is None:
+        return canonical
+    recorded_paths = (
+        inventory.directories
+        + inventory.ignored
+        + inventory.symbolic_links
+        + inventory.non_regular
+        + tuple(issue.path for issue in inventory.unreadable)
+        + tuple(issue.path for issue in inventory.changed)
+    )
+    for path in recorded_paths:
+        if path.parent == inventory.root and _directory_identity(path) == identity:
+            return path
+    return canonical
+
+
 def without_duplicate_review_tree(
     inventory: TreeInventory,
 ) -> tuple[TreeInventory, ReviewTreeInventory]:
     """Return comparison evidence excluding ``dups`` plus its physical inventory."""
 
-    review_root = CollectionLayout(inventory.root).dups
+    review_root = _resolved_review_root(inventory)
     review_directory_present = review_root in inventory.directories
     review_files = tuple(
         entry

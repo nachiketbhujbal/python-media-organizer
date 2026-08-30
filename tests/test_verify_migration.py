@@ -241,6 +241,7 @@ def test_simulation_uses_representative_outside_review_tree_and_recounts_copies(
 
     assert result.returncode == 0, result.stdout + result.stderr
     report = json.loads(result.stdout)
+    assert report["result_kind"] == "simulated"
     assert report["destination"]["duplicate_copies"] == 1
     assert report["multiplicity"]["destination_duplicate_copies"] == 0
     assert report["coverage"]["verdict"] == "complete"
@@ -267,6 +268,34 @@ def test_simulation_does_not_treat_regular_file_named_dups_as_review_tree(
     assert report["coverage"]["verdict"] == "complete"
     assert report["simulation"]["destination_review_tree"]["present"] is False
     assert report["simulation"]["destination_review_tree"]["hashed_files"] == 0
+
+
+def test_simulation_resolves_review_tree_by_filesystem_identity(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    stored_review = destination / "DUPS"
+    source.mkdir()
+    (stored_review / "pics").mkdir(parents=True)
+    (source / "source.bin").write_bytes(b"same")
+    (stored_review / "pics" / "review.bin").write_bytes(b"same")
+
+    result = run_verify(source, destination, "--simulate-without-dups", "--json")
+
+    assert result.returncode in {0, 1}, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    review = report["simulation"]["destination_review_tree"]
+    if (destination / "dups").exists():
+        assert result.returncode == 1
+        assert report["coverage"]["verdict"] == "incomplete"
+        assert report["preservation"]["verdict"] == "incomplete"
+        assert review["present"] is True
+        assert review["hashed_files"] == 1
+    else:
+        assert result.returncode == 0
+        assert report["coverage"]["verdict"] == "complete"
+        assert report["preservation"]["verdict"] == "complete"
+        assert review["present"] is False
+        assert review["hashed_files"] == 0
 
 
 def test_simulation_revalidates_complete_physical_destination(

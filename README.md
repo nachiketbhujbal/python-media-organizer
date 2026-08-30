@@ -352,7 +352,9 @@ Normal text and JSON omit both roots and all filenames. `--show-files` exposes
 only relative missing, destination-only, and problem paths;
 `--show-ignored` separately exposes relative policy exclusions. Exit status 0
 means complete layered preservation, 1 means incomplete or unproven, and 2
-means invalid setup.
+means invalid setup. Under `--simulate-without-dups`, status 0 means simulated
+completion eligible only for human quarantine review; only an observed result
+with `eligible-for-human-signoff` can enter final migration sign-off.
 
 ### Inspect the derived cache
 

@@ -1030,6 +1030,16 @@ block completion, the full physical destination is revalidated, and every
 schema-5 layer and final verdict is marked simulated. Ordinary verification
 continues to include `dups` and is required after retained external quarantine.
 
+The focused independent review at candidate `98183af` reproduced all 417 tests
+and accepted the overall contract, then found that lexical path equality could
+miss a differently cased stored review-directory name on a case-insensitive
+filesystem. The release resolves the canonical directory to its discovered
+spelling by no-follow device and inode identity, retains the case-sensitive,
+regular-file, and symbolic-link boundaries, and adds a filesystem-aware
+cross-platform regression. The same review's exit-status documentation gap is
+resolved by distinguishing simulated status 0 quarantine-review eligibility
+from an ordinary observed result eligible for final sign-off.
+
 ## Media validation
 
 `src/pymo/validate.py` implements media-non-mutating
