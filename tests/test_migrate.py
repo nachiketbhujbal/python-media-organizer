@@ -103,6 +103,7 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
         "workers": 2,
     }
     assert stat_mode(state_file(log_dir)) == 0o600
+    assert stat_mode(log_dir / "pymo-migration-state.lock") == 0o600
     assert list(baseline.iterdir()) == []
     assert list(working.iterdir()) == []
 
@@ -291,6 +292,13 @@ def test_external_quarantine_confirmation_requires_absent_dups_path(
         (lambda value: value.update(tool_version="0.0.0"), "different pymo version"),
         (lambda value: value.update(next_stage=1), "does not match its history"),
         (lambda value: value["options"].pop("no_cache"), "options are malformed"),
+        (
+            lambda value: value["options"].update(verbose=True, quiet=True),
+            "output options conflict",
+        ),
+        (lambda value: value["options"].update(workers=33), "workers are out of range"),
+        (lambda value: value.update(created_at="not-a-time"), "invalid creation time"),
+        (lambda value: value.update(baseline="relative"), "non-absolute baseline"),
     ],
 )
 def test_restart_state_fails_closed(tmp_path: Path, mutation, message: str) -> None:
@@ -308,6 +316,24 @@ def test_restart_state_fails_closed(tmp_path: Path, mutation, message: str) -> N
     assert message in result.stderr
     assert list(baseline.iterdir()) == []
     assert list(working.iterdir()) == []
+
+
+def test_restart_state_and_lock_require_private_regular_files(tmp_path: Path) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    common = ["migrate", baseline, working, "--log-dir", log_dir]
+    assert run_pymo(*common, "--start").returncode == 0
+
+    state_file(log_dir).chmod(0o644)
+    state_result = run_pymo(*common)
+    assert state_result.returncode == 1
+    assert "restart state is not private" in state_result.stderr
+
+    state_file(log_dir).chmod(0o600)
+    (log_dir / "pymo-migration-state.lock").chmod(0o644)
+    lock_result = run_pymo(*common)
+    assert lock_result.returncode == 1
+    assert "state lock is not private" in lock_result.stderr
 
 
 def test_complete_empty_collection_sequence_is_restartable_and_stage_logged(

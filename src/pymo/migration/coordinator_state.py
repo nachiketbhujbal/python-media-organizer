@@ -110,10 +110,13 @@ def _state_lock(log_dir: Path) -> Iterator[None]:
     except OSError as error:
         raise MigrationCoordinatorError("migration state lock is unsafe") from error
     try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+        lock_state = os.fstat(descriptor)
+        if not stat.S_ISREG(lock_state.st_mode):
             raise MigrationCoordinatorError(
                 "migration state lock is not a regular file"
             )
+        if lock_state.st_nlink != 1 or lock_state.st_mode & 0o077:
+            raise MigrationCoordinatorError("migration state lock is not private")
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as error:
@@ -139,6 +142,8 @@ def _read_regular_file(path: Path) -> bytes:
             raise MigrationCoordinatorError(
                 "migration restart state is not a regular file"
             )
+        if metadata.st_nlink != 1 or metadata.st_mode & 0o077:
+            raise MigrationCoordinatorError("migration restart state is not private")
         chunks: list[bytes] = []
         total = 0
         while True:
@@ -212,6 +217,31 @@ def _require_optional_str(value: object, field: str) -> str | None:
     return value
 
 
+def _require_absolute_optional_path(value: object, field: str) -> str | None:
+    result = _require_optional_str(value, field)
+    if result is not None and not Path(result).is_absolute():
+        raise MigrationCoordinatorError(
+            f"migration restart state has non-absolute {field}"
+        )
+    return result
+
+
+def _require_timestamp(value: object, field: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise MigrationCoordinatorError(f"migration restart state has invalid {field}")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise MigrationCoordinatorError(
+            f"migration restart state has invalid {field}"
+        ) from error
+    if parsed.tzinfo is None:
+        raise MigrationCoordinatorError(
+            f"migration restart state has timezone-free {field}"
+        )
+    return value
+
+
 def _options_from_json(value: object) -> CoordinatorOptions:
     expected = {
         "verbose",
@@ -228,19 +258,24 @@ def _options_from_json(value: object) -> CoordinatorOptions:
     }
     if not isinstance(value, dict) or set(value) != expected:
         raise MigrationCoordinatorError("migration restart options are malformed")
-    return CoordinatorOptions(
+    options = CoordinatorOptions(
         verbose=_require_bool(value["verbose"], "verbose"),
         quiet=_require_bool(value["quiet"], "quiet"),
         timestamps=_require_bool(value["timestamps"], "timestamps"),
-        config=_require_optional_str(value["config"], "config"),
+        config=_require_absolute_optional_path(value["config"], "config"),
         show_ignored=_require_bool(value["show_ignored"], "show_ignored"),
         show_files=_require_bool(value["show_files"], "show_files"),
-        ffmpeg=_require_optional_str(value["ffmpeg"], "ffmpeg"),
-        ffprobe=_require_optional_str(value["ffprobe"], "ffprobe"),
+        ffmpeg=_require_absolute_optional_path(value["ffmpeg"], "ffmpeg"),
+        ffprobe=_require_absolute_optional_path(value["ffprobe"], "ffprobe"),
         decode_timeout=_require_optional_int(value["decode_timeout"], "decode_timeout"),
         workers=_require_optional_int(value["workers"], "workers"),
         no_cache=_require_bool(value["no_cache"], "no_cache"),
     )
+    if options.verbose and options.quiet:
+        raise MigrationCoordinatorError("migration restart output options conflict")
+    if options.workers is not None and options.workers > 32:
+        raise MigrationCoordinatorError("migration restart workers are out of range")
+    return options
 
 
 def _attempt_from_json(value: object) -> Attempt:
@@ -257,11 +292,12 @@ def _attempt_from_json(value: object) -> Attempt:
         raise MigrationCoordinatorError("migration restart attempt has invalid action")
     if type(exit_status) is not int or not 0 <= exit_status <= 255:
         raise MigrationCoordinatorError("migration restart attempt has invalid status")
-    if not isinstance(completed_at, str) or not completed_at:
-        raise MigrationCoordinatorError(
-            "migration restart attempt has invalid timestamp"
-        )
+    completed_at = _require_timestamp(completed_at, "attempt timestamp")
     log_file = _require_optional_str(value["log_file"], "attempt log file")
+    if log_file is not None and (
+        Path(log_file).name != log_file or not log_file.endswith(".log")
+    ):
+        raise MigrationCoordinatorError("migration restart attempt has unsafe log file")
     apply = _require_bool(value["apply"], "attempt apply flag")
     return Attempt(stage, action, exit_status, completed_at, log_file, apply)
 
@@ -282,7 +318,11 @@ def _validate_attempt_order(attempts: tuple[Attempt, ...], next_stage: int) -> N
             )
         stage = stages[expected]
         if attempt.action == "run":
-            if stage.mode == "checkpoint" or attempt.apply != (stage.mode == "apply"):
+            if (
+                stage.mode == "checkpoint"
+                or attempt.log_file is None
+                or attempt.apply != (stage.mode == "apply")
+            ):
                 raise MigrationCoordinatorError(
                     "migration restart attempt is inconsistent"
                 )
@@ -296,13 +336,20 @@ def _validate_attempt_order(attempts: tuple[Attempt, ...], next_stage: int) -> N
                 or previous.stage != stage.identifier
                 or previous.action != "run"
                 or previous.exit_status != 1
+                or attempt.log_file is not None
+                or attempt.apply
             ):
                 raise MigrationCoordinatorError(
                     "migration status acknowledgement is invalid"
                 )
             expected += 1
         else:
-            if stage.mode != "checkpoint" or attempt.exit_status != 0:
+            if (
+                stage.mode != "checkpoint"
+                or attempt.exit_status != 0
+                or attempt.log_file is not None
+                or attempt.apply
+            ):
                 raise MigrationCoordinatorError(
                     "migration quarantine confirmation is invalid"
                 )
@@ -337,8 +384,8 @@ def _load_state(path: Path) -> MigrationState:
     if value["schema_version"] != MIGRATION_STATE_SCHEMA_VERSION:
         raise MigrationCoordinatorError("migration restart state schema is unsupported")
     tool_version = _require_optional_str(value["tool_version"], "tool version")
-    baseline = _require_optional_str(value["baseline"], "baseline")
-    working = _require_optional_str(value["working"], "working collection")
+    baseline = _require_absolute_optional_path(value["baseline"], "baseline")
+    working = _require_absolute_optional_path(value["working"], "working collection")
     next_stage = value["next_stage"]
     attempts_value = value["attempts"]
     created_at = value["created_at"]
@@ -349,10 +396,8 @@ def _load_state(path: Path) -> MigrationState:
         raise MigrationCoordinatorError("migration restart stage is invalid")
     if not isinstance(attempts_value, list):
         raise MigrationCoordinatorError("migration restart attempts are malformed")
-    if not isinstance(created_at, str) or not created_at:
-        raise MigrationCoordinatorError("migration restart creation time is invalid")
-    if not isinstance(updated_at, str) or not updated_at:
-        raise MigrationCoordinatorError("migration restart update time is invalid")
+    created_at = _require_timestamp(created_at, "creation time")
+    updated_at = _require_timestamp(updated_at, "update time")
     attempts = tuple(_attempt_from_json(item) for item in attempts_value)
     _validate_attempt_order(attempts, next_stage)
     return MigrationState(
