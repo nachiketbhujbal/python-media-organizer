@@ -53,6 +53,7 @@ def test_cli_help_and_argument_errors_remain_unprefixed(tmp_path: Path) -> None:
     assert "--no-timestamps" in help_result.stdout
     assert "verify-migration" in help_result.stdout
     assert "correct-extensions" in help_result.stdout
+    assert "migrate" in help_result.stdout
     assert help_result.stdout.startswith("usage: pymo")
     assert conflict_result.returncode == 2
     assert conflict_result.stderr.startswith("usage: pymo")
@@ -93,6 +94,20 @@ def test_cli_does_not_create_persistent_logs_by_default(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Dry run" in result.stdout
     assert not list(tmp_path.rglob("*.log"))
+
+
+def test_migrate_rejects_the_single_global_log_file(tmp_path: Path) -> None:
+    baseline = tmp_path / "baseline"
+    working = tmp_path / "working"
+    baseline.mkdir()
+    working.mkdir()
+    log_file = tmp_path / "unexpected.log"
+
+    result = run_pymo("--log-file", log_file, "migrate", baseline, working)
+
+    assert result.returncode == 2
+    assert "migrate uses --log-dir" in result.stderr
+    assert not log_file.exists()
 
 
 def test_cli_explicit_log_file_and_verbose_mode(tmp_path: Path) -> None:

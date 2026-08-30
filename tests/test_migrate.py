@@ -1,0 +1,316 @@
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from pymo import __version__, migrate
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_ROOT = PROJECT_ROOT / "src"
+
+
+def run_pymo(*arguments: object) -> subprocess.CompletedProcess[str]:
+    environment = os.environ.copy()
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    environment["PYTHONPATH"] = str(SOURCE_ROOT)
+    return subprocess.run(
+        [sys.executable, "-m", "pymo", *(str(item) for item in arguments)],
+        cwd=PROJECT_ROOT,
+        env=environment,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+
+
+def collections(tmp_path: Path) -> tuple[Path, Path]:
+    baseline = tmp_path / "baseline"
+    working = tmp_path / "working"
+    baseline.mkdir()
+    working.mkdir()
+    return baseline, working
+
+
+def state_file(log_dir: Path) -> Path:
+    return log_dir / "pymo-migration-state.json"
+
+
+def test_zero_write_plan_requires_explicit_private_state(tmp_path: Path) -> None:
+    baseline, working = collections(tmp_path)
+
+    result = run_pymo("--no-timestamps", "migrate", baseline, working)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Guided single-collection migration plan" in result.stdout
+    assert "Zero-write plan only" in result.stdout
+    assert "extension-apply" in result.stdout
+    assert "external-quarantine" in result.stdout
+    assert list(baseline.iterdir()) == []
+    assert list(working.iterdir()) == []
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["baseline", "working"]
+
+
+def test_start_records_private_options_and_refuses_mismatched_reuse(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    config = tmp_path / "settings.toml"
+    config.write_text("version = 1\n", encoding="utf-8")
+
+    started = run_pymo(
+        "--verbose",
+        "--config",
+        config,
+        "--show-ignored",
+        "migrate",
+        baseline,
+        working,
+        "--log-dir",
+        log_dir,
+        "--start",
+        "--no-cache",
+        "--workers",
+        "2",
+        "--decode-timeout",
+        "15",
+    )
+
+    assert started.returncode == 0, started.stdout + started.stderr
+    payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 1
+    assert payload["tool_version"] == __version__
+    assert payload["baseline"] == str(baseline.resolve())
+    assert payload["working"] == str(working.resolve())
+    assert payload["options"] == {
+        "config": str(config.resolve()),
+        "decode_timeout": 15,
+        "ffmpeg": None,
+        "ffprobe": None,
+        "no_cache": True,
+        "quiet": False,
+        "show_ignored": True,
+        "timestamps": True,
+        "verbose": True,
+        "workers": 2,
+    }
+    assert stat_mode(state_file(log_dir)) == 0o600
+    assert list(baseline.iterdir()) == []
+    assert list(working.iterdir()) == []
+
+    status = run_pymo(
+        "migrate", baseline, working, "--log-dir", log_dir, "--workers", "3"
+    )
+    assert status.returncode == 1
+    assert "workers differs from the recorded" in status.stderr
+    assert (
+        json.loads(state_file(log_dir).read_text(encoding="utf-8"))["next_stage"] == 0
+    )
+
+
+def stat_mode(path: Path) -> int:
+    return path.stat().st_mode & 0o777
+
+
+def _state_at(log_dir: Path, baseline: Path, working: Path, next_stage: int) -> None:
+    now = "2026-08-29T12:00:00-04:00"
+    attempts = tuple(
+        migrate.Attempt(
+            stage.identifier, "run", 0, now, f"{index}.log", stage.mode == "apply"
+        )
+        for index, stage in enumerate(migrate._stages()[:next_stage], start=1)
+        if stage.mode != "checkpoint"
+    )
+    state = migrate.MigrationState(
+        __version__,
+        baseline.resolve(),
+        working.resolve(),
+        migrate.CoordinatorOptions(
+            False, False, True, None, False, None, None, None, None, False
+        ),
+        next_stage,
+        attempts,
+        now,
+        now,
+    )
+    migrate._write_state(state_file(log_dir), state)
+
+
+def test_apply_checkpoint_requires_second_explicit_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    observed: list[list[str]] = []
+
+    def completed(
+        command: list[str], *, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(migrate.subprocess, "run", completed)
+
+    assert (
+        migrate.main(
+            [str(baseline), str(working), "--log-dir", str(log_dir), "--run-next"]
+        )
+        == 2
+    )
+    assert observed == []
+    assert migrate._load_state(state_file(log_dir)).next_stage == 6
+
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--run-next",
+                "--apply",
+            ]
+        )
+        == 0
+    )
+    assert observed and observed[0][-1] == "--apply"
+    assert "correct-extensions" in observed[0]
+    assert migrate._load_state(state_file(log_dir)).next_stage == 7
+
+
+def test_real_child_status_stops_and_only_validation_one_can_be_acknowledged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 2)
+
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: subprocess.CompletedProcess(command, 1),
+    )
+    arguments = [str(baseline), str(working), "--log-dir", str(log_dir)]
+
+    assert migrate.main([*arguments, "--run-next"]) == 1
+    stopped = migrate._load_state(state_file(log_dir))
+    assert stopped.next_stage == 2
+    assert stopped.attempts[-1].exit_status == 1
+    assert migrate.main([*arguments, "--accept-status"]) == 0
+    accepted = migrate._load_state(state_file(log_dir))
+    assert accepted.next_stage == 3
+    assert accepted.attempts[-1].action == "acknowledge-status"
+    assert accepted.attempts[-1].exit_status == 1
+
+    _state_at(log_dir, baseline, working, 4)
+    assert migrate.main([*arguments, "--run-next"]) == 1
+    assert migrate.main([*arguments, "--accept-status"]) == 2
+    assert migrate._load_state(state_file(log_dir)).next_stage == 4
+
+
+def test_external_quarantine_confirmation_requires_absent_dups_path(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 21)
+    dups = working / "dups"
+    dups.mkdir()
+    arguments = [
+        str(baseline),
+        str(working),
+        "--log-dir",
+        str(log_dir),
+        "--confirm-quarantine",
+    ]
+
+    assert migrate.main(arguments) == 1
+    assert migrate._load_state(state_file(log_dir)).next_stage == 21
+    dups.rmdir()
+    assert migrate.main(arguments) == 0
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == 22
+    assert state.attempts[-1].action == "confirm-quarantine"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        (lambda value: value.update(schema_version=99), "schema is unsupported"),
+        (lambda value: value.update(tool_version="0.0.0"), "different pymo version"),
+        (lambda value: value.update(next_stage=1), "does not match its history"),
+        (lambda value: value["options"].pop("no_cache"), "options are malformed"),
+    ],
+)
+def test_restart_state_fails_closed(tmp_path: Path, mutation, message: str) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    started = run_pymo("migrate", baseline, working, "--log-dir", log_dir, "--start")
+    assert started.returncode == 0
+    payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
+    mutation(payload)
+    state_file(log_dir).write_text(json.dumps(payload), encoding="utf-8")
+
+    result = run_pymo("migrate", baseline, working, "--log-dir", log_dir)
+
+    assert result.returncode == 1
+    assert message in result.stderr
+    assert list(baseline.iterdir()) == []
+    assert list(working.iterdir()) == []
+
+
+def test_complete_empty_collection_sequence_is_restartable_and_stage_logged(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    common = ["migrate", baseline, working, "--log-dir", log_dir]
+    started = run_pymo(*common, "--start", "--no-cache", "--no-timestamps")
+    assert started.returncode == 0, started.stdout + started.stderr
+
+    apply_stages = {
+        "extension-apply",
+        "organize-apply",
+        "rename-apply",
+        "image-duplicates-apply",
+        "video-duplicates-apply",
+    }
+    while True:
+        payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
+        next_stage = payload["next_stage"]
+        if next_stage == len(migrate._stages()):
+            break
+        stage = migrate._stages()[next_stage]
+        if stage.identifier == "external-quarantine":
+            result = run_pymo(*common, "--confirm-quarantine")
+        else:
+            arguments: list[object] = [*common, "--run-next"]
+            if stage.identifier in apply_stages:
+                arguments.append("--apply")
+            result = run_pymo(*arguments)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    status = run_pymo(*common)
+    assert status.returncode == 0, status.stdout + status.stderr
+    assert "Migration sequence complete" in status.stdout
+    final_state = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
+    assert final_state["next_stage"] == len(migrate._stages())
+    assert len(final_state["attempts"]) == len(migrate._stages())
+    logs = sorted(log_dir.glob("*.log"))
+    assert len(logs) == len(migrate._stages()) - 1
+    assert all(stat_mode(path) == 0o600 for path in logs)
+    assert list(baseline.iterdir()) == []
+    assert (working / "pics").is_dir()
+    assert (working / "vids").is_dir()
+    assert not (working / "dups").exists()

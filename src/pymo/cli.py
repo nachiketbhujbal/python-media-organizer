@@ -11,6 +11,7 @@ from pathlib import Path
 from pymo import (
     __version__,
     correct_extensions,
+    migrate,
     organize,
     rename,
     scan,
@@ -32,6 +33,7 @@ def _commands() -> dict[str, Callable[[Sequence[str] | None], int]]:
         "validate": validate.main,
         "verify-migration": verify_migration.main,
         "correct-extensions": correct_extensions.main,
+        "migrate": migrate.main,
         "organize": organize.main,
         "rename": rename.main,
         "find-image-duplicates": images.main,
@@ -72,7 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="omit timestamps from human-readable console output",
     )
-    parser.set_defaults(timestamps=True)
+    parser.set_defaults(timestamps=None)
     parser.add_argument(
         "--config",
         type=Path,
@@ -87,6 +89,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "migrate" and args.log_file is not None:
+        parser.error("migrate uses --log-dir for explicit per-stage private logs")
     started_at = time.monotonic()
     structured_json = (
         args.command in {"scan", "validate", "cache", "verify-migration"}
@@ -96,7 +100,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         verbose=args.verbose and not structured_json,
         quiet=args.quiet and not structured_json,
         log_file=args.log_file,
-        timestamps=args.timestamps and not structured_json,
+        timestamps=args.timestamps is not False and not structured_json,
     )
     if not structured_json:
         logging.getLogger("pymo").debug("Dispatching pymo command: %s", args.command)
@@ -116,6 +120,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         forwarded_options.append("--show-ignored")
     if args.config is not None:
         forwarded_options.extend(("--config", str(args.config)))
+    if args.command == "migrate":
+        if args.verbose:
+            forwarded_options.append("--verbose")
+        elif args.quiet:
+            forwarded_options.append("--quiet")
+        if args.timestamps is not None:
+            forwarded_options.append(
+                "--timestamps" if args.timestamps else "--no-timestamps"
+            )
     insertion = (
         1 if args.command == "cache" and cache_action in {"warm", "refresh"} else 0
     )
