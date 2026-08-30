@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from pymo import __version__, migrate
 from pymo.migration.workflow import child_command
@@ -380,3 +382,47 @@ def test_complete_empty_collection_sequence_is_restartable_and_stage_logged(
     assert (working / "pics").is_dir()
     assert (working / "vids").is_dir()
     assert not (working / "dups").exists()
+
+
+def test_complete_media_sequence_preserves_bytes_through_external_quarantine(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    source = baseline / "first.jpg"
+    Image.new("RGB", (4, 3), (20, 40, 60)).save(source, format="PNG")
+    shutil.copyfile(source, baseline / "second.jpg")
+    shutil.copytree(baseline, working, dirs_exist_ok=True)
+    original_bytes = source.read_bytes()
+    log_dir = tmp_path / "private-logs"
+    quarantine = tmp_path / "retained-quarantine"
+    common = ["migrate", baseline, working, "--log-dir", log_dir]
+    started = run_pymo(*common, "--start", "--no-cache", "--no-timestamps")
+    assert started.returncode == 0, started.stdout + started.stderr
+
+    while True:
+        payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
+        next_stage = payload["next_stage"]
+        if next_stage == len(migrate._stages()):
+            break
+        stage = migrate._stages()[next_stage]
+        if stage.identifier == "external-quarantine":
+            review = working / "dups"
+            assert len(list((review / "pics").iterdir())) == 1
+            review.rename(quarantine)
+            result = run_pymo(*common, "--confirm-quarantine")
+        else:
+            arguments: list[object] = [*common, "--run-next"]
+            if stage.mode == "apply":
+                arguments.append("--apply")
+            result = run_pymo(*arguments)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    assert source.read_bytes() == original_bytes
+    assert (baseline / "second.jpg").read_bytes() == original_bytes
+    retained = list((working / "pics").iterdir())
+    reviewed = list((quarantine / "pics").iterdir())
+    assert len(retained) == len(reviewed) == 1
+    assert retained[0].suffix == ".png"
+    assert retained[0].read_bytes() == reviewed[0].read_bytes() == original_bytes
+    assert not (working / "dups").exists()
+    assert any(working.glob("*-actions-log.jsonl"))
