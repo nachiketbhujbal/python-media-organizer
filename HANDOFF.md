@@ -361,7 +361,14 @@ ordinary verification. The coordinator does not rescue-copy, automatically
 quarantine, delete, or treat state as evidence. `docs/MIGRATION.md` remains the
 operational authority; full copying and multi-collection queues remain later
 research. ADR 0084 records the decision. Independent review, hosted checks,
-merge, tag, and installed-release proof remain outstanding.
+merge, tag, and installed-release proof remain outstanding. The exact local
+candidate at `444b0d3` passes Ruff, Black, mypy, pre-commit, all 436 synthetic
+and real-FFmpeg tests with 88 percent subprocess-aware coverage, source and
+wheel builds, and isolated installed CLI proof at
+`pymo 0.5.11.dev5+g444b0d3a8.d20260830`. The installed-CLI acceptance path
+performs real image extension correction, organization, deterministic renaming,
+exact duplicate isolation, external quarantine, and final ordinary proof while
+confirming the unchanged baseline and retained bytes.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
