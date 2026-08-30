@@ -369,11 +369,11 @@ collection roles or place private logs inside collection evidence. Coordinator
 setup and unsafe-state failures return status 2, distinct from real child
 status-1 findings. Independent review at candidate `51749dd` reported
 GUIDE-R01 and GUIDE-R02; both are resolved on the owner branch and await focused
-closure. The exact local
-candidate at `444b0d3` passes Ruff, Black, mypy, pre-commit, all 436 synthetic
+closure. The exact post-review owner candidate at `5725a1b` passes Ruff, Black,
+mypy, pre-commit, all 438 synthetic
 and real-FFmpeg tests with 88 percent subprocess-aware coverage, source and
 wheel builds, and isolated installed CLI proof at
-`pymo 0.5.11.dev5+g444b0d3a8.d20260830`. The installed-CLI acceptance path
+`pymo 0.5.11.dev7+g5725a1b9b`. The installed-CLI acceptance path
 performs real image extension correction, organization, deterministic renaming,
 exact duplicate isolation, external quarantine, and final ordinary proof while
 confirming the unchanged baseline and retained bytes.
@@ -1311,10 +1311,11 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   unsafe review entries, full physical final stability, path/ignore privacy,
   a regular file named `dups`, and zero-write behavior;
 - guided migration zero-write planning, fixed common-option persistence,
-  schema/version/root binding, private state and log permissions, one-child
-  execution, separate apply authorization, exact exit-status stopping,
-  reviewed validation acknowledgement, absent-`dups` confirmation, malformed
-  and out-of-order state refusal, and a complete installed-CLI traversal of
+  schema/version/root binding, filesystem-identity root and log separation,
+  private state and log permissions, one-child execution, separate apply
+  authorization, setup-versus-finding exit statuses, exact child-status
+  stopping, reviewed validation acknowledgement, absent-`dups` confirmation,
+  malformed and out-of-order state refusal, and a complete installed-CLI traversal of
   every stage over temporary empty collections;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
