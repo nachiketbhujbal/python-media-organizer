@@ -991,12 +991,17 @@ automatic ignore rules. The promoted continuation completed public governance
 in 0.5.8; version 0.5.9 adds reversible
 `correct-extensions` before organization,
 adds zero-write preservation simulation without `dups` in 0.5.10, and version
-0.5.11 coordinates the complete guided single-collection runbook. Rescue copying, irreversible
-duplicate finalization, damaged-media remediation, richer metadata, and
-similarity tooling remain later roadmap or research work. Full video decoding
-remains sequential until representative benchmarks show that bounded process
-concurrency improves real external-drive workloads without increasing
-contention or reducing safety.
+0.5.11 coordinates the complete guided single-collection runbook. The guided
+coordinator rejects baseline/working aliases by filesystem identity. A planned
+v0.5.12 correction applies that same boundary to direct standalone
+`verify-migration` invocations, whose v0.5.11 root check is lexical; until then,
+use the guided coordinator for production runs or independently confirm that
+manually supplied verification roots are distinct physical directories. Rescue
+copying, irreversible duplicate finalization, damaged-media remediation, richer
+metadata, and similarity tooling remain later roadmap or research work. Full
+video decoding remains sequential until representative benchmarks show that
+bounded process concurrency improves real external-drive workloads without
+increasing contention or reducing safety.
 
 See the [documentation index](docs/README.md) for the release
 [roadmap](docs/ROADMAP.md), [research notebook](docs/RESEARCH.md),

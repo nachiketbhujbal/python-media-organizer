@@ -31,9 +31,9 @@ The package is named `python-media-organizer`, imports as `pymo`, exposes the
 `pymo` command, and includes layered preservation through version 0.5.3,
 validation truthfulness and cache compatibility through version 0.5.7, public
 governance through version 0.5.8, reversible truthful-extension correction
-through version 0.5.9, and zero-write preservation simulation without
-destination `dups` through released version 0.5.10. The unreleased version
-0.5.11 candidate adds guided single-collection migration.
+through version 0.5.9, zero-write preservation simulation without destination
+`dups` through version 0.5.10, and guided single-collection migration through
+version 0.5.11.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -360,16 +360,18 @@ requires the working `dups` path to be absent before final fresh validation and
 ordinary verification. The coordinator does not rescue-copy, automatically
 quarantine, delete, or treat state as evidence. `docs/MIGRATION.md` remains the
 operational authority; full copying and multi-collection queues remain later
-research. ADR 0084 records the decision. Initial hosted checks passed at
-`51749dd`; focused review closure, updated hosted checks, merge, tag, and
+research. ADR 0084 records the decision. Hosted run `33289647836` passed at
+exact candidate `f073132`; focused review closure comment `5466462460`
+independently reproduced all 438 tests at 88 percent coverage, closed GUIDE-R01
+and GUIDE-R02, and required no further owner change. Merge, tag, and
 installed-release proof remain outstanding. Root and
 log-directory separation now uses filesystem device-and-inode ancestry, so
 case or Unicode aliases cannot make one physical directory serve both
 collection roles or place private logs inside collection evidence. Coordinator
 setup and unsafe-state failures return status 2, distinct from real child
 status-1 findings. Independent review at candidate `51749dd` reported
-GUIDE-R01 and GUIDE-R02; both are resolved on the owner branch and await focused
-closure. The exact post-review owner candidate at `5725a1b` passes Ruff, Black,
+GUIDE-R01 and GUIDE-R02; both are resolved and independently closed. The exact
+post-review owner candidate at `5725a1b` passes Ruff, Black,
 mypy, pre-commit, all 438 synthetic
 and real-FFmpeg tests with 88 percent subprocess-aware coverage, source and
 wheel builds, and isolated installed CLI proof at
@@ -377,6 +379,13 @@ wheel builds, and isolated installed CLI proof at
 performs real image extension correction, organization, deterministic renaming,
 exact duplicate isolation, external quarantine, and final ordinary proof while
 confirming the unchanged baseline and retained bytes.
+
+The closure review also recorded a pre-existing, report-only standalone
+`verify-migration` root-alias gap. A source and destination that are one
+physical directory under case or Unicode aliases can receive a vacuous complete
+result. The guided v0.5.11 coordinator rejects that pair before dispatch and is
+not affected. MIG-R01 and the promoted v0.5.12 roadmap row retain the separate
+filesystem-identity correction; do not describe it as shipped in v0.5.11.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime

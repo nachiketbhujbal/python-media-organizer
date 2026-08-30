@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.5.11 - Unreleased
+## 0.5.11 - 2026-08-29
 
 - Add `pymo migrate BASELINE WORKING` as a one-stage-at-a-time coordinator over
   the production runbook. With no explicit log directory it remains zero-write
