@@ -2,6 +2,21 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.5.12 - 2026-09-06
+
+- Make standalone `pymo verify-migration SOURCE DESTINATION` compare existing
+  roots by no-follow filesystem device-and-inode ancestry rather than resolved
+  path spelling, rejecting case, Unicode, and other aliases of one physical
+  directory as well as existing nested roots.
+- Share the filesystem-identity boundary with the guided migration coordinator,
+  while retaining its support for checking a not-yet-created private log path.
+- Treat uncertain root identity as invalid setup status 2 before configuration,
+  discovery, hashing, decoding, or reporting begins. Preserve path-private
+  diagnostics and the verifier's zero-write contract.
+- Retain valid comparisons between genuinely distinct roots on case-sensitive
+  filesystems, and record the correction in ADR 0085 with focused cross-platform
+  regressions.
+
 ## 0.5.11 - 2026-08-29
 
 - Add `pymo migrate BASELINE WORKING` as a one-stage-at-a-time coordinator over

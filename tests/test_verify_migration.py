@@ -16,7 +16,9 @@ from pymo.collection import CollectionLayout
 from pymo.config import load_config
 from pymo.migration import images as migration_images
 from pymo.migration import inventory
+from pymo.migration import roots as migration_roots
 from pymo.migration.coverage import compare_byte_inventories
+from pymo.migration.roots import DirectoryIdentityError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
@@ -523,6 +525,76 @@ def test_verify_migration_rejects_same_or_nested_roots_without_state(
     assert "distinct, non-nested" in same.stderr
     assert "distinct, non-nested" in overlapping.stderr
     assert files_under(source) == {}
+
+
+def test_verify_migration_roots_use_filesystem_identity(tmp_path: Path) -> None:
+    stored = tmp_path / "collection"
+    alias = tmp_path / "COLLECTION"
+    stored.mkdir()
+
+    if alias.exists():
+        before = files_under(stored)
+
+        result = run_verify(stored, alias)
+
+        assert result.returncode == 2
+        assert "distinct, non-nested" in result.stderr
+        assert files_under(stored) == before
+    else:
+        alias.mkdir()
+        (stored / "source.bin").write_bytes(b"same")
+        (alias / "destination.bin").write_bytes(b"same")
+
+        result = run_verify(stored, alias, "--json")
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads(result.stdout)["preservation"]["verdict"] == "complete"
+
+
+def test_textually_different_roots_are_disjoint_only_when_identities_are(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = tmp_path / "collection"
+    second = tmp_path / "COLLECTION"
+    identities = {first: (1, 100), second: (1, 100)}
+
+    monkeypatch.setattr(
+        migration_roots, "directory_identity", lambda path: identities.get(path)
+    )
+
+    assert not migration_roots.existing_directories_are_disjoint(first, second)
+    identities[second] = (1, 101)
+    assert migration_roots.existing_directories_are_disjoint(first, second)
+
+
+def test_verify_migration_fails_closed_on_uncertain_root_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+
+    def identity_failure(_source: Path, _destination: Path) -> bool:
+        raise DirectoryIdentityError("synthetic identity failure")
+
+    messages: list[tuple[str, object]] = []
+    monkeypatch.setattr(
+        migration_verifier, "existing_directories_are_disjoint", identity_failure
+    )
+    monkeypatch.setattr(
+        migration_verifier,
+        "print",
+        lambda message, *, file=None: messages.append((message, file)),
+    )
+
+    assert migration_verifier.main([str(source), str(destination)]) == 2
+    assert messages == [
+        ("Source or destination directory identity cannot be verified.", sys.stderr)
+    ]
+    assert list(source.iterdir()) == []
+    assert list(destination.iterdir()) == []
 
 
 def test_changed_hash_input_is_omitted_and_reported(

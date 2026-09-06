@@ -33,7 +33,8 @@ validation truthfulness and cache compatibility through version 0.5.7, public
 governance through version 0.5.8, reversible truthful-extension correction
 through version 0.5.9, zero-write preservation simulation without destination
 `dups` through version 0.5.10, and guided single-collection migration through
-version 0.5.11.
+version 0.5.11. The version 0.5.12 candidate brings direct standalone
+verification roots up to the coordinator's filesystem-identity boundary.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -380,12 +381,15 @@ performs real image extension correction, organization, deterministic renaming,
 exact duplicate isolation, external quarantine, and final ordinary proof while
 confirming the unchanged baseline and retained bytes.
 
-The closure review also recorded a pre-existing, report-only standalone
-`verify-migration` root-alias gap. A source and destination that are one
-physical directory under case or Unicode aliases can receive a vacuous complete
-result. The guided v0.5.11 coordinator rejects that pair before dispatch and is
-not affected. MIG-R01 and the promoted v0.5.12 roadmap row retain the separate
-filesystem-identity correction; do not describe it as shipped in v0.5.11.
+Version 0.5.12 resolves MIG-R01 for direct standalone `verify-migration`.
+Source and destination now use the same no-follow device-and-inode ancestry
+boundary as the guided coordinator, so case, Unicode, or other aliases of one
+physical directory and existing nested roots are rejected before evidence work.
+Uncertain identity returns setup status 2, while genuinely distinct
+case-sensitive roots remain valid. The report schema, path privacy, and
+zero-write contract are unchanged. ADR 0085 records the shared migration-root
+boundary; independent exact-SHA review and complete release proof remain
+pending.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -566,6 +570,7 @@ python-media-organizer/
       images.py
       inventory.py
       report.py
+      roots.py
       simulation.py
       verdict.py
       videos.py

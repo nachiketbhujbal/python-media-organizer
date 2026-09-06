@@ -151,12 +151,12 @@ working copy. Read the exact-byte, exact displayed-image, and strict
 decoded-video layers separately. Pixel or playback equivalence does not prove
 metadata, encoding, container, or original bytes.
 
-The v0.5.11 guided coordinator rejects aliased baseline and working roots by
-filesystem identity before dispatch. A direct standalone `verify-migration`
-invocation still has a lexical root gate until the promoted v0.5.12 correction;
-for a manual v0.5.11 sequence, independently confirm the two arguments are
-distinct physical directories rather than case or Unicode aliases of one
-directory.
+The guided coordinator and direct standalone `verify-migration` both reject
+aliased baseline and working roots by no-follow filesystem identity before
+work begins. Case, Unicode, or other aliases cannot make one physical directory
+serve as both roles, while genuinely distinct case-sensitive directories remain
+valid. An uncertain identity is an invalid setup rather than usable migration
+evidence.
 
 ## Stage 3: correct truthful extensions
 

@@ -19,6 +19,10 @@ from pymo.migration.coverage import compare_byte_inventories
 from pymo.migration.images import compare_image_content
 from pymo.migration.inventory import discover_tree, hash_tree, revalidate_tree
 from pymo.migration.report import build_report, print_report
+from pymo.migration.roots import (
+    DirectoryIdentityError,
+    existing_directories_are_disjoint,
+)
 from pymo.migration.simulation import without_duplicate_review_tree
 from pymo.migration.verdict import build_preservation_evidence
 from pymo.migration.videos import (
@@ -73,14 +77,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _roots_are_disjoint(source: Path, destination: Path) -> bool:
-    return (
-        source != destination
-        and source not in destination.parents
-        and destination not in source.parents
-    )
-
-
 def _discard_message(_message: str) -> None:
     pass
 
@@ -98,7 +94,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not destination.is_dir():
         print("Destination is not a readable directory.", file=sys.stderr)
         return 2
-    if not _roots_are_disjoint(source, destination):
+    try:
+        roots_are_disjoint = existing_directories_are_disjoint(source, destination)
+    except DirectoryIdentityError:
+        print(
+            "Source or destination directory identity cannot be verified.",
+            file=sys.stderr,
+        )
+        return 2
+    if not roots_are_disjoint:
         print(
             "Source and destination must be distinct, non-nested directories.",
             file=sys.stderr,

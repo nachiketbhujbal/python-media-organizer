@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import stat
 import subprocess
 import sys
 import uuid
@@ -25,6 +24,11 @@ from pymo.migration.coordinator_state import (
     _updated_state,
     _write_state,
 )
+from pymo.migration.roots import (
+    DirectoryIdentityError,
+    existing_directories_are_disjoint,
+    paths_are_disjoint,
+)
 from pymo.migration.workflow import (
     CoordinatorOptions,
     Stage,
@@ -33,37 +37,11 @@ from pymo.migration.workflow import (
 )
 
 
-def _directory_identity(path: Path) -> tuple[int, int] | None:
-    try:
-        value = os.stat(path, follow_symlinks=False)
-    except (FileNotFoundError, NotADirectoryError):
-        return None
-    except OSError as error:
-        raise MigrationCoordinatorError(
-            "directory identity could not be verified"
-        ) from error
-    if not stat.S_ISDIR(value.st_mode):
-        return None
-    return (value.st_dev, value.st_ino)
-
-
-def _within(child: Path, root: Path) -> bool:
-    """Return whether an existing ancestor of child is root by identity."""
-
-    root_identity = _directory_identity(root)
-    if root_identity is None:
-        return False
-    current = child
-    while True:
-        if _directory_identity(current) == root_identity:
-            return True
-        if current.parent == current:
-            return False
-        current = current.parent
-
-
 def _disjoint(first: Path, second: Path) -> bool:
-    return not _within(first, second) and not _within(second, first)
+    try:
+        return paths_are_disjoint(first, second)
+    except DirectoryIdentityError as error:
+        raise MigrationCoordinatorError(str(error)) from error
 
 
 def _validate_roots(baseline: Path, working: Path) -> None:
@@ -73,7 +51,11 @@ def _validate_roots(baseline: Path, working: Path) -> None:
         raise MigrationCoordinatorError(
             "working collection is not a readable directory"
         )
-    if not _disjoint(baseline, working):
+    try:
+        disjoint = existing_directories_are_disjoint(baseline, working)
+    except DirectoryIdentityError as error:
+        raise MigrationCoordinatorError(str(error)) from error
+    if not disjoint:
         raise MigrationCoordinatorError(
             "baseline and working collection must be distinct, non-nested directories"
         )
