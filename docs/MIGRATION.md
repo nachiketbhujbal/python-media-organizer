@@ -18,6 +18,10 @@ contract; it does not prove whole-device recovery.
 - Version 0.5.11 adds `pymo migrate` to coordinate this sequence for one
   declared baseline/working pair. It does not perform rescue copying,
   automatic quarantine, or deletion.
+- The unreleased version 0.5.12 candidate hardens both standalone verification
+  and guided coordinator setup against aliased, disappearing, replaced, or
+  unresolvable roots and command-line paths. This behavior is available only
+  after version 0.5.12 is released and installed.
 
 Perform only stages supported by the installed version and keep every
 transition human-reviewed. Do not use a loose shell script as the production
@@ -55,7 +59,10 @@ copies on one physical device are not independent backups.
 
 ## Guided coordinator
 
-The v0.5.11 workflow keeps the manual stages below as its authority.
+The workflow introduced in v0.5.11 keeps the manual stages below as its
+authority. The unreleased v0.5.12 candidate additionally contains every
+command-line path expansion and resolution failure before private state can be
+created.
 First inspect the zero-write plan, then explicitly initialize one dedicated
 private directory outside and non-nested with both collections:
 
@@ -151,12 +158,12 @@ working copy. Read the exact-byte, exact displayed-image, and strict
 decoded-video layers separately. Pixel or playback equivalence does not prove
 metadata, encoding, container, or original bytes.
 
-The v0.5.11 guided coordinator rejects aliased baseline and working roots by
-filesystem identity before dispatch. A direct standalone `verify-migration`
-invocation still has a lexical root gate until the promoted v0.5.12 correction;
-for a manual v0.5.11 sequence, independently confirm the two arguments are
-distinct physical directories rather than case or Unicode aliases of one
-directory.
+The guided coordinator and direct standalone `verify-migration` both reject
+aliased baseline and working roots by no-follow filesystem identity before
+work begins. Case, Unicode, or other aliases cannot make one physical directory
+serve as both roles, while genuinely distinct case-sensitive directories remain
+valid. An uncertain identity is an invalid setup rather than usable migration
+evidence.
 
 ## Stage 3: correct truthful extensions
 
@@ -270,8 +277,11 @@ Version 0.5.11 reduces repetition by carrying one declared baseline, working
 collection, and explicit private log directory through these stages. It
 preserves the same stop points, previews, exit statuses, fresh evidence, and
 human sign-off rather than turning the sequence into an unattended batch.
-It compares collection and log-directory ancestry by filesystem identity, so
-case or Unicode aliases cannot make one physical directory serve both
-collection roles or hide a log directory inside either collection. Coordinator
-setup, unsafe-state, and invocation errors return status 2; a `--run-next`
-attempt returns the child command's real status.
+The unreleased version 0.5.12 candidate retains and revalidates initial
+collection identities through strict existing-root ancestry checks, so a
+temporary disappearance or replacement cannot turn an alias into accepted
+separation. It also resolves every coordinator path before any requested log
+state is created. Case or Unicode aliases cannot make one physical directory
+serve both collection roles or hide a log directory inside either collection.
+Coordinator setup, unsafe-state, and invocation errors return status 2; a
+`--run-next` attempt returns the child command's real status.

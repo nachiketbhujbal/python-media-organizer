@@ -16,7 +16,9 @@ from pymo.collection import CollectionLayout
 from pymo.config import load_config
 from pymo.migration import images as migration_images
 from pymo.migration import inventory
+from pymo.migration import roots as migration_roots
 from pymo.migration.coverage import compare_byte_inventories
+from pymo.migration.roots import DirectoryIdentityError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
@@ -523,6 +525,207 @@ def test_verify_migration_rejects_same_or_nested_roots_without_state(
     assert "distinct, non-nested" in same.stderr
     assert "distinct, non-nested" in overlapping.stderr
     assert files_under(source) == {}
+
+
+def test_verify_migration_roots_use_filesystem_identity(tmp_path: Path) -> None:
+    stored = tmp_path / "collection"
+    alias = tmp_path / "COLLECTION"
+    stored.mkdir()
+
+    if alias.exists():
+        before = files_under(stored)
+
+        result = run_verify(stored, alias)
+
+        assert result.returncode == 2
+        assert "distinct, non-nested" in result.stderr
+        assert files_under(stored) == before
+    else:
+        alias.mkdir()
+        (stored / "source.bin").write_bytes(b"same")
+        (alias / "destination.bin").write_bytes(b"same")
+
+        result = run_verify(stored, alias, "--json")
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert json.loads(result.stdout)["preservation"]["verdict"] == "complete"
+
+
+@pytest.mark.parametrize("looping_root_name", ("source", "destination"))
+def test_verify_migration_rejects_self_referential_root_symlink_privately(
+    tmp_path: Path,
+    looping_root_name: str,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    looping_root = source if looping_root_name == "source" else destination
+    readable_root = destination if looping_root_name == "source" else source
+    readable_root.mkdir()
+    looping_root.symlink_to(looping_root.name, target_is_directory=True)
+    before_entries = sorted(entry.name for entry in tmp_path.iterdir())
+
+    result = run_verify(source, destination)
+
+    assert result.returncode == 2
+    output = result.stdout + result.stderr
+    assert "Source or destination directory identity cannot be verified." in output
+    assert "Traceback" not in output
+    assert str(tmp_path) not in output
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == before_entries
+    assert looping_root.is_symlink()
+    assert os.readlink(looping_root) == looping_root.name
+    assert list(readable_root.iterdir()) == []
+    layout = CollectionLayout(readable_root)
+    assert not layout.derived_cache.exists()
+    assert not layout.derived_cache_lock.exists()
+    assert not layout.action_log.exists()
+
+
+@pytest.mark.parametrize("failing_root_name", ("source", "destination"))
+@pytest.mark.parametrize("error_type", (OSError, RuntimeError))
+def test_verify_migration_fails_closed_on_root_resolution_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failing_root_name: str,
+    error_type: type[Exception],
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    failing_root = source if failing_root_name == "source" else destination
+    real_resolve = Path.resolve
+
+    def fail_selected_root(path: Path, *args, **kwargs) -> Path:
+        if path == failing_root:
+            raise error_type(f"sensitive root: {failing_root}")
+        return real_resolve(path, *args, **kwargs)
+
+    messages: list[tuple[str, object]] = []
+    monkeypatch.setattr(Path, "resolve", fail_selected_root)
+    monkeypatch.setattr(
+        migration_verifier,
+        "print",
+        lambda message, *, file=None: messages.append((message, file)),
+    )
+
+    assert migration_verifier.main([str(source), str(destination)]) == 2
+    assert messages == [
+        ("Source or destination directory identity cannot be verified.", sys.stderr)
+    ]
+    assert str(tmp_path) not in messages[0][0]
+    assert list(source.iterdir()) == []
+    assert list(destination.iterdir()) == []
+
+
+@pytest.mark.parametrize("changing_root_name", ("source", "destination"))
+@pytest.mark.parametrize("transition", ("temporarily-missing", "replaced"))
+@pytest.mark.parametrize("changing_observation", (2, 3), ids=("ancestry", "final"))
+def test_verify_migration_fails_closed_when_root_changes_during_identity_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changing_root_name: str,
+    transition: str,
+    changing_observation: int,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    changing_root = source if changing_root_name == "source" else destination
+    held_root = tmp_path / f"held-{changing_root_name}"
+    real_identity = migration_roots.directory_identity
+    observations = 0
+
+    def race_identity(path: Path) -> tuple[int, int] | None:
+        nonlocal observations
+        if path == changing_root:
+            observations += 1
+            if observations == changing_observation:
+                changing_root.rename(held_root)
+                try:
+                    if transition == "replaced":
+                        changing_root.mkdir()
+                    return real_identity(path)
+                finally:
+                    if transition == "replaced":
+                        changing_root.rmdir()
+                    held_root.rename(changing_root)
+        return real_identity(path)
+
+    messages: list[tuple[str, object]] = []
+    monkeypatch.setattr(migration_roots, "directory_identity", race_identity)
+    monkeypatch.setattr(
+        migration_verifier,
+        "print",
+        lambda message, *, file=None: messages.append((message, file)),
+    )
+
+    assert migration_verifier.main([str(source), str(destination), "--json"]) == 2
+    assert observations >= changing_observation
+    assert messages == [
+        ("Source or destination directory identity cannot be verified.", sys.stderr)
+    ]
+    assert str(tmp_path) not in messages[0][0]
+    assert list(source.iterdir()) == []
+    assert list(destination.iterdir()) == []
+    assert not held_root.exists()
+
+
+def test_textually_different_roots_are_disjoint_only_when_identities_are(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = tmp_path / "first-root"
+    second = tmp_path / "second-root"
+    first.mkdir()
+    second.mkdir()
+    real_identity = migration_roots.directory_identity
+    first_identity = real_identity(first)
+    second_identity = real_identity(second)
+    assert first_identity is not None
+    assert second_identity is not None
+    identities = {first: first_identity, second: first_identity}
+
+    def controlled_identity(path: Path) -> tuple[int, int] | None:
+        if path in identities:
+            return identities[path]
+        return real_identity(path)
+
+    monkeypatch.setattr(migration_roots, "directory_identity", controlled_identity)
+
+    assert not migration_roots.existing_directories_are_disjoint(first, second)
+    identities[second] = second_identity
+    assert migration_roots.existing_directories_are_disjoint(first, second)
+
+
+def test_verify_migration_fails_closed_on_uncertain_root_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+
+    def identity_failure(_source: Path, _destination: Path) -> bool:
+        raise DirectoryIdentityError("synthetic identity failure")
+
+    messages: list[tuple[str, object]] = []
+    monkeypatch.setattr(
+        migration_verifier, "existing_directories_are_disjoint", identity_failure
+    )
+    monkeypatch.setattr(
+        migration_verifier,
+        "print",
+        lambda message, *, file=None: messages.append((message, file)),
+    )
+
+    assert migration_verifier.main([str(source), str(destination)]) == 2
+    assert messages == [
+        ("Source or destination directory identity cannot be verified.", sys.stderr)
+    ]
+    assert list(source.iterdir()) == []
+    assert list(destination.iterdir()) == []
 
 
 def test_changed_hash_input_is_omitted_and_reported(

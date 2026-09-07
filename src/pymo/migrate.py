@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import stat
 import subprocess
 import sys
 import uuid
@@ -25,6 +24,11 @@ from pymo.migration.coordinator_state import (
     _updated_state,
     _write_state,
 )
+from pymo.migration.roots import (
+    DirectoryIdentityError,
+    existing_directories_are_disjoint,
+    paths_are_disjoint,
+)
 from pymo.migration.workflow import (
     CoordinatorOptions,
     Stage,
@@ -33,37 +37,29 @@ from pymo.migration.workflow import (
 )
 
 
-def _directory_identity(path: Path) -> tuple[int, int] | None:
-    try:
-        value = os.stat(path, follow_symlinks=False)
-    except (FileNotFoundError, NotADirectoryError):
-        return None
-    except OSError as error:
-        raise MigrationCoordinatorError(
-            "directory identity could not be verified"
-        ) from error
-    if not stat.S_ISDIR(value.st_mode):
-        return None
-    return (value.st_dev, value.st_ino)
-
-
-def _within(child: Path, root: Path) -> bool:
-    """Return whether an existing ancestor of child is root by identity."""
-
-    root_identity = _directory_identity(root)
-    if root_identity is None:
-        return False
-    current = child
-    while True:
-        if _directory_identity(current) == root_identity:
-            return True
-        if current.parent == current:
-            return False
-        current = current.parent
-
-
 def _disjoint(first: Path, second: Path) -> bool:
-    return not _within(first, second) and not _within(second, first)
+    try:
+        return paths_are_disjoint(first, second)
+    except DirectoryIdentityError as error:
+        raise MigrationCoordinatorError(str(error)) from error
+
+
+def _expand_argument_path(path: Path) -> Path:
+    try:
+        return path.expanduser()
+    except (OSError, RuntimeError) as error:
+        raise MigrationCoordinatorError(
+            "a command-line path cannot be resolved safely"
+        ) from error
+
+
+def _resolve_argument_path(path: Path) -> Path:
+    try:
+        return _expand_argument_path(path).resolve()
+    except (OSError, RuntimeError) as error:
+        raise MigrationCoordinatorError(
+            "a command-line path cannot be resolved safely"
+        ) from error
 
 
 def _validate_roots(baseline: Path, working: Path) -> None:
@@ -73,7 +69,11 @@ def _validate_roots(baseline: Path, working: Path) -> None:
         raise MigrationCoordinatorError(
             "working collection is not a readable directory"
         )
-    if not _disjoint(baseline, working):
+    try:
+        disjoint = existing_directories_are_disjoint(baseline, working)
+    except DirectoryIdentityError as error:
+        raise MigrationCoordinatorError(str(error)) from error
+    if not disjoint:
         raise MigrationCoordinatorError(
             "baseline and working collection must be distinct, non-nested directories"
         )
@@ -98,12 +98,12 @@ def _option_overrides(args: argparse.Namespace) -> dict[str, object]:
         value = getattr(args, name)
         if value is not None:
             overrides[name] = (
-                str(value.expanduser().resolve()) if isinstance(value, Path) else value
+                str(_resolve_argument_path(value)) if isinstance(value, Path) else value
             )
     return overrides
 
 
-def _initial_options(args: argparse.Namespace) -> CoordinatorOptions:
+def _initial_options(overrides: dict[str, object]) -> CoordinatorOptions:
     values: dict[str, object] = {
         "verbose": False,
         "quiet": False,
@@ -117,13 +117,15 @@ def _initial_options(args: argparse.Namespace) -> CoordinatorOptions:
         "workers": None,
         "no_cache": False,
     }
-    values.update(_option_overrides(args))
+    values.update(overrides)
     return CoordinatorOptions(**values)  # type: ignore[arg-type]
 
 
-def _require_matching_options(args: argparse.Namespace, state: MigrationState) -> None:
+def _require_matching_options(
+    overrides: dict[str, object], state: MigrationState
+) -> None:
     current = state.options.as_json()
-    for name, value in _option_overrides(args).items():
+    for name, value in overrides.items():
         if current[name] != value:
             raise MigrationCoordinatorError(
                 f"{name.replace('_', '-')} differs from the recorded coordinator option"
@@ -357,9 +359,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("--workers must be between 1 and 32.", file=sys.stderr)
         return 2
 
-    baseline = args.baseline.expanduser().resolve()
-    working = args.working.expanduser().resolve()
     try:
+        baseline = _resolve_argument_path(args.baseline)
+        working = _resolve_argument_path(args.working)
         _validate_roots(baseline, working)
         if args.log_dir is None:
             if (
@@ -377,16 +379,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
 
-        requested_log_dir = args.log_dir.expanduser()
+        requested_log_dir = _expand_argument_path(args.log_dir)
         if requested_log_dir.is_symlink():
             raise MigrationCoordinatorError(
                 "private log directory must not be a symbolic link"
             )
-        log_dir = requested_log_dir.resolve()
+        log_dir = _resolve_argument_path(requested_log_dir)
         if not _disjoint(log_dir, baseline) or not _disjoint(log_dir, working):
             raise MigrationCoordinatorError(
                 "private log directory must be distinct and non-nested with both collections"
             )
+        option_overrides = _option_overrides(args)
         _prepare_log_dir(log_dir, create=args.start)
         state_path = _state_path(log_dir)
         with _state_lock(log_dir):
@@ -400,7 +403,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     __version__,
                     baseline,
                     working,
-                    _initial_options(args),
+                    _initial_options(option_overrides),
                     0,
                     (),
                     created,
@@ -423,7 +426,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise MigrationCoordinatorError(
                     "restart state was created by a different pymo version"
                 )
-            _require_matching_options(args, state)
+            _require_matching_options(option_overrides, state)
             if args.run_next:
                 return _run_next(log_dir, state_path, state, args.apply)
             if args.accept_status:

@@ -103,6 +103,132 @@ def test_coordinator_setup_errors_use_status_two(tmp_path: Path) -> None:
     assert "baseline is not a readable directory" in result.stderr
 
 
+@pytest.mark.parametrize("looping_root_name", ("baseline", "working"))
+def test_migrate_rejects_self_referential_collection_root_privately(
+    tmp_path: Path,
+    looping_root_name: str,
+) -> None:
+    baseline = tmp_path / "baseline"
+    working = tmp_path / "working"
+    looping_root = baseline if looping_root_name == "baseline" else working
+    readable_root = working if looping_root_name == "baseline" else baseline
+    readable_root.mkdir()
+    looping_root.symlink_to(looping_root.name, target_is_directory=True)
+    before_entries = sorted(entry.name for entry in tmp_path.iterdir())
+
+    result = run_pymo("--no-timestamps", "migrate", baseline, working)
+
+    assert result.returncode == 2
+    output = result.stdout + result.stderr
+    assert "Migration coordinator cannot safely continue" in output
+    assert "Traceback" not in output
+    assert str(tmp_path) not in output
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == before_entries
+    assert looping_root.is_symlink()
+    assert os.readlink(looping_root) == looping_root.name
+    assert list(readable_root.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "path_option", ("--log-dir", "--config", "--ffmpeg", "--ffprobe")
+)
+def test_migrate_rejects_self_referential_optional_path_before_writes(
+    tmp_path: Path,
+    path_option: str,
+) -> None:
+    baseline, working = collections(tmp_path)
+    looping_path = tmp_path / "looping-path"
+    looping_path.symlink_to(looping_path.name)
+    log_dir = looping_path if path_option == "--log-dir" else tmp_path / "logs"
+    arguments: list[object] = [
+        "--no-timestamps",
+        "migrate",
+        baseline,
+        working,
+        "--log-dir",
+        log_dir,
+        "--start",
+    ]
+    if path_option != "--log-dir":
+        arguments.extend((path_option, looping_path))
+    before_entries = sorted(entry.name for entry in tmp_path.iterdir())
+
+    result = run_pymo(*arguments)
+
+    assert result.returncode == 2
+    output = result.stdout + result.stderr
+    assert "Migration coordinator cannot safely continue" in output
+    assert "Traceback" not in output
+    assert str(tmp_path) not in output
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == before_entries
+    assert not (tmp_path / "logs").exists()
+    assert list(baseline.iterdir()) == []
+    assert list(working.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "failing_path_name",
+    ("baseline", "working", "log-dir", "config", "ffmpeg", "ffprobe"),
+)
+@pytest.mark.parametrize("error_type", (OSError, RuntimeError))
+def test_migrate_contains_argument_path_resolution_errors_before_writes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failing_path_name: str,
+    error_type: type[Exception],
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    optional_path = tmp_path / f"{failing_path_name}-argument"
+    paths = {
+        "baseline": baseline,
+        "working": working,
+        "log-dir": log_dir,
+        "config": optional_path,
+        "ffmpeg": optional_path,
+        "ffprobe": optional_path,
+    }
+    failing_path = paths[failing_path_name]
+    arguments = [
+        str(baseline),
+        str(working),
+        "--log-dir",
+        str(log_dir),
+        "--start",
+    ]
+    if failing_path_name in {"config", "ffmpeg", "ffprobe"}:
+        arguments.extend((f"--{failing_path_name}", str(optional_path)))
+    before_entries = sorted(entry.name for entry in tmp_path.iterdir())
+    real_resolve = Path.resolve
+
+    def fail_selected_path(path: Path, *args, **kwargs) -> Path:
+        if path == failing_path:
+            raise error_type(f"sensitive path: {failing_path}")
+        return real_resolve(path, *args, **kwargs)
+
+    messages: list[tuple[str, object]] = []
+    monkeypatch.setattr(Path, "resolve", fail_selected_path)
+    monkeypatch.setattr(
+        migrate,
+        "print",
+        lambda message, *, file=None: messages.append((message, file)),
+    )
+
+    assert migrate.main(arguments) == 2
+    assert messages == [
+        (
+            "Migration coordinator cannot safely continue: "
+            "a command-line path cannot be resolved safely.",
+            sys.stderr,
+        )
+    ]
+    assert str(tmp_path) not in messages[0][0]
+    assert sorted(entry.name for entry in tmp_path.iterdir()) == before_entries
+    assert not log_dir.exists()
+    assert list(baseline.iterdir()) == []
+    assert list(working.iterdir()) == []
+
+
 def test_start_records_private_options_and_refuses_mismatched_reuse(
     tmp_path: Path,
 ) -> None:

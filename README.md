@@ -320,12 +320,15 @@ destination copy; reduced and added multiplicity are reported separately.
 Destination-only content is also reported but does not invalidate source
 coverage.
 
-Both trees are enumerated without following symbolic links, then every
+Source and destination separation is checked by no-follow filesystem identity,
+so case, Unicode, or other aliases cannot make one physical directory serve as
+both roots, while genuinely distinct case-sensitive directories remain valid.
+Both trees are then enumerated without following symbolic links, and every
 in-scope regular file is hashed from a fresh, stable, collection-anchored
 descriptor. The command does not accept cached historical hashes as current
 preservation proof and writes no cache, lock, configuration, media, duplicate
 tree, or action history. Source and destination must be distinct, non-nested
-directories.
+physical directories; uncertain identity evidence is an invalid setup.
 
 The byte verdict is `complete` when all in-scope source identities have readable
 destination representatives, `incomplete` when complete evidence proves some
@@ -991,12 +994,10 @@ automatic ignore rules. The promoted continuation completed public governance
 in 0.5.8; version 0.5.9 adds reversible
 `correct-extensions` before organization,
 adds zero-write preservation simulation without `dups` in 0.5.10, and version
-0.5.11 coordinates the complete guided single-collection runbook. The guided
-coordinator rejects baseline/working aliases by filesystem identity. A planned
-v0.5.12 correction applies that same boundary to direct standalone
-`verify-migration` invocations, whose v0.5.11 root check is lexical; until then,
-use the guided coordinator for production runs or independently confirm that
-manually supplied verification roots are distinct physical directories. Rescue
+0.5.11 coordinates the complete guided single-collection runbook. The
+unreleased 0.5.12 candidate brings direct standalone `verify-migration` to the
+coordinator's filesystem-identity boundary and makes later root observations
+fail closed. Rescue
 copying, irreversible duplicate finalization, damaged-media remediation, richer
 metadata, and similarity tooling remain later roadmap or research work. Full
 video decoding remains sequential until representative benchmarks show that

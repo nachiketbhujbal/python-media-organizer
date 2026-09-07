@@ -90,3 +90,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0082](0082-reversible-truthful-extension-correction.md) | Reversible truthful-extension correction |
 | [0083](0083-simulate-preservation-without-duplicate-review-tree.md) | Simulated preservation without the duplicate review tree |
 | [0084](0084-guided-single-collection-migration.md) | Guided single-collection migration |
+| [0085](0085-filesystem-identity-migration-roots.md) | Filesystem-identity migration roots |
