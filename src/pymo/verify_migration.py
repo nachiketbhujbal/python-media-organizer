@@ -86,8 +86,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.decode_timeout is not None and args.decode_timeout <= 0:
         print("--decode-timeout must be a positive number", file=sys.stderr)
         return 2
-    source = args.source.expanduser().resolve()
-    destination = args.destination.expanduser().resolve()
+    try:
+        source = args.source.expanduser().resolve()
+        destination = args.destination.expanduser().resolve()
+    except (OSError, RuntimeError):
+        print(
+            "Source or destination directory identity cannot be verified.",
+            file=sys.stderr,
+        )
+        return 2
     if not source.is_dir():
         print("Source is not a readable directory.", file=sys.stderr)
         return 2

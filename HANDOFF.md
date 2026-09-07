@@ -388,16 +388,23 @@ physical directory and existing nested roots are rejected before evidence work.
 Uncertain identity returns setup status 2, while genuinely distinct
 case-sensitive roots remain valid. The report schema, path privacy, and
 zero-write contract are unchanged. ADR 0085 records the shared migration-root
-boundary. Exact owner candidate `27227e1` passes Ruff, Black, mypy, pre-commit,
+boundary. Exact owner candidate `27227e1` passed Ruff, Black, mypy, pre-commit,
 all 441 synthetic and real-FFmpeg tests with 88 percent subprocess-aware
 coverage, source and wheel builds, artifact/license inspection, and isolated
-installed-CLI proof at `pymo 0.5.12.dev2+g27227e158`. The installed
-wheel rejects a textually different alias of one physical root at setup status
-2 and accepts genuinely distinct roots without writing collection state.
-Independent exact-SHA review accepted that candidate without findings, and PR
-#44 hosted run `34063366227` passed Ubuntu, pinned Fedora 42, macOS, and the
-unconditional quality gate. Final release-ledger reconciliation is
-documentation-only and still requires exact-head review and hosted proof before
+installed-CLI proof at `pymo 0.5.12.dev2+g27227e158`. Independent review
+accepted that implementation head, and hosted run `34063366227` passed the
+complete gate. The later release-ledger candidate `fe209f8` also passed hosted
+run `34082891359`, but renewed exact-SHA review rejected it because source and
+destination resolution still occurred outside the controlled identity-error
+boundary. A self-referential root symbolic link could therefore return status
+1 with a traceback and absolute-path disclosure. The owner correction catches
+`OSError` and `RuntimeError` around both root resolutions and adds real
+source/destination symbolic-link-cycle plus symmetric injected-error
+regressions proving path-private setup status 2 and zero writes. Its complete
+local gate passes Ruff, Black, mypy, pre-commit, all 447 synthetic and
+real-FFmpeg tests with 88 percent subprocess-aware coverage, source and wheel
+builds, artifact/license inspection, and isolated installed-CLI proof. Renewed
+exact-SHA independent review and exact-head hosted proof remain required before
 merge; exact-main, tag, and installed-release proof remain distinct release
 steps.
 

@@ -138,6 +138,7 @@ The same adversarial method was repeated after the first validation release.
 | MIG-021 | High | Recognized source media without a supported deterministic equivalence path could otherwise be reported as definitely missing instead of unproven. | 0.5.3 | Resolved with explicit unsupported-media accounting and an unproven final disposition |
 | MIG-022 | Medium | A complete collection-level result could be misread as whole-device recovery or an automatic deletion instruction. | 0.5.3 | Resolved with a named namespace-visible contract, exclusion counts, and human-signoff-only disposition |
 | MIG-R01 | Medium | Standalone `verify-migration` compares resolved roots lexically, so one physical directory reached through case or Unicode aliases can produce a vacuous complete result eligible for human sign-off. The command is report-only, and the v0.5.11 guided coordinator rejects the pair before dispatch. | 0.5.12 | Resolved in ADR 0085 with a shared no-follow filesystem-identity ancestry boundary plus alias, case-sensitive-distinct, nesting, fail-closed, privacy, and zero-write regressions; independently accepted without findings at `27227e1` |
+| MIG-R02 | Medium | Standalone `verify-migration` resolves both command-line roots before its controlled identity-error boundary, so a self-referential symbolic link or another resolution failure can escape as status 1 with a traceback and absolute-path disclosure. | 0.5.12 | Owner correction catches `OSError` and `RuntimeError` for both root resolutions and adds real source/destination symbolic-link-cycle plus symmetric injected-error privacy and zero-write regressions; renewed exact-SHA independent review pending |
 
 ## CI portability findings
 
@@ -359,6 +360,11 @@ The same adversarial method was repeated after the first validation release.
 
 ## Independent review evidence
 
+- Renewed independent review rejected PR #44 exact head `fe209f8` with
+  MIG-R02 after a real self-referential root symbolic link escaped the intended
+  setup-status-2 boundary. Hosted run `34082891359` passed the classifier,
+  Ubuntu, pinned Fedora 42, macOS, and the unconditional quality gate at that
+  head, but passing automation does not override the blocking review finding.
 - Codex independently reviewed PR #44 at exact head `27227e1` in a separate
   detached worktree, reproduced the base false-complete result and target
   setup-status-2 rejection on a real case-insensitive filesystem, reran all

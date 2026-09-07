@@ -10,7 +10,8 @@ All notable changes to `python-media-organizer` will be recorded here.
   directory as well as existing nested roots.
 - Share the filesystem-identity boundary with the guided migration coordinator,
   while retaining its support for checking a not-yet-created private log path.
-- Treat uncertain root identity as invalid setup status 2 before configuration,
+- Treat uncertain root identity, including a root-resolution failure or
+  symbolic-link cycle, as invalid setup status 2 before configuration,
   discovery, hashing, decoding, or reporting begins. Preserve path-private
   diagnostics and the verifier's zero-write contract.
 - Retain valid comparisons between genuinely distinct roots on case-sensitive
