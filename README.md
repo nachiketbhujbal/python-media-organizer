@@ -994,9 +994,10 @@ automatic ignore rules. The promoted continuation completed public governance
 in 0.5.8; version 0.5.9 adds reversible
 `correct-extensions` before organization,
 adds zero-write preservation simulation without `dups` in 0.5.10, and version
-0.5.11 coordinates the complete guided single-collection runbook. The guided
-coordinator and direct standalone `verify-migration` both reject
-baseline/working aliases by the same filesystem-identity boundary. Rescue
+0.5.11 coordinates the complete guided single-collection runbook. The
+unreleased 0.5.12 candidate brings direct standalone `verify-migration` to the
+coordinator's filesystem-identity boundary and makes later root observations
+fail closed. Rescue
 copying, irreversible duplicate finalization, damaged-media remediation, richer
 metadata, and similarity tooling remain later roadmap or research work. Full
 video decoding remains sequential until representative benchmarks show that

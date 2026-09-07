@@ -95,6 +95,7 @@ The same adversarial method was repeated after the first validation release.
 | GUIDE-006 | Medium | Malformed, substituted, concurrent, cross-version, or out-of-order restart state could dispatch the wrong stage or options. | 0.5.11 | Resolved with a no-follow regular-file boundary, dedicated lock, strict exact-key schema and lifecycle validation, root/version/option binding, size limits, and atomic private publication |
 | GUIDE-R01 | High | Lexical root comparisons allowed one directory reached through case or Unicode aliases to serve as both baseline and working collection, or allowed private logs inside a collection, making the nominally unchanged baseline mutable and contaminating evidence. | 0.5.11 | Resolved with device-and-inode ancestry checks for existing roots and not-yet-created log-directory leaves, plus a filesystem-aware regression that preserves genuinely distinct case-sensitive directories; independently closed at `f073132` |
 | GUIDE-R02 | Low | Coordinator setup and unsafe-state failures returned status 1, colliding with real child findings and the established invalid-setup status 2. | 0.5.11 | Resolved by returning status 2 for every `MigrationCoordinatorError`, preserving real child status 1 and documenting the distinction; independently closed at `f073132` |
+| GUIDE-R03 | Medium | Guided migration resolved baseline and working roots before its controlled error boundary; a self-referential symbolic link in either position returned status 1 with a traceback and absolute-path disclosure. Configuration and native-tool paths could fail similarly only after creating private log state. | 0.5.12 | Owner correction routes all six command-line path roles through a generic path-private setup-status-2 boundary and resolves optional paths before any log directory or lock creation; real symmetric symbolic-link-cycle and injected `OSError`/`RuntimeError` zero-write regressions added; renewed exact-SHA independent review pending |
 
 ## Scan review findings
 
@@ -139,6 +140,7 @@ The same adversarial method was repeated after the first validation release.
 | MIG-022 | Medium | A complete collection-level result could be misread as whole-device recovery or an automatic deletion instruction. | 0.5.3 | Resolved with a named namespace-visible contract, exclusion counts, and human-signoff-only disposition |
 | MIG-R01 | Medium | Standalone `verify-migration` compares resolved roots lexically, so one physical directory reached through case or Unicode aliases can produce a vacuous complete result eligible for human sign-off. The command is report-only, and the v0.5.11 guided coordinator rejects the pair before dispatch. | 0.5.12 | Resolved in ADR 0085 with a shared no-follow filesystem-identity ancestry boundary plus alias, case-sensitive-distinct, nesting, fail-closed, privacy, and zero-write regressions; independently accepted without findings at `27227e1` |
 | MIG-R02 | Medium | Standalone `verify-migration` resolves both command-line roots before its controlled identity-error boundary, so a self-referential symbolic link or another resolution failure can escape as status 1 with a traceback and absolute-path disclosure. | 0.5.12 | Owner correction catches `OSError` and `RuntimeError` for both root resolutions and adds real source/destination symbolic-link-cycle plus symmetric injected-error privacy and zero-write regressions; renewed exact-SHA independent review pending |
+| MIG-R03 | Medium | The shared required-root comparison discarded the initial endpoint identities and reused a permissive ancestry helper, so a root that disappeared or changed identity during a later observation could be treated as merely non-ancestral and allow a false complete migration result. | 0.5.12 | Owner correction retains and compares both initial identities, uses a strict existing-root ancestry walk, and revalidates both endpoints after both walks; real disappearance and replacement races cover each endpoint during ancestry and final revalidation; renewed exact-SHA independent review pending |
 
 ## CI portability findings
 
@@ -357,9 +359,17 @@ The same adversarial method was repeated after the first validation release.
   runbook one child at a time, with private restart state, separate previews and
   applies, exact statuses, external-quarantine confirmation, and fresh final
   proof.
+- `0.5.12`: make migration-root identity stable across the complete ancestry
+  decision and contain every guided-coordinator command-line path resolution
+  before evidence work or opt-in private-state creation.
 
 ## Independent review evidence
 
+- Renewed independent review rejected PR #44 exact head `18c6573` with
+  MIG-R03, GUIDE-R03, and two release-truth contradictions. The earlier hosted
+  run `34138191253` passed every platform and the aggregate gate at that head,
+  but is superseded by those blocking findings. Owner correction and a new
+  exact-SHA independent review are required before merge.
 - Renewed independent review rejected PR #44 exact head `fe209f8` with
   MIG-R02 after a real self-referential root symbolic link escaped the intended
   setup-status-2 boundary. Hosted run `34082891359` passed the classifier,

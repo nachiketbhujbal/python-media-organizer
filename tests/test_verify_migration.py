@@ -618,19 +618,83 @@ def test_verify_migration_fails_closed_on_root_resolution_error(
     assert list(destination.iterdir()) == []
 
 
+@pytest.mark.parametrize("changing_root_name", ("source", "destination"))
+@pytest.mark.parametrize("transition", ("temporarily-missing", "replaced"))
+@pytest.mark.parametrize("changing_observation", (2, 3), ids=("ancestry", "final"))
+def test_verify_migration_fails_closed_when_root_changes_during_identity_check(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changing_root_name: str,
+    transition: str,
+    changing_observation: int,
+) -> None:
+    source = tmp_path / "source"
+    destination = tmp_path / "destination"
+    source.mkdir()
+    destination.mkdir()
+    changing_root = source if changing_root_name == "source" else destination
+    held_root = tmp_path / f"held-{changing_root_name}"
+    real_identity = migration_roots.directory_identity
+    observations = 0
+
+    def race_identity(path: Path) -> tuple[int, int] | None:
+        nonlocal observations
+        if path == changing_root:
+            observations += 1
+            if observations == changing_observation:
+                changing_root.rename(held_root)
+                try:
+                    if transition == "replaced":
+                        changing_root.mkdir()
+                    return real_identity(path)
+                finally:
+                    if transition == "replaced":
+                        changing_root.rmdir()
+                    held_root.rename(changing_root)
+        return real_identity(path)
+
+    messages: list[tuple[str, object]] = []
+    monkeypatch.setattr(migration_roots, "directory_identity", race_identity)
+    monkeypatch.setattr(
+        migration_verifier,
+        "print",
+        lambda message, *, file=None: messages.append((message, file)),
+    )
+
+    assert migration_verifier.main([str(source), str(destination), "--json"]) == 2
+    assert observations >= changing_observation
+    assert messages == [
+        ("Source or destination directory identity cannot be verified.", sys.stderr)
+    ]
+    assert str(tmp_path) not in messages[0][0]
+    assert list(source.iterdir()) == []
+    assert list(destination.iterdir()) == []
+    assert not held_root.exists()
+
+
 def test_textually_different_roots_are_disjoint_only_when_identities_are(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    first = tmp_path / "collection"
-    second = tmp_path / "COLLECTION"
-    identities = {first: (1, 100), second: (1, 100)}
+    first = tmp_path / "first-root"
+    second = tmp_path / "second-root"
+    first.mkdir()
+    second.mkdir()
+    real_identity = migration_roots.directory_identity
+    first_identity = real_identity(first)
+    second_identity = real_identity(second)
+    assert first_identity is not None
+    assert second_identity is not None
+    identities = {first: first_identity, second: first_identity}
 
-    monkeypatch.setattr(
-        migration_roots, "directory_identity", lambda path: identities.get(path)
-    )
+    def controlled_identity(path: Path) -> tuple[int, int] | None:
+        if path in identities:
+            return identities[path]
+        return real_identity(path)
+
+    monkeypatch.setattr(migration_roots, "directory_identity", controlled_identity)
 
     assert not migration_roots.existing_directories_are_disjoint(first, second)
-    identities[second] = (1, 101)
+    identities[second] = second_identity
     assert migration_roots.existing_directories_are_disjoint(first, second)
 
 

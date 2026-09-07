@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.5.12 - 2026-09-06
+## 0.5.12 - Unreleased candidate
 
 - Make standalone `pymo verify-migration SOURCE DESTINATION` compare existing
   roots by no-follow filesystem device-and-inode ancestry rather than resolved
@@ -14,6 +14,13 @@ All notable changes to `python-media-organizer` will be recorded here.
   symbolic-link cycle, as invalid setup status 2 before configuration,
   discovery, hashing, decoding, or reporting begins. Preserve path-private
   diagnostics and the verifier's zero-write contract.
+- Retain each required root's initial device-and-inode identity through a strict
+  existing-ancestor walk, reject a missing or replaced later observation, and
+  revalidate both endpoints after the walk before accepting separation.
+- Contain baseline, working, private-log, configuration, ffmpeg, and ffprobe
+  path expansion or resolution failures inside the guided coordinator's
+  path-private setup-status-2 boundary, resolving every optional path before
+  any private restart directory or lock can be created.
 - Retain valid comparisons between genuinely distinct roots on case-sensitive
   filesystems, and record the correction in ADR 0085 with focused cross-platform
   regressions.

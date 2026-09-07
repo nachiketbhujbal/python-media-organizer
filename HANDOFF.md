@@ -404,9 +404,19 @@ regressions proving path-private setup status 2 and zero writes. Its complete
 local gate passes Ruff, Black, mypy, pre-commit, all 447 synthetic and
 real-FFmpeg tests with 88 percent subprocess-aware coverage, source and wheel
 builds, artifact/license inspection, and isolated installed-CLI proof. Renewed
-exact-SHA independent review and exact-head hosted proof remain required before
-merge; exact-main, tag, and installed-release proof remain distinct release
-steps.
+review then rejected exact head `18c6573` with MIG-R03 because the required-root
+comparison did not retain endpoint identities through later observations,
+GUIDE-R03 because guided migration path resolution escaped or followed private
+state creation, and two release-truth contradictions. The owner correction now
+uses strict existing-root ancestry with final endpoint revalidation, contains
+all six guided command-line path roles before any optional private-state write,
+and marks 0.5.12 as an unreleased candidate throughout its availability record.
+The renewed owner candidate passes Ruff, Black, mypy, pre-commit, all 473
+synthetic and real-FFmpeg tests with 88 percent subprocess-aware coverage,
+source and wheel builds, and artifact/license/privacy inspection. A clean-commit
+built-wheel adversarial proof, new exact-SHA independent review, and exact-head
+hosted proof remain required before merge; exact-main, tag, and installed-release
+proof remain distinct release steps.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
