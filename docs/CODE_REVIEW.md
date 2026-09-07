@@ -137,7 +137,7 @@ The same adversarial method was repeated after the first validation release.
 | MIG-020 | High | Reopening only previously hashed files cannot detect a new entry or directory namespace change during long media decoding. | 0.5.3 | Resolved by a fresh final discovery plus exact file-state, directory, category, and root-identity comparison |
 | MIG-021 | High | Recognized source media without a supported deterministic equivalence path could otherwise be reported as definitely missing instead of unproven. | 0.5.3 | Resolved with explicit unsupported-media accounting and an unproven final disposition |
 | MIG-022 | Medium | A complete collection-level result could be misread as whole-device recovery or an automatic deletion instruction. | 0.5.3 | Resolved with a named namespace-visible contract, exclusion counts, and human-signoff-only disposition |
-| MIG-R01 | Medium | Standalone `verify-migration` compares resolved roots lexically, so one physical directory reached through case or Unicode aliases can produce a vacuous complete result eligible for human sign-off. The command is report-only, and the v0.5.11 guided coordinator rejects the pair before dispatch. | 0.5.12 | Implemented in ADR 0085 with a shared no-follow filesystem-identity ancestry boundary plus alias, case-sensitive-distinct, nesting, fail-closed, privacy, and zero-write regressions; independent exact-SHA review pending |
+| MIG-R01 | Medium | Standalone `verify-migration` compares resolved roots lexically, so one physical directory reached through case or Unicode aliases can produce a vacuous complete result eligible for human sign-off. The command is report-only, and the v0.5.11 guided coordinator rejects the pair before dispatch. | 0.5.12 | Resolved in ADR 0085 with a shared no-follow filesystem-identity ancestry boundary plus alias, case-sensitive-distinct, nesting, fail-closed, privacy, and zero-write regressions; independently accepted without findings at `27227e1` |
 
 ## CI portability findings
 
@@ -359,6 +359,15 @@ The same adversarial method was repeated after the first validation release.
 
 ## Independent review evidence
 
+- Codex independently reviewed PR #44 at exact head `27227e1` in a separate
+  detached worktree, reproduced the base false-complete result and target
+  setup-status-2 rejection on a real case-insensitive filesystem, reran all
+  441 synthetic and real-FFmpeg tests at 88 percent subprocess-aware coverage,
+  and reported no findings in
+  [the exact-SHA review comment](https://github.com/nachiketbhujbal/python-media-organizer/pull/44#issuecomment-5562546868).
+  Hosted run `34063366227` then passed the trusted classifier, Ubuntu, pinned
+  Fedora 42, macOS, and unconditional aggregate quality gate at that same
+  implementation head.
 - Opus independently reviewed PR #42 at exact head `98183af`, reran all 417
   tests, and reported SIM-R01 plus SIM-R02 in
   [the consolidated review comment](https://github.com/nachiketbhujbal/python-media-organizer/pull/42#issuecomment-5465866835).
