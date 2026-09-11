@@ -53,6 +53,12 @@ def _outcomes(
     return values
 
 
+def validate_synopsis_history(log_dir: Path, state: MigrationState) -> None:
+    """Require every recorded private outcome to remain trustworthy."""
+
+    _outcomes(log_dir, state)
+
+
 def _latest(
     values: Iterable[tuple[Attempt, dict[str, Any]]],
     *stage_names: str,
@@ -226,17 +232,25 @@ def print_synopsis(log_dir: Path, state: MigrationState) -> None:
         if simulation is not None:
             review_files = simulation["data"]["review_files"]
             review_bytes = simulation["data"]["review_bytes"]
-        print(
-            f"  Duplicate review storage: {review_files} file(s), "
-            f"{format_bytes(review_bytes)} potentially reclaimable from the working "
-            "collection."
+        quarantine_confirmed = any(
+            attempt.action == "confirm-quarantine" for attempt in state.attempts
         )
-        if any(attempt.action == "confirm-quarantine" for attempt in state.attempts):
+        if quarantine_confirmed:
+            print(
+                "  Duplicate review storage before external retention: "
+                f"{review_files} file(s), {format_bytes(review_bytes)} isolated "
+                "from the working collection."
+            )
             print(
                 "  External retention: confirmed by the operator; pymo did not "
                 "inspect the retained destination or prove physical storage reclaimed."
             )
         else:
+            print(
+                f"  Duplicate review storage: {review_files} file(s), "
+                f"{format_bytes(review_bytes)} potentially reclaimable from the working "
+                "collection."
+            )
             print("  External retention: pending; no storage reclamation is claimed.")
 
         cache_results = [outcome["data"]["cache"] for outcome in duplicates]

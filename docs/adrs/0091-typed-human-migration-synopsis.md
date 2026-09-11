@@ -38,6 +38,11 @@ review-tree accounting. A failed child may contribute a valid partial outcome,
 but absence or invalidity of an outcome can never be converted into a success
 claim.
 
+Every resumed coordinator action preflights the complete required outcome
+history before it may dispatch another child. Outcome creation and reading pin
+the already-separated private parent directory, use no-follow descriptor-relative
+leaf operations, and verify the parent and leaf identities through access.
+
 The human synopsis is a deterministic projection of strict coordinator history
 and these owned aggregate outcomes. It labels the workflow as not started,
 pending, stopped, complete and eligible for sign-off, or complete and signed
@@ -60,6 +65,6 @@ is absent.
 - The append-only collection action log remains the authority for reversible
   mutations; an outcome only summarizes the command result that produced it.
 - A missing, malformed, mismatched, or unsafe successful-stage outcome stops
-  the coordinator before it advances restart state.
+  both initial advancement and every later resume before another child runs.
 - Version 0.6.4 may stabilize an exported report from the same typed model
   without declaring these private per-stage files compatible.

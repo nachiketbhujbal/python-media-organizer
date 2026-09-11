@@ -20,6 +20,12 @@ All notable changes to `python-media-organizer` will be recorded here.
   outcome records only inside the explicitly requested migration log directory.
   Validate their schema, stage command, result kind, status, and values before
   advancing schema-2 restart state.
+- Preflight every required historical outcome before any resumed action or child
+  dispatch. Pin its private parent directory and leaf identity through
+  descriptor-relative no-follow reads and exclusive creation.
+- Keep persistent cache reuse separate from same-run image memoization, and
+  describe duplicate review storage after external retention as historical
+  isolation rather than capacity still recoverable from the working tree.
 - Keep the synopsis a projection of owned stage results rather than new
   preservation evidence, action history, a deletion authorization, or the
   stable machine-readable report contract planned for version 0.6.4.

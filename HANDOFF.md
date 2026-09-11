@@ -1201,6 +1201,10 @@ Version 0.6.2 adds a private aggregate outcome beside each coordinator child
 log and records its filename plus observed duration in restart state. The child
 command owns its typed facts; the coordinator validates the outcome against the
 stage command, result kind, exit status, schema, and values before advancing.
+Every resume preflights the complete required outcome history before another
+child can run. Outcome reads and exclusive creation pin the private parent
+directory and operate on the leaf by descriptor, refusing parent or leaf
+substitution.
 Current status and automatic or interactive boundaries project those owned
 facts into a concise human synopsis. It distinguishes previewed from isolated
 duplicates, potential recovery from proven reclamation, simulated from observed

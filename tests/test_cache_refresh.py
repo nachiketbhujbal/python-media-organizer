@@ -109,7 +109,10 @@ def test_image_refresh_recomputes_selected_records_and_preserves_unrelated_evide
     assert refreshed.returncode == 0, refreshed.stdout + refreshed.stderr
     assert "Whole-file hash cache refresh: 0 reusable record(s)" in refreshed.stdout
     assert "Displayed-pixel cache refresh: 0 compatible record(s)" in refreshed.stdout
-    assert "0 reused; 1 computed; 1 refreshed record(s) persisted" in refreshed.stdout
+    assert (
+        "0 reused; 1 computed; 0 same-run memoized; 1 refreshed record(s) persisted"
+        in refreshed.stdout
+    )
     assert "Image cache refresh summary" in refreshed.stdout
     contents = cache_service.read_coordinated_cache(layout.derived_cache)
     assert contents is not None

@@ -407,10 +407,14 @@ def _validate_attempt_order(attempts: tuple[Attempt, ...], next_stage: int) -> N
             )
         stage = stages[expected]
         if attempt.action == "run":
+            outcome_required = attempt.exit_status == 0 or (
+                stage.identifier in validation_stages and attempt.exit_status == 1
+            )
             if (
                 stage.mode == "checkpoint"
                 or attempt.log_file is None
                 or attempt.apply != (stage.mode == "apply")
+                or (outcome_required and attempt.outcome_file is None)
             ):
                 raise MigrationCoordinatorError(
                     "migration restart attempt is inconsistent"

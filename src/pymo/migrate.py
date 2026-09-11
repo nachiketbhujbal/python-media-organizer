@@ -32,7 +32,11 @@ from pymo.migration.roots import (
     existing_directories_are_disjoint,
     paths_are_disjoint,
 )
-from pymo.migration.synopsis import MigrationSynopsisError, print_synopsis
+from pymo.migration.synopsis import (
+    MigrationSynopsisError,
+    print_synopsis,
+    validate_synopsis_history,
+)
 from pymo.migration.workflow import (
     CoordinatorOptions,
     Stage,
@@ -205,6 +209,7 @@ def _print_status(state: MigrationState) -> None:
 def _run_next(
     log_dir: Path, state_path: Path, state: MigrationState, apply: bool
 ) -> int:
+    validate_synopsis_history(log_dir, state)
     if state.next_stage == len(_stages()):
         print("Migration sequence is already complete.")
         return 0
@@ -851,6 +856,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "restart state was created by a different pymo version"
                 )
             _require_matching_options(option_overrides, state)
+            validate_synopsis_history(log_dir, state)
             if args.run_next:
                 status = _run_next(log_dir, state_path, state, args.apply)
                 updated = _load_state(state_path)

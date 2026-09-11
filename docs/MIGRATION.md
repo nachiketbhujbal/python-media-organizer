@@ -368,3 +368,6 @@ the external migration record as the operator's durable record and do not treat
 the private outcome files as a stable interchange format. Version 0.6.4 defines
 the separate versioned machine-readable report artifact and compatibility
 contract.
+Before any resumed action, the coordinator revalidates every required private
+outcome through its pinned private-directory boundary. Missing, replaced,
+publicly readable, or malformed history stops before another child is run.

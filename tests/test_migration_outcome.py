@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from pymo.migration import outcome as migration_outcome
 from pymo.migration.outcome import (
     MigrationOutcomeError,
     outcome_record,
@@ -105,6 +107,38 @@ def test_outcome_destination_cannot_be_inside_collection(tmp_path: Path) -> None
     assert not destination.exists()
 
 
+def test_outcome_write_rejects_parent_substitution_after_disjoint_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    collection = tmp_path / "collection"
+    private = tmp_path / "private"
+    displaced = tmp_path / "displaced-private"
+    collection.mkdir()
+    private.mkdir()
+    destination = private / "stage.outcome.json"
+    real_disjoint = migration_outcome.existing_directories_are_disjoint
+    substituted = False
+
+    def replace_parent(first: Path, second: Path) -> bool:
+        nonlocal substituted
+        result = real_disjoint(first, second)
+        if not substituted:
+            substituted = True
+            private.rename(displaced)
+            os.symlink(collection, private, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(
+        migration_outcome, "existing_directories_are_disjoint", replace_parent
+    )
+
+    with pytest.raises(MigrationOutcomeError, match="parent cannot be opened safely"):
+        write_outcome(destination, scan_outcome(), collection)
+
+    assert not (collection / destination.name).exists()
+    assert not (displaced / destination.name).exists()
+
+
 @pytest.mark.parametrize(
     "mutation",
     (
@@ -144,6 +178,23 @@ def test_outcome_reader_rejects_symbolic_link(tmp_path: Path) -> None:
 
     with pytest.raises(MigrationOutcomeError, match="cannot be read safely"):
         read_outcome(link, expected_command="scan", expected_status=0)
+
+
+def test_outcome_reader_rejects_symbolic_link_parent(tmp_path: Path) -> None:
+    actual = tmp_path / "actual"
+    actual.mkdir()
+    target = actual / "stage.outcome.json"
+    target.write_text(json.dumps(scan_outcome()), encoding="utf-8")
+    target.chmod(0o600)
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(actual, target_is_directory=True)
+
+    with pytest.raises(MigrationOutcomeError, match="parent cannot be opened safely"):
+        read_outcome(
+            linked_parent / target.name,
+            expected_command="scan",
+            expected_status=0,
+        )
 
 
 @pytest.mark.parametrize(

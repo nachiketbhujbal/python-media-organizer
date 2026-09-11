@@ -160,6 +160,8 @@ def completed_child(
     )
     if category == "duplicates" and "--apply" not in command:
         result_kind = "preview"
+    if category == "verification" and result_kind == "simulated" and status == 0:
+        data["disposition"] = "eligible-for-human-quarantine-review"
     path = Path(command[command.index("--migration-outcome") + 1])
     path.write_text(
         json.dumps(outcome_record(child, category, result_kind, status, data)) + "\n",
@@ -478,30 +480,88 @@ def stat_mode(path: Path) -> int:
 
 def _state_at(log_dir: Path, baseline: Path, working: Path, next_stage: int) -> None:
     now = "2026-08-29T12:00:00-04:00"
-    attempts = tuple(
-        migrate.Attempt(
-            stage.identifier,
-            "confirm-quarantine" if stage.mode == "checkpoint" else "run",
-            0,
-            now,
-            None if stage.mode == "checkpoint" else f"{index}.log",
-            stage.mode == "apply",
-        )
-        for index, stage in enumerate(migrate._stages()[:next_stage], start=1)
+    options = migrate.CoordinatorOptions(
+        False, False, True, None, False, False, None, None, None, None, False
     )
+    attempts: list[migrate.Attempt] = []
+    for index, stage in enumerate(migrate._stages()[:next_stage], start=1):
+        if stage.mode == "checkpoint":
+            attempts.append(
+                migrate.Attempt(
+                    stage.identifier,
+                    "confirm-quarantine",
+                    0,
+                    now,
+                    None,
+                    False,
+                )
+            )
+            continue
+        log_name = f"{index}.log"
+        outcome_name = f"{index}.outcome.json"
+        command = child_command(
+            baseline.resolve(),
+            working.resolve(),
+            options,
+            stage,
+            log_dir / log_name,
+            log_dir / outcome_name,
+        )
+        completed_child(command)
+        attempts.append(
+            migrate.Attempt(
+                stage.identifier,
+                "run",
+                0,
+                now,
+                log_name,
+                stage.mode == "apply",
+                0,
+                outcome_name,
+            )
+        )
     state = migrate.MigrationState(
         __version__,
         baseline.resolve(),
         working.resolve(),
-        migrate.CoordinatorOptions(
-            False, False, True, None, False, False, None, None, None, None, False
-        ),
+        options,
         next_stage,
-        attempts,
+        tuple(attempts),
         now,
         now,
     )
     migrate._write_state(state_file(log_dir), state)
+
+
+def _failed_validation_attempt(
+    log_dir: Path,
+    baseline: Path,
+    working: Path,
+    state: migrate.MigrationState,
+    stage_name: str,
+) -> migrate.Attempt:
+    stage = next(item for item in migrate._stages() if item.identifier == stage_name)
+    log_name = "failed.log"
+    outcome_name = "failed.outcome.json"
+    command = child_command(
+        baseline.resolve(),
+        working.resolve(),
+        state.options,
+        stage,
+        log_dir / log_name,
+        log_dir / outcome_name,
+    )
+    completed_child(command, 1)
+    return migrate.Attempt(
+        stage_name,
+        "run",
+        1,
+        "2026-08-29T12:00:01-04:00",
+        log_name,
+        False,
+        0,
+        outcome_name,
+    )
 
 
 class TerminalInput(io.StringIO):
@@ -517,6 +577,7 @@ def test_interactive_requires_terminal_input_without_state_write(
     log_dir.mkdir()
     _state_at(log_dir, baseline, working, 6)
     before = state_file(log_dir).read_bytes()
+    before_entries = sorted(path.name for path in log_dir.iterdir())
 
     result = run_pymo(
         "migrate", baseline, working, "--log-dir", log_dir, "--interactive"
@@ -525,7 +586,7 @@ def test_interactive_requires_terminal_input_without_state_write(
     assert result.returncode == 2
     assert "--interactive requires terminal input" in result.stderr
     assert state_file(log_dir).read_bytes() == before
-    assert len(list(log_dir.iterdir())) == 1
+    assert sorted(path.name for path in log_dir.iterdir()) == before_entries
 
 
 @pytest.mark.parametrize(("response", "status"), [("\n", 0), ("maybe\n", 2), ("", 2)])
@@ -644,15 +705,10 @@ def test_interactive_accepts_pending_status_one_without_rerunning_it(
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
     _state_at(log_dir, baseline, working, 2)
-    failed = migrate.Attempt(
-        "baseline-validation",
-        "run",
-        1,
-        "2026-08-29T12:00:01-04:00",
-        "failed.log",
-        False,
-    )
     current = migrate._load_state(state_file(log_dir))
+    failed = _failed_validation_attempt(
+        log_dir, baseline, working, current, "baseline-validation"
+    )
     migrate._write_state(
         state_file(log_dir), migrate._updated_state(current, failed, advance=False)
     )
@@ -690,15 +746,10 @@ def test_interactive_declines_pending_status_one_with_original_status(
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
     _state_at(log_dir, baseline, working, 2)
-    failed = migrate.Attempt(
-        "baseline-validation",
-        "run",
-        1,
-        "2026-08-29T12:00:01-04:00",
-        "failed.log",
-        False,
-    )
     current = migrate._load_state(state_file(log_dir))
+    failed = _failed_validation_attempt(
+        log_dir, baseline, working, current, "baseline-validation"
+    )
     migrate._write_state(
         state_file(log_dir), migrate._updated_state(current, failed, advance=False)
     )
@@ -1588,7 +1639,7 @@ def test_complete_media_sequence_preserves_bytes_through_external_quarantine(
     assert "2 organization moves" in synopsis
     assert "2 canonical renames" in synopsis
     assert "1 duplicate copy of image content isolated across 1 group" in synopsis
-    assert "Duplicate review storage: 1 file(s)" in synopsis
+    assert "Duplicate review storage before external retention: 1 file(s)" in synopsis
     assert "confirmed by the operator" in synopsis
     assert "did not inspect the retained destination" in synopsis
     assert "Observed preservation: COMPLETE; 1/1" in synopsis
@@ -1653,3 +1704,49 @@ def test_status_fails_closed_if_recorded_outcome_becomes_unsafe(
         sys.stderr,
     )
     assert str(tmp_path) not in messages[-1][0]
+
+
+def test_state_rejects_successful_attempt_without_outcome_reference(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 1)
+    payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
+    payload["attempts"][0]["outcome_file"] = None
+    state_file(log_dir).write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(
+        migrate.MigrationCoordinatorError,
+        match="migration restart attempt is inconsistent",
+    ):
+        migrate._load_state(state_file(log_dir))
+
+
+def test_resume_validates_prior_outcomes_before_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 1)
+    payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
+    outcome = log_dir / payload["attempts"][0]["outcome_file"]
+    outcome.chmod(0o644)
+    observed: list[list[str]] = []
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: observed.append(command),
+    )
+
+    result = migrate.main(
+        [str(baseline), str(working), "--log-dir", str(log_dir), "--run-next"]
+    )
+
+    assert result == 2
+    assert observed == []
+    assert (
+        json.loads(state_file(log_dir).read_text(encoding="utf-8"))["next_stage"] == 1
+    )

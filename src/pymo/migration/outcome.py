@@ -6,6 +6,8 @@ import argparse
 import json
 import os
 import stat
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
 
@@ -545,6 +547,96 @@ def _require_external_private_parent(path: Path, roots: tuple[Path, ...]) -> Pat
     return parent / path.name
 
 
+def _directory_identity_from_stat(value: os.stat_result) -> tuple[int, int]:
+    return (value.st_dev, value.st_ino)
+
+
+def _file_identity_from_stat(
+    value: os.stat_result,
+) -> tuple[int, int, int, int, int, int, int]:
+    return (
+        value.st_dev,
+        value.st_ino,
+        value.st_mode,
+        value.st_nlink,
+        value.st_size,
+        value.st_mtime_ns,
+        value.st_ctime_ns,
+    )
+
+
+def _require_pinned_parent_current(
+    parent: Path, descriptor: int, expected: tuple[int, int]
+) -> None:
+    try:
+        opened = os.fstat(descriptor)
+        current = os.stat(parent, follow_symlinks=False)
+    except OSError as error:
+        raise MigrationOutcomeError(
+            "migration outcome parent changed during access"
+        ) from error
+    if (
+        not stat.S_ISDIR(opened.st_mode)
+        or not stat.S_ISDIR(current.st_mode)
+        or _directory_identity_from_stat(opened) != expected
+        or _directory_identity_from_stat(current) != expected
+    ):
+        raise MigrationOutcomeError("migration outcome parent changed during access")
+
+
+@contextmanager
+def _pinned_outcome_parent(path: Path) -> Iterator[tuple[int, str, Path]]:
+    if path.name in {"", ".", ".."}:
+        raise MigrationOutcomeError("migration outcome destination is unsafe")
+    parent = path.parent
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(parent, flags)
+    except OSError as error:
+        raise MigrationOutcomeError(
+            "migration outcome parent cannot be opened safely"
+        ) from error
+    try:
+        try:
+            metadata = os.fstat(descriptor)
+        except OSError as error:
+            raise MigrationOutcomeError(
+                "migration outcome parent cannot be inspected safely"
+            ) from error
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise MigrationOutcomeError(
+                "migration outcome parent is not a safe directory"
+            )
+        identity = _directory_identity_from_stat(metadata)
+        _require_pinned_parent_current(parent, descriptor, identity)
+        yield descriptor, path.name, parent
+        _require_pinned_parent_current(parent, descriptor, identity)
+    finally:
+        os.close(descriptor)
+
+
+def _require_parent_outside_roots(
+    parent: Path, descriptor: int, roots: tuple[Path, ...]
+) -> None:
+    try:
+        metadata = os.fstat(descriptor)
+    except OSError as error:
+        raise MigrationOutcomeError(
+            "migration outcome parent cannot be inspected safely"
+        ) from error
+    expected = _directory_identity_from_stat(metadata)
+    for root in roots:
+        try:
+            disjoint = existing_directories_are_disjoint(root, parent)
+        except DirectoryIdentityError as error:
+            raise MigrationOutcomeError(str(error)) from error
+        if not disjoint:
+            raise MigrationOutcomeError(
+                "migration outcome destination must be outside every collection"
+            )
+    _require_pinned_parent_current(parent, descriptor, expected)
+
+
 def write_outcome(path: Path | None, value: dict[str, Any], *roots: Path) -> None:
     if path is None:
         return
@@ -557,30 +649,41 @@ def write_outcome(path: Path | None, value: dict[str, Any], *roots: Path) -> Non
     if len(payload) > 1024 * 1024:
         raise MigrationOutcomeError("migration outcome is too large")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    descriptor: int | None = None
-    try:
-        descriptor = os.open(destination, flags, 0o600)
-        view = memoryview(payload)
-        while view:
-            written = os.write(descriptor, view)
-            if written == 0:
-                raise OSError("short migration outcome write")
-            view = view[written:]
-        os.fsync(descriptor)
-        metadata = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(metadata.st_mode)
-            or metadata.st_nlink != 1
-            or metadata.st_mode & 0o077
-        ):
-            raise OSError("unsafe migration outcome destination")
-    except OSError as error:
-        raise MigrationOutcomeError(
-            "migration outcome could not be saved safely"
-        ) from error
-    finally:
-        if descriptor is not None:
-            os.close(descriptor)
+    with _pinned_outcome_parent(destination) as (
+        parent_descriptor,
+        name,
+        parent,
+    ):
+        _require_parent_outside_roots(parent, parent_descriptor, tuple(roots))
+        descriptor: int | None = None
+        try:
+            descriptor = os.open(name, flags, 0o600, dir_fd=parent_descriptor)
+            view = memoryview(payload)
+            while view:
+                written = os.write(descriptor, view)
+                if written == 0:
+                    raise OSError("short migration outcome write")
+                view = view[written:]
+            os.fsync(descriptor)
+            metadata = os.fstat(descriptor)
+            current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_nlink != 1
+                or metadata.st_mode & 0o077
+                or _file_identity_from_stat(current)
+                != _file_identity_from_stat(metadata)
+            ):
+                raise OSError("unsafe migration outcome destination")
+            os.fsync(parent_descriptor)
+            _require_parent_outside_roots(parent, parent_descriptor, tuple(roots))
+        except OSError as error:
+            raise MigrationOutcomeError(
+                "migration outcome could not be saved safely"
+            ) from error
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
 
 
 def read_outcome(
@@ -590,27 +693,40 @@ def read_outcome(
     expected_status: int,
     expected_result_kind: ResultKind | None = None,
 ) -> dict[str, Any]:
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-    try:
-        descriptor = os.open(path, flags)
-    except OSError as error:
-        raise MigrationOutcomeError(
-            "migration outcome cannot be read safely"
-        ) from error
-    try:
-        metadata = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(metadata.st_mode)
-            or metadata.st_nlink != 1
-            or metadata.st_mode & 0o077
-            or metadata.st_size > 1024 * 1024
-        ):
-            raise MigrationOutcomeError("migration outcome file is unsafe")
-        chunks: list[bytes] = []
-        while chunk := os.read(descriptor, 65536):
-            chunks.append(chunk)
-    finally:
-        os.close(descriptor)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    with _pinned_outcome_parent(path) as (parent_descriptor, name, _):
+        try:
+            descriptor = os.open(name, flags, dir_fd=parent_descriptor)
+        except OSError as error:
+            raise MigrationOutcomeError(
+                "migration outcome cannot be read safely"
+            ) from error
+        try:
+            metadata = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_nlink != 1
+                or metadata.st_mode & 0o077
+                or metadata.st_size > 1024 * 1024
+            ):
+                raise MigrationOutcomeError("migration outcome file is unsafe")
+            initial = _file_identity_from_stat(metadata)
+            chunks: list[bytes] = []
+            while chunk := os.read(descriptor, 65536):
+                chunks.append(chunk)
+            final = os.fstat(descriptor)
+            current = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
+            if (
+                _file_identity_from_stat(final) != initial
+                or _file_identity_from_stat(current) != initial
+            ):
+                raise MigrationOutcomeError("migration outcome changed during read")
+        except OSError as error:
+            raise MigrationOutcomeError(
+                "migration outcome cannot be read safely"
+            ) from error
+        finally:
+            os.close(descriptor)
     try:
         value = json.loads(b"".join(chunks))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:

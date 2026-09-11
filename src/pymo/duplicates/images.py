@@ -92,6 +92,13 @@ class ImageRecord:
         return self.state.modified_ns
 
 
+@dataclass(frozen=True)
+class ImageCacheUse:
+    reused: int
+    computed: int
+    persisted: int
+
+
 ImageMove = tuple[str, ImageRecord, ImageRecord, Path]
 
 
@@ -225,6 +232,7 @@ def _write_migration_outcome(
     cache_enabled: bool,
     cache_reused: int,
     cache_computed: int,
+    cache_persisted: int,
     status: int,
 ) -> int:
     if path is None:
@@ -249,7 +257,7 @@ def _write_migration_outcome(
                         "enabled": cache_enabled,
                         "reused": cache_reused,
                         "computed": cache_computed,
-                        "persisted": cache_computed if cache_enabled else 0,
+                        "persisted": cache_persisted,
                         "issue": None,
                     },
                 },
@@ -303,7 +311,7 @@ def keep_sort_key(record: ImageRecord) -> tuple[int, int, str]:
     return (-record.file_size, record.modified_ns, str(record.path).casefold())
 
 
-def inspect_image_paths(
+def _inspect_image_paths_with_stats(
     root: Path,
     paths: list[Path],
     progress_interval_seconds: int,
@@ -312,7 +320,7 @@ def inspect_image_paths(
     pillow_runtime: str,
     *,
     reuse_evidence: bool = True,
-) -> tuple[list[ImageRecord], int, list[tuple[Path, str]]]:
+) -> tuple[list[ImageRecord], int, list[tuple[Path, str]], ImageCacheUse]:
     scanned_bytes = 0
     skipped: list[tuple[Path, str]] = []
     states: dict[Path, FileState] = {}
@@ -337,6 +345,7 @@ def inspect_image_paths(
             "Image fingerprint cache cannot be used safely: "
             f"{error}\nThe cache is disposable; move it aside or rerun with --no-cache."
         ) from error
+    persistent_pixel_hashes = set(cached_pixels)
     if database is None:
         print("Image fingerprint cache disabled: no records read or written.")
     else:
@@ -438,12 +447,49 @@ def inspect_image_paths(
         )
         print(
             "Displayed-pixel cache use: "
-            f"{sum(record.pixel_hash_cached for record in analyzed)} reused; "
+            f"{sum(record.byte_sha256 in persistent_pixel_hashes for record in analyzed)} reused; "
             f"{sum(not record.pixel_hash_cached for record in analyzed)} computed; "
+            f"{sum(record.pixel_hash_cached and record.byte_sha256 not in persistent_pixel_hashes for record in analyzed)} "
+            "same-run memoized; "
             f"{len(pixels_persisted)} {publication_label} record(s) persisted."
         )
 
-    return analyzed, scanned_bytes, skipped
+    reused = sum(record.byte_sha256_cached for record in analyzed)
+    reused += sum(record.byte_sha256 in persistent_pixel_hashes for record in analyzed)
+    computed = sum(not record.byte_sha256_cached for record in analyzed)
+    computed += sum(not record.pixel_hash_cached for record in analyzed)
+    return (
+        analyzed,
+        scanned_bytes,
+        skipped,
+        ImageCacheUse(
+            reused=reused,
+            computed=computed,
+            persisted=hashes_persisted + len(pixels_persisted),
+        ),
+    )
+
+
+def inspect_image_paths(
+    root: Path,
+    paths: list[Path],
+    progress_interval_seconds: int,
+    database: Path | None,
+    publication_batch_size: int,
+    pillow_runtime: str,
+    *,
+    reuse_evidence: bool = True,
+) -> tuple[list[ImageRecord], int, list[tuple[Path, str]]]:
+    records, scanned_bytes, skipped, _ = _inspect_image_paths_with_stats(
+        root,
+        paths,
+        progress_interval_seconds,
+        database,
+        publication_batch_size,
+        pillow_runtime,
+        reuse_evidence=reuse_evidence,
+    )
+    return records, scanned_bytes, skipped
 
 
 def group_image_duplicates(records: list[ImageRecord]) -> list[list[ImageRecord]]:
@@ -679,11 +725,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             cache_enabled=not args.no_cache,
             cache_reused=0,
             cache_computed=0,
+            cache_persisted=0,
             status=0,
         )
 
     try:
-        records, scanned_bytes, skipped = inspect_image_paths(
+        records, scanned_bytes, skipped, cache_use = _inspect_image_paths_with_stats(
             root,
             paths,
             config.performance.progress_interval_seconds,
@@ -748,11 +795,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             for path, reason in skipped:
                 print(f"  {path}: {reason}")
 
-    cache_reused = sum(
-        int(record.byte_sha256_cached) + int(record.pixel_hash_cached)
-        for record in records
-    )
-    cache_computed = 2 * len(records) - cache_reused
     return _write_migration_outcome(
         args.migration_outcome,
         root,
@@ -762,8 +804,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         duplicate_groups=duplicate_groups,
         skipped=len(skipped),
         cache_enabled=not args.no_cache,
-        cache_reused=cache_reused,
-        cache_computed=cache_computed,
+        cache_reused=cache_use.reused,
+        cache_computed=cache_use.computed,
+        cache_persisted=cache_use.persisted,
         status=0,
     )
 
