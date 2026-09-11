@@ -52,6 +52,13 @@ from pymo.duplicates.videos import (
 )
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
+from pymo.migration.outcome import (
+    MigrationOutcomeError,
+    add_outcome_argument,
+    outcome_record,
+    validation_data,
+    write_outcome,
+)
 from pymo.progress import ProgressMeter, format_bytes
 
 # This identifies the public machine-readable validation report contract.
@@ -1159,6 +1166,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
+    add_outcome_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -1314,7 +1322,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(report, sort_keys=True, separators=(",", ":")))
     else:
         print_report(report, args.show_files)
-    return 1 if report["health"]["files_with_errors"] or cache_issue else 0
+    status = 1 if report["health"]["files_with_errors"] or cache_issue else 0
+    if args.migration_outcome is None:
+        return status
+    try:
+        write_outcome(
+            args.migration_outcome,
+            outcome_record(
+                "validate", "validation", "observed", status, validation_data(report)
+            ),
+            root,
+        )
+    except MigrationOutcomeError:
+        print("Migration outcome could not be recorded safely.", file=sys.stderr)
+        return 1
+    return status
 
 
 if __name__ == "__main__":

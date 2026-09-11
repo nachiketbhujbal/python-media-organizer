@@ -18,6 +18,13 @@ from pymo.logging_config import emit as print
 from pymo.migration.coverage import compare_byte_inventories
 from pymo.migration.images import compare_image_content
 from pymo.migration.inventory import discover_tree, hash_tree, revalidate_tree
+from pymo.migration.outcome import (
+    MigrationOutcomeError,
+    add_outcome_argument,
+    outcome_record,
+    verification_data,
+    write_outcome,
+)
 from pymo.migration.report import build_report, print_report
 from pymo.migration.roots import (
     DirectoryIdentityError,
@@ -74,6 +81,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
+    add_outcome_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -280,7 +288,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(report, sort_keys=True, separators=(",", ":")))
     else:
         print_report(report)
-    return 0 if preservation.verdict == "complete" else 1
+    status = 0 if preservation.verdict == "complete" else 1
+    if args.migration_outcome is None:
+        return status
+    try:
+        write_outcome(
+            args.migration_outcome,
+            outcome_record(
+                "verify-migration",
+                "verification",
+                "simulated" if args.simulate_without_dups else "observed",
+                status,
+                verification_data(report),
+            ),
+            source,
+            destination,
+        )
+    except MigrationOutcomeError:
+        print("Migration outcome could not be recorded safely.", file=sys.stderr)
+        return 1
+    return status
 
 
 if __name__ == "__main__":

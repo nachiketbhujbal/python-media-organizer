@@ -17,7 +17,7 @@ from typing import Any, Literal
 from pymo.migration.workflow import CoordinatorOptions, _stages
 
 # This identifies the private restart-state compatibility contract.
-MIGRATION_STATE_SCHEMA_VERSION = 1
+MIGRATION_STATE_SCHEMA_VERSION = 2
 
 
 class MigrationCoordinatorError(RuntimeError):
@@ -38,6 +38,8 @@ class Attempt:
     completed_at: str
     log_file: str | None
     apply: bool
+    duration_milliseconds: int = 0
+    outcome_file: str | None = None
 
     def as_json(self) -> dict[str, bool | int | str | None]:
         return {
@@ -47,6 +49,8 @@ class Attempt:
             "completed_at": self.completed_at,
             "log_file": self.log_file,
             "apply": self.apply,
+            "duration_milliseconds": self.duration_milliseconds,
+            "outcome_file": self.outcome_file,
         }
 
 
@@ -285,7 +289,16 @@ def _options_from_json(value: object) -> CoordinatorOptions:
 
 
 def _attempt_from_json(value: object) -> Attempt:
-    expected = {"stage", "action", "exit_status", "completed_at", "log_file", "apply"}
+    expected = {
+        "stage",
+        "action",
+        "exit_status",
+        "completed_at",
+        "log_file",
+        "apply",
+        "duration_milliseconds",
+        "outcome_file",
+    }
     if not isinstance(value, dict) or set(value) != expected:
         raise MigrationCoordinatorError("migration restart attempt is malformed")
     stage = value["stage"]
@@ -311,7 +324,35 @@ def _attempt_from_json(value: object) -> Attempt:
     ):
         raise MigrationCoordinatorError("migration restart attempt has unsafe log file")
     apply = _require_bool(value["apply"], "attempt apply flag")
-    return Attempt(stage, action, exit_status, completed_at, log_file, apply)
+    duration = value["duration_milliseconds"]
+    if isinstance(duration, bool) or not isinstance(duration, int) or duration < 0:
+        raise MigrationCoordinatorError(
+            "migration restart attempt has invalid duration"
+        )
+    outcome_file = _require_optional_str(value["outcome_file"], "attempt outcome file")
+    if outcome_file is not None and (
+        Path(outcome_file).name != outcome_file
+        or not outcome_file.endswith(".outcome.json")
+        or log_file is None
+        or outcome_file != f"{log_file[:-4]}.outcome.json"
+    ):
+        raise MigrationCoordinatorError(
+            "migration restart attempt has unsafe outcome file"
+        )
+    if action != "run" and (duration != 0 or outcome_file is not None):
+        raise MigrationCoordinatorError(
+            "migration restart bookkeeping attempt has child result fields"
+        )
+    return Attempt(
+        stage,
+        action,
+        exit_status,
+        completed_at,
+        log_file,
+        apply,
+        duration,
+        outcome_file,
+    )
 
 
 def _validate_attempt_order(attempts: tuple[Attempt, ...], next_stage: int) -> None:
@@ -366,10 +407,14 @@ def _validate_attempt_order(attempts: tuple[Attempt, ...], next_stage: int) -> N
             )
         stage = stages[expected]
         if attempt.action == "run":
+            outcome_required = attempt.exit_status == 0 or (
+                stage.identifier in validation_stages and attempt.exit_status == 1
+            )
             if (
                 stage.mode == "checkpoint"
                 or attempt.log_file is None
                 or attempt.apply != (stage.mode == "apply")
+                or (outcome_required and attempt.outcome_file is None)
             ):
                 raise MigrationCoordinatorError(
                     "migration restart attempt is inconsistent"

@@ -96,3 +96,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0088](0088-safe-migration-operator-loop.md) | Foreground safe migration operator loop |
 | [0089](0089-interactive-migration-checkpoints.md) | Conservative interactive migration checkpoints |
 | [0090](0090-post-tag-release-truth-reconciliation.md) | Post-tag release-truth reconciliation |
+| [0091](0091-typed-human-migration-synopsis.md) | Typed human migration synopsis |

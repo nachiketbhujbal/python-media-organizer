@@ -263,15 +263,17 @@ Version 0.5.11 coordinates the production runbook for one unchanged baseline
 and one working collection. Version 0.6.0 adds a foreground safe operator loop
 that advances routine stages in one invocation while preserving every existing
 decision boundary. Version 0.6.1 adds explicit terminal questions at those
-boundaries. With no log directory the coordinator writes nothing and prints the
-complete plan:
+boundaries. Version 0.6.2 adds a concise path-private synopsis of the recorded
+stage outcomes. With no log directory the coordinator writes nothing and
+prints the complete plan:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-copy"
 ```
 
 Select a dedicated private directory outside both collections to opt into
-restart state and one log per attempted child stage:
+restart state, one log per attempted child stage, and the private aggregate
+outcomes used by the synopsis:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-copy" \
@@ -325,23 +327,27 @@ between stages, preserves the initial restart-state binding, requires every
 reload to add exactly the one expected successful attempt, and stops with status
 2 if any of those invariants changes.
 
-The schema-1 restart file records canonical roots, the installed pymo version,
-fixed common options, attempts, statuses, and private log names. Collection and
-log-directory separation is checked by filesystem identity, so aliases on a
-case-insensitive or normalizing filesystem cannot collapse the baseline and
-working roots or place private logs inside either collection. It is workflow
-bookkeeping, not action history or preservation evidence. It cannot create the
-baseline or working copy, move quarantine, rescue-copy, delete, or authorize
-discarding any data. See the [production runbook](docs/MIGRATION.md) for the
-complete procedure and option examples.
+The schema-2 restart file records canonical roots, the installed pymo version,
+fixed common options, attempts, statuses, measured child durations, and private
+log and outcome names. Collection and log-directory separation is checked by
+filesystem identity, so aliases on a case-insensitive or normalizing filesystem
+cannot collapse the baseline and working roots or place private records inside
+either collection. The coordinator validates each aggregate child outcome
+before advancing. State, outcomes, and the human synopsis are workflow
+bookkeeping, not action history, fresh preservation evidence, or a stable
+machine-readable report. They cannot create the baseline or working copy, move
+quarantine, rescue-copy, delete, or authorize discarding any data. See the
+[production runbook](docs/MIGRATION.md) for the complete procedure and option
+examples.
 
 Operational trials found that the stage engine produces the right media and
 preservation outcomes but asked the operator to perform too much repetitive
 coordination. Version 0.6.0 adds routine automatic advancement and version
-0.6.1 adds conservative in-process checkpoint questions. Concise human and
-machine reports, saved resume context, logging and visibility policy,
-pymo-owned duplicate disposition, a sequential manifest-backed queue, and
-benchmark-proven scheduling remain separate later releases.
+0.6.1 adds conservative in-process checkpoint questions. Version 0.6.2 adds the
+concise human synopsis without claiming a stable machine interface. The stable
+report artifact, saved resume context, logging and visibility policy, pymo-owned
+duplicate disposition, a sequential manifest-backed queue, and benchmark-proven
+scheduling remain separate later releases.
 
 ### Verify a migration by exact bytes and media content
 
@@ -1048,7 +1054,9 @@ disposition, queueing, and measured scheduling the version 0.6 theme under
 adds the foreground safe operator loop under
 [ADR 0088](docs/adrs/0088-safe-migration-operator-loop.md); version 0.6.1 adds
 terminal-only checkpoint consent under
-[ADR 0089](docs/adrs/0089-interactive-migration-checkpoints.md). Rescue copying,
+[ADR 0089](docs/adrs/0089-interactive-migration-checkpoints.md); and version
+0.6.2 adds the typed path-private human synopsis under
+[ADR 0091](docs/adrs/0091-typed-human-migration-synopsis.md). Rescue copying,
 permanent deletion, damaged-media remediation, richer
 metadata, and similarity tooling remain later roadmap or research work. Full
 video decoding remains sequential until representative benchmarks show that

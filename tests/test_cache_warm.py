@@ -218,12 +218,16 @@ def test_image_warm_populates_and_reuses_cache_without_duplicate_planning(
     assert first.returncode == 0, first.stdout + first.stderr
     assert "0 reusable record(s); 2 hash(es) required" in first.stdout
     assert "0 compatible record(s) available" in first.stdout
-    assert "1 reused; 1 computed; 1 new record(s) persisted" in first.stdout
+    assert "0 reused; 1 computed; 1 same-run memoized" in first.stdout
+    assert "1 new record(s) persisted" in first.stdout
     assert "complete selected-media coverage" in first.stdout
     assert second.returncode == 0, second.stdout + second.stderr
     assert "2 reusable record(s); 0 hash(es) required" in second.stdout
     assert "1 compatible record(s) available" in second.stdout
-    assert "2 reused; 0 computed; 0 new record(s) persisted" in second.stdout
+    assert (
+        "2 reused; 0 computed; 0 same-run memoized; 0 new record(s) persisted"
+        in second.stdout
+    )
     assert layout.derived_cache.is_file()
     assert layout.derived_cache_lock.is_file()
     assert not layout.dups.exists()

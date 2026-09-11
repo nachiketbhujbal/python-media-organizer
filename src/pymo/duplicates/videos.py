@@ -58,6 +58,12 @@ from pymo.duplicates.common import (
 )
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
+from pymo.migration.outcome import (
+    MigrationOutcomeError,
+    add_outcome_argument,
+    outcome_record,
+    write_outcome,
+)
 from pymo.progress import ProgressMeter, StageTimer, format_bytes
 from pymo.video import ProbeInfo
 from pymo.video_content import (
@@ -95,6 +101,13 @@ class VideoRecord:
     @property
     def modified_ns(self) -> int:
         return self.state.modified_ns
+
+
+@dataclass(frozen=True)
+class FingerprintCacheUse:
+    reused: int
+    computed: int
+    persisted: int
 
 
 VideoMove = tuple[VideoRecord, VideoRecord, Path]
@@ -297,6 +310,64 @@ def print_storage_summary(
     print("  No files are deleted by this tool.")
 
 
+def _duplicate_bytes(duplicate_groups: list[list[VideoRecord]]) -> int:
+    return sum(
+        record.file_size
+        for records in duplicate_groups
+        for record in sorted(records, key=keep_sort_key)[1:]
+    )
+
+
+def _write_migration_outcome(
+    path: Path | None,
+    root: Path,
+    *,
+    apply: bool,
+    scanned_files: int,
+    scanned_bytes: int,
+    duplicate_groups: list[list[VideoRecord]],
+    skipped: int,
+    cache_enabled: bool,
+    cache_reused: int,
+    cache_computed: int,
+    cache_persisted: int,
+    status: int,
+) -> int:
+    if path is None:
+        return status
+    try:
+        write_outcome(
+            path,
+            outcome_record(
+                "find-video-duplicates",
+                "duplicates",
+                "observed" if apply else "preview",
+                status,
+                {
+                    "media_kind": "video",
+                    "scanned_files": scanned_files,
+                    "scanned_bytes": scanned_bytes,
+                    "groups": len(duplicate_groups),
+                    "extra_copies": sum(len(group) - 1 for group in duplicate_groups),
+                    "duplicate_bytes": _duplicate_bytes(duplicate_groups),
+                    "skipped": skipped,
+                    "cache": {
+                        "enabled": cache_enabled,
+                        "reused": cache_reused,
+                        "computed": cache_computed,
+                        "persisted": cache_persisted,
+                        "issue": None,
+                    },
+                },
+            ),
+            root,
+        )
+    except MigrationOutcomeError:
+        print("Migration outcome could not be recorded safely.", file=sys.stderr)
+        return 1
+    return status
+
+
 def undo_duplicate_run(root: Path, apply: bool, *, summary: bool = False) -> int:
     log = ActionLog(root)
     try:
@@ -491,7 +562,7 @@ def candidate_video_records(records: list[VideoRecord]) -> list[VideoRecord]:
     ]
 
 
-def derive_candidate_fingerprints(
+def _derive_candidate_fingerprints_with_stats(
     root: Path,
     candidate_records: list[VideoRecord],
     database: Path,
@@ -504,7 +575,7 @@ def derive_candidate_fingerprints(
     *,
     fingerprint_label: str = "candidate content",
     reuse_evidence: bool = True,
-) -> tuple[dict[str, DerivedFingerprint], list[tuple[Path, str]]]:
+) -> tuple[dict[str, DerivedFingerprint], list[tuple[Path, str]], FingerprintCacheUse]:
     unique_hashes = {record.byte_sha256: record for record in candidate_records}
     try:
         cached = (
@@ -615,6 +686,44 @@ def derive_candidate_fingerprints(
             f"{cache_misses - persisted_records} required fingerprint(s) not "
             "persisted."
         )
+    return (
+        derived,
+        skipped,
+        FingerprintCacheUse(
+            reused=cache_hits,
+            computed=cache_misses,
+            persisted=persisted_records,
+        ),
+    )
+
+
+def derive_candidate_fingerprints(
+    root: Path,
+    candidate_records: list[VideoRecord],
+    database: Path,
+    ffmpeg: str,
+    ffmpeg_release: str,
+    decode_timeout: int,
+    progress_interval_seconds: int,
+    no_cache: bool,
+    summary: bool = False,
+    *,
+    fingerprint_label: str = "candidate content",
+    reuse_evidence: bool = True,
+) -> tuple[dict[str, DerivedFingerprint], list[tuple[Path, str]]]:
+    derived, skipped, _ = _derive_candidate_fingerprints_with_stats(
+        root,
+        candidate_records,
+        database,
+        ffmpeg,
+        ffmpeg_release,
+        decode_timeout,
+        progress_interval_seconds,
+        no_cache,
+        summary,
+        fingerprint_label=fingerprint_label,
+        reuse_evidence=reuse_evidence,
+    )
     return derived, skipped
 
 
@@ -777,6 +886,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
+    add_outcome_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -862,7 +972,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Fewer than two videos; exact comparison is not required.")
         print(f"\n{verb} 0 duplicate(s) from 0 group(s).")
         print_storage_summary([], scanned_bytes)
-        return 0
+        return _write_migration_outcome(
+            args.migration_outcome,
+            root,
+            apply=args.apply,
+            scanned_files=len(paths),
+            scanned_bytes=scanned_bytes,
+            duplicate_groups=[],
+            skipped=0,
+            cache_enabled=not args.no_cache,
+            cache_reused=0,
+            cache_computed=0,
+            cache_persisted=0,
+            status=0,
+        )
 
     try:
         ffmpeg = resolve_executable(args.ffmpeg, "ffmpeg")
@@ -903,7 +1026,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     candidate_records = candidate_video_records(records)
     try:
         with stage_timer.measure("fingerprinting"):
-            derived, fingerprint_skips = derive_candidate_fingerprints(
+            (
+                derived,
+                fingerprint_skips,
+                fingerprint_cache,
+            ) = _derive_candidate_fingerprints_with_stats(
                 root,
                 candidate_records,
                 database,
@@ -980,7 +1107,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not args.summary:
             for path, reason in skipped:
                 print(f"  {path}: {reason}")
-    return 0
+    inspection_reused = sum(
+        int(record.byte_sha256_cached) + int(record.probe_cached) for record in records
+    )
+    inspection_computed = 2 * len(records) - inspection_reused
+    inspection_persisted = sum(not record.byte_sha256_cached for record in records)
+    inspection_persisted += len(
+        {record.byte_sha256 for record in records if not record.probe_cached}
+    )
+    return _write_migration_outcome(
+        args.migration_outcome,
+        root,
+        apply=args.apply,
+        scanned_files=len(records),
+        scanned_bytes=scanned_bytes,
+        duplicate_groups=duplicate_groups,
+        skipped=len(skipped),
+        cache_enabled=not args.no_cache,
+        cache_reused=inspection_reused + fingerprint_cache.reused,
+        cache_computed=inspection_computed + fingerprint_cache.computed,
+        cache_persisted=inspection_persisted + fingerprint_cache.persisted,
+        status=0,
+    )
 
 
 if __name__ == "__main__":

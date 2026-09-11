@@ -40,6 +40,12 @@ from pymo.config import (
 )
 from pymo.discovery import DiscoveryError
 from pymo.logging_config import emit as print
+from pymo.migration.outcome import (
+    MigrationOutcomeError,
+    add_outcome_argument,
+    outcome_record,
+    write_outcome,
+)
 from pymo.organize import discover_files, path_key
 from pymo.progress import ProgressMeter
 
@@ -349,7 +355,41 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
+    add_outcome_argument(parser)
     return parser.parse_args(argv)
+
+
+def _write_migration_outcome(
+    path: Path | None,
+    root: Path,
+    *,
+    apply: bool,
+    files: int,
+    status: int,
+) -> int:
+    if path is None:
+        return status
+    try:
+        write_outcome(
+            path,
+            outcome_record(
+                "rename",
+                "transformation",
+                "observed" if apply else "preview",
+                status,
+                {
+                    "operation": "rename",
+                    "files": files,
+                    "directories_created": 0,
+                    "directories_removed": 0,
+                },
+            ),
+            root,
+        )
+    except MigrationOutcomeError:
+        print("Migration outcome could not be recorded safely.", file=sys.stderr)
+        return 1
+    return status
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -398,12 +438,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"Already using this naming scheme: {already_named} file(s).")
         if plan:
             print("Dry run only. Add --apply after reviewing this list.")
-        return 0
+        return _write_migration_outcome(
+            args.migration_outcome,
+            root,
+            apply=False,
+            files=len(plan),
+            status=0,
+        )
 
     if not plan:
         print("\nRenamed 0 media file(s).")
         print(f"Already using this naming scheme: {already_named} file(s).")
-        return 0
+        return _write_migration_outcome(
+            args.migration_outcome, root, apply=True, files=0, status=0
+        )
 
     try:
         log_path = apply_rename_plan(root, plan)
@@ -423,9 +471,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("\nRename verification needs attention:")
         for record in verification_failures:
             print(f"  {record.source} -> {record.target}")
-        return 1
+        return _write_migration_outcome(
+            args.migration_outcome,
+            root,
+            apply=True,
+            files=len(plan),
+            status=1,
+        )
     print("Verification passed: every planned media rename was completed.")
-    return 0
+    return _write_migration_outcome(
+        args.migration_outcome,
+        root,
+        apply=True,
+        files=len(plan),
+        status=0,
+    )
 
 
 if __name__ == "__main__":

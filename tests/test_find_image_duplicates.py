@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -39,7 +41,10 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
     assert "Ignored by configuration: 1 path(s)." in dry_run.stdout
     assert "Would move 1 duplicate" in dry_run.stdout
     assert "0 compatible record(s) available" in dry_run.stdout
-    assert "0 reused; 2 computed; 2 new record(s) persisted" in dry_run.stdout
+    assert (
+        "0 reused; 2 computed; 0 same-run memoized; 2 new record(s) persisted"
+        in dry_run.stdout
+    )
     assert "Potentially reclaimable if extra copies were deleted" in dry_run.stdout
     assert "No files are deleted by this tool" in dry_run.stdout
     assert older.exists()
@@ -51,7 +56,10 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
 
     assert applied.returncode == 0
     assert "2 compatible record(s) available" in applied.stdout
-    assert "2 reused; 0 computed; 0 new record(s) persisted" in applied.stdout
+    assert (
+        "2 reused; 0 computed; 0 same-run memoized; 0 new record(s) persisted"
+        in applied.stdout
+    )
     assert larger.exists()
     assert not older.exists()
     moved = tmp_path / "dups" / "pics" / "larger_copy(1).png"
@@ -67,6 +75,38 @@ def test_duplicate_finder_stays_dry_run_until_apply(tmp_path: Path, run_script) 
     assert larger.exists()
     assert not (tmp_path / "dups").exists()
     assert action_log_path(tmp_path).exists()
+
+
+def test_private_outcome_does_not_call_same_run_memoization_cache_reuse(
+    tmp_path: Path, run_script
+) -> None:
+    root = tmp_path / "collection"
+    private = tmp_path / "private"
+    pics, _ = make_organized_collection(root)
+    private.mkdir()
+    first = pics / "first.png"
+    second = pics / "second.png"
+    Image.new("RGB", (3, 2), "purple").save(first)
+    shutil.copyfile(first, second)
+    outcome = private / "image.outcome.json"
+
+    result = run_script(
+        "find_image_duplicates.py",
+        root,
+        "--migration-outcome",
+        outcome,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    cache = json.loads(outcome.read_text(encoding="utf-8"))["data"]["cache"]
+    assert cache == {
+        "enabled": True,
+        "reused": 0,
+        "computed": 3,
+        "persisted": 3,
+        "issue": None,
+    }
+    assert "0 reused; 1 computed; 1 same-run memoized" in result.stdout
 
 
 def test_image_summary_applies_with_path_private_aggregate_output(

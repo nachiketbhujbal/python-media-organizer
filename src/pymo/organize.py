@@ -42,6 +42,12 @@ from pymo.discovery import (
     walk_entry_kind_complete,
 )
 from pymo.logging_config import emit as print
+from pymo.migration.outcome import (
+    MigrationOutcomeError,
+    add_outcome_argument,
+    outcome_record,
+    write_outcome,
+)
 from pymo.progress import ProgressMeter
 
 
@@ -420,7 +426,43 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
+    add_outcome_argument(parser)
     return parser.parse_args(argv)
+
+
+def _write_migration_outcome(
+    path: Path | None,
+    root: Path,
+    *,
+    apply: bool,
+    files: int,
+    directories_created: int,
+    directories_removed: int,
+    status: int,
+) -> int:
+    if path is None:
+        return status
+    try:
+        write_outcome(
+            path,
+            outcome_record(
+                "organize",
+                "transformation",
+                "observed" if apply else "preview",
+                status,
+                {
+                    "operation": "organization",
+                    "files": files,
+                    "directories_created": directories_created,
+                    "directories_removed": directories_removed,
+                },
+            ),
+            root,
+        )
+    except MigrationOutcomeError:
+        print("Migration outcome could not be recorded safely.", file=sys.stderr)
+        return 1
+    return status
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -516,12 +558,21 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.apply:
         try:
-            return report_layout_verification(root, pics, vids, classifier, config)
+            status = report_layout_verification(root, pics, vids, classifier, config)
         except DiscoveryError as error:
             print(f"Verification could not inspect the complete layout: {error}")
-            return 1
-
-    return 0
+            status = 1
+    else:
+        status = 0
+    return _write_migration_outcome(
+        args.migration_outcome,
+        root,
+        apply=args.apply,
+        files=len(plan),
+        directories_created=len(missing_destinations),
+        directories_removed=(removed_count if args.apply else len(source_directories)),
+        status=status,
+    )
 
 
 if __name__ == "__main__":

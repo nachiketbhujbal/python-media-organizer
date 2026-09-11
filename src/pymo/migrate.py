@@ -6,6 +6,7 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 import uuid
 from collections.abc import Sequence
 from pathlib import Path
@@ -24,11 +25,17 @@ from pymo.migration.coordinator_state import (
     _updated_state,
     _write_state,
 )
+from pymo.migration.outcome import MigrationOutcomeError, ResultKind, read_outcome
 from pymo.migration.roots import (
     DirectoryIdentityError,
     directory_identity,
     existing_directories_are_disjoint,
     paths_are_disjoint,
+)
+from pymo.migration.synopsis import (
+    MigrationSynopsisError,
+    print_synopsis,
+    validate_synopsis_history,
 )
 from pymo.migration.workflow import (
     CoordinatorOptions,
@@ -147,6 +154,14 @@ def _new_log_file(log_dir: Path, state: MigrationState, stage: Stage) -> Path:
     return path
 
 
+def _stage_result_kind(stage: Stage) -> ResultKind:
+    if stage.identifier == "without-dups-simulation":
+        return "simulated"
+    if stage.mode == "preview":
+        return "preview"
+    return "observed"
+
+
 def _print_plan(next_stage: int = 0) -> None:
     stages = _stages()
     print("Guided single-collection migration plan:")
@@ -194,6 +209,7 @@ def _print_status(state: MigrationState) -> None:
 def _run_next(
     log_dir: Path, state_path: Path, state: MigrationState, apply: bool
 ) -> int:
+    validate_synopsis_history(log_dir, state)
     if state.next_stage == len(_stages()):
         print("Migration sequence is already complete.")
         return 0
@@ -215,11 +231,18 @@ def _run_next(
         return 2
 
     log_file = _new_log_file(log_dir, state, stage)
+    outcome_file = log_file.with_suffix(".outcome.json")
     command = child_command(
-        state.baseline, state.working, state.options, stage, log_file
+        state.baseline,
+        state.working,
+        state.options,
+        stage,
+        log_file,
+        outcome_file,
     )
     print(f"Running one migration stage: {stage.identifier}.")
     print(f"Private stage log: {log_file}")
+    started_at = time.monotonic()
     try:
         completed = subprocess.run(command, check=False)
         status = completed.returncode
@@ -227,7 +250,35 @@ def _run_next(
             status = 128 + abs(status)
     except OSError:
         status = 127
-    attempt = Attempt(stage.identifier, "run", status, _now(), log_file.name, apply)
+    duration_milliseconds = max(0, round((time.monotonic() - started_at) * 1000))
+    outcome_name: str | None = None
+    if os.path.lexists(outcome_file):
+        try:
+            read_outcome(
+                outcome_file,
+                expected_command=stage.command or "",
+                expected_status=status,
+                expected_result_kind=_stage_result_kind(stage),
+            )
+        except MigrationOutcomeError as error:
+            raise MigrationCoordinatorError(
+                "private stage outcome is invalid"
+            ) from error
+        outcome_name = outcome_file.name
+    elif status == 0 or (stage.command == "validate" and status == 1):
+        raise MigrationCoordinatorError(
+            "successful child stage did not record its private typed outcome"
+        )
+    attempt = Attempt(
+        stage.identifier,
+        "run",
+        status,
+        _now(),
+        log_file.name,
+        apply,
+        duration_milliseconds,
+        outcome_name,
+    )
     _write_state(state_path, _updated_state(state, attempt, advance=status == 0))
     if status == 0:
         print(f"Stage complete: {stage.identifier}.")
@@ -244,6 +295,7 @@ def _run_next(
                 "final-working-validation",
             }
             and status == 1
+            and outcome_name is not None
         ):
             print(
                 "Review the findings; --accept-status is the explicit acknowledgement boundary."
@@ -262,10 +314,12 @@ def _run_until_checkpoint(
         if stage.mode in {"apply", "checkpoint"}:
             print("Safe operator loop paused at an operator checkpoint.")
             _print_status(state)
+            print_synopsis(log_dir, state)
             return 0
         previous_state = state
         status = _run_next(log_dir, state_path, state, apply=False)
         if status != 0:
+            print_synopsis(log_dir, _load_state(state_path))
             return status
         state = _load_state(state_path)
         _require_successful_transition(previous_state, state, stage)
@@ -274,10 +328,12 @@ def _run_until_checkpoint(
         if stage.review_after_success:
             print("Safe operator loop paused for validation review.")
             _print_status(state)
+            print_synopsis(log_dir, state)
             return 0
     _require_collection_identities(state, identities)
     print("Safe operator loop reached the final sign-off boundary.")
     _print_status(state)
+    print_synopsis(log_dir, state)
     return 0
 
 
@@ -323,6 +379,7 @@ def _require_run_transition(
         or attempt.exit_status != status
         or attempt.log_file is None
         or attempt.apply != apply
+        or (status == 0 and attempt.outcome_file is None)
     ):
         raise MigrationCoordinatorError(
             "migration restart lifecycle changed unexpectedly during the safe operator loop"
@@ -517,6 +574,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
                 f"Accept the reviewed successful findings for {successful_review.identifier}?"
             ):
                 print("Interactive migration paused before validation acknowledgement.")
+                print_synopsis(log_dir, state)
                 return 0
             state = _reload_after_prompt(state_path, state, binding, identities)
             previous_state = state
@@ -538,6 +596,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
                 f"Accept the reviewed status-1 findings for {status_one_review.identifier}?"
             ):
                 print("Interactive migration paused before validation acknowledgement.")
+                print_synopsis(log_dir, state)
                 return 1
             state = _reload_after_prompt(state_path, state, binding, identities)
             previous_state = state
@@ -559,11 +618,13 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
             if state.attempts and state.attempts[-1].action == "signoff":
                 print("Interactive migration is already complete and signed off.")
                 _print_status(state)
+                print_synopsis(log_dir, state)
                 return 0
             if not _prompt_yes_no(
                 "Record human sign-off for the completed migration verification?"
             ):
                 print("Interactive migration paused at final human sign-off.")
+                print_synopsis(log_dir, state)
                 return 0
             state = _reload_after_prompt(state_path, state, binding, identities)
             previous_state = state
@@ -582,6 +643,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
             _require_collection_identities(state, identities)
             print("Human sign-off recorded in private migration state.")
             _print_status(state)
+            print_synopsis(log_dir, state)
             return 0
 
         stage = _stages()[state.next_stage]
@@ -590,6 +652,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
                 f"Apply the reviewed mutation for {stage.identifier}?"
             ):
                 print("Interactive migration paused before mutation.")
+                print_synopsis(log_dir, state)
                 return 0
             state = _reload_after_prompt(state_path, state, binding, identities)
             previous_state = state
@@ -601,6 +664,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
             _require_operator_binding(state, binding)
             _require_collection_identities(state, identities)
             if status != 0:
+                print_synopsis(log_dir, state)
                 return status
             continue
 
@@ -609,12 +673,14 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
                 "Confirm the complete dups tree is retained externally and absent from the working collection?"
             ):
                 print("Interactive migration paused at external quarantine review.")
+                print_synopsis(log_dir, state)
                 return 0
             state = _reload_after_prompt(state_path, state, binding, identities)
             previous_state = state
             status = _confirm_quarantine(state_path, state)
             if status != 0:
                 _require_collection_identities(state, identities)
+                print_synopsis(log_dir, state)
                 return status
             state = _load_state(state_path)
             _require_bookkeeping_transition(
@@ -636,6 +702,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
         _require_operator_binding(state, binding)
         _require_collection_identities(state, identities)
         if status != 0 and not (stage.review_after_success and status == 1):
+            print_synopsis(log_dir, state)
             return status
 
 
@@ -773,6 +840,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _write_state(state_path, state)
                 print(f"Initialized private migration state: {state_path}")
                 _print_status(state)
+                print_synopsis(log_dir, state)
                 return 0
             if not os.path.lexists(state_path):
                 raise MigrationCoordinatorError(
@@ -788,20 +856,29 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "restart state was created by a different pymo version"
                 )
             _require_matching_options(option_overrides, state)
+            validate_synopsis_history(log_dir, state)
             if args.run_next:
-                return _run_next(log_dir, state_path, state, args.apply)
+                status = _run_next(log_dir, state_path, state, args.apply)
+                updated = _load_state(state_path)
+                print_synopsis(log_dir, updated)
+                return status
             if args.run:
                 return _run_until_checkpoint(log_dir, state_path, state)
             if args.interactive:
                 return _run_interactive(log_dir, state_path, state)
             if args.accept_status:
-                return _accept_status(state_path, state)
+                status = _accept_status(state_path, state)
+                print_synopsis(log_dir, _load_state(state_path))
+                return status
             if args.confirm_quarantine:
-                return _confirm_quarantine(state_path, state)
+                status = _confirm_quarantine(state_path, state)
+                print_synopsis(log_dir, _load_state(state_path))
+                return status
             _print_status(state)
             _print_plan(state.next_stage)
+            print_synopsis(log_dir, state)
             return 0
-    except MigrationCoordinatorError as error:
+    except (MigrationCoordinatorError, MigrationSynopsisError) as error:
         print(
             f"Migration coordinator cannot safely continue: {error}.", file=sys.stderr
         )

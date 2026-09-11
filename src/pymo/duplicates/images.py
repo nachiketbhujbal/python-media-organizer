@@ -55,6 +55,12 @@ from pymo.duplicates.common import (
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.image_content import displayed_pixel_hash
 from pymo.logging_config import emit as print
+from pymo.migration.outcome import (
+    MigrationOutcomeError,
+    add_outcome_argument,
+    outcome_record,
+    write_outcome,
+)
 from pymo.progress import ProgressMeter, format_bytes
 
 try:
@@ -84,6 +90,13 @@ class ImageRecord:
     @property
     def modified_ns(self) -> int:
         return self.state.modified_ns
+
+
+@dataclass(frozen=True)
+class ImageCacheUse:
+    reused: int
+    computed: int
+    persisted: int
 
 
 ImageMove = tuple[str, ImageRecord, ImageRecord, Path]
@@ -199,6 +212,64 @@ def print_storage_summary(
     print("  No files are deleted by this tool.")
 
 
+def _duplicate_bytes(duplicate_groups: list[list[ImageRecord]]) -> int:
+    return sum(
+        record.file_size
+        for records in duplicate_groups
+        for record in sorted(records, key=keep_sort_key)[1:]
+    )
+
+
+def _write_migration_outcome(
+    path: Path | None,
+    root: Path,
+    *,
+    apply: bool,
+    scanned_files: int,
+    scanned_bytes: int,
+    duplicate_groups: list[list[ImageRecord]],
+    skipped: int,
+    cache_enabled: bool,
+    cache_reused: int,
+    cache_computed: int,
+    cache_persisted: int,
+    status: int,
+) -> int:
+    if path is None:
+        return status
+    try:
+        write_outcome(
+            path,
+            outcome_record(
+                "find-image-duplicates",
+                "duplicates",
+                "observed" if apply else "preview",
+                status,
+                {
+                    "media_kind": "image",
+                    "scanned_files": scanned_files,
+                    "scanned_bytes": scanned_bytes,
+                    "groups": len(duplicate_groups),
+                    "extra_copies": sum(len(group) - 1 for group in duplicate_groups),
+                    "duplicate_bytes": _duplicate_bytes(duplicate_groups),
+                    "skipped": skipped,
+                    "cache": {
+                        "enabled": cache_enabled,
+                        "reused": cache_reused,
+                        "computed": cache_computed,
+                        "persisted": cache_persisted,
+                        "issue": None,
+                    },
+                },
+            ),
+            root,
+        )
+    except MigrationOutcomeError:
+        print("Migration outcome could not be recorded safely.", file=sys.stderr)
+        return 1
+    return status
+
+
 def undo_duplicate_run(root: Path, apply: bool, *, summary: bool = False) -> int:
     log = ActionLog(root)
     try:
@@ -240,7 +311,7 @@ def keep_sort_key(record: ImageRecord) -> tuple[int, int, str]:
     return (-record.file_size, record.modified_ns, str(record.path).casefold())
 
 
-def inspect_image_paths(
+def _inspect_image_paths_with_stats(
     root: Path,
     paths: list[Path],
     progress_interval_seconds: int,
@@ -249,7 +320,7 @@ def inspect_image_paths(
     pillow_runtime: str,
     *,
     reuse_evidence: bool = True,
-) -> tuple[list[ImageRecord], int, list[tuple[Path, str]]]:
+) -> tuple[list[ImageRecord], int, list[tuple[Path, str]], ImageCacheUse]:
     scanned_bytes = 0
     skipped: list[tuple[Path, str]] = []
     states: dict[Path, FileState] = {}
@@ -274,6 +345,7 @@ def inspect_image_paths(
             "Image fingerprint cache cannot be used safely: "
             f"{error}\nThe cache is disposable; move it aside or rerun with --no-cache."
         ) from error
+    persistent_pixel_hashes = set(cached_pixels)
     if database is None:
         print("Image fingerprint cache disabled: no records read or written.")
     else:
@@ -375,12 +447,49 @@ def inspect_image_paths(
         )
         print(
             "Displayed-pixel cache use: "
-            f"{sum(record.pixel_hash_cached for record in analyzed)} reused; "
+            f"{sum(record.byte_sha256 in persistent_pixel_hashes for record in analyzed)} reused; "
             f"{sum(not record.pixel_hash_cached for record in analyzed)} computed; "
+            f"{sum(record.pixel_hash_cached and record.byte_sha256 not in persistent_pixel_hashes for record in analyzed)} "
+            "same-run memoized; "
             f"{len(pixels_persisted)} {publication_label} record(s) persisted."
         )
 
-    return analyzed, scanned_bytes, skipped
+    reused = sum(record.byte_sha256_cached for record in analyzed)
+    reused += sum(record.byte_sha256 in persistent_pixel_hashes for record in analyzed)
+    computed = sum(not record.byte_sha256_cached for record in analyzed)
+    computed += sum(not record.pixel_hash_cached for record in analyzed)
+    return (
+        analyzed,
+        scanned_bytes,
+        skipped,
+        ImageCacheUse(
+            reused=reused,
+            computed=computed,
+            persisted=hashes_persisted + len(pixels_persisted),
+        ),
+    )
+
+
+def inspect_image_paths(
+    root: Path,
+    paths: list[Path],
+    progress_interval_seconds: int,
+    database: Path | None,
+    publication_batch_size: int,
+    pillow_runtime: str,
+    *,
+    reuse_evidence: bool = True,
+) -> tuple[list[ImageRecord], int, list[tuple[Path, str]]]:
+    records, scanned_bytes, skipped, _ = _inspect_image_paths_with_stats(
+        root,
+        paths,
+        progress_interval_seconds,
+        database,
+        publication_batch_size,
+        pillow_runtime,
+        reuse_evidence=reuse_evidence,
+    )
+    return records, scanned_bytes, skipped
 
 
 def group_image_duplicates(records: list[ImageRecord]) -> list[list[ImageRecord]]:
@@ -535,6 +644,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
+    add_outcome_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -604,10 +714,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         verb = "Moved" if args.apply else "Would move"
         print(f"\n{verb} 0 duplicate(s) from 0 group(s).")
         print_storage_summary([], 0)
-        return 0
+        return _write_migration_outcome(
+            args.migration_outcome,
+            root,
+            apply=args.apply,
+            scanned_files=0,
+            scanned_bytes=0,
+            duplicate_groups=[],
+            skipped=0,
+            cache_enabled=not args.no_cache,
+            cache_reused=0,
+            cache_computed=0,
+            cache_persisted=0,
+            status=0,
+        )
 
     try:
-        duplicate_groups, scanned_bytes, skipped = analyze_images(
+        records, scanned_bytes, skipped, cache_use = _inspect_image_paths_with_stats(
             root,
             paths,
             config.performance.progress_interval_seconds,
@@ -615,6 +738,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             config.performance.cache_publication_batch_size,
             f"Pillow {__version__}",
         )
+        duplicate_groups = group_image_duplicates(records)
     except ImageAnalysisCacheError as error:
         detail = (
             "Image fingerprint cache cannot be used safely; rerun without "
@@ -671,7 +795,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             for path, reason in skipped:
                 print(f"  {path}: {reason}")
 
-    return 0
+    return _write_migration_outcome(
+        args.migration_outcome,
+        root,
+        apply=args.apply,
+        scanned_files=len(records),
+        scanned_bytes=scanned_bytes,
+        duplicate_groups=duplicate_groups,
+        skipped=len(skipped),
+        cache_enabled=not args.no_cache,
+        cache_reused=cache_use.reused,
+        cache_computed=cache_use.computed,
+        cache_persisted=cache_use.persisted,
+        status=0,
+    )
 
 
 if __name__ == "__main__":
