@@ -183,7 +183,7 @@ def _print_status(state: MigrationState) -> None:
             "Move or retain the complete dups tree externally, then use --confirm-quarantine."
         )
     else:
-        print("Run only this stage with --run-next.")
+        print("Run routine stages with --run, or only this stage with --run-next.")
 
 
 def _run_next(

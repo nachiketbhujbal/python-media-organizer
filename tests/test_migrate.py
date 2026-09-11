@@ -261,6 +261,7 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
     )
 
     assert started.returncode == 0, started.stdout + started.stderr
+    assert "Run routine stages with --run" in started.stdout
     payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
     assert payload["schema_version"] == 1
     assert payload["tool_version"] == __version__

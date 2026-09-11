@@ -6,6 +6,8 @@ All notable changes to `python-media-organizer` will be recorded here.
 
 - Add `pymo migrate BASELINE WORKING --log-dir PRIVATE --run` to advance
   routine successful evidence and preview stages in one foreground process.
+- Make initialization and status output recommend `--run` for routine work
+  while retaining `--run-next` as the explicit one-child alternative.
 - Stop normally before every reviewed apply and external-quarantine checkpoint,
   and finish only at the existing human-signoff boundary. The loop never
   supplies `--apply`, acknowledges validation findings, confirms quarantine,
