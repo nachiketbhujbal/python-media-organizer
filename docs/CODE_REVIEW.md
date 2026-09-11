@@ -112,6 +112,13 @@ The same adversarial method was repeated after the first validation release.
 | CACHE-R01 | Medium | A cold exact-image run labeled byte-identical same-run pixel memoization as persistent cache reuse in the private outcome and human synopsis. | 0.6.2 | Resolved by accounting persistent reuse, fresh computation, same-run memoization, and persisted records separately; a cold byte-identical pair now records zero persistent reuse, three computations, and three persisted records |
 | SYN-R01 | Medium | After external quarantine confirmation, the synopsis still described duplicate review bytes as currently reclaimable from the working collection even though the checkpoint required the working `dups` path to be absent. | 0.6.2 | Resolved by presenting the amount as historical review storage isolated before external retention, while retaining the explicit statement that pymo neither inspected external retention nor proved physical capacity reclaimed |
 
+Renewed independent review accepted exact v0.6.2 owner head `2fdcfed` without
+findings after reproducing the closures of STATE-R01, OUT-R01, CACHE-R01, and
+SYN-R01 from a separate detached worktree. PR #50 and exact-main full-platform
+quality gates passed before annotated tag `v0.6.2` was created at merge
+`147b0e7`; its tag-triggered build and isolated install also passed. ADR 0092
+records the separate post-tag release-truth reconciliation.
+
 ## Scan review findings
 
 | ID | Severity | Finding | Resolution target | Status |

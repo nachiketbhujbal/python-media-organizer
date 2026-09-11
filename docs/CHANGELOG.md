@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.6.2 - Unreleased
+## 0.6.2 - 2026-09-11
 
 - Print a concise path-private migration synopsis whenever current coordinator
   state is displayed and at automatic or interactive pause, failure, and
