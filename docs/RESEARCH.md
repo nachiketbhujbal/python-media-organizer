@@ -750,9 +750,13 @@ a stronger contract than an `--apply` option on either duplicate finder:
   concise version-control log, which distinguishes committed reversible runs,
   undo runs, quarantines, and irreversible finalization events.
 
-The journal schema, confirmation ceremony, quarantine portability across
-macOS/Linux/WSL, and preservation-evidence binding require an ADR before this
-work receives a release number.
+[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) promotes an honest
+retained-in-place duplicate disposition into version 0.6.8,
+same-filesystem managed quarantine into 0.6.9, and explicit cross-filesystem
+quarantine into 0.6.10. Their journal schema, confirmation ceremony,
+portability across macOS/Linux/WSL, and preservation-evidence binding still
+require dedicated implementation ADRs. Permanent deletion remains research
+and is not implied by any planned quarantine workflow.
 
 Ordinary migration verification continues to describe the physical target that
 actually exists, including media under `dups`; silently excluding that tree by
@@ -763,8 +767,10 @@ physical destination review tree, reports it separately, excludes those regular
 files only from counterfactual destination evidence, performs no writes, and
 labels every verdict simulated. A non-complete result blocks quarantine review;
 a simulated complete result still requires retained quarantine plus ordinary
-fresh post-move verification. The later duplicate-finalization command and its
-journal/evidence binding remain research.
+fresh post-move verification. Version 0.6.8 must integrate the simulation into
+an honest retained-in-place outcome without weakening ordinary verification;
+versions 0.6.9 and 0.6.10 then automate same-filesystem and cross-filesystem
+quarantine without weakening either evidence boundary.
 
 ## Migration orchestration and queues
 
@@ -778,16 +784,23 @@ current. Each mutating stage retains its own preview and explicit apply
 boundary. Its private restart state records workflow attempts but never replaces
 fresh evidence, action history, or the external migration tracker.
 
-Full copying and multi-collection queues remain research. Naive recursive copy
-and unconstrained collection-level parallelism are unsafe defaults. That later
-work must cover:
+Operational trials confirmed that a human should not have to re-enter the same
+coordinator shape for every stage or remain present merely to advance routine
+success. [ADR 0087](adrs/0087-operator-first-migration-roadmap.md) promotes safe
+automatic advancement in 0.6.0, interactive checkpoints in 0.6.1, manifest
+planning through queue reporting in versions 0.6.11 through 0.6.14, and
+measurement before bounded scheduling in versions 0.6.15 through 0.6.17.
+Rescue copying remains separate research.
+
+The planned queue and the still-unplanned copy workflow must cover:
 
 - a declarative local manifest of source, unchanged baseline, working target,
   quarantine, and final destination rather than fragile positional queues;
 - capacity and case-folded collision preflight before copying between
   case-sensitive and case-insensitive filesystems;
 - resumable, no-overwrite copying with retained copy evidence instead of
-  assuming `cp -R` or a Finder duplicate completed;
+  assuming `cp -R` or a Finder duplicate completed, before copying itself can
+  enter the queue contract;
 - explicit checkpoints before transformation, duplicate finalization, baseline
   removal, and final collection renaming;
 - sequential execution by default on one physical disk, with bounded
@@ -797,7 +810,7 @@ work must cover:
   default and never treat a successful prior stage as proof that current files
   are unchanged.
 
-Automatic creation of `_base` and `_target` trees may improve usability, but
+Automatic creation of baseline and target trees may improve usability, but
 their names are policy rather than identity. The design must handle interrupted
 copies, insufficient space, existing destinations, external quarantine,
 cross-filesystem moves, and the fact that two copies on one device are not
@@ -844,8 +857,10 @@ commands whose contract is report-only, complicate read-only collections and
 two-root migration verification, and require the log itself to be excluded
 consistently from scan, validation, mutation, and preservation scope.
 
-Research should compare the current explicit `--log-file PATH` behavior with a
-possible `{collection-name}-pymo.log` default plus `--no-log`. Any default must
+Version 0.6.6 now owns logging-surface and level behavior, while version 0.6.7
+owns the visibility-profile and default-privacy comparison. They should
+evaluate the current explicit `--log-file PATH` behavior against a possible
+private diagnostic profile and automatic coordinator records. Any default must
 define append/rotation and locking behavior, failure policy, filename privacy,
 which root owns a two-collection command's log, and whether read-only commands
 may create it at all. A safer alternative may be an explicit configured log
@@ -855,9 +870,11 @@ future history command provide the durable collection audit record.
 Logging-level controls should also be normalized without proliferating
 ambiguous flags. Evaluate a conventional `--log-level
 {DEBUG,INFO,WARNING,ERROR,CRITICAL}` interface, a convenient `--debug` alias,
-separate console/file thresholds, and compatibility treatment for the current
-`--verbose` and `--quiet` options. The current default remains console INFO and
-explicit-file INFO, with DEBUG enabled only deliberately.
+separate console/file thresholds, coherent full/private/quiet visibility
+profiles, and compatibility treatment for the current `--verbose`, `--quiet`,
+`--show-files`, and `--show-ignored` options. The current default remains
+console INFO and explicit-file INFO, with DEBUG and path disclosure enabled
+only deliberately until that compatibility decision ships.
 
 ## AI-tool repository coordination
 

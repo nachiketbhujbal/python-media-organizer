@@ -260,8 +260,11 @@ paths are needed.
 ### Guide one collection migration
 
 Version 0.5.11 coordinates the production runbook for one unchanged baseline
-and one working collection without turning it into an unattended batch. With
-no log directory it writes nothing and prints the complete plan:
+and one working collection. The released coordinator deliberately exposes one
+checkpoint per invocation; it is restartable and conservative, but completing
+the full sequence currently requires roughly two dozen similar invocations and
+is not an unattended or continuously interactive program. With no log directory
+it writes nothing and prints the complete plan:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-copy"
@@ -301,6 +304,15 @@ bookkeeping, not action history or preservation evidence. It cannot create the
 baseline or working copy, move quarantine, rescue-copy, delete, or authorize
 discarding any data. See the [production runbook](docs/MIGRATION.md) for the
 complete procedure and option examples.
+
+Operational trials found that this safe stage engine produces the right media
+and preservation outcomes but asks the operator to perform too much repetitive
+coordination. The version 0.6 roadmap therefore uses small releases to build a
+safe operator loop, interactive checkpoints, concise human and machine
+reports, saved resume context, logging and visibility policy, pymo-owned
+duplicate disposition, a sequential manifest-backed queue, and only then
+benchmark-proven parallel scheduling. Those are planned changes, not features
+of the current release.
 
 ### Verify a migration by exact bytes and media content
 
@@ -1000,8 +1012,11 @@ adds zero-write preservation simulation without `dups` in 0.5.10, and version
 filesystem-identity boundary and makes later root observations fail closed.
 Version 0.5.13 reconciles the authoritative documentation with the verified
 0.5.12 release and establishes privacy-preserving trials on existing real
-collections as the next evidence-gathering phase. Rescue
-copying, irreversible duplicate finalization, damaged-media remediation, richer
+collections as the next evidence-gathering phase. Those trials validated the
+preservation engine and made operator supervision, outcome reporting, duplicate
+disposition, queueing, and measured scheduling the version 0.6 theme under
+[ADR 0087](docs/adrs/0087-operator-first-migration-roadmap.md). Rescue copying,
+permanent deletion, damaged-media remediation, richer
 metadata, and similarity tooling remain later roadmap or research work. Full
 video decoding remains sequential until representative benchmarks show that
 bounded process concurrency improves real external-drive workloads without

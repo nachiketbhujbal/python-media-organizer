@@ -28,6 +28,26 @@ Perform only stages supported by the installed version and keep every
 transition human-reviewed. Do not use a loose shell script as the production
 authority.
 
+## Operational experience and next direction
+
+Controlled v0.5.13 trials established that this runbook can preserve and
+reproduce the intended media outcomes across varied existing collections. They
+also showed that the released coordinator is operationally expensive: a full
+run requires roughly two dozen similar invocations, special standalone modes
+for validation acknowledgement and quarantine confirmation, and manual movement
+of the duplicate review tree. Long media analysis magnifies that supervision
+cost even when the underlying work and cache reuse are correct.
+
+That is a usability finding, not permission to skip checkpoints in the current
+release. Continue using the exact v0.5.13 procedure below until later behavior
+ships. The version 0.6 plan in
+[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) uses small releases
+to add a safe operator loop, interactive checkpoints, concise human and machine
+reports, saved resume context, logging and visibility policy, pymo-owned
+duplicate disposition, a sequential manifest-backed queue, and
+benchmark-gated parallel scheduling while retaining fresh evidence and
+explicit decision boundaries.
+
 ## Collection roles
 
 - **Source:** the original device or recovery source. Keep it read-only whenever
@@ -285,3 +305,11 @@ state is created. Case or Unicode aliases cannot make one physical directory
 serve both collection roles or hide a log directory inside either collection.
 Coordinator setup, unsafe-state, and invocation errors return status 2; a
 `--run-next` attempt returns the child command's real status.
+
+The released coordinator does not yet synthesize the final operator report.
+Record initial and final inventory and health, extension corrections,
+organization and rename counts, image/video duplicate counts and potential
+storage recovery, quarantine disposition, cache reuse, stage durations, known
+warnings, and the final preservation verdict in the external migration record.
+Version 0.6.2 promotes that synopsis to normal pymo output; version 0.6.4 adds
+its stable machine-readable artifact.

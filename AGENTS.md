@@ -410,5 +410,15 @@ deletion. Version 0.5.12 makes standalone verification and guided setup reject
 aliased, nested, unstable, or unresolvable migration roots through the shared
 filesystem-identity boundary. Version 0.5.13 reconciles the authoritative
 release documentation and begins privacy-preserving workflow trials on existing
-real collections without changing product behavior. Full copy and
-multi-collection queue orchestration remain later research.
+real collections without changing product behavior. ADR 0087 promotes a
+fine-grained operator-experience sequence: versions 0.6.0 through 0.6.5 build
+safe automatic advancement, interactive checkpoints, human and machine
+reports, concise resume, and separately pre-authorized unattended execution;
+0.6.6 and 0.6.7 separate logging from visibility policy; 0.6.8 through 0.6.10
+separate retained-in-place, same-filesystem, and cross-filesystem duplicate
+disposition; 0.6.11 through 0.6.14 build a sequential queue in manifest,
+execution, recovery, and reporting steps; and 0.6.15 through 0.6.17 measure
+before enabling bounded intra-collection and cross-collection scheduling.
+Current `migrate` behavior remains one-stage-at-a-time until the applicable
+implementation, tests, compatibility decision, and review land. Rescue copying
+and permanent deletion remain research.

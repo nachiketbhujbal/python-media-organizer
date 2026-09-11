@@ -211,14 +211,49 @@ preservation consequences of each — remains **research rather than schedule**
 and is recorded under "Media truthfulness, damage, and remediation" in
 [RESEARCH.md](RESEARCH.md). None of it is approved for implementation.
 
+## Version 0.6 operator experience
+
+Privacy-preserving operational trials after v0.5.13 reproduced the expected
+content and preservation outcomes while exposing the released coordinator as
+too repetitive for long unattended work.
+[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) therefore makes
+operator experience—not another media transformation—the version 0.6 theme.
+
+| Version | Primary purpose | Acceptance boundary | Status |
+| --- | --- | --- | --- |
+| 0.6.0 | Safe operator loop | Add a foreground driver over the existing restartable stage engine that automatically advances routine successful stages in one process but stops at every existing finding, mutation, duplicate-disposition, and sign-off boundary. Preserve preview-before-apply, exact child statuses, fresh evidence, and stop-on-ambiguity behavior. | Planned |
+| 0.6.1 | Interactive checkpoints | Keep the operator session alive at reviewed status, apply, duplicate-disposition, and sign-off boundaries; ask explicit questions; and continue only from an affirmative, context-specific answer. This completes the interactive one-invocation path without adding unattended authorization. | Planned |
+| 0.6.2 | Human migration synopsis | Emit a concise end-of-run account of inventory, health, transformations, duplicate isolation, potential or realized storage recovery, cache reuse, observed durations, warnings, and preservation disposition. Keep collection paths and filenames private unless explicitly requested. | Planned |
+| 0.6.3 | Saved invocation context and resume | Persist the already-private run binding for exact roots, log location, options, and current checkpoint so an interrupted operator can resume without reconstructing the long original command. Restart bookkeeping remains non-evidence. | Planned |
+| 0.6.4 | Stable migration report artifact | Define and export a versioned machine-readable report from the same typed outcome model as the human synopsis, with deterministic path-private output and explicit compatibility rules. | Planned |
+| 0.6.5 | Pre-authorized unattended mode | Add a deliberately explicit non-interactive policy that may cross only enumerated, pre-authorized checkpoints and stops on every unexpected finding, changed state, failed proof, or unrecognized decision. | Planned |
+| 0.6.6 | Logging surfaces and levels | Separate console output, durable private diagnostics, restart state, and final reports; add conventional console/file log levels and retention rules without changing path disclosure defaults. | Planned |
+| 0.6.7 | Visibility and privacy profiles | Define coherent full, private, and quiet profiles; reconcile the current verbose, quiet, show-files, and show-ignored flags; and make any default-visibility change an explicit compatibility decision. | Planned |
+| 0.6.8 | Retained-in-place duplicate disposition | Integrate the existing without-`dups` simulation into the operator flow so a reviewed tree may remain in place with an honest simulated preservation disposition and an explicit statement that no storage was reclaimed. Do not silently change ordinary physical verification. | Planned |
+| 0.6.9 | Same-filesystem managed quarantine | Add dry-run-first, descriptor-relative, atomic no-replace movement of a reviewed duplicate tree to a retained quarantine on the same filesystem, with journal, undo, interruption, and fresh post-move verification boundaries. | Planned |
+| 0.6.10 | Cross-filesystem managed quarantine | Add an explicit capacity-checked copy, verify, and no-replace publication protocol for retained quarantine across filesystems, with restart and failure semantics distinct from same-filesystem movement. Never treat it as an implicit move fallback. | Planned |
+| 0.6.11 | Queue manifest and planning | Define and validate a declarative local manifest binding each baseline, working collection, private state, quarantine destination, policy, and desired disposition; report a complete execution plan without running it. | Planned |
+| 0.6.12 | Sequential queue execution | Execute validated manifest entries sequentially by default, isolate every collection's state, and stop safely on the first unhandled outcome. | Planned |
+| 0.6.13 | Queue recovery | Resume individual collection jobs without rerunning completed work, define retry and skip policy, and preserve every fresh-evidence boundary. | Planned |
+| 0.6.14 | Queue synopsis | Aggregate stable per-collection outcomes into a path-private queue report without allowing one collection's success to mask another's failure or uncertainty. | Planned |
+| 0.6.15 | Storage-aware scheduler measurements | Model stage dependencies and storage topology and collect representative CPU, memory, thermal, cache-lock, and device-contention evidence without enabling new concurrency. | Planned |
+| 0.6.16 | Bounded intra-collection scheduling | Enable only benchmark-proven independent work within one collection, with explicit limits, current cache-publication safety, and a sequential fallback. | Planned |
+| 0.6.17 | Bounded cross-collection scheduling | Add storage-aware cross-collection execution and later-collection cache warming only where measured topology and workload evidence show a material benefit; remain sequential by default. | Planned |
+
+The sequence deliberately gives each patch one primary acceptance purpose. It
+separates the operator loop from checkpoint consent, human output from a stable
+report schema, saved context from unattended authority, logging from visibility
+policy, logical duplicate disposition from physical movement, queue declaration
+from execution and recovery, and measurement from concurrency. Each release
+requires its own implementation evidence and independent review; planning
+status is not shipped behavior.
+
 ## Later promoted work
 
-The immediate post-v0.5.13 phase is controlled use of the released workflow on
-existing real collections. Those trials gather aggregate, privacy-preserving
-operational observations to test the documented sequence and inform later
-priorities. Collection names, paths, media, statistics, and identifying
-metadata remain outside the repository, and observations do not promote a
-feature into a release without a separate decision.
+The post-v0.5.13 trials are complete enough to promote the version 0.6 sequence
+above. Collection names, paths, media, statistics, and identifying metadata
+remain outside the repository. Further trials may refine acceptance criteria,
+but do not silently change a planned release.
 
 These have an accepted product direction but no release number yet:
 
@@ -226,19 +261,15 @@ These have an accepted product direction but no release number yet:
 - a collection-history command that summarizes committed runs and actions from
   the portable journal without exposing paths by default, including an explicit
   distinction between reversible operations and any future irreversible event;
-- deliberate duplicate finalization as a command separate from the duplicate
-  finders and the version 0.5.10 simulation, dry-run by default and gated by
-  fresh preservation evidence, with a quarantine-first workflow and an
-  unmistakable explicit boundary before any irreversible deletion is recorded;
 - validation remediation guidance that turns findings into explicit next
   actions, including reversible quarantine planning for media that cannot be
   decoded, while never converting damage into an ignore rule or claiming an
   unsupported format is corrupt; reversible extension correction is sequenced
   separately under "Version 0.5 continuation" above;
-- resumable rescue copying and a queue manifest for multiple collections with
-  capacity, case-collision, copy-completeness, storage-contention, quarantine,
-  and final naming policy; this remains separate from the version 0.5.11
-  single-pair coordinator and requires a larger mutation boundary;
+- resumable rescue copying with capacity, case-collision, copy-completeness,
+  destination, and final naming policy; this remains separate from the planned
+  queue over already-declared baseline/working pairs and requires a larger
+  mutation boundary;
 - categorization of collection files beyond pictures and video, keeping tool-owned state and
   unrecognized files untouched, with the open design questions recorded in
   [RESEARCH.md](RESEARCH.md);
@@ -250,10 +281,6 @@ These have an accepted product direction but no release number yet:
 - report-only perceptual image/video similarity;
 - explainable keeper-quality recommendations;
 - reversible metadata or quarantine actions only after dedicated safety ADRs;
-- hardware-aware worker selection that benchmarks the storage/CPU boundary,
-  remains explicitly overrideable, and warns when a configured override is
-  likely to oversubscribe the detected machine;
-- benchmark-driven bounded native-process concurrency;
 - broader POSIX portability beyond the tested Debian-family Linux, Red
   Hat-family Linux, macOS, and Linux-based WSL execution models, including safe
   atomic no-replace mutation primitives;
