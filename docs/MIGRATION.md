@@ -142,11 +142,13 @@ Use `--interactive` only from a real terminal. It runs routine stages like
 `--run`, then asks a separate `[y/N]` question for a successful or status-one
 validation review, one pending reviewed apply, external-quarantine
 confirmation, and final human sign-off. Only `y` or `yes` authorizes the
-current checkpoint. `n`, `no`, or an empty line pauses normally. Invalid input,
-end-of-file, and redirected non-terminal input return setup status 2 without
-advancing the checkpoint; Ctrl-C retains status 130. Accepted mutations still
-use the existing one-stage apply path and must pass the exact restart-transition
-and collection-identity checks before any later child can run.
+current checkpoint. `n`, `no`, or an empty line pauses normally except that a
+pending status-one validation continues to return its recorded status 1 until
+it is acknowledged. Invalid input, end-of-file, and redirected non-terminal
+input return setup status 2 without advancing the checkpoint; Ctrl-C retains
+status 130. Accepted mutations still use the existing one-stage apply path and
+must pass the exact restart-transition and collection-identity checks before
+any later child can run.
 
 A nonzero child status is recorded, returned unchanged, and stops both modes.
 Rerun after resolving the cause. Status 1 from a validation checkpoint may be

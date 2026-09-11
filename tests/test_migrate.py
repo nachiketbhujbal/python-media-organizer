@@ -545,6 +545,39 @@ def test_interactive_accepts_pending_status_one_without_rerunning_it(
     assert state.attempts[-2].stage == "baseline-validation"
 
 
+@pytest.mark.parametrize("answer", ("n\n", "\n"))
+def test_interactive_declines_pending_status_one_with_original_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, answer: str
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 2)
+    failed = migrate.Attempt(
+        "baseline-validation",
+        "run",
+        1,
+        "2026-08-29T12:00:01-04:00",
+        "failed.log",
+        False,
+    )
+    current = migrate._load_state(state_file(log_dir))
+    migrate._write_state(
+        state_file(log_dir), migrate._updated_state(current, failed, advance=False)
+    )
+    expected = state_file(log_dir).read_bytes()
+
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput(answer))
+
+    assert (
+        migrate.main(
+            [str(baseline), str(working), "--log-dir", str(log_dir), "--interactive"]
+        )
+        == 1
+    )
+    assert state_file(log_dir).read_bytes() == expected
+
+
 def test_interactive_quarantine_confirmation_remains_fail_closed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

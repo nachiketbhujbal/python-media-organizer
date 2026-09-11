@@ -689,7 +689,8 @@ outside both collections.
 Version 0.6.1's `--interactive` selector retains that one-child dispatch path
 and asks in-process only at successful or status-one validation review, one
 pending apply, external-quarantine confirmation, and final sign-off. Only `y`
-or `yes` accepts the current question; negative or empty input pauses, while
+or `yes` accepts the current question; negative or empty input pauses except
+that a pending status-one validation continues to return status 1, while
 ambiguous, ended, or non-terminal input fails closed. Accepted review and
 sign-off decisions are strict private restart attempts rather than evidence or
 action history.

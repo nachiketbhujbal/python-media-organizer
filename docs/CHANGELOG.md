@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.6.1 - 2026-09-11
+## 0.6.1 - Unreleased
 
 - Add `pymo migrate BASELINE WORKING --log-dir PRIVATE --interactive` to keep
   one foreground terminal session alive across routine stages and existing
@@ -10,8 +10,9 @@ All notable changes to `python-media-organizer` will be recorded here.
 - Ask a separate conservative yes-or-no question when a successful or
   status-one validation needs review, one reviewed apply is pending, external
   duplicate quarantine must be confirmed, or final human sign-off is eligible.
-  Only `y` or `yes` authorizes the current question; a negative or empty answer
-  pauses normally, while invalid, ended, or non-terminal input fails closed.
+  Only `y` or `yes` authorizes the current question. A negative or empty answer
+  preserves status 1 at a pending status-one validation and otherwise pauses
+  normally; invalid, ended, or non-terminal input fails closed.
 - Record successful-validation review and final sign-off as strict private
   restart-state attempts. Preserve the existing status-one acknowledgement and
   quarantine-confirmation records so an interrupted session can resume without

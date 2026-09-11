@@ -296,7 +296,8 @@ desired.
 keeps a terminal session open to ask separately about successful or status-one
 validation review, each pending reviewed apply, external quarantine, and final
 sign-off. Only `y` or `yes` authorizes the current question. `n`, `no`, or an
-empty answer pauses normally; ambiguous input, end-of-file, or non-terminal
+empty answer pauses normally except that a pending status-one validation
+continues to return status 1; ambiguous input, end-of-file, or non-terminal
 input fails closed. Every accepted apply still dispatches exactly one existing
 apply child and revalidates the strict restart transition, invocation binding,
 and both collection identities before continuing. One answer never authorizes

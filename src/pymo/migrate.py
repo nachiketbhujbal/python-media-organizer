@@ -538,7 +538,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
                 f"Accept the reviewed status-1 findings for {status_one_review.identifier}?"
             ):
                 print("Interactive migration paused before validation acknowledgement.")
-                return 0
+                return 1
             state = _reload_after_prompt(state_path, state, binding, identities)
             previous_state = state
             status = _accept_status(state_path, state)

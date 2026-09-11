@@ -30,10 +30,11 @@ the current validated lifecycle reaches one of these boundaries:
 - final human sign-off after ordinary fresh verification.
 
 Only `yes` or `y`, ignoring case and surrounding whitespace, authorizes the
-current question. An empty or negative response stops normally. Invalid input,
-end-of-file, or unavailable non-terminal input stops with a setup error.
-Interruptions retain status 130 through the existing command boundary. No
-answer authorizes a later checkpoint.
+current question. An empty or negative response stops normally, except that a
+pending status-one validation preserves and returns its recorded status 1.
+Invalid input, end-of-file, or unavailable non-terminal input stops with a
+setup error. Interruptions retain status 130 through the existing command
+boundary. No answer authorizes a later checkpoint.
 
 Accepted mutation questions still call the existing one-stage apply path and
 must satisfy exact attempt, state-binding, and collection-identity transition
