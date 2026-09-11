@@ -1212,15 +1212,34 @@ reaches the final human-signoff boundary. A completed sequence remains eligible
 for human sign-off only and does not authorize removal of source, baseline,
 quarantine, or working data.
 
-The exact v0.6.0 implementation candidate `e4746a1` passes all 485 synthetic
-and real-FFmpeg tests at 88 percent subprocess-aware coverage, the complete
-pre-commit gate, source and wheel builds, and isolated installed-wheel
-acceptance. Hosted run `34638137395` passes Ubuntu, pinned Fedora 42, macOS, and
-the unconditional quality gate. Renewed independent review reproduced the
-warning-only validation and same-binding lifecycle-substitution attacks,
-confirmed GUIDE-R04 and GUIDE-R05 closed, and reported no findings at that
-exact SHA. The merge, exact-main gate, annotated tag, tag workflow, and
-installed iMac proof remain separate release boundaries.
+Version 0.6.0 is released through PR #47 and exact merge
+`9262b486a7c85b052d373c48c660aede1a64b39f`. Independent review accepted exact
+owner head `7199905fe314a3fac42f211b75aa865be7b3bce7`; PR run `34639262941` and
+exact-main run `34639895126` passed Ubuntu, pinned Fedora 42, macOS, and the
+unconditional quality gate. Annotated tag `v0.6.0` peels to the merge and its
+release run `34640387313` passed the tagged build and isolated-install proof.
+
+Version 0.6.1 is released through PR #48 and exact merge
+`bcf13b94c1c7c7b15412e34847f165c47f62ccc5`. Independent review rejected the
+first candidate for premature release wording and for returning status 0 when
+a pending status-one validation acknowledgement was declined. Exact corrected
+owner head `11b096293e3ee6becdf9cb2eae827676b0f7429f` preserves status 1, leaves
+restart state byte-identical on refusal, and received a no-findings renewed
+review. PR run `34649427729` and exact-main run `34649758731` passed every
+applicable platform and the unconditional quality gate. Annotated tag `v0.6.1`
+has object `9254f253e5bcdffd633dda59d9584e6fc93876cd`, peels to the exact merge,
+and release run `34650103933` passed its mainline, tagged-build, version, and
+isolated-install checks. An independent tagged build produced wheel SHA-256
+`d56be404aa73a9ad58970b0be0bae8a791329918ab198f356198f1fd2efde72e` and
+source-distribution SHA-256
+`90d54c2804443d70b282da63f4cc5c2c0cc1f174fcd400b6f23841de8b9c0d45`;
+the iMac's uv-managed command reports `pymo 0.6.1`.
+
+ADR 0090 keeps candidate documentation truthful until publication evidence
+exists, then reconciles the latest `main` in a separate documentation-only
+change. The immutable v0.6.1 tagged tree therefore retains its truthful
+pre-publication `Unreleased` and release-candidate wording; the latest `main`
+documentation is the authoritative post-tag release-status view.
 
 Operational trials confirm that this fixed sequence reaches the intended
 preservation outcomes, including reviewed validation findings and cache-backed

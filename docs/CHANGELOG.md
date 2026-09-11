@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.6.1 - Unreleased
+## 0.6.1 - 2026-09-11
 
 - Add `pymo migrate BASELINE WORKING --log-dir PRIVATE --interactive` to keep
   one foreground terminal session alive across routine stages and existing
