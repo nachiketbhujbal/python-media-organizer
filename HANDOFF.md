@@ -1168,8 +1168,9 @@ executed children retain their actual statuses.
 `--run-next` invokes the installed child CLI through the same interpreter and
 executes at most one checkpoint. Version 0.6.0 adds `--run`, which invokes that
 same path repeatedly only while routine evidence or preview children succeed. It
-reloads the strict persisted lifecycle and revalidates both collection
-directory identities between children. A failure is recorded, returned with
+reloads the strict persisted lifecycle, retains its initial roots, version,
+options, and creation binding, and revalidates both collection directory
+identities between children. A failure is recorded, returned with
 its exact status, and stops the loop. Validation status 1 alone can advance
 after separate `--accept-status`; other statuses must be resolved and rerun.
 Each mutating preview precedes a distinct apply stage that stops `--run` and
@@ -1408,8 +1409,8 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   malformed and out-of-order state refusal, a complete installed-CLI traversal
   of every stage over temporary empty collections, and foreground safe-loop
   chaining that stops before applies and quarantine, preserves validation and
-  exact-status boundaries, rejects between-stage root replacement, and reaches
-  final evidence without claiming human sign-off;
+  exact-status boundaries, rejects between-stage root or restart-binding
+  replacement, and reaches final evidence without claiming human sign-off;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

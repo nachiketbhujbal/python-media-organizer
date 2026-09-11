@@ -301,7 +301,8 @@ return an executed child's nonzero status unchanged. Reaching an expected
 operator checkpoint with `--run` returns 0 after clearly reporting the pause;
 status 1 from external-quarantine confirmation means the working `dups` path is
 still present. The safe loop revalidates both collection-directory identities
-between stages and stops with status 2 if either changes.
+between stages, preserves the initial restart-state binding, and stops with
+status 2 if either changes.
 
 The schema-1 restart file records canonical roots, the installed pymo version,
 fixed common options, attempts, statuses, and private log names. Collection and

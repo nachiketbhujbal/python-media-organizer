@@ -249,6 +249,7 @@ def _run_next(
 def _run_until_checkpoint(
     log_dir: Path, state_path: Path, state: MigrationState
 ) -> int:
+    binding = state
     identities = _collection_identities(state)
     while state.next_stage < len(_stages()):
         _require_collection_identities(state, identities)
@@ -261,10 +262,24 @@ def _run_until_checkpoint(
         if status != 0:
             return status
         state = _load_state(state_path)
+        _require_operator_binding(state, binding)
     _require_collection_identities(state, identities)
     print("Safe operator loop reached the final sign-off boundary.")
     _print_status(state)
     return 0
+
+
+def _require_operator_binding(state: MigrationState, expected: MigrationState) -> None:
+    if (
+        state.tool_version != expected.tool_version
+        or state.baseline != expected.baseline
+        or state.working != expected.working
+        or state.options != expected.options
+        or state.created_at != expected.created_at
+    ):
+        raise MigrationCoordinatorError(
+            "migration restart binding changed during the safe operator loop"
+        )
 
 
 def _collection_identities(

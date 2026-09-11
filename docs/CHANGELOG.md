@@ -14,8 +14,9 @@ All notable changes to `python-media-organizer` will be recorded here.
   Retain separate `--accept-status`, `--run-next --apply`, and
   `--confirm-quarantine` actions, plus complete `--run-next` compatibility.
 - Reload and strictly validate durable restart state after every successful
-  child, and revalidate both collection-directory identities between stages so
-  a replaced root stops before another child is dispatched.
+  child, retain the bound roots, version, options, and creation identity, and
+  revalidate both collection-directory identities between stages so a replaced
+  root or substituted binding stops before another child is dispatched.
 - Keep the existing zero-write plan, opt-in private restart/log directory,
   path-private output defaults, fresh evidence, local-only operation, and
   no-delete/no-overwrite guarantees. Interactive prompts and broader operator

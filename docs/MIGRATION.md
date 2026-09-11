@@ -112,10 +112,11 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
   --log-dir "/path/to/private-logs" --run
 ```
 
-`--run` chains only routine successful evidence and preview children. It reloads the
-strict restart lifecycle and verifies both collection-directory identities
-between stages. A successful preview pauses before its distinct mutation
-checkpoint. After reviewing that preview, authorize only the pending child:
+`--run` chains only routine successful evidence and preview children. It reloads
+the strict restart lifecycle without changing its roots, version, options, or
+creation binding, and verifies both collection-directory identities between
+stages. A successful preview pauses before its distinct mutation checkpoint.
+After reviewing that preview, authorize only the pending child:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-collection" \

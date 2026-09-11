@@ -23,7 +23,10 @@ quarantine, final-signoff, nonzero-status, ambiguous-state, and unsafe-state
 boundary.
 
 The one-stage engine and its persisted attempt lifecycle remain authoritative.
-Existing stage-at-a-time operation remains supported. The loop does not add
+The loop reloads and validates that lifecycle after each successful child,
+retains its root, tool-version, option, and creation binding, and verifies both
+collection directory identities between stages. Existing stage-at-a-time
+operation remains supported. The loop does not add
 interactive prompts, pre-authorized mutation, reporting contracts, saved
 invocation shortcuts, duplicate disposition, queueing, or parallel execution.
 

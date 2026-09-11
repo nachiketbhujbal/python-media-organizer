@@ -555,6 +555,49 @@ def test_safe_operator_loop_stops_if_a_collection_root_is_replaced(
     assert str(tmp_path) not in messages[-1][0]
 
 
+def test_safe_operator_loop_stops_if_restart_binding_is_substituted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 0)
+    real_load_state = migrate._load_state
+    load_count = 0
+
+    def substituted_binding(path: Path) -> migrate.MigrationState:
+        nonlocal load_count
+        load_count += 1
+        state = real_load_state(path)
+        if load_count == 2:
+            return migrate.MigrationState(
+                "substituted-version",
+                state.baseline,
+                state.working,
+                state.options,
+                state.next_stage,
+                state.attempts,
+                state.created_at,
+                state.updated_at,
+            )
+        return state
+
+    observed: list[list[str]] = []
+    monkeypatch.setattr(migrate, "_load_state", substituted_binding)
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: (
+            observed.append(command) or subprocess.CompletedProcess(command, 0)
+        ),
+    )
+
+    arguments = [str(baseline), str(working), "--log-dir", str(log_dir), "--run"]
+    assert migrate.main(arguments) == 2
+    assert len(observed) == 1
+    assert real_load_state(state_file(log_dir)).next_stage == 1
+
+
 def test_safe_operator_loop_preserves_validation_acknowledgement_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
