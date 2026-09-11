@@ -32,5 +32,8 @@ Version 0.5.11 adds guided single-collection migration; ADR 0084 records its
 one-stage execution, private restart/log state, explicit apply and validation
 acknowledgement checkpoints, external-quarantine stop, and fresh final-proof
 boundaries.
-The unreleased version 0.5.12 candidate hardens shared migration-root identity;
-ADR 0085 records its alias-resistant, stable existing-root boundary.
+Version 0.5.12 hardens shared migration-root identity; ADR 0085 records its
+alias-resistant, stable existing-root boundary. Version 0.5.13 reconciles the
+current documentation with the verified 0.5.12 release and records
+privacy-preserving real-collection workflow trials as the next product phase;
+ADR 0086 records that documentation and evidence boundary.

@@ -1,7 +1,8 @@
 # python-media-organizer
 
-`python-media-organizer` is a local-first, reversible toolkit for organizing
-personal media collections. Its command is `pymo`.
+`python-media-organizer` organizes and transforms a media collection without
+silently losing, overwriting, misclassifying, or falsely claiming preservation
+of content. It is a local-first, reversible toolkit whose command is `pymo`.
 
 The project defaults to previews, never deletes media, never overwrites an
 existing file, and does not include telemetry, cloud services, hosted AI, or
@@ -994,10 +995,12 @@ automatic ignore rules. The promoted continuation completed public governance
 in 0.5.8; version 0.5.9 adds reversible
 `correct-extensions` before organization,
 adds zero-write preservation simulation without `dups` in 0.5.10, and version
-0.5.11 coordinates the complete guided single-collection runbook. The
-unreleased 0.5.12 candidate brings direct standalone `verify-migration` to the
-coordinator's filesystem-identity boundary and makes later root observations
-fail closed. Rescue
+0.5.11 coordinates the complete guided single-collection runbook. Version
+0.5.12 brings direct standalone `verify-migration` to the coordinator's
+filesystem-identity boundary and makes later root observations fail closed.
+Version 0.5.13 reconciles the authoritative documentation with the verified
+0.5.12 release and establishes privacy-preserving trials on existing real
+collections as the next evidence-gathering phase. Rescue
 copying, irreversible duplicate finalization, damaged-media remediation, richer
 metadata, and similarity tooling remain later roadmap or research work. Full
 video decoding remains sequential until representative benchmarks show that

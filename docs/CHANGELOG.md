@@ -2,7 +2,20 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.5.12 - Unreleased candidate
+## 0.5.13 - 2026-09-10
+
+- Reconcile the README, handoff, documentation index, roadmap, changelog,
+  migration runbook, and review ledger with the verified v0.5.12 release.
+- Use the public product description: “Organize and transform a media
+  collection without silently losing, overwriting, misclassifying, or falsely
+  claiming preservation of content.”
+- Establish privacy-preserving workflow trials on existing real collections as
+  the next evidence-gathering phase. Collection names, paths, media, statistics,
+  and identifying metadata remain outside the repository.
+- Change no runtime, package, configuration, command, report, cache, journal,
+  migration, or media behavior.
+
+## 0.5.12 - 2026-09-07
 
 - Make standalone `pymo verify-migration SOURCE DESTINATION` compare existing
   roots by no-follow filesystem device-and-inode ancestry rather than resolved

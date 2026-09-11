@@ -613,7 +613,7 @@ later stage sees a file whose name no longer lies and the deterministic renamer 
 preserve a false extension. The maintainer promoted this work to version 0.5.9 as the separate
 `pymo correct-extensions COLLECTION` command.
 
-The unreleased candidate implements those constraints through fresh stable-descriptor Pillow
+Version 0.5.9 implements those constraints through fresh stable-descriptor Pillow
 verification plus full frame decoding, extensionless ffprobe evidence, immutable packaged
 canonical/synonym maps with exact mapped-or-protected coverage, dry-run/apply/undo, a distinct
 journal tool ID carrying ordinary rename actions, existing collision naming, and stable target
@@ -623,8 +623,8 @@ elementary streams, weak probes, unsupported or corrupt media, meaningful non-me
 custom classification extensions have no correction authority. Extensionless conclusive media may
 receive a canonical suffix. The command protects `dups`, consumes no validation cache evidence,
 and fails before state when discovery or evidenced file state changes. ADR 0082 owns the accepted
-implementation decision; release evidence remains outstanding until the reviewed candidate passes
-hosted checks, merge, and tag.
+implementation decision. Independent review, hosted pull-request and exact-main checks, merge,
+annotated tag, release checks, and isolated installation all passed for the released version.
 
 ### What an isolation folder would mean
 

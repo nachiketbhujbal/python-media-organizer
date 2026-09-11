@@ -196,7 +196,8 @@ retain that subsystem while tightening evidence behavior and repository records.
 | 0.5.9 | Reversible truthful-extension correction | Add `pymo correct-extensions COLLECTION`, sequenced after fresh validation and before organization or deterministic renaming. Act only on fresh descriptor-pinned content evidence with an unambiguous packaged canonical extension; fully decode every mapped image frame; require exact mapped-or-protected packaged-policy coverage; and leave valid synonyms, TIFF-derived and camera-raw images, shared or audio-capable video families, raw elementary streams, weak probes, unsupported formats, and other ambiguity untouched. Add a canonical suffix to conclusive extensionless media. Change no media bytes, preview by default, require `--apply`, use atomic no-replace collision handling, append distinct journal actions, verify applied state, and support dependency-aware undo. | Released |
 | 0.5.10 | Simulated preservation without `dups` | Add zero-write `verify-migration --simulate-without-dups`. Inventory the destination review tree and report its files and bytes separately, but prevent it from satisfying destination coverage; label every verdict simulated; retain distinct byte, exact-pixel, strict-playback, multiplicity, exclusion, and uncertainty accounting; and become non-complete whenever removing `dups` would leave the declared source contract unaccounted. Do not move, quarantine, delete, cache, lock, or action-log anything. | Released |
 | 0.5.11 | Guided single-collection migration | Add a production coordinator over one declared baseline/working pair and the documented runbook. Carry common options and one explicit private log directory through scan, fresh validation, initial preservation proof, extension correction, organization, deterministic renaming, duplicate isolation, simulated duplicate removal, external-quarantine confirmation, and final fresh sign-off. Preserve previews, explicit apply boundaries, real exit statuses, restartable stage state, and human checkpoints. Do not rescue-copy media, delete content, silently continue after a failed stage, or enable persistent logs by default. | Released |
-| 0.5.12 | Filesystem-identity verification roots | Make standalone `verify-migration` reject a source and destination that are the same or nested physical directory through case, Unicode, or other same-filesystem aliases. Retain initial identities through strict existing-root ancestry and final endpoint revalidation, contain every guided-coordinator command-line path resolution before optional private-state creation, retain genuinely distinct case-sensitive roots, and leave report-only inventory, preservation, privacy, and zero-write behavior unchanged. | Corrected and owner-gated; renewed exact-SHA review and release pending |
+| 0.5.12 | Filesystem-identity verification roots | Make standalone `verify-migration` reject a source and destination that are the same or nested physical directory through case, Unicode, or other same-filesystem aliases. Retain initial identities through strict existing-root ancestry and final endpoint revalidation, contain every guided-coordinator command-line path resolution before optional private-state creation, retain genuinely distinct case-sensitive roots, and leave report-only inventory, preservation, privacy, and zero-write behavior unchanged. | Released |
+| 0.5.13 | Authoritative release-documentation reconciliation | Reconcile every current availability, review, roadmap, changelog, and handoff claim with the verified v0.5.12 release; adopt one concise public product description; and identify privacy-preserving workflow trials on existing real collections as the next evidence-gathering phase without changing runtime behavior. | Released |
 
 Release numbers are assigned by the maintainer; this ledger records the
 accepted sequence rather than promised delivery dates. Each planned row remains
@@ -211,6 +212,13 @@ and is recorded under "Media truthfulness, damage, and remediation" in
 [RESEARCH.md](RESEARCH.md). None of it is approved for implementation.
 
 ## Later promoted work
+
+The immediate post-v0.5.13 phase is controlled use of the released workflow on
+existing real collections. Those trials gather aggregate, privacy-preserving
+operational observations to test the documented sequence and inform later
+priorities. Collection names, paths, media, statistics, and identifying
+metadata remain outside the repository, and observations do not promote a
+feature into a release without a separate decision.
 
 These have an accepted product direction but no release number yet:
 
