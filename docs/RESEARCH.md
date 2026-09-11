@@ -787,8 +787,9 @@ fresh evidence, action history, or the external migration tracker.
 Operational trials confirmed that a human should not have to re-enter the same
 coordinator shape for every stage or remain present merely to advance routine
 success. [ADR 0088](adrs/0088-safe-migration-operator-loop.md) implements that
-bounded foreground loop in 0.6.0 without crossing a decision. ADR 0087 keeps
-interactive checkpoints in 0.6.1, manifest planning through queue reporting in
+bounded foreground loop in 0.6.0 without crossing a decision and conservative
+terminal-only checkpoint questions in 0.6.1. ADR 0087 keeps manifest planning
+through queue reporting in
 versions 0.6.11 through 0.6.14, and measurement before bounded scheduling in
 versions 0.6.15 through 0.6.17. Rescue copying remains separate research.
 

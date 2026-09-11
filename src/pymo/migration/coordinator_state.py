@@ -27,7 +27,13 @@ class MigrationCoordinatorError(RuntimeError):
 @dataclass(frozen=True)
 class Attempt:
     stage: str
-    action: Literal["run", "acknowledge-status", "confirm-quarantine"]
+    action: Literal[
+        "run",
+        "acknowledge-status",
+        "acknowledge-review",
+        "confirm-quarantine",
+        "signoff",
+    ]
     exit_status: int
     completed_at: str
     log_file: str | None
@@ -288,7 +294,13 @@ def _attempt_from_json(value: object) -> Attempt:
     completed_at = value["completed_at"]
     if not isinstance(stage, str) or not stage:
         raise MigrationCoordinatorError("migration restart attempt has invalid stage")
-    if action not in {"run", "acknowledge-status", "confirm-quarantine"}:
+    if action not in {
+        "run",
+        "acknowledge-status",
+        "acknowledge-review",
+        "confirm-quarantine",
+        "signoff",
+    }:
         raise MigrationCoordinatorError("migration restart attempt has invalid action")
     if type(exit_status) is not int or not 0 <= exit_status <= 255:
         raise MigrationCoordinatorError("migration restart attempt has invalid status")
@@ -312,6 +324,42 @@ def _validate_attempt_order(attempts: tuple[Attempt, ...], next_stage: int) -> N
         "final-working-validation",
     }
     for attempt in attempts:
+        completed_stage = stages[expected - 1] if expected else None
+        if attempt.action == "acknowledge-review":
+            if (
+                completed_stage is None
+                or completed_stage.identifier not in validation_stages
+                or attempt.stage != completed_stage.identifier
+                or attempt.exit_status != 0
+                or previous is None
+                or previous.stage != completed_stage.identifier
+                or previous.action != "run"
+                or previous.exit_status != 0
+                or attempt.log_file is not None
+                or attempt.apply
+            ):
+                raise MigrationCoordinatorError(
+                    "migration validation review acknowledgement is invalid"
+                )
+            previous = attempt
+            continue
+        if attempt.action == "signoff":
+            if (
+                expected != len(stages)
+                or attempt.stage != stages[-1].identifier
+                or attempt.exit_status != 0
+                or previous is None
+                or previous.stage != stages[-1].identifier
+                or previous.action != "run"
+                or previous.exit_status != 0
+                or attempt.log_file is not None
+                or attempt.apply
+            ):
+                raise MigrationCoordinatorError(
+                    "migration final sign-off acknowledgement is invalid"
+                )
+            previous = attempt
+            continue
         if expected >= len(stages) or attempt.stage != stages[expected].identifier:
             raise MigrationCoordinatorError(
                 "migration restart attempts are out of order"

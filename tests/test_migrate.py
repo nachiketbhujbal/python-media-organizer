@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import os
 import shutil
@@ -10,7 +11,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from pymo import __version__, migrate
+from pymo import __version__, cli, migrate
+from pymo.logging_config import configure_logging
 from pymo.migration.workflow import child_command
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -363,6 +365,445 @@ def _state_at(log_dir: Path, baseline: Path, working: Path, next_stage: int) -> 
         now,
     )
     migrate._write_state(state_file(log_dir), state)
+
+
+class TerminalInput(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+def test_interactive_requires_terminal_input_without_state_write(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    before = state_file(log_dir).read_bytes()
+
+    result = run_pymo(
+        "migrate", baseline, working, "--log-dir", log_dir, "--interactive"
+    )
+
+    assert result.returncode == 2
+    assert "--interactive requires terminal input" in result.stderr
+    assert state_file(log_dir).read_bytes() == before
+    assert len(list(log_dir.iterdir())) == 1
+
+
+@pytest.mark.parametrize(("response", "status"), [("\n", 0), ("maybe\n", 2), ("", 2)])
+def test_interactive_apply_decline_and_ambiguous_input_are_zero_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    response: str,
+    status: int,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    before = state_file(log_dir).read_bytes()
+    observed: list[list[str]] = []
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput(response))
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: observed.append(command),
+    )
+
+    result = migrate.main(
+        [str(baseline), str(working), "--log-dir", str(log_dir), "--interactive"]
+    )
+
+    assert result == status
+    assert observed == []
+    assert state_file(log_dir).read_bytes() == before
+    assert len(list(log_dir.glob("*.log"))) == 0
+
+
+def test_interactive_yes_authorizes_only_the_current_apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    observed: list[list[str]] = []
+
+    def completed(
+        command: list[str], *, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\nno\n"))
+    monkeypatch.setattr(migrate.subprocess, "run", completed)
+
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--interactive",
+            ]
+        )
+        == 0
+    )
+
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == 9
+    assert len(observed) == 3
+    assert "--apply" in observed[0]
+    assert all("--apply" not in command for command in observed[1:])
+    assert state.attempts[6].stage == "extension-apply"
+    assert state.attempts[6].apply is True
+    assert all(attempt.stage != "organize-apply" for attempt in state.attempts)
+
+
+def test_interactive_records_successful_validation_review_for_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 2)
+    observed: list[list[str]] = []
+
+    def completed(
+        command: list[str], *, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("y\nn\n"))
+    monkeypatch.setattr(migrate.subprocess, "run", completed)
+
+    assert (
+        migrate.main(
+            [str(baseline), str(working), "--log-dir", str(log_dir), "--interactive"]
+        )
+        == 0
+    )
+
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == 4
+    assert len(observed) == 2
+    assert [attempt.action for attempt in state.attempts[-3:]] == [
+        "run",
+        "acknowledge-review",
+        "run",
+    ]
+    assert state.attempts[-2].stage == "baseline-validation"
+
+
+def test_interactive_accepts_pending_status_one_without_rerunning_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 2)
+    failed = migrate.Attempt(
+        "baseline-validation",
+        "run",
+        1,
+        "2026-08-29T12:00:01-04:00",
+        "failed.log",
+        False,
+    )
+    current = migrate._load_state(state_file(log_dir))
+    migrate._write_state(
+        state_file(log_dir), migrate._updated_state(current, failed, advance=False)
+    )
+    observed: list[list[str]] = []
+
+    def completed(
+        command: list[str], *, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\nno\n"))
+    monkeypatch.setattr(migrate.subprocess, "run", completed)
+
+    assert (
+        migrate.main(
+            [str(baseline), str(working), "--log-dir", str(log_dir), "--interactive"]
+        )
+        == 0
+    )
+
+    state = migrate._load_state(state_file(log_dir))
+    assert len(observed) == 1
+    assert "working-validation" in " ".join(observed[0])
+    assert state.attempts[-2].action == "acknowledge-status"
+    assert state.attempts[-2].stage == "baseline-validation"
+
+
+@pytest.mark.parametrize("answer", ("n\n", "\n"))
+def test_interactive_declines_pending_status_one_with_original_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, answer: str
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 2)
+    failed = migrate.Attempt(
+        "baseline-validation",
+        "run",
+        1,
+        "2026-08-29T12:00:01-04:00",
+        "failed.log",
+        False,
+    )
+    current = migrate._load_state(state_file(log_dir))
+    migrate._write_state(
+        state_file(log_dir), migrate._updated_state(current, failed, advance=False)
+    )
+    expected = state_file(log_dir).read_bytes()
+
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput(answer))
+
+    assert (
+        migrate.main(
+            [str(baseline), str(working), "--log-dir", str(log_dir), "--interactive"]
+        )
+        == 1
+    )
+    assert state_file(log_dir).read_bytes() == expected
+
+
+def test_interactive_quarantine_confirmation_remains_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 21)
+    (working / "dups").mkdir()
+    before = state_file(log_dir).read_bytes()
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\n"))
+
+    assert (
+        migrate.main(
+            [str(baseline), str(working), "--log-dir", str(log_dir), "--interactive"]
+        )
+        == 1
+    )
+    assert state_file(log_dir).read_bytes() == before
+
+
+def test_interactive_records_final_signoff_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, len(migrate._stages()))
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\n"))
+
+    arguments = [
+        str(baseline),
+        str(working),
+        "--log-dir",
+        str(log_dir),
+        "--interactive",
+    ]
+    assert migrate.main(arguments) == 0
+    signed = migrate._load_state(state_file(log_dir))
+    assert signed.attempts[-1].action == "signoff"
+    assert signed.next_stage == len(migrate._stages())
+
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput(""))
+    assert migrate.main(arguments) == 0
+    resumed = migrate._load_state(state_file(log_dir))
+    assert resumed == signed
+
+
+def test_interactive_interrupt_retains_status_130_and_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    before = state_file(log_dir).read_bytes()
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\n"))
+
+    def interrupt(question: str) -> bool:
+        del question
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(migrate, "_prompt_yes_no", interrupt)
+
+    assert (
+        cli.main(
+            [
+                "migrate",
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--interactive",
+            ]
+        )
+        == 130
+    )
+    assert state_file(log_dir).read_bytes() == before
+
+
+def test_interactive_revalidates_root_identity_after_an_apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    displaced = tmp_path / "displaced-working"
+    observed: list[list[str]] = []
+
+    def replace_root(
+        command: list[str], *, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        working.rename(displaced)
+        working.mkdir()
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\n"))
+    monkeypatch.setattr(migrate.subprocess, "run", replace_root)
+
+    assert (
+        migrate.main(
+            [str(baseline), str(working), "--log-dir", str(log_dir), "--interactive"]
+        )
+        == 2
+    )
+    assert len(observed) == 1
+    assert migrate._load_state(state_file(log_dir)).next_stage == 7
+
+
+def test_interactive_reloads_state_after_the_operator_answers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    observed: list[list[str]] = []
+
+    def substitute_state(question: str) -> bool:
+        del question
+        state = migrate._load_state(state_file(log_dir))
+        injected = migrate.Attempt(
+            "extension-apply",
+            "run",
+            7,
+            "2026-08-29T12:00:01-04:00",
+            "injected.log",
+            True,
+        )
+        migrate._write_state(
+            state_file(log_dir),
+            migrate._updated_state(state, injected, advance=False),
+        )
+        return True
+
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\n"))
+    monkeypatch.setattr(migrate, "_prompt_yes_no", substitute_state)
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: observed.append(command),
+    )
+
+    assert (
+        migrate.main(
+            [str(baseline), str(working), "--log-dir", str(log_dir), "--interactive"]
+        )
+        == 2
+    )
+    assert observed == []
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == 6
+    assert state.attempts[-1].exit_status == 7
+
+
+def test_interactive_revalidates_root_identity_after_the_operator_answers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    displaced = tmp_path / "displaced-working"
+    observed: list[list[str]] = []
+
+    def replace_root(question: str) -> bool:
+        del question
+        working.rename(displaced)
+        working.mkdir()
+        return True
+
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\n"))
+    monkeypatch.setattr(migrate, "_prompt_yes_no", replace_root)
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: observed.append(command),
+    )
+
+    assert (
+        migrate.main(
+            [str(baseline), str(working), "--log-dir", str(log_dir), "--interactive"]
+        )
+        == 2
+    )
+    assert observed == []
+    assert migrate._load_state(state_file(log_dir)).next_stage == 6
+
+
+def test_interactive_prompt_remains_visible_in_quiet_mode(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("no\n"))
+    configure_logging(quiet=True, timestamps=False)
+    try:
+        assert (
+            migrate.main(
+                [
+                    str(baseline),
+                    str(working),
+                    "--log-dir",
+                    str(log_dir),
+                    "--interactive",
+                ]
+            )
+            == 0
+        )
+        assert "Apply the reviewed mutation" in capsys.readouterr().err
+    finally:
+        configure_logging(timestamps=False)
+
+
+def test_interactive_selector_is_exclusive_and_never_accepts_apply() -> None:
+    with pytest.raises(SystemExit) as conflict:
+        migrate.parse_args(["baseline", "working", "--run", "--interactive"])
+    assert conflict.value.code == 2
+
+    assert migrate.main(["baseline", "working", "--interactive", "--apply"]) == 2
 
 
 def test_apply_checkpoint_requires_second_explicit_boundary(

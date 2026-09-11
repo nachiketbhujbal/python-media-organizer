@@ -25,6 +25,9 @@ contract; it does not prove whole-device recovery.
   changes no workflow or command behavior.
 - Version 0.6.0 adds `migrate --run`, which advances routine successful stages
   in one foreground invocation and stops at every existing decision boundary.
+- Version 0.6.1 adds `migrate --interactive`, which uses a terminal to ask one
+  conservative question at each existing decision boundary and records
+  accepted review and sign-off decisions in private restart state.
 
 Perform only stages supported by the installed version and keep every
 transition human-reviewed. Do not use a loose shell script as the production
@@ -44,12 +47,16 @@ Version 0.6.0 reduces that repetition without skipping a checkpoint. Its safe
 operator loop pauses after every successful validation for review, stops before
 every apply, after any nonzero child status, at the external-quarantine
 checkpoint, and after final evidence becomes eligible for human sign-off. It
-asks no questions and grants no mutation authority.
-[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) keeps interactive
-checkpoints, reports, saved context, logging and visibility policy, duplicate
-disposition, queues, and benchmark-gated scheduling as separate later releases;
-[ADR 0088](adrs/0088-safe-migration-operator-loop.md) records this first loop
-boundary.
+asks no questions and grants no mutation authority. Version 0.6.1's explicit
+interactive mode asks separately at those same boundaries; an answer applies
+only to its current question.
+[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) keeps reports, saved
+context, logging and visibility policy, duplicate disposition, queues, and
+benchmark-gated scheduling as separate later releases;
+[ADR 0088](adrs/0088-safe-migration-operator-loop.md) records the first loop
+boundary, and
+[ADR 0089](adrs/0089-interactive-migration-checkpoints.md) records interactive
+consent.
 
 ## Collection roles
 
@@ -111,6 +118,8 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
   --log-dir "/path/to/private-logs" --run-next
 pymo migrate "/path/to/baseline" "/path/to/working-collection" \
   --log-dir "/path/to/private-logs" --run
+pymo migrate "/path/to/baseline" "/path/to/working-collection" \
+  --log-dir "/path/to/private-logs" --interactive
 ```
 
 `--run` chains only routine successful evidence and preview children. It reloads
@@ -128,6 +137,18 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
 
 Then use `--run` again to continue routine evidence work. Use `--run-next`
 instead whenever exactly one child stage is desired.
+
+Use `--interactive` only from a real terminal. It runs routine stages like
+`--run`, then asks a separate `[y/N]` question for a successful or status-one
+validation review, one pending reviewed apply, external-quarantine
+confirmation, and final human sign-off. Only `y` or `yes` authorizes the
+current checkpoint. `n`, `no`, or an empty line pauses normally except that a
+pending status-one validation continues to return its recorded status 1 until
+it is acknowledged. Invalid input, end-of-file, and redirected non-terminal
+input return setup status 2 without advancing the checkpoint; Ctrl-C retains
+status 130. Accepted mutations still use the existing one-stage apply path and
+must pass the exact restart-transition and collection-identity checks before
+any later child can run.
 
 A nonzero child status is recorded, returned unchanged, and stops both modes.
 Rerun after resolving the cause. Status 1 from a validation checkpoint may be
@@ -149,7 +170,9 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
 That confirmation proves only path absence plus the operator's acknowledgement,
 not quarantine retention. A later `--run` performs final fresh validation and
 pauses for review. One more `--run` performs ordinary observed verification,
-then stops at the human-signoff boundary.
+then stops at the human-signoff boundary. `--interactive` performs the same
+absence check and asks for final sign-off; its accepted review and sign-off
+attempts support honest resume but remain bookkeeping rather than evidence.
 Restart state and stage logs
 are private operational records, not the collection action journal, current
 media evidence, or deletion authority. An interrupted apply may have committed

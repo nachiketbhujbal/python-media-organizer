@@ -262,8 +262,9 @@ paths are needed.
 Version 0.5.11 coordinates the production runbook for one unchanged baseline
 and one working collection. Version 0.6.0 adds a foreground safe operator loop
 that advances routine stages in one invocation while preserving every existing
-decision boundary. With no log directory the coordinator writes nothing and
-prints the complete plan:
+decision boundary. Version 0.6.1 adds explicit terminal questions at those
+boundaries. With no log directory the coordinator writes nothing and prints the
+complete plan:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-copy"
@@ -277,6 +278,8 @@ pymo migrate "/path/to/baseline" "/path/to/working-copy" \
   --log-dir "/path/to/private-logs" --start --no-cache
 pymo migrate "/path/to/baseline" "/path/to/working-copy" \
   --log-dir "/path/to/private-logs" --run
+pymo migrate "/path/to/baseline" "/path/to/working-copy" \
+  --log-dir "/path/to/private-logs" --interactive
 ```
 
 `--run` executes routine successful evidence and preview stages until it reaches
@@ -289,6 +292,17 @@ routine work with `--run` after that single reviewed apply. The original
 `--run-next` selector remains available when exactly one pending child stage is
 desired.
 
+`--interactive` uses the same one-stage engine and routine advancement, but
+keeps a terminal session open to ask separately about successful or status-one
+validation review, each pending reviewed apply, external quarantine, and final
+sign-off. Only `y` or `yes` authorizes the current question. `n`, `no`, or an
+empty answer pauses normally except that a pending status-one validation
+continues to return status 1; ambiguous input, end-of-file, or non-terminal
+input fails closed. Every accepted apply still dispatches exactly one existing
+apply child and revalidates the strict restart transition, invocation binding,
+and both collection identities before continuing. One answer never authorizes
+a later checkpoint.
+
 A status-1 validation result stops and returns status 1 until it is rerun or
 explicitly acknowledged with `--accept-status`; other failures cannot be
 waived. At the duplicate-review boundary, pymo stops for the operator to retain
@@ -296,7 +310,10 @@ the complete `dups` tree outside the working collection.
 `--confirm-quarantine` records the human checkpoint only when the working
 `dups` path is absent. A following `--run` performs final fresh validation and
 pauses for review; one more `--run` performs ordinary verification, then reports
-that human sign-off is still required.
+that human sign-off is still required. In interactive mode the same quarantine
+check remains human-managed, and an affirmative final question records sign-off
+in private restart state without turning it into preservation evidence or
+deletion authority.
 
 Coordinator setup, unsafe-state, and invocation errors return status 2, keeping
 them distinct from a child's status-1 findings. Both `--run` and `--run-next`
@@ -320,11 +337,11 @@ complete procedure and option examples.
 
 Operational trials found that the stage engine produces the right media and
 preservation outcomes but asked the operator to perform too much repetitive
-coordination. Version 0.6.0 addresses only routine automatic advancement.
-Interactive questions, concise human and machine reports, saved resume context,
-logging and visibility policy, pymo-owned duplicate disposition, a sequential
-manifest-backed queue, and benchmark-proven scheduling remain separate later
-releases.
+coordination. Version 0.6.0 adds routine automatic advancement and version
+0.6.1 adds conservative in-process checkpoint questions. Concise human and
+machine reports, saved resume context, logging and visibility policy,
+pymo-owned duplicate disposition, a sequential manifest-backed queue, and
+benchmark-proven scheduling remain separate later releases.
 
 ### Verify a migration by exact bytes and media content
 
@@ -1029,8 +1046,9 @@ preservation engine and made operator supervision, outcome reporting, duplicate
 disposition, queueing, and measured scheduling the version 0.6 theme under
 [ADR 0087](docs/adrs/0087-operator-first-migration-roadmap.md). Version 0.6.0
 adds the foreground safe operator loop under
-[ADR 0088](docs/adrs/0088-safe-migration-operator-loop.md) while leaving every
-operator decision explicit. Rescue copying,
+[ADR 0088](docs/adrs/0088-safe-migration-operator-loop.md); version 0.6.1 adds
+terminal-only checkpoint consent under
+[ADR 0089](docs/adrs/0089-interactive-migration-checkpoints.md). Rescue copying,
 permanent deletion, damaged-media remediation, richer
 metadata, and similarity tooling remain later roadmap or research work. Full
 video decoding remains sequential until representative benchmarks show that

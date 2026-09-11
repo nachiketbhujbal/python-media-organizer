@@ -41,4 +41,6 @@ The resulting operational evidence promotes an operator-first version 0.6
 sequence; ADR 0087 records a fine-grained progression through operator control,
 reporting, visibility, duplicate disposition, queue execution, and measured
 concurrency. Version 0.6.0 adds only the foreground safe operator loop; ADR
-0088 records its automatic-success and explicit-checkpoint boundaries.
+0088 records its automatic-success and explicit-checkpoint boundaries. Version
+0.6.1 adds the explicit terminal-only interactive selector; ADR 0089 records
+its conservative per-question consent and private resume-state boundaries.

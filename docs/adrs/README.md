@@ -94,3 +94,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0086](0086-authoritative-release-documentation.md) | Authoritative release documentation and operational evidence |
 | [0087](0087-operator-first-migration-roadmap.md) | Operator-first version 0.6 migration roadmap |
 | [0088](0088-safe-migration-operator-loop.md) | Foreground safe migration operator loop |
+| [0089](0089-interactive-migration-checkpoints.md) | Conservative interactive migration checkpoints |
