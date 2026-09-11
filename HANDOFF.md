@@ -433,6 +433,17 @@ identifying metadata remain outside the repository. Version 0.5.13 changes no
 runtime, package, configuration, command, report, cache, journal, migration, or
 media behavior.
 
+[ADR 0087](docs/adrs/0087-operator-first-migration-roadmap.md) records the
+operational conclusion from those privacy-preserving
+trials: the preservation and transformation engine is ready for continued real
+use, but the stage-by-stage operator experience is the dominant shortcoming.
+Version 0.6 is therefore planned around a single-invocation driver and final
+report, coherent visibility and diagnostic profiles, verified duplicate
+disposition, a manifest-backed multi-collection queue, and storage-aware
+bounded scheduling. The plan changes no current runtime behavior. Private
+collection identities, paths, statistics, and detailed timing evidence remain
+outside this public repository.
+
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
 behavior. Version 0.3.18 prefixes every physical line of normal human-readable
@@ -1165,6 +1176,14 @@ separate fresh child stages. A completed sequence remains eligible for human
 sign-off only and does not authorize removal of source, baseline, quarantine,
 or working data.
 
+Operational trials confirm that this fixed sequence reaches the intended
+preservation outcomes, including reviewed validation findings and cache-backed
+exact-video reuse. They also confirm that requiring a separate invocation for
+nearly every state transition is tiring, easy to misuse, and poorly suited to
+hours-long media analysis. Version 0.6.0 will add an operator driver over this
+stage engine rather than weakening the engine's evidence or mutation
+boundaries.
+
 ## Media validation
 
 `src/pymo/validate.py` implements media-non-mutating
@@ -1235,11 +1254,12 @@ behavioral tests.
   never reveals them.
 - No persistent log is created by default.
 
-Automatic collection-local diagnostic logging, conventional log-level
-selection, and a `--debug` alias are research items rather than current
-behavior. Default logging would conflict with the present opt-in privacy rule,
-report-only command guarantees, read-only collections, and two-root migration
-verification unless those boundaries receive an explicit design and ADR.
+Automatic diagnostic logging, conventional log-level selection, coherent
+visibility profiles, and a `--debug` alias are planned for version 0.6.1 rather
+than current behavior. Default path-bearing logs or default path disclosure
+would conflict with the present opt-in privacy rule, report-only command
+guarantees, read-only collections, and two-root migration verification unless
+those boundaries receive an explicit design, compatibility decision, and ADR.
 
 Do not put media bytes or unrelated metadata into exceptions or diagnostics.
 Scan JSON is the first machine-readable result contract; human command output
@@ -1404,7 +1424,8 @@ cautions, and open design questions that are not committed to a release.
 `docs/ROADMAP.md` is the promoted delivery plan, with one primary purpose per
 patch through the version 0.1 foundation, version 0.2 inspection and hardening,
 version 0.3 stabilization, version 0.4 preservation and cache foundation, and
-version 0.5 migration-verification and production-readiness sequence.
+version 0.5 migration-verification and production-readiness sequence, and the
+version 0.6 operator-experience sequence promoted by ADR 0087.
 `docs/CHANGELOG.md` is the shipped-behavior record. Keep these roles separate
 instead of maintaining duplicate feature inventories.
 

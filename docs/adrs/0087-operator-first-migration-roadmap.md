@@ -7,7 +7,7 @@
 ## Context
 
 Version 0.5.13 began controlled use of the released migration workflow on
-existing real collections. Four end-to-end trials reached complete preservation
+existing real collections. Multiple end-to-end trials reached complete preservation
 verdicts and reproduced the previously accepted content outcomes without
 silent deletion or overwrite. The transformation and evidence layers behaved
 as designed across healthy media, validation findings, extension correction,

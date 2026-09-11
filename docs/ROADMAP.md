@@ -211,14 +211,33 @@ preservation consequences of each — remains **research rather than schedule**
 and is recorded under "Media truthfulness, damage, and remediation" in
 [RESEARCH.md](RESEARCH.md). None of it is approved for implementation.
 
+## Version 0.6 operator experience
+
+Privacy-preserving operational trials after v0.5.13 reproduced the expected
+content and preservation outcomes while exposing the released coordinator as
+too repetitive for long unattended work.
+[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) therefore makes
+operator experience—not another media transformation—the version 0.6 theme.
+
+| Version | Primary purpose | Acceptance boundary | Status |
+| --- | --- | --- | --- |
+| 0.6.0 | Single-invocation migration and final report | Add an operator driver over the existing restartable stage engine that advances routine successful work in one process, pauses only at explicit findings, mutation, duplicate-disposition, and sign-off boundaries, resumes without reconstructing a long command, and emits readable plus stable machine-readable summaries of inventory, health, transformations, potential or realized duplicate storage recovery, cache reuse, durations, and preservation disposition. Offer a deliberately pre-authorized non-interactive mode that stops on any unanticipated condition. Preserve preview-before-apply, exact child statuses, fresh evidence, and stop-on-ambiguity behavior. | Planned |
+| 0.6.1 | Visibility and private diagnostic profiles | Separate console detail, durable stage logs, restart state, and final reports; add conventional log levels and coherent visibility profiles; retain private permissions and explicit retention behavior; and decide the compatibility boundary for the maintainer-preferred rich local default without silently weakening report-only or path-privacy guarantees. | Planned |
+| 0.6.2 | Verified duplicate disposition | Replace manual shell movement and special path-absence confirmation with a dry-run-first pymo workflow for retained external quarantine, including capacity, root identity, no-overwrite, cross-filesystem, interruption, verification, and journal semantics. Allow an explicitly retained in-place review tree to receive an honest non-reclaimed disposition. Keep permanent deletion separately gated and unapproved until an irreversible audit contract exists. | Planned |
+| 0.6.3 | Manifest-backed collection queue | Accept a declarative local manifest that binds every baseline, working collection, private-state/log location, quarantine destination, policy, and desired final disposition; run sequentially by default; isolate and resume each collection independently; and emit per-collection plus queue-level summaries. A newline list may be a convenience frontend only when every omitted role is resolved without ambiguity. | Planned |
+| 0.6.4 | Measured scheduler and bounded concurrency | Model stage dependencies and storage topology, benchmark independent image/video work, later-collection cache warming, and cross-collection execution, then enable only combinations that improve observed wall time without oversubscribing FFmpeg, CPU, memory, thermals, cache locks, or one physical disk. Preserve explicit overrides, current cache-publication safety, and sequential fallback. | Planned |
+
+The sequence deliberately separates interaction design, privacy/logging policy,
+duplicate mutation, queue state, and process scheduling. Each requires its own
+implementation evidence and independent review; planning status is not shipped
+behavior.
+
 ## Later promoted work
 
-The immediate post-v0.5.13 phase is controlled use of the released workflow on
-existing real collections. Those trials gather aggregate, privacy-preserving
-operational observations to test the documented sequence and inform later
-priorities. Collection names, paths, media, statistics, and identifying
-metadata remain outside the repository, and observations do not promote a
-feature into a release without a separate decision.
+The post-v0.5.13 trials are complete enough to promote the version 0.6 sequence
+above. Collection names, paths, media, statistics, and identifying metadata
+remain outside the repository. Further trials may refine acceptance criteria,
+but do not silently change a planned release.
 
 These have an accepted product direction but no release number yet:
 
@@ -226,19 +245,15 @@ These have an accepted product direction but no release number yet:
 - a collection-history command that summarizes committed runs and actions from
   the portable journal without exposing paths by default, including an explicit
   distinction between reversible operations and any future irreversible event;
-- deliberate duplicate finalization as a command separate from the duplicate
-  finders and the version 0.5.10 simulation, dry-run by default and gated by
-  fresh preservation evidence, with a quarantine-first workflow and an
-  unmistakable explicit boundary before any irreversible deletion is recorded;
 - validation remediation guidance that turns findings into explicit next
   actions, including reversible quarantine planning for media that cannot be
   decoded, while never converting damage into an ignore rule or claiming an
   unsupported format is corrupt; reversible extension correction is sequenced
   separately under "Version 0.5 continuation" above;
-- resumable rescue copying and a queue manifest for multiple collections with
-  capacity, case-collision, copy-completeness, storage-contention, quarantine,
-  and final naming policy; this remains separate from the version 0.5.11
-  single-pair coordinator and requires a larger mutation boundary;
+- resumable rescue copying with capacity, case-collision, copy-completeness,
+  destination, and final naming policy; this remains separate from the planned
+  queue over already-declared baseline/working pairs and requires a larger
+  mutation boundary;
 - categorization of collection files beyond pictures and video, keeping tool-owned state and
   unrecognized files untouched, with the open design questions recorded in
   [RESEARCH.md](RESEARCH.md);
@@ -250,10 +265,6 @@ These have an accepted product direction but no release number yet:
 - report-only perceptual image/video similarity;
 - explainable keeper-quality recommendations;
 - reversible metadata or quarantine actions only after dedicated safety ADRs;
-- hardware-aware worker selection that benchmarks the storage/CPU boundary,
-  remains explicitly overrideable, and warns when a configured override is
-  likely to oversubscribe the detected machine;
-- benchmark-driven bounded native-process concurrency;
 - broader POSIX portability beyond the tested Debian-family Linux, Red
   Hat-family Linux, macOS, and Linux-based WSL execution models, including safe
   atomic no-replace mutation primitives;
