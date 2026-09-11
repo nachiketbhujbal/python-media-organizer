@@ -1257,11 +1257,31 @@ source-distribution SHA-256
 `90d54c2804443d70b282da63f4cc5c2c0cc1f174fcd400b6f23841de8b9c0d45`;
 the iMac's uv-managed command reports `pymo 0.6.1`.
 
+Version 0.6.2 is released through PR #50 and exact merge
+`147b0e7ad9aec86848bb24688b2fb7e0a5ae8b89`. Independent review rejected
+the first owner candidate with two high- and two medium-severity findings in
+restart-history validation, descriptor-pinned outcome access, cache accounting,
+and post-quarantine wording. Corrected exact owner head
+`2fdcfed9fd81f3d7b6a9540cc403a82b7dba7709` received a no-findings renewed
+review after independently reproducing all four corrections. All 524 tests
+passed at 88 percent subprocess-aware coverage. PR run `34657437534` and
+exact-main run `34657723232` passed Ubuntu, pinned Fedora 42, macOS, and the
+unconditional quality gate. Annotated tag `v0.6.2` has object
+`8f71a5e159b7794d98a9463f075c64c30a8e19c3`, peels to the exact merge, and
+release run `34658094726` passed its mainline, tagged-build, version, and
+isolated-install checks. An independent tagged build produced wheel SHA-256
+`8d86cf2a742d101106bd161d406de37f0f2a90c4482a19f932f9a86a01c940ce` and
+source-distribution SHA-256
+`3e17cc0925f7b33f58e89b4b395fbdb0b03a32a4ad5b68439b4f5232099d02e3`;
+the iMac's uv-managed command reports `pymo 0.6.2`.
+
 ADR 0090 keeps candidate documentation truthful until publication evidence
 exists, then reconciles the latest `main` in a separate documentation-only
 change. The immutable v0.6.1 tagged tree therefore retains its truthful
 pre-publication `Unreleased` and release-candidate wording; the latest `main`
 documentation is the authoritative post-tag release-status view.
+ADR 0092 applies that same boundary to v0.6.2 without moving or recreating its
+immutable tag.
 
 Operational trials confirm that this fixed sequence reaches the intended
 preservation outcomes, including reviewed validation findings and cache-backed

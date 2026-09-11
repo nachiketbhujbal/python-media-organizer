@@ -97,3 +97,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0089](0089-interactive-migration-checkpoints.md) | Conservative interactive migration checkpoints |
 | [0090](0090-post-tag-release-truth-reconciliation.md) | Post-tag release-truth reconciliation |
 | [0091](0091-typed-human-migration-synopsis.md) | Typed human migration synopsis |
+| [0092](0092-v0.6.2-release-truth.md) | V0.6.2 post-tag release truth |
