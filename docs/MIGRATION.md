@@ -41,11 +41,12 @@ cost even when the underlying work and cache reuse are correct.
 That is a usability finding, not permission to skip checkpoints in the current
 release. Continue using the exact v0.5.13 procedure below until later behavior
 ships. The version 0.6 plan in
-[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) adds a
-single-invocation operator driver, a concise final report, visibility profiles,
-pymo-owned duplicate disposition, a manifest-backed queue, and benchmark-gated
-parallel scheduling while retaining fresh evidence and explicit decision
-boundaries.
+[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) uses small releases
+to add a safe operator loop, interactive checkpoints, concise human and machine
+reports, saved resume context, logging and visibility policy, pymo-owned
+duplicate disposition, a sequential manifest-backed queue, and
+benchmark-gated parallel scheduling while retaining fresh evidence and
+explicit decision boundaries.
 
 ## Collection roles
 
@@ -310,4 +311,5 @@ Record initial and final inventory and health, extension corrections,
 organization and rename counts, image/video duplicate counts and potential
 storage recovery, quarantine disposition, cache reuse, stage durations, known
 warnings, and the final preservation verdict in the external migration record.
-Version 0.6.0 promotes that synopsis to normal pymo output.
+Version 0.6.2 promotes that synopsis to normal pymo output; version 0.6.4 adds
+its stable machine-readable artifact.

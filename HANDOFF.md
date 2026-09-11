@@ -437,12 +437,13 @@ media behavior.
 operational conclusion from those privacy-preserving
 trials: the preservation and transformation engine is ready for continued real
 use, but the stage-by-stage operator experience is the dominant shortcoming.
-Version 0.6 is therefore planned around a single-invocation driver and final
-report, coherent visibility and diagnostic profiles, verified duplicate
-disposition, a manifest-backed multi-collection queue, and storage-aware
-bounded scheduling. The plan changes no current runtime behavior. Private
-collection identities, paths, statistics, and detailed timing evidence remain
-outside this public repository.
+Version 0.6 is therefore planned as small, independently accepted releases
+covering the operator loop, interactive consent, human and machine reports,
+resume and unattended policy, logging and visibility, logical and physical
+duplicate disposition, sequential queue operation, and only then
+storage-aware bounded scheduling. The plan changes no current runtime behavior.
+Private collection identities, paths, statistics, and detailed timing evidence
+remain outside this public repository.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
@@ -1180,9 +1181,10 @@ Operational trials confirm that this fixed sequence reaches the intended
 preservation outcomes, including reviewed validation findings and cache-backed
 exact-video reuse. They also confirm that requiring a separate invocation for
 nearly every state transition is tiring, easy to misuse, and poorly suited to
-hours-long media analysis. Version 0.6.0 will add an operator driver over this
-stage engine rather than weakening the engine's evidence or mutation
-boundaries.
+hours-long media analysis. Version 0.6.0 will automatically advance routine
+safe stages but still stop at every decision boundary. Version 0.6.1 will add
+in-process interactive checkpoint handling rather than weakening the stage
+engine's evidence or mutation boundaries.
 
 ## Media validation
 
@@ -1254,9 +1256,10 @@ behavioral tests.
   never reveals them.
 - No persistent log is created by default.
 
-Automatic diagnostic logging, conventional log-level selection, coherent
-visibility profiles, and a `--debug` alias are planned for version 0.6.1 rather
-than current behavior. Default path-bearing logs or default path disclosure
+Automatic diagnostic logging and conventional log-level selection are planned
+for version 0.6.6; coherent visibility profiles, compatibility treatment, and
+a possible `--debug` alias are planned for version 0.6.7 rather than current
+behavior. Default path-bearing logs or default path disclosure
 would conflict with the present opt-in privacy rule, report-only command
 guarantees, read-only collections, and two-root migration verification unless
 those boundaries receive an explicit design, compatibility decision, and ADR.

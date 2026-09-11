@@ -36,24 +36,30 @@ preservation evidence, preview-before-apply boundaries, exact child statuses,
 no-overwrite behavior, and explicit human decisions remain the safety
 foundation.
 
-The promoted sequence is:
+The promoted sequence uses one primary acceptance purpose per release:
 
-1. add a single-invocation operator driver and a useful final migration report;
-2. unify console visibility, persistent diagnostics, restart state, and report
-   output under explicit privacy profiles;
-3. replace manual duplicate-review-tree shell choreography with a pymo-owned,
-   dry-run-first disposition workflow;
-4. add a manifest-backed multi-collection queue that is sequential by default;
-   and
-5. add bounded parallel scheduling only after storage-aware benchmarks prove a
-   material wall-time benefit.
+1. versions 0.6.0 and 0.6.1 add safe automatic stage advancement and then
+   in-process interactive checkpoints;
+2. versions 0.6.2 through 0.6.5 add the human synopsis, saved invocation
+   context, a stable machine-readable report, and deliberately pre-authorized
+   unattended execution as separate contracts;
+3. versions 0.6.6 and 0.6.7 separate logging surfaces and levels before deciding
+   coherent visibility and privacy profiles;
+4. versions 0.6.8 through 0.6.10 add retained-in-place duplicate disposition,
+   same-filesystem managed quarantine, and explicit cross-filesystem quarantine
+   separately;
+5. versions 0.6.11 through 0.6.14 add manifest validation, sequential execution,
+   per-collection recovery, and queue reporting separately; and
+6. versions 0.6.15 through 0.6.17 measure storage topology before enabling
+   bounded intra-collection and then cross-collection scheduling.
 
-The driver may advance routine successful stages automatically, but it must
-stop for unexpected findings, mutation authorization, irreversible decisions,
-and unsafe or changed state. A later deliberately pre-authorized non-interactive
-mode may cross reviewed mutation boundaries only under a separately specified
-contract; it may never convert a warning, failed proof, or ambiguous state into
-implicit consent.
+The first driver release may advance routine successful stages automatically,
+but it must stop at every existing decision boundary. Interactive checkpoint
+handling is a following release rather than hidden inside the loop foundation.
+A still-later deliberately pre-authorized non-interactive mode may cross
+reviewed mutation boundaries only under a separately specified contract; it
+may never convert a warning, failed proof, or ambiguous state into implicit
+consent.
 
 Rich local visibility is a valid usability goal, but console detail, durable
 path-bearing logs, restart bookkeeping, and machine-readable summaries are
@@ -61,10 +67,13 @@ different surfaces. Any change from the current path-private and opt-in
 persistence defaults requires its own explicit compatibility and privacy
 decision.
 
-Duplicate detection remains non-deleting. External quarantine and any future
-permanent cleanup require distinct evidence, capacity, interruption, journal,
-and confirmation semantics. A convenience flag must not make irreversible
-deletion an accidental consequence of migration.
+Duplicate detection remains non-deleting. The existing without-`dups`
+simulation may support an honest retained-in-place disposition without
+claiming that storage was reclaimed. Same-filesystem quarantine,
+cross-filesystem quarantine, and any future permanent cleanup require distinct
+evidence, capacity, interruption, journal, and confirmation semantics. A
+convenience flag must not make irreversible deletion an accidental consequence
+of migration. Permanent deletion remains outside the version 0.6 plan.
 
 This ADR and its documentation release change no runtime, package,
 configuration, command, report, cache, journal, migration, or media behavior.
@@ -73,14 +82,17 @@ configuration, command, report, cache, journal, migration, or media behavior.
 
 - The next major value is reducing supervision and ambiguity around already
   reliable work, not broadening the set of automatic transformations.
-- A human-readable and machine-readable outcome synopsis becomes a primary
-  product result rather than an agent-authored after-action note.
+- A human-readable outcome synopsis becomes a primary product result rather
+  than an agent-authored after-action note; its stable machine-readable schema
+  follows as a separate compatibility boundary.
 - Queue input must describe complete collection roles and policy; a
   newline-only list may be a convenience frontend but is not an adequate safety
   contract by itself.
 - Image and video work, later-collection cache warming, and cross-collection
   execution are candidates for dependency-aware scheduling, not assumed-safe
   parallel work.
-- Version 0.6 work can be split across devices only as separately owned product
-  branches with explicit interfaces and exact-SHA review. Agent Relay
+- One primary owner retains version 0.6 integration and real-collection
+  acceptance. Supporting sessions on other devices may run bounded analysis,
+  tests, benchmarks, and independent exact-SHA review through Agent Relay, but
+  they do not silently acquire product or release ownership. Agent Relay
   coordinates ownership and evidence; it is not the product scheduler.

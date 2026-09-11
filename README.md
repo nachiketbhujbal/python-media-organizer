@@ -307,11 +307,12 @@ complete procedure and option examples.
 
 Operational trials found that this safe stage engine produces the right media
 and preservation outcomes but asks the operator to perform too much repetitive
-coordination. The version 0.6 roadmap therefore begins with a single-invocation
-operator driver and a concise final report, followed by coherent visibility
-profiles, pymo-owned duplicate disposition, a manifest-backed queue, and only
-then benchmark-proven parallel scheduling. Those are planned changes, not
-features of the current release.
+coordination. The version 0.6 roadmap therefore uses small releases to build a
+safe operator loop, interactive checkpoints, concise human and machine
+reports, saved resume context, logging and visibility policy, pymo-owned
+duplicate disposition, a sequential manifest-backed queue, and only then
+benchmark-proven parallel scheduling. Those are planned changes, not features
+of the current release.
 
 ### Verify a migration by exact bytes and media content
 

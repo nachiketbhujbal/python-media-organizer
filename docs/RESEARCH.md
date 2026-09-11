@@ -750,12 +750,13 @@ a stronger contract than an `--apply` option on either duplicate finder:
   concise version-control log, which distinguishes committed reversible runs,
   undo runs, quarantines, and irreversible finalization events.
 
-[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) promotes retained
-duplicate disposition into version 0.6.2. Its
-journal schema, confirmation ceremony, quarantine portability across
-macOS/Linux/WSL, and preservation-evidence binding still require a dedicated
-implementation ADR. Permanent deletion remains research and is not implied by
-the planned quarantine workflow.
+[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) promotes an honest
+retained-in-place duplicate disposition into version 0.6.8,
+same-filesystem managed quarantine into 0.6.9, and explicit cross-filesystem
+quarantine into 0.6.10. Their journal schema, confirmation ceremony,
+portability across macOS/Linux/WSL, and preservation-evidence binding still
+require dedicated implementation ADRs. Permanent deletion remains research
+and is not implied by any planned quarantine workflow.
 
 Ordinary migration verification continues to describe the physical target that
 actually exists, including media under `dups`; silently excluding that tree by
@@ -766,8 +767,10 @@ physical destination review tree, reports it separately, excludes those regular
 files only from counterfactual destination evidence, performs no writes, and
 labels every verdict simulated. A non-complete result blocks quarantine review;
 a simulated complete result still requires retained quarantine plus ordinary
-fresh post-move verification. Version 0.6.2 must automate that disposition
-ceremony without weakening either evidence boundary.
+fresh post-move verification. Version 0.6.8 must integrate the simulation into
+an honest retained-in-place outcome without weakening ordinary verification;
+versions 0.6.9 and 0.6.10 then automate same-filesystem and cross-filesystem
+quarantine without weakening either evidence boundary.
 
 ## Migration orchestration and queues
 
@@ -783,10 +786,11 @@ fresh evidence, action history, or the external migration tracker.
 
 Operational trials confirmed that a human should not have to re-enter the same
 coordinator shape for every stage or remain present merely to advance routine
-success. [ADR 0087](adrs/0087-operator-first-migration-roadmap.md) promotes a
-single-invocation operator driver in 0.6.0, a
-manifest-backed queue over already-declared baseline/working pairs in 0.6.3,
-and measured scheduling in 0.6.4. Rescue copying remains separate research.
+success. [ADR 0087](adrs/0087-operator-first-migration-roadmap.md) promotes safe
+automatic advancement in 0.6.0, interactive checkpoints in 0.6.1, manifest
+planning through queue reporting in versions 0.6.11 through 0.6.14, and
+measurement before bounded scheduling in versions 0.6.15 through 0.6.17.
+Rescue copying remains separate research.
 
 The planned queue and the still-unplanned copy workflow must cover:
 
@@ -853,9 +857,10 @@ commands whose contract is report-only, complicate read-only collections and
 two-root migration verification, and require the log itself to be excluded
 consistently from scan, validation, mutation, and preservation scope.
 
-Version 0.6.1 now owns this comparison. It should evaluate the current explicit
-`--log-file PATH` behavior against a possible private diagnostic profile and
-automatic coordinator records. Any default must
+Version 0.6.6 now owns logging-surface and level behavior, while version 0.6.7
+owns the visibility-profile and default-privacy comparison. They should
+evaluate the current explicit `--log-file PATH` behavior against a possible
+private diagnostic profile and automatic coordinator records. Any default must
 define append/rotation and locking behavior, failure policy, filename privacy,
 which root owns a two-collection command's log, and whether read-only commands
 may create it at all. A safer alternative may be an explicit configured log

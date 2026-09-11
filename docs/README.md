@@ -38,6 +38,6 @@ current documentation with the verified 0.5.12 release and records
 privacy-preserving real-collection workflow trials as the next product phase;
 ADR 0086 records that documentation and evidence boundary.
 The resulting operational evidence promotes an operator-first version 0.6
-sequence; ADR 0087 records the single-invocation, reporting, visibility,
-duplicate-disposition, queue, and measured-concurrency priorities without
-changing current command behavior.
+sequence; ADR 0087 records a fine-grained progression through operator control,
+reporting, visibility, duplicate disposition, queue execution, and measured
+concurrency without changing current command behavior.
