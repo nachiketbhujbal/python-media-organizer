@@ -2,6 +2,32 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.6.1 - 2026-09-11
+
+- Add `pymo migrate BASELINE WORKING --log-dir PRIVATE --interactive` to keep
+  one foreground terminal session alive across routine stages and existing
+  operator checkpoints.
+- Ask a separate conservative yes-or-no question when a successful or
+  status-one validation needs review, one reviewed apply is pending, external
+  duplicate quarantine must be confirmed, or final human sign-off is eligible.
+  Only `y` or `yes` authorizes the current question; a negative or empty answer
+  pauses normally, while invalid, ended, or non-terminal input fails closed.
+- Record successful-validation review and final sign-off as strict private
+  restart-state attempts. Preserve the existing status-one acknowledgement and
+  quarantine-confirmation records so an interrupted session can resume without
+  inventing consent or rerunning an already reviewed status-one validation.
+- Dispatch every accepted mutation through the existing one-stage `--apply`
+  path, then require the exact expected attempt, stage transition, run binding,
+  and collection identities before continuing. One answer never authorizes a
+  later checkpoint.
+- Retain all noninteractive selectors, child exit statuses, opt-in private
+  state and logs, external human-managed quarantine, path-privacy defaults,
+  fresh evidence, and no-delete/no-overwrite behavior.
+- Record the decision in ADR 0089 and add focused unit plus real terminal
+  acceptance coverage for declines, ambiguous input, interruption, resume,
+  quiet-mode prompts, apply isolation, quarantine refusal, root replacement,
+  and final sign-off.
+
 ## 0.6.0 - 2026-09-11
 
 - Add `pymo migrate BASELINE WORKING --log-dir PRIVATE --run` to advance

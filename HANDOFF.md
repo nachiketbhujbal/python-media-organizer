@@ -40,6 +40,9 @@ phase without changing product behavior.
 Version 0.6.0 adds a foreground `migrate --run` loop that advances routine
 successful stages while retaining every existing operator checkpoint and
 pausing after each successful validation for review.
+Version 0.6.1 adds terminal-only `migrate --interactive` checkpoint questions,
+with conservative defaults, one-question authorization, and private restart
+records for accepted review and final sign-off.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -683,6 +686,13 @@ routine successful read and preview stages before pausing after a validation or
 at the next operator checkpoint. It rejects the global single `--log-file`; its
 explicit `--log-dir` owns private restart state and one child log per attempt
 outside both collections.
+Version 0.6.1's `--interactive` selector retains that one-child dispatch path
+and asks in-process only at successful or status-one validation review, one
+pending apply, external-quarantine confirmation, and final sign-off. Only `y`
+or `yes` accepts the current question; negative or empty input pauses, while
+ambiguous, ended, or non-terminal input fails closed. Accepted review and
+sign-off decisions are strict private restart attempts rather than evidence or
+action history.
 
 ## Shared configuration and collection layout
 
@@ -1181,6 +1191,17 @@ still requires `--run-next --apply`. Ordinary fresh verification follows every
 applied transformation. Common options are forwarded only to child commands
 that own them, and each attempt receives a unique private log.
 
+Version 0.6.1 adds `--interactive` over the same loop. It requires terminal
+input and asks one conservative `[y/N]` question for each successful or
+status-one validation review, each pending reviewed apply, external quarantine,
+and final sign-off. An affirmative answer authorizes only the current question.
+Every accepted apply still dispatches exactly one child through the existing
+apply path, and every child or bookkeeping change is followed by strict
+lifecycle, binding, and collection-identity validation before continuation.
+Successful-validation review and final sign-off are recorded in private restart
+state so resume does not invent consent; they do not become preservation
+evidence or deletion authority.
+
 After the successful counterfactual simulation, `--run` pauses and the
 coordinator performs no quarantine operation. `--confirm-quarantine` requires
 the working `dups` path to be absent and records only the human checkpoint, not
@@ -1205,9 +1226,9 @@ preservation outcomes, including reviewed validation findings and cache-backed
 exact-video reuse. They also confirm that requiring a separate invocation for
 nearly every state transition is tiring, easy to misuse, and poorly suited to
 hours-long media analysis. Version 0.6.0 implements routine safe advancement
-without crossing a decision boundary. Version 0.6.1 will add in-process
-interactive checkpoint handling rather than weakening the stage engine's
-evidence or mutation boundaries.
+without crossing a decision boundary. Version 0.6.1 adds in-process interactive
+checkpoint handling without weakening the stage engine's evidence or mutation
+boundaries. Human and machine synopses remain the next separate release units.
 
 ## Media validation
 

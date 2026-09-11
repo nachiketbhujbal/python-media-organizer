@@ -428,6 +428,9 @@ disposition; 0.6.11 through 0.6.14 build a sequential queue in manifest,
 execution, recovery, and reporting steps; and 0.6.15 through 0.6.17 measure
 before enabling bounded intra-collection and cross-collection scheduling.
 Version 0.6.0 layers safe automatic advancement over the unchanged one-stage
-engine and stops at every existing decision boundary. Interactive consent and
-the remaining operator-experience sequence retain their later release slots.
+engine and stops at every existing decision boundary. Version 0.6.1 adds
+terminal-only, conservative questions at those existing checkpoints, records
+review and sign-off decisions in private restart state, and never lets one
+answer authorize a later checkpoint. The remaining operator-experience
+sequence retains its later release slots.
 Rescue copying and permanent deletion remain research.

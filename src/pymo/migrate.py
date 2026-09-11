@@ -165,9 +165,14 @@ def _print_plan(next_stage: int = 0) -> None:
 def _print_status(state: MigrationState) -> None:
     if state.next_stage == len(_stages()):
         print("Migration sequence complete: final observed verification succeeded.")
-        print(
-            "The result is eligible for human sign-off only; retain source, baseline, and quarantine."
-        )
+        if any(attempt.action == "signoff" for attempt in state.attempts):
+            print(
+                "Human sign-off is recorded in private restart state; retain source, baseline, and quarantine."
+            )
+        else:
+            print(
+                "The result is eligible for human sign-off only; retain source, baseline, and quarantine."
+            )
         if any(attempt.action == "acknowledge-status" for attempt in state.attempts):
             print(
                 "Reviewed validation findings were explicitly acknowledged and remain recorded."
@@ -292,8 +297,19 @@ def _require_operator_binding(state: MigrationState, expected: MigrationState) -
 def _require_successful_transition(
     previous: MigrationState, current: MigrationState, stage: Stage
 ) -> None:
+    _require_run_transition(previous, current, stage, status=0, apply=False)
+
+
+def _require_run_transition(
+    previous: MigrationState,
+    current: MigrationState,
+    stage: Stage,
+    *,
+    status: int,
+    apply: bool,
+) -> None:
     if (
-        current.next_stage != previous.next_stage + 1
+        current.next_stage != previous.next_stage + int(status == 0)
         or len(current.attempts) != len(previous.attempts) + 1
         or current.attempts[:-1] != previous.attempts
     ):
@@ -304,12 +320,42 @@ def _require_successful_transition(
     if (
         attempt.stage != stage.identifier
         or attempt.action != "run"
-        or attempt.exit_status != 0
+        or attempt.exit_status != status
         or attempt.log_file is None
-        or attempt.apply
+        or attempt.apply != apply
     ):
         raise MigrationCoordinatorError(
             "migration restart lifecycle changed unexpectedly during the safe operator loop"
+        )
+
+
+def _require_bookkeeping_transition(
+    previous: MigrationState,
+    current: MigrationState,
+    stage: Stage,
+    *,
+    action: str,
+    status: int,
+    advance: bool,
+) -> None:
+    if (
+        current.next_stage != previous.next_stage + int(advance)
+        or len(current.attempts) != len(previous.attempts) + 1
+        or current.attempts[:-1] != previous.attempts
+    ):
+        raise MigrationCoordinatorError(
+            "migration restart lifecycle changed unexpectedly during the interactive operator loop"
+        )
+    attempt = current.attempts[-1]
+    if (
+        attempt.stage != stage.identifier
+        or attempt.action != action
+        or attempt.exit_status != status
+        or attempt.log_file is not None
+        or attempt.apply
+    ):
+        raise MigrationCoordinatorError(
+            "migration restart lifecycle changed unexpectedly during the interactive operator loop"
         )
 
 
@@ -389,6 +435,210 @@ def _confirm_quarantine(state_path: Path, state: MigrationState) -> int:
     return 0
 
 
+def _prompt_yes_no(question: str) -> bool:
+    print(f"{question} [y/N]", file=sys.stderr)
+    response = sys.stdin.readline()
+    if response == "":
+        raise MigrationCoordinatorError("interactive input ended before a decision")
+    answer = response.strip().lower()
+    if answer in {"y", "yes"}:
+        return True
+    if answer in {"", "n", "no"}:
+        return False
+    raise MigrationCoordinatorError(
+        "interactive input must be yes, y, no, n, or an empty response"
+    )
+
+
+def _successful_validation_review(state: MigrationState) -> Stage | None:
+    if not state.attempts:
+        return None
+    attempt = state.attempts[-1]
+    if attempt.action != "run" or attempt.exit_status != 0:
+        return None
+    stage = next((item for item in _stages() if item.identifier == attempt.stage), None)
+    if stage is None or not stage.review_after_success:
+        return None
+    return stage
+
+
+def _pending_status_one_validation(state: MigrationState) -> Stage | None:
+    if state.next_stage == len(_stages()) or not state.attempts:
+        return None
+    stage = _stages()[state.next_stage]
+    attempt = state.attempts[-1]
+    if (
+        not stage.review_after_success
+        or attempt.stage != stage.identifier
+        or attempt.action != "run"
+        or attempt.exit_status != 1
+    ):
+        return None
+    return stage
+
+
+def _acknowledge_review(state_path: Path, state: MigrationState, stage: Stage) -> None:
+    attempt = Attempt(stage.identifier, "acknowledge-review", 0, _now(), None, False)
+    _write_state(state_path, _updated_state(state, attempt, advance=False))
+
+
+def _record_signoff(state_path: Path, state: MigrationState) -> None:
+    stage = _stages()[-1]
+    attempt = Attempt(stage.identifier, "signoff", 0, _now(), None, False)
+    _write_state(state_path, _updated_state(state, attempt, advance=False))
+
+
+def _reload_after_prompt(
+    state_path: Path,
+    expected_state: MigrationState,
+    binding: MigrationState,
+    identities: tuple[tuple[int, int], tuple[int, int]],
+) -> MigrationState:
+    state = _load_state(state_path)
+    if state != expected_state:
+        raise MigrationCoordinatorError(
+            "migration restart lifecycle changed while awaiting interactive input"
+        )
+    _require_operator_binding(state, binding)
+    _require_collection_identities(state, identities)
+    return state
+
+
+def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> int:
+    binding = state
+    identities = _collection_identities(state)
+    while True:
+        _require_operator_binding(state, binding)
+        _require_collection_identities(state, identities)
+
+        successful_review = _successful_validation_review(state)
+        if successful_review is not None:
+            if not _prompt_yes_no(
+                f"Accept the reviewed successful findings for {successful_review.identifier}?"
+            ):
+                print("Interactive migration paused before validation acknowledgement.")
+                return 0
+            state = _reload_after_prompt(state_path, state, binding, identities)
+            previous_state = state
+            _acknowledge_review(state_path, state, successful_review)
+            state = _load_state(state_path)
+            _require_bookkeeping_transition(
+                previous_state,
+                state,
+                successful_review,
+                action="acknowledge-review",
+                status=0,
+                advance=False,
+            )
+            continue
+
+        status_one_review = _pending_status_one_validation(state)
+        if status_one_review is not None:
+            if not _prompt_yes_no(
+                f"Accept the reviewed status-1 findings for {status_one_review.identifier}?"
+            ):
+                print("Interactive migration paused before validation acknowledgement.")
+                return 0
+            state = _reload_after_prompt(state_path, state, binding, identities)
+            previous_state = state
+            status = _accept_status(state_path, state)
+            if status != 0:
+                return status
+            state = _load_state(state_path)
+            _require_bookkeeping_transition(
+                previous_state,
+                state,
+                status_one_review,
+                action="acknowledge-status",
+                status=1,
+                advance=True,
+            )
+            continue
+
+        if state.next_stage == len(_stages()):
+            if state.attempts and state.attempts[-1].action == "signoff":
+                print("Interactive migration is already complete and signed off.")
+                _print_status(state)
+                return 0
+            if not _prompt_yes_no(
+                "Record human sign-off for the completed migration verification?"
+            ):
+                print("Interactive migration paused at final human sign-off.")
+                return 0
+            state = _reload_after_prompt(state_path, state, binding, identities)
+            previous_state = state
+            final_stage = _stages()[-1]
+            _record_signoff(state_path, state)
+            state = _load_state(state_path)
+            _require_bookkeeping_transition(
+                previous_state,
+                state,
+                final_stage,
+                action="signoff",
+                status=0,
+                advance=False,
+            )
+            _require_operator_binding(state, binding)
+            _require_collection_identities(state, identities)
+            print("Human sign-off recorded in private migration state.")
+            _print_status(state)
+            return 0
+
+        stage = _stages()[state.next_stage]
+        if stage.mode == "apply":
+            if not _prompt_yes_no(
+                f"Apply the reviewed mutation for {stage.identifier}?"
+            ):
+                print("Interactive migration paused before mutation.")
+                return 0
+            state = _reload_after_prompt(state_path, state, binding, identities)
+            previous_state = state
+            status = _run_next(log_dir, state_path, state, apply=True)
+            state = _load_state(state_path)
+            _require_run_transition(
+                previous_state, state, stage, status=status, apply=True
+            )
+            _require_operator_binding(state, binding)
+            _require_collection_identities(state, identities)
+            if status != 0:
+                return status
+            continue
+
+        if stage.mode == "checkpoint":
+            if not _prompt_yes_no(
+                "Confirm the complete dups tree is retained externally and absent from the working collection?"
+            ):
+                print("Interactive migration paused at external quarantine review.")
+                return 0
+            state = _reload_after_prompt(state_path, state, binding, identities)
+            previous_state = state
+            status = _confirm_quarantine(state_path, state)
+            if status != 0:
+                _require_collection_identities(state, identities)
+                return status
+            state = _load_state(state_path)
+            _require_bookkeeping_transition(
+                previous_state,
+                state,
+                stage,
+                action="confirm-quarantine",
+                status=0,
+                advance=True,
+            )
+            continue
+
+        previous_state = state
+        status = _run_next(log_dir, state_path, state, apply=False)
+        state = _load_state(state_path)
+        _require_run_transition(
+            previous_state, state, stage, status=status, apply=False
+        )
+        _require_operator_binding(state, binding)
+        _require_collection_identities(state, identities)
+        if status != 0 and not (stage.review_after_success and status == 1):
+            return status
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Guide one baseline and working collection through the production runbook."
@@ -411,6 +661,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--run",
         action="store_true",
         help="run routine stages until the next operator checkpoint",
+    )
+    actions.add_argument(
+        "--interactive",
+        action="store_true",
+        help="run in one foreground process and ask at each operator checkpoint",
     )
     actions.add_argument(
         "--accept-status",
@@ -456,6 +711,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.workers is not None and not 1 <= args.workers <= 32:
         print("--workers must be between 1 and 32.", file=sys.stderr)
         return 2
+    if args.interactive and not sys.stdin.isatty():
+        print(
+            "Migration coordinator cannot safely continue: --interactive requires terminal input.",
+            file=sys.stderr,
+        )
+        return 2
 
     try:
         baseline = _resolve_argument_path(args.baseline)
@@ -466,6 +727,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.start
                 or args.run_next
                 or args.run
+                or args.interactive
                 or args.accept_status
                 or args.confirm_quarantine
             ):
@@ -530,6 +792,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 return _run_next(log_dir, state_path, state, args.apply)
             if args.run:
                 return _run_until_checkpoint(log_dir, state_path, state)
+            if args.interactive:
+                return _run_interactive(log_dir, state_path, state)
             if args.accept_status:
                 return _accept_status(state_path, state)
             if args.confirm_quarantine:
