@@ -32,9 +32,11 @@ The package is named `python-media-organizer`, imports as `pymo`, exposes the
 validation truthfulness and cache compatibility through version 0.5.7, public
 governance through version 0.5.8, reversible truthful-extension correction
 through version 0.5.9, zero-write preservation simulation without destination
-`dups` through version 0.5.10, and guided single-collection migration through
-version 0.5.11. The version 0.5.12 candidate brings direct standalone
-verification roots up to the coordinator's filesystem-identity boundary.
+`dups` through version 0.5.10, guided single-collection migration through
+version 0.5.11, and stable filesystem-identity verification roots through
+version 0.5.12. Version 0.5.13 reconciles the authoritative documentation with
+those verified releases and begins a privacy-preserving operational-evidence
+phase without changing product behavior.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -348,7 +350,7 @@ exact head `9b0d39e`; hosted run `33284905006` passes Ubuntu, Fedora 42, macOS,
 and the aggregate quality gate at that same head. Exact-main, tag, and installed
 release proofs remain distinct release steps.
 
-The version 0.5.11 candidate adds `pymo migrate` over the documented production
+Version 0.5.11 adds `pymo migrate` over the documented production
 sequence for one unchanged baseline and one working collection. With no log
 directory it is zero-write and prints the complete plan. Explicit `--log-dir`
 and `--start` bind private schema-1 restart state to the canonical roots,
@@ -361,11 +363,7 @@ requires the working `dups` path to be absent before final fresh validation and
 ordinary verification. The coordinator does not rescue-copy, automatically
 quarantine, delete, or treat state as evidence. `docs/MIGRATION.md` remains the
 operational authority; full copying and multi-collection queues remain later
-research. ADR 0084 records the decision. Hosted run `33289647836` passed at
-exact candidate `f073132`; focused review closure comment `5466462460`
-independently reproduced all 438 tests at 88 percent coverage, closed GUIDE-R01
-and GUIDE-R02, and required no further owner change. Merge, tag, and
-installed-release proof remain outstanding. Root and
+research. ADR 0084 records the decision. Root and
 log-directory separation now uses filesystem device-and-inode ancestry, so
 case or Unicode aliases cannot make one physical directory serve both
 collection roles or place private logs inside collection evidence. Coordinator
@@ -379,7 +377,11 @@ wheel builds, and isolated installed CLI proof at
 `pymo 0.5.11.dev7+g5725a1b9b`. The installed-CLI acceptance path
 performs real image extension correction, organization, deterministic renaming,
 exact duplicate isolation, external quarantine, and final ordinary proof while
-confirming the unchanged baseline and retained bytes.
+confirming the unchanged baseline and retained bytes. Independent review
+closed GUIDE-R01 and GUIDE-R02 without further owner change. PR #43 merged as
+`bf320a6`; exact-main and release CI passed, annotated tag v0.5.11 resolves to
+that merge, all 438 tests passed at 88 percent coverage, and isolated-wheel
+proof reported `pymo 0.5.11`.
 
 Version 0.5.12 resolves MIG-R01 for direct standalone `verify-migration`.
 Source and destination now use the same no-follow device-and-inode ancestry
@@ -410,13 +412,26 @@ GUIDE-R03 because guided migration path resolution escaped or followed private
 state creation, and two release-truth contradictions. The owner correction now
 uses strict existing-root ancestry with final endpoint revalidation, contains
 all six guided command-line path roles before any optional private-state write,
-and marks 0.5.12 as an unreleased candidate throughout its availability record.
-The renewed owner candidate passes Ruff, Black, mypy, pre-commit, all 473
+and correctly described 0.5.12 as an unreleased candidate at that checkpoint.
+The final owner candidate `be36189` passes Ruff, Black, mypy, pre-commit, all 473
 synthetic and real-FFmpeg tests with 88 percent subprocess-aware coverage,
-source and wheel builds, and artifact/license/privacy inspection. A clean-commit
-built-wheel adversarial proof, new exact-SHA independent review, and exact-head
-hosted proof remain required before merge; exact-main, tag, and installed-release
-proof remain distinct release steps.
+source and wheel builds, and artifact/license/privacy inspection. Independent
+review accepted that exact head without findings, and PR #44's complete
+Ubuntu, pinned Fedora 42, macOS, and quality gate passed. PR #44 merged without
+head drift as `a6215de`; exact-main CI passed, annotated tag v0.5.12 resolves to
+that merge, release CI built and installed the tagged artifacts, and both the
+refreshed editable installation and a separate installed wheel reported
+`pymo 0.5.12`.
+
+Version 0.5.13 performs the authoritative post-release documentation
+reconciliation under ADR 0086. It records versions 0.5.12 and 0.5.13 as
+released, preserves the intermediate review history while closing its final
+disposition, adopts the concise public product description, and establishes
+controlled use of the released workflow on existing real collections as the
+next evidence-gathering phase. Collection names, paths, media, statistics, and
+identifying metadata remain outside the repository. Version 0.5.13 changes no
+runtime, package, configuration, command, report, cache, journal, migration, or
+media behavior.
 
 Version 0.3.19 aligns the roadmap's retained release ledger, the README's
 next-work guidance, and the completed review record without changing runtime
