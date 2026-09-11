@@ -1256,13 +1256,15 @@ behavioral tests.
   never reveals them.
 - No persistent log is created by default.
 
-Automatic diagnostic logging and conventional log-level selection are planned
-for version 0.6.6; coherent visibility profiles, compatibility treatment, and
-a possible `--debug` alias are planned for version 0.6.7 rather than current
-behavior. Default path-bearing logs or default path disclosure
-would conflict with the present opt-in privacy rule, report-only command
-guarantees, read-only collections, and two-root migration verification unless
-those boundaries receive an explicit design, compatibility decision, and ADR.
+Separating console output, explicitly requested durable diagnostics, restart
+state, and reports plus conventional log-level selection is planned for version
+0.6.6. Coherent visibility profiles, compatibility treatment, and a possible
+`--debug` alias are planned for version 0.6.7 rather than current behavior.
+Whether diagnostic persistence ever becomes automatic remains undecided.
+Default path-bearing logs or default path disclosure would conflict with the
+present opt-in privacy rule, report-only command guarantees, read-only
+collections, and two-root migration verification unless those boundaries
+receive an explicit design, compatibility decision, and ADR.
 
 Do not put media bytes or unrelated metadata into exceptions or diagnostics.
 Scan JSON is the first machine-readable result contract; human command output
