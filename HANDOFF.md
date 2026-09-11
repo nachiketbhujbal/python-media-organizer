@@ -37,9 +37,9 @@ version 0.5.11, and stable filesystem-identity verification roots through
 version 0.5.12. Version 0.5.13 reconciles the authoritative documentation with
 those verified releases and begins a privacy-preserving operational-evidence
 phase without changing product behavior.
-The version 0.6.0 candidate adds a foreground `migrate --run` loop that advances
-routine successful stages while retaining every existing operator checkpoint
-and pausing after each successful validation for review.
+Version 0.6.0 adds a foreground `migrate --run` loop that advances routine
+successful stages while retaining every existing operator checkpoint and
+pausing after each successful validation for review.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -1189,6 +1189,16 @@ pauses for review; one more `--run` executes ordinary observed verification and
 reaches the final human-signoff boundary. A completed sequence remains eligible
 for human sign-off only and does not authorize removal of source, baseline,
 quarantine, or working data.
+
+The exact v0.6.0 implementation candidate `e4746a1` passes all 485 synthetic
+and real-FFmpeg tests at 88 percent subprocess-aware coverage, the complete
+pre-commit gate, source and wheel builds, and isolated installed-wheel
+acceptance. Hosted run `34638137395` passes Ubuntu, pinned Fedora 42, macOS, and
+the unconditional quality gate. Renewed independent review reproduced the
+warning-only validation and same-binding lifecycle-substitution attacks,
+confirmed GUIDE-R04 and GUIDE-R05 closed, and reported no findings at that
+exact SHA. The merge, exact-main gate, annotated tag, tag workflow, and
+installed iMac proof remain separate release boundaries.
 
 Operational trials confirm that this fixed sequence reaches the intended
 preservation outcomes, including reviewed validation findings and cache-backed

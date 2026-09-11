@@ -377,6 +377,14 @@ The same adversarial method was repeated after the first validation release.
 
 ## Independent review evidence
 
+- Independent review rejected v0.6.0 candidate `6e700f0` with GUIDE-R04 and
+  GUIDE-R05 after reproducing a warning-only validation that the loop crossed
+  and a schema-valid same-binding lifecycle substitution that skipped six
+  stages. The owner correction at exact head `e4746a1` pauses after every
+  successful validation and requires exactly one expected successful state
+  transition. Renewed independent review reproduced both attacks, reran all 485
+  tests at 88 percent subprocess-aware coverage, verified hosted run
+  `34638137395`, and reported no findings.
 - Renewed independent review rejected PR #44 exact head `18c6573` with
   MIG-R03, GUIDE-R03, and two release-truth contradictions. The earlier hosted
   run `34138191253` passed every platform and the aggregate gate at that head,

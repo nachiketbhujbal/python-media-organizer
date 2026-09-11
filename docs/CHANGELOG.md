@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.6.0 - Unreleased candidate
+## 0.6.0 - 2026-09-11
 
 - Add `pymo migrate BASELINE WORKING --log-dir PRIVATE --run` to advance
   routine successful evidence and preview stages in one foreground process.
