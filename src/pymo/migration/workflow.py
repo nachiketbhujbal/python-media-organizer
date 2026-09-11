@@ -248,6 +248,7 @@ def child_command(
     options: CoordinatorOptions,
     stage: Stage,
     log_file: Path,
+    outcome_file: Path | None = None,
 ) -> list[str]:
     if stage.command is None:
         raise ValueError("checkpoint does not have a child command")
@@ -285,6 +286,8 @@ def child_command(
         command.extend(_native_options(options, ffmpeg=True))
         if stage.identifier == "without-dups-simulation":
             command.append("--simulate-without-dups")
+    if outcome_file is not None:
+        command.extend(("--migration-outcome", str(outcome_file)))
     if stage.mode == "apply":
         command.append("--apply")
     return command

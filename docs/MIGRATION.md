@@ -28,6 +28,9 @@ contract; it does not prove whole-device recovery.
 - Version 0.6.1 adds `migrate --interactive`, which uses a terminal to ask one
   conservative question at each existing decision boundary and records
   accepted review and sign-off decisions in private restart state.
+- Version 0.6.2 adds a concise path-private synopsis of the stage outcomes
+  already recorded by the coordinator. It creates no new preservation evidence
+  and grants no deletion authority.
 
 Perform only stages supported by the installed version and keep every
 transition human-reviewed. Do not use a loose shell script as the production
@@ -56,7 +59,8 @@ benchmark-gated scheduling as separate later releases;
 [ADR 0088](adrs/0088-safe-migration-operator-loop.md) records the first loop
 boundary, and
 [ADR 0089](adrs/0089-interactive-migration-checkpoints.md) records interactive
-consent.
+consent. [ADR 0091](adrs/0091-typed-human-migration-synopsis.md) records the
+private typed-outcome and human-synopsis boundary.
 
 ## Collection roles
 
@@ -102,11 +106,11 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
   --log-dir "/path/to/private-logs" --start
 ```
 
-Common `--config`, `--show-ignored`, `--show-files`, `--verbose`/`--quiet`, timestamp,
-`--workers`, `--no-cache`, ffmpeg/ffprobe, and decode-timeout choices supplied
-at `--start` are fixed in schema-1 restart state and carried only to applicable
-child commands. Later explicit options must agree with that state. Use the same
-released pymo version for the complete sequence.
+Common `--config`, `--show-ignored`, `--show-files`, `--verbose`/`--quiet`,
+timestamp, `--workers`, `--no-cache`, ffmpeg/ffprobe, and decode-timeout choices
+supplied at `--start` are fixed in schema-2 restart state and carried only to
+applicable child commands. Later explicit options must agree with that state.
+Use the same released pymo version for the complete sequence.
 
 Inspect current state without advancing it, execute exactly one pending stage,
 or advance routine work to the next operator checkpoint:
@@ -178,6 +182,18 @@ are private operational records, not the collection action journal, current
 media evidence, or deletion authority. An interrupted apply may have committed
 its own append-only action run even if coordinator state did not advance; review
 the child log and action history before rerunning.
+
+Current coordinator status and each automatic or interactive stop also print a
+concise migration synopsis. Its available facts come from strict aggregate
+outcomes written by the child commands into the same explicit private log
+directory. The synopsis reports only stages that actually ran, keeps paths and
+filenames private, labels previewed versus isolated duplicates and simulated
+versus observed preservation, and reports only measured child duration. A
+potentially reclaimable duplicate total is not a claim that storage has been
+reclaimed; even after external confirmation, pymo has proved only path absence
+and recorded the operator's acknowledgement. The synopsis is convenient
+bookkeeping, not fresh evidence, action history, quarantine proof, sign-off, or
+deletion authority.
 
 ## Stage 1: establish readable evidence
 
@@ -347,10 +363,8 @@ Coordinator setup, unsafe-state, and invocation errors return status 2; a
 `--run` selector retains that exact status behavior while chaining only routine
 successes and revalidating collection identities between them.
 
-The released coordinator does not yet synthesize the final operator report.
-Record initial and final inventory and health, extension corrections,
-organization and rename counts, image/video duplicate counts and potential
-storage recovery, quarantine disposition, cache reuse, stage durations, known
-warnings, and the final preservation verdict in the external migration record.
-Version 0.6.2 promotes that synopsis to normal pymo output; version 0.6.4 adds
-its stable machine-readable artifact.
+Version 0.6.2 promotes the human synopsis to normal coordinator output. Retain
+the external migration record as the operator's durable record and do not treat
+the private outcome files as a stable interchange format. Version 0.6.4 defines
+the separate versioned machine-readable report artifact and compatibility
+contract.

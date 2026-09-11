@@ -27,6 +27,13 @@ from pymo.config import (
 )
 from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
+from pymo.migration.outcome import (
+    MigrationOutcomeError,
+    add_outcome_argument,
+    outcome_record,
+    scan_data,
+    write_outcome,
+)
 from pymo.progress import ProgressMeter, format_bytes
 from pymo.rename import canonical_match, collection_slug
 
@@ -722,6 +729,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     add_config_argument(parser)
     add_show_ignored_argument(parser)
+    add_outcome_argument(parser)
     return parser.parse_args(argv)
 
 
@@ -766,4 +774,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps(report, sort_keys=True, separators=(",", ":")))
     else:
         print_report(report, args.show_ignored)
+    if args.migration_outcome is None:
+        return 0
+    try:
+        write_outcome(
+            args.migration_outcome,
+            outcome_record("scan", "scan", "observed", 0, scan_data(report)),
+            root,
+        )
+    except MigrationOutcomeError:
+        print("Migration outcome could not be recorded safely.", file=sys.stderr)
+        return 1
     return 0

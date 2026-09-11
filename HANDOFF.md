@@ -43,6 +43,9 @@ pausing after each successful validation for review.
 Version 0.6.1 adds terminal-only `migrate --interactive` checkpoint questions,
 with conservative defaults, one-question authorization, and private restart
 records for accepted review and final sign-off.
+Version 0.6.2 adds a concise path-private human synopsis projected from strict
+private aggregate stage outcomes. It does not create preservation evidence,
+stabilize a public report schema, or grant deletion authority.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -629,9 +632,11 @@ python-media-organizer/
       coverage.py
       images.py
       inventory.py
+      outcome.py
       report.py
       roots.py
       simulation.py
+      synopsis.py
       verdict.py
       videos.py
       workflow.py
@@ -1163,7 +1168,7 @@ from an ordinary observed result eligible for final sign-off.
 
 `src/pymo/migrate.py` coordinates `pymo migrate BASELINE WORKING` while
 `migration/workflow.py` owns the fixed ordered stages and child arguments and
-`migration/coordinator_state.py` owns private schema-1 restart state. The
+`migration/coordinator_state.py` owns private schema-2 restart state. The
 command with no `--log-dir` prints a zero-write plan. `--start` creates one
 explicit external private directory, binds canonical roots, exact pymo version,
 and common options, and publishes mode-0600 state atomically under a dedicated
@@ -1191,6 +1196,19 @@ Each mutating preview precedes a distinct apply stage that stops `--run` and
 still requires `--run-next --apply`. Ordinary fresh verification follows every
 applied transformation. Common options are forwarded only to child commands
 that own them, and each attempt receives a unique private log.
+
+Version 0.6.2 adds a private aggregate outcome beside each coordinator child
+log and records its filename plus observed duration in restart state. The child
+command owns its typed facts; the coordinator validates the outcome against the
+stage command, result kind, exit status, schema, and values before advancing.
+Current status and automatic or interactive boundaries project those owned
+facts into a concise human synopsis. It distinguishes previewed from isolated
+duplicates, potential recovery from proven reclamation, simulated from observed
+preservation, and pending or stopped state from completed sign-off. Paths and
+filenames remain private. These records and the synopsis are bookkeeping, not
+fresh evidence, action history, quarantine proof, a stable report API, or
+deletion authority. ADR 0091 records the boundary; version 0.6.4 remains the
+separate public machine-report contract.
 
 Version 0.6.1 adds `--interactive` over the same loop. It requires terminal
 input and asks one conservative `[y/N]` question for each successful or
@@ -1248,7 +1266,8 @@ nearly every state transition is tiring, easy to misuse, and poorly suited to
 hours-long media analysis. Version 0.6.0 implements routine safe advancement
 without crossing a decision boundary. Version 0.6.1 adds in-process interactive
 checkpoint handling without weakening the stage engine's evidence or mutation
-boundaries. Human and machine synopses remain the next separate release units.
+boundaries. Version 0.6.2 adds the human synopsis while leaving saved resume
+context and the stable machine-readable report as separate release units.
 
 ## Media validation
 
@@ -1465,6 +1484,12 @@ The suite is entirely synthetic and temporary. Current coverage includes:
   chaining that stops before applies and quarantine, preserves validation and
   exact-status boundaries, rejects between-stage root or restart-binding
   replacement, and reaches final evidence without claiming human sign-off;
+- private typed migration outcomes and path-private human synopses across
+  not-started, pending, failed, simulated, observed, unsigned, and signed-off
+  states, including exact stage/status/result validation, measured child
+  durations, duplicate preview-versus-isolation language, potential storage
+  accounting, malformed or unsafe outcome refusal, and proof that missing
+  outcome data cannot advance a successful child;
 - unified CLI version, default no-log behavior, explicit logging, verbose mode,
   quiet mode, global option forwarding, default ignored-name privacy, and
   explicit relative ignored-path output;

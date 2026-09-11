@@ -2,6 +2,31 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.6.2 - Unreleased
+
+- Print a concise path-private migration synopsis whenever current coordinator
+  state is displayed and at automatic or interactive pause, failure, and
+  completion boundaries.
+- Report initial inventory, baseline and latest working health, applied
+  transformations, exact duplicate isolation or preview counts, potential
+  review storage, aggregate duplicate-cache activity, final findings, measured
+  child duration, and the latest observed or simulated preservation
+  disposition when those stage results exist.
+- Distinguish pending, stopped, complete-but-unsigned, and signed-off workflow
+  state; observed and simulated preservation; previewed and isolated duplicate
+  copies; and potential storage recovery from storage actually proven
+  reclaimed.
+- Have coordinator-launched child commands publish strict aggregate private
+  outcome records only inside the explicitly requested migration log directory.
+  Validate their schema, stage command, result kind, status, and values before
+  advancing schema-2 restart state.
+- Keep the synopsis a projection of owned stage results rather than new
+  preservation evidence, action history, a deletion authorization, or the
+  stable machine-readable report contract planned for version 0.6.4.
+- Preserve standalone command output, explicit persistent-log opt-in, path and
+  filename privacy, child exit statuses, existing checkpoints, and all current
+  no-delete/no-overwrite guarantees. Record the decision in ADR 0091.
+
 ## 0.6.1 - 2026-09-11
 
 - Add `pymo migrate BASELINE WORKING --log-dir PRIVATE --interactive` to keep

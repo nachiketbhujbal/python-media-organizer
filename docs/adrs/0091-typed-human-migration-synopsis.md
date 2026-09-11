@@ -23,11 +23,11 @@ version 0.6.4 compatibility decision.
 
 Each coordinator-launched child stage may write one small, aggregate,
 path-private outcome record into the explicitly requested private migration log
-directory. The coordinator creates the destination with private permissions,
-passes it through a hidden coordinator-only command option, and accepts it only
-after strict schema, stage, command, result-kind, and value validation. The
-coordinator records the validated outcome filename and the observed child
-duration in schema-2 restart state.
+directory. The coordinator assigns a unique destination and passes it through a
+hidden coordinator-only command option; the child creates it with private
+permissions. The coordinator accepts it only after strict schema, stage,
+command, result-kind, and value validation, then records the validated outcome
+filename and observed child duration in schema-2 restart state.
 
 The child command remains the owner of its facts. Scan contributes inventory;
 validation contributes health, aggregate findings, and validation-cache use;

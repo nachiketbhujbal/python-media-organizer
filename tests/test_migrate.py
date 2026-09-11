@@ -13,6 +13,7 @@ from PIL import Image
 
 from pymo import __version__, cli, migrate
 from pymo.logging_config import configure_logging
+from pymo.migration.outcome import OutcomeCategory, ResultKind, outcome_record
 from pymo.migration.workflow import child_command
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +33,140 @@ def run_pymo(*arguments: object) -> subprocess.CompletedProcess[str]:
         timeout=60,
         check=False,
     )
+
+
+def completed_child(
+    command: list[str], status: int = 0
+) -> subprocess.CompletedProcess[str]:
+    commands = {
+        "scan",
+        "validate",
+        "verify-migration",
+        "correct-extensions",
+        "organize",
+        "rename",
+        "find-image-duplicates",
+        "find-video-duplicates",
+    }
+    child = next(item for item in command if item in commands)
+    if child == "scan":
+        category: OutcomeCategory = "scan"
+        data: dict[str, object] = {
+            "files": 0,
+            "directories": 0,
+            "bytes": 0,
+            "pictures": 0,
+            "videos": 0,
+            "audio": 0,
+            "other": 0,
+            "unknown": 0,
+            "ignored": 0,
+            "symbolic_links": 0,
+            "unreadable": 0,
+            "changed": 0,
+        }
+    elif child == "validate":
+        category = "validation"
+        failed = status == 1
+        data = {
+            "media_files": int(failed),
+            "media_bytes": 0,
+            "pictures": int(failed),
+            "videos": 0,
+            "other_files": 0,
+            "symbolic_links": 0,
+            "unreadable": 0,
+            "changed": 0,
+            "healthy": 0,
+            "warning_only": 0,
+            "errors": int(failed),
+            "findings": (
+                [{"severity": "error", "code": "test-finding", "count": 1}]
+                if failed
+                else []
+            ),
+            "cache": {
+                "enabled": False,
+                "reused": 0,
+                "computed": 0,
+                "persisted": 0,
+                "issue": None,
+            },
+        }
+    elif child == "verify-migration":
+        category = "verification"
+        failed = status != 0
+        data = {
+            "source_files": int(failed),
+            "source_bytes": 0,
+            "source_unique_streams": int(failed),
+            "accounted_unique_streams": 0,
+            "accounted_source_files": 0,
+            "unaccounted_unique_streams": int(failed),
+            "unaccounted_source_files": int(failed),
+            "unsupported_unique_streams": 0,
+            "unsupported_source_files": 0,
+            "destination_files": 0,
+            "destination_bytes": 0,
+            "review_files": 0,
+            "review_bytes": 0,
+            "verdict": "complete" if status == 0 else "unproven",
+            "disposition": (
+                "retain-source-and-resolve-findings"
+                if failed
+                else "eligible-for-human-signoff"
+            ),
+            "reasons": ["source-content-unaccounted"] if failed else [],
+        }
+    elif child in {"correct-extensions", "organize", "rename"}:
+        category = "transformation"
+        operations = {
+            "correct-extensions": "extension-correction",
+            "organize": "organization",
+            "rename": "rename",
+        }
+        data = {
+            "operation": operations[child],
+            "files": 0,
+            "directories_created": 0,
+            "directories_removed": 0,
+        }
+    else:
+        category = "duplicates"
+        data = {
+            "media_kind": "image" if child == "find-image-duplicates" else "video",
+            "scanned_files": 0,
+            "scanned_bytes": 0,
+            "groups": 0,
+            "extra_copies": 0,
+            "duplicate_bytes": 0,
+            "skipped": 0,
+            "cache": {
+                "enabled": False,
+                "reused": 0,
+                "computed": 0,
+                "persisted": 0,
+                "issue": None,
+            },
+        }
+    result_kind: ResultKind = (
+        "simulated"
+        if "--simulate-without-dups" in command
+        else (
+            "observed"
+            if "--apply" in command or category != "transformation"
+            else "preview"
+        )
+    )
+    if category == "duplicates" and "--apply" not in command:
+        result_kind = "preview"
+    path = Path(command[command.index("--migration-outcome") + 1])
+    path.write_text(
+        json.dumps(outcome_record(child, category, result_kind, status, data)) + "\n",
+        encoding="utf-8",
+    )
+    path.chmod(0o600)
+    return subprocess.CompletedProcess(command, status)
 
 
 def collections(tmp_path: Path) -> tuple[Path, Path]:
@@ -264,8 +399,10 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
 
     assert started.returncode == 0, started.stdout + started.stderr
     assert "Run routine stages with --run" in started.stdout
+    assert "Migration synopsis" in started.stdout
+    assert "Workflow: not started" in started.stdout
     payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     assert payload["tool_version"] == __version__
     assert payload["baseline"] == str(baseline.resolve())
     assert payload["working"] == str(working.resolve())
@@ -435,7 +572,7 @@ def test_interactive_yes_authorizes_only_the_current_apply(
     ) -> subprocess.CompletedProcess[str]:
         assert check is False
         observed.append(command)
-        return subprocess.CompletedProcess(command, 0)
+        return completed_child(command)
 
     monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\nno\n"))
     monkeypatch.setattr(migrate.subprocess, "run", completed)
@@ -477,7 +614,7 @@ def test_interactive_records_successful_validation_review_for_resume(
     ) -> subprocess.CompletedProcess[str]:
         assert check is False
         observed.append(command)
-        return subprocess.CompletedProcess(command, 0)
+        return completed_child(command)
 
     monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("y\nn\n"))
     monkeypatch.setattr(migrate.subprocess, "run", completed)
@@ -526,7 +663,7 @@ def test_interactive_accepts_pending_status_one_without_rerunning_it(
     ) -> subprocess.CompletedProcess[str]:
         assert check is False
         observed.append(command)
-        return subprocess.CompletedProcess(command, 0)
+        return completed_child(command)
 
     monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\nno\n"))
     monkeypatch.setattr(migrate.subprocess, "run", completed)
@@ -674,7 +811,7 @@ def test_interactive_revalidates_root_identity_after_an_apply(
         observed.append(command)
         working.rename(displaced)
         working.mkdir()
-        return subprocess.CompletedProcess(command, 0)
+        return completed_child(command)
 
     monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\n"))
     monkeypatch.setattr(migrate.subprocess, "run", replace_root)
@@ -820,7 +957,7 @@ def test_apply_checkpoint_requires_second_explicit_boundary(
     ) -> subprocess.CompletedProcess[str]:
         assert check is False
         observed.append(command)
-        return subprocess.CompletedProcess(command, 0)
+        return completed_child(command)
 
     monkeypatch.setattr(migrate.subprocess, "run", completed)
 
@@ -881,7 +1018,7 @@ def test_safe_operator_loop_advances_routine_stages_and_pauses_before_apply(
     ) -> subprocess.CompletedProcess[str]:
         assert check is False
         observed.append(command)
-        return subprocess.CompletedProcess(command, 0)
+        return completed_child(command)
 
     messages: list[tuple[str, object]] = []
     monkeypatch.setattr(migrate.subprocess, "run", completed)
@@ -943,7 +1080,7 @@ def test_safe_operator_loop_returns_exact_child_failure_and_stops(
     ) -> subprocess.CompletedProcess[str]:
         assert check is False
         observed.append(command)
-        return subprocess.CompletedProcess(command, next(statuses))
+        return completed_child(command, next(statuses))
 
     monkeypatch.setattr(migrate.subprocess, "run", completed)
 
@@ -973,7 +1110,7 @@ def test_safe_operator_loop_stops_if_a_collection_root_is_replaced(
         observed.append(command)
         working.rename(original_working)
         working.mkdir()
-        return subprocess.CompletedProcess(command, 0)
+        return completed_child(command)
 
     messages: list[tuple[str, object]] = []
     monkeypatch.setattr(migrate.subprocess, "run", replace_after_first_child)
@@ -1030,7 +1167,7 @@ def test_safe_operator_loop_stops_if_restart_binding_is_substituted(
         migrate.subprocess,
         "run",
         lambda command, *, check: (
-            observed.append(command) or subprocess.CompletedProcess(command, 0)
+            observed.append(command) or completed_child(command)
         ),
     )
 
@@ -1085,7 +1222,7 @@ def test_safe_operator_loop_rejects_same_binding_lifecycle_jump(
         migrate.subprocess,
         "run",
         lambda command, *, check: (
-            observed.append(command) or subprocess.CompletedProcess(command, 0)
+            observed.append(command) or completed_child(command)
         ),
     )
 
@@ -1096,7 +1233,8 @@ def test_safe_operator_loop_rejects_same_binding_lifecycle_jump(
 
 
 def test_safe_operator_loop_pauses_after_successful_validation_for_review(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     baseline, working = collections(tmp_path)
     log_dir = tmp_path / "logs"
@@ -1104,11 +1242,12 @@ def test_safe_operator_loop_pauses_after_successful_validation_for_review(
     _state_at(log_dir, baseline, working, 2)
     observed: list[list[str]] = []
     messages: list[tuple[str, object]] = []
+    synopses: list[tuple[Path, migrate.MigrationState]] = []
     monkeypatch.setattr(
         migrate.subprocess,
         "run",
         lambda command, *, check: (
-            observed.append(command) or subprocess.CompletedProcess(command, 0)
+            observed.append(command) or completed_child(command)
         ),
     )
     monkeypatch.setattr(
@@ -1116,12 +1255,20 @@ def test_safe_operator_loop_pauses_after_successful_validation_for_review(
         "print",
         lambda message, *, file=None: messages.append((message, file)),
     )
+    monkeypatch.setattr(
+        migrate,
+        "print_synopsis",
+        lambda path, state: synopses.append((path, state)),
+    )
 
     arguments = [str(baseline), str(working), "--log-dir", str(log_dir), "--run"]
     assert migrate.main(arguments) == 0
     assert len(observed) == 1
     assert migrate._load_state(state_file(log_dir)).next_stage == 3
     assert any("paused for validation review" in message for message, _ in messages)
+    assert len(synopses) == 1
+    assert synopses[0][0] == log_dir
+    assert synopses[0][1].next_stage == 3
 
 
 def test_safe_operator_loop_preserves_validation_acknowledgement_boundary(
@@ -1136,7 +1283,7 @@ def test_safe_operator_loop_preserves_validation_acknowledgement_boundary(
     monkeypatch.setattr(
         migrate.subprocess,
         "run",
-        lambda command, *, check: subprocess.CompletedProcess(command, 1),
+        lambda command, *, check: completed_child(command, 1),
     )
     assert migrate.main([*arguments, "--run"]) == 1
     stopped = migrate._load_state(state_file(log_dir))
@@ -1159,7 +1306,7 @@ def test_safe_operator_loop_finishes_with_human_signoff_still_pending(
     monkeypatch.setattr(
         migrate.subprocess,
         "run",
-        lambda command, *, check: subprocess.CompletedProcess(command, 0),
+        lambda command, *, check: completed_child(command),
     )
     messages: list[tuple[str, object]] = []
     monkeypatch.setattr(
@@ -1235,7 +1382,7 @@ def test_real_child_status_stops_and_only_validation_one_can_be_acknowledged(
     monkeypatch.setattr(
         migrate.subprocess,
         "run",
-        lambda command, *, check: subprocess.CompletedProcess(command, 1),
+        lambda command, *, check: completed_child(command, 1),
     )
     arguments = [str(baseline), str(working), "--log-dir", str(log_dir)]
 
@@ -1372,6 +1519,19 @@ def test_complete_empty_collection_sequence_is_restartable_and_stage_logged(
     logs = sorted(log_dir.glob("*.log"))
     assert len(logs) == len(migrate._stages()) - 1
     assert all(stat_mode(path) == 0o600 for path in logs)
+    outcomes = sorted(log_dir.glob("*.outcome.json"))
+    assert len(outcomes) == len(migrate._stages()) - 1
+    assert all(stat_mode(path) == 0o600 for path in outcomes)
+    assert all(
+        attempt["outcome_file"] is not None
+        for attempt in final_state["attempts"]
+        if attempt["action"] == "run"
+    )
+    assert all(
+        isinstance(attempt["duration_milliseconds"], int)
+        and attempt["duration_milliseconds"] >= 0
+        for attempt in final_state["attempts"]
+    )
     assert list(baseline.iterdir()) == []
     assert (working / "pics").is_dir()
     assert (working / "vids").is_dir()
@@ -1420,3 +1580,76 @@ def test_complete_media_sequence_preserves_bytes_through_external_quarantine(
     assert retained[0].read_bytes() == reviewed[0].read_bytes() == original_bytes
     assert not (working / "dups").exists()
     assert any(working.glob("*-actions-log.jsonl"))
+    assert "Migration synopsis" in result.stdout
+    synopsis = result.stdout.split("Migration synopsis", maxsplit=1)[1]
+    assert "Workflow: complete; human sign-off pending" in synopsis
+    assert "Baseline: 2 file(s)" in synopsis
+    assert "2 extension corrections" in synopsis
+    assert "2 organization moves" in synopsis
+    assert "2 canonical renames" in synopsis
+    assert "1 duplicate copy of image content isolated across 1 group" in synopsis
+    assert "Duplicate review storage: 1 file(s)" in synopsis
+    assert "confirmed by the operator" in synopsis
+    assert "did not inspect the retained destination" in synopsis
+    assert "Observed preservation: COMPLETE; 1/1" in synopsis
+    assert str(tmp_path) not in synopsis
+
+    status = run_pymo(*common)
+    assert status.returncode == 0, status.stdout + status.stderr
+    assert "Migration synopsis" in status.stdout
+    assert str(tmp_path) not in status.stdout
+
+
+def test_successful_child_without_typed_outcome_fails_before_state_advance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 0)
+    before = state_file(log_dir).read_bytes()
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: subprocess.CompletedProcess(command, 0),
+    )
+
+    result = migrate.main(
+        [str(baseline), str(working), "--log-dir", str(log_dir), "--run-next"]
+    )
+
+    assert result == 2
+    assert state_file(log_dir).read_bytes() == before
+
+
+def test_status_fails_closed_if_recorded_outcome_becomes_unsafe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 0)
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: completed_child(command),
+    )
+    common = [str(baseline), str(working), "--log-dir", str(log_dir)]
+    assert migrate.main([*common, "--run-next"]) == 0
+    state = migrate._load_state(state_file(log_dir))
+    outcome = log_dir / str(state.attempts[-1].outcome_file)
+    outcome.chmod(0o644)
+
+    messages: list[tuple[str, object]] = []
+    monkeypatch.setattr(
+        migrate,
+        "print",
+        lambda message, *, file=None: messages.append((message, file)),
+    )
+    assert migrate.main(common) == 2
+    assert messages[-1] == (
+        "Migration coordinator cannot safely continue: migration synopsis cannot "
+        "trust a private stage outcome.",
+        sys.stderr,
+    )
+    assert str(tmp_path) not in messages[-1][0]
