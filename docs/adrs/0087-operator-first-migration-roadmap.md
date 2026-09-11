@@ -91,8 +91,11 @@ configuration, command, report, cache, journal, migration, or media behavior.
 - Image and video work, later-collection cache warming, and cross-collection
   execution are candidates for dependency-aware scheduling, not assumed-safe
   parallel work.
-- One primary owner retains version 0.6 integration and real-collection
-  acceptance. Supporting sessions on other devices may run bounded analysis,
-  tests, benchmarks, and independent exact-SHA review through Agent Relay, but
-  they do not silently acquire product or release ownership. Agent Relay
-  coordinates ownership and evidence; it is not the product scheduler.
+- One primary owner retains version 0.6 integration, release publication, and
+  real-collection acceptance. Supporting sessions on other devices may own
+  non-overlapping contribution branches and perform substantial bounded
+  implementation, analysis, tests, and benchmarks through Agent Relay. The
+  primary owner vets and integrates their exact contributions; an author does
+  not independently review its own work. Contribution-branch ownership does
+  not silently transfer release ownership. Agent Relay coordinates ownership
+  and evidence; it is not the product scheduler.
