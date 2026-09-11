@@ -40,4 +40,5 @@ ADR 0086 records that documentation and evidence boundary.
 The resulting operational evidence promotes an operator-first version 0.6
 sequence; ADR 0087 records a fine-grained progression through operator control,
 reporting, visibility, duplicate disposition, queue execution, and measured
-concurrency without changing current command behavior.
+concurrency. Version 0.6.0 adds only the foreground safe operator loop; ADR
+0088 records its automatic-success and explicit-checkpoint boundaries.

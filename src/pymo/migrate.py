@@ -26,6 +26,7 @@ from pymo.migration.coordinator_state import (
 )
 from pymo.migration.roots import (
     DirectoryIdentityError,
+    directory_identity,
     existing_directories_are_disjoint,
     paths_are_disjoint,
 )
@@ -245,6 +246,52 @@ def _run_next(
     return status
 
 
+def _run_until_checkpoint(
+    log_dir: Path, state_path: Path, state: MigrationState
+) -> int:
+    identities = _collection_identities(state)
+    while state.next_stage < len(_stages()):
+        _require_collection_identities(state, identities)
+        stage = _stages()[state.next_stage]
+        if stage.mode in {"apply", "checkpoint"}:
+            print("Safe operator loop paused at an operator checkpoint.")
+            _print_status(state)
+            return 0
+        status = _run_next(log_dir, state_path, state, apply=False)
+        if status != 0:
+            return status
+        state = _load_state(state_path)
+    _require_collection_identities(state, identities)
+    print("Safe operator loop reached the final sign-off boundary.")
+    _print_status(state)
+    return 0
+
+
+def _collection_identities(
+    state: MigrationState,
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    try:
+        baseline = directory_identity(state.baseline)
+        working = directory_identity(state.working)
+    except DirectoryIdentityError as error:
+        raise MigrationCoordinatorError(str(error)) from error
+    if baseline is None or working is None:
+        raise MigrationCoordinatorError(
+            "collection identity changed during the safe operator loop"
+        )
+    return baseline, working
+
+
+def _require_collection_identities(
+    state: MigrationState,
+    expected: tuple[tuple[int, int], tuple[int, int]],
+) -> None:
+    if _collection_identities(state) != expected:
+        raise MigrationCoordinatorError(
+            "collection identity changed during the safe operator loop"
+        )
+
+
 def _accept_status(state_path: Path, state: MigrationState) -> int:
     if state.next_stage == len(_stages()) or not state.attempts:
         print("There is no pending validation status to acknowledge.", file=sys.stderr)
@@ -315,6 +362,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--run-next", action="store_true", help="run exactly the pending child stage"
     )
     actions.add_argument(
+        "--run",
+        action="store_true",
+        help="run routine stages until the next operator checkpoint",
+    )
+    actions.add_argument(
         "--accept-status",
         action="store_true",
         help="acknowledge the latest reviewed validation status 1",
@@ -367,6 +419,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if (
                 args.start
                 or args.run_next
+                or args.run
                 or args.accept_status
                 or args.confirm_quarantine
             ):
@@ -429,6 +482,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             _require_matching_options(option_overrides, state)
             if args.run_next:
                 return _run_next(log_dir, state_path, state, args.apply)
+            if args.run:
+                return _run_until_checkpoint(log_dir, state_path, state)
             if args.accept_status:
                 return _accept_status(state_path, state)
             if args.confirm_quarantine:

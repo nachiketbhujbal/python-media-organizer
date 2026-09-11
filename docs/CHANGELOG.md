@@ -2,6 +2,29 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.6.0 - Unreleased candidate
+
+- Add `pymo migrate BASELINE WORKING --log-dir PRIVATE --run` to advance
+  routine successful evidence and preview stages in one foreground process.
+- Stop normally before every reviewed apply and external-quarantine checkpoint,
+  and finish only at the existing human-signoff boundary. The loop never
+  supplies `--apply`, acknowledges validation findings, confirms quarantine,
+  moves or deletes media, or answers an operator decision.
+- Return every executed child's nonzero status unchanged and stop immediately.
+  Retain separate `--accept-status`, `--run-next --apply`, and
+  `--confirm-quarantine` actions, plus complete `--run-next` compatibility.
+- Reload and strictly validate durable restart state after every successful
+  child, and revalidate both collection-directory identities between stages so
+  a replaced root stops before another child is dispatched.
+- Keep the existing zero-write plan, opt-in private restart/log directory,
+  path-private output defaults, fresh evidence, local-only operation, and
+  no-delete/no-overwrite guarantees. Interactive prompts and broader operator
+  automation remain later releases.
+- Record the foreground-loop decision in ADR 0088 and add unit plus real-child
+  CLI coverage for routine chaining, all checkpoint categories, exact failure
+  status, validation acknowledgement, root replacement, final sign-off, and
+  existing one-stage behavior.
+
 ## 0.5.13 - 2026-09-10
 
 - Reconcile the README, handoff, documentation index, roadmap, changelog,

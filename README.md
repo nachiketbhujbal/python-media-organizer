@@ -260,11 +260,10 @@ paths are needed.
 ### Guide one collection migration
 
 Version 0.5.11 coordinates the production runbook for one unchanged baseline
-and one working collection. The released coordinator deliberately exposes one
-checkpoint per invocation; it is restartable and conservative, but completing
-the full sequence currently requires roughly two dozen similar invocations and
-is not an unattended or continuously interactive program. With no log directory
-it writes nothing and prints the complete plan:
+and one working collection. Version 0.6.0 adds a foreground safe operator loop
+that advances routine stages in one invocation while preserving every existing
+decision boundary. With no log directory the coordinator writes nothing and
+prints the complete plan:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-copy"
@@ -277,23 +276,32 @@ restart state and one log per attempted child stage:
 pymo migrate "/path/to/baseline" "/path/to/working-copy" \
   --log-dir "/path/to/private-logs" --start --no-cache
 pymo migrate "/path/to/baseline" "/path/to/working-copy" \
-  --log-dir "/path/to/private-logs" --run-next
+  --log-dir "/path/to/private-logs" --run
 ```
 
-Each invocation runs at most one stage and returns that child command's actual
-status. A successful preview advances to a separate apply checkpoint, where
-both `--run-next` and `--apply` are required. A status-1 validation result stops
-until it is rerun or explicitly acknowledged with `--accept-status`; other
-failures cannot be waived. At the duplicate-review boundary, pymo stops for the
-operator to retain the complete `dups` tree outside the working collection.
+`--run` executes routine successful evidence and preview stages until it reaches the
+next apply, validation-finding, external-quarantine, failure, or final-signoff
+boundary. It does not answer questions or authorize a mutation. A successful
+preview therefore pauses before the separate apply checkpoint, where both
+`--run-next` and `--apply` remain required. Resume routine work with `--run`
+after that single reviewed apply. The original `--run-next` selector remains
+available when exactly one pending child stage is desired.
+
+A status-1 validation result stops and returns status 1 until it is rerun or
+explicitly acknowledged with `--accept-status`; other failures cannot be
+waived. At the duplicate-review boundary, pymo stops for the operator to retain
+the complete `dups` tree outside the working collection.
 `--confirm-quarantine` records the human checkpoint only when the working
-`dups` path is absent, then fresh final validation and ordinary migration
-verification remain pending.
+`dups` path is absent. A following `--run` performs final fresh validation and
+ordinary verification, then reports that human sign-off is still required.
 
 Coordinator setup, unsafe-state, and invocation errors return status 2, keeping
-them distinct from a child's status-1 findings. A `--run-next` attempt otherwise
-returns the child command's actual status; status 1 from the external-quarantine
-confirmation means the working `dups` path is still present.
+them distinct from a child's status-1 findings. Both `--run` and `--run-next`
+return an executed child's nonzero status unchanged. Reaching an expected
+operator checkpoint with `--run` returns 0 after clearly reporting the pause;
+status 1 from external-quarantine confirmation means the working `dups` path is
+still present. The safe loop revalidates both collection-directory identities
+between stages and stops with status 2 if either changes.
 
 The schema-1 restart file records canonical roots, the installed pymo version,
 fixed common options, attempts, statuses, and private log names. Collection and
@@ -305,14 +313,13 @@ baseline or working copy, move quarantine, rescue-copy, delete, or authorize
 discarding any data. See the [production runbook](docs/MIGRATION.md) for the
 complete procedure and option examples.
 
-Operational trials found that this safe stage engine produces the right media
-and preservation outcomes but asks the operator to perform too much repetitive
-coordination. The version 0.6 roadmap therefore uses small releases to build a
-safe operator loop, interactive checkpoints, concise human and machine
-reports, saved resume context, logging and visibility policy, pymo-owned
-duplicate disposition, a sequential manifest-backed queue, and only then
-benchmark-proven parallel scheduling. Those are planned changes, not features
-of the current release.
+Operational trials found that the stage engine produces the right media and
+preservation outcomes but asked the operator to perform too much repetitive
+coordination. Version 0.6.0 addresses only routine automatic advancement.
+Interactive questions, concise human and machine reports, saved resume context,
+logging and visibility policy, pymo-owned duplicate disposition, a sequential
+manifest-backed queue, and benchmark-proven scheduling remain separate later
+releases.
 
 ### Verify a migration by exact bytes and media content
 
@@ -1015,7 +1022,10 @@ Version 0.5.13 reconciles the authoritative documentation with the verified
 collections as the next evidence-gathering phase. Those trials validated the
 preservation engine and made operator supervision, outcome reporting, duplicate
 disposition, queueing, and measured scheduling the version 0.6 theme under
-[ADR 0087](docs/adrs/0087-operator-first-migration-roadmap.md). Rescue copying,
+[ADR 0087](docs/adrs/0087-operator-first-migration-roadmap.md). Version 0.6.0
+adds the foreground safe operator loop under
+[ADR 0088](docs/adrs/0088-safe-migration-operator-loop.md) while leaving every
+operator decision explicit. Rescue copying,
 permanent deletion, damaged-media remediation, richer
 metadata, and similarity tooling remain later roadmap or research work. Full
 video decoding remains sequential until representative benchmarks show that
