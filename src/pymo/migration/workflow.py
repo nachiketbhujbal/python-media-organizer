@@ -45,6 +45,7 @@ class Stage:
     command: str | None
     target: Literal["baseline", "working", "pair", "checkpoint"]
     mode: Literal["read", "preview", "apply", "checkpoint"]
+    review_after_success: bool = False
 
 
 def _stages() -> tuple[Stage, ...]:
@@ -61,6 +62,7 @@ def _stages() -> tuple[Stage, ...]:
             "validate",
             "baseline",
             "read",
+            review_after_success=True,
         ),
         Stage(
             "working-validation",
@@ -68,6 +70,7 @@ def _stages() -> tuple[Stage, ...]:
             "validate",
             "working",
             "read",
+            review_after_success=True,
         ),
         Stage(
             "initial-verification",
@@ -201,6 +204,7 @@ def _stages() -> tuple[Stage, ...]:
             "validate",
             "working",
             "read",
+            review_after_success=True,
         ),
         Stage(
             "final-verification",

@@ -26,6 +26,7 @@ from pymo.migration.coordinator_state import (
 )
 from pymo.migration.roots import (
     DirectoryIdentityError,
+    directory_identity,
     existing_directories_are_disjoint,
     paths_are_disjoint,
 )
@@ -182,7 +183,7 @@ def _print_status(state: MigrationState) -> None:
             "Move or retain the complete dups tree externally, then use --confirm-quarantine."
         )
     else:
-        print("Run only this stage with --run-next.")
+        print("Run routine stages with --run, or only this stage with --run-next.")
 
 
 def _run_next(
@@ -243,6 +244,98 @@ def _run_next(
                 "Review the findings; --accept-status is the explicit acknowledgement boundary."
             )
     return status
+
+
+def _run_until_checkpoint(
+    log_dir: Path, state_path: Path, state: MigrationState
+) -> int:
+    binding = state
+    identities = _collection_identities(state)
+    while state.next_stage < len(_stages()):
+        _require_collection_identities(state, identities)
+        stage = _stages()[state.next_stage]
+        if stage.mode in {"apply", "checkpoint"}:
+            print("Safe operator loop paused at an operator checkpoint.")
+            _print_status(state)
+            return 0
+        previous_state = state
+        status = _run_next(log_dir, state_path, state, apply=False)
+        if status != 0:
+            return status
+        state = _load_state(state_path)
+        _require_successful_transition(previous_state, state, stage)
+        _require_operator_binding(state, binding)
+        _require_collection_identities(state, identities)
+        if stage.review_after_success:
+            print("Safe operator loop paused for validation review.")
+            _print_status(state)
+            return 0
+    _require_collection_identities(state, identities)
+    print("Safe operator loop reached the final sign-off boundary.")
+    _print_status(state)
+    return 0
+
+
+def _require_operator_binding(state: MigrationState, expected: MigrationState) -> None:
+    if (
+        state.tool_version != expected.tool_version
+        or state.baseline != expected.baseline
+        or state.working != expected.working
+        or state.options != expected.options
+        or state.created_at != expected.created_at
+    ):
+        raise MigrationCoordinatorError(
+            "migration restart binding changed during the safe operator loop"
+        )
+
+
+def _require_successful_transition(
+    previous: MigrationState, current: MigrationState, stage: Stage
+) -> None:
+    if (
+        current.next_stage != previous.next_stage + 1
+        or len(current.attempts) != len(previous.attempts) + 1
+        or current.attempts[:-1] != previous.attempts
+    ):
+        raise MigrationCoordinatorError(
+            "migration restart lifecycle changed unexpectedly during the safe operator loop"
+        )
+    attempt = current.attempts[-1]
+    if (
+        attempt.stage != stage.identifier
+        or attempt.action != "run"
+        or attempt.exit_status != 0
+        or attempt.log_file is None
+        or attempt.apply
+    ):
+        raise MigrationCoordinatorError(
+            "migration restart lifecycle changed unexpectedly during the safe operator loop"
+        )
+
+
+def _collection_identities(
+    state: MigrationState,
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    try:
+        baseline = directory_identity(state.baseline)
+        working = directory_identity(state.working)
+    except DirectoryIdentityError as error:
+        raise MigrationCoordinatorError(str(error)) from error
+    if baseline is None or working is None:
+        raise MigrationCoordinatorError(
+            "collection identity changed during the safe operator loop"
+        )
+    return baseline, working
+
+
+def _require_collection_identities(
+    state: MigrationState,
+    expected: tuple[tuple[int, int], tuple[int, int]],
+) -> None:
+    if _collection_identities(state) != expected:
+        raise MigrationCoordinatorError(
+            "collection identity changed during the safe operator loop"
+        )
 
 
 def _accept_status(state_path: Path, state: MigrationState) -> int:
@@ -315,6 +408,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--run-next", action="store_true", help="run exactly the pending child stage"
     )
     actions.add_argument(
+        "--run",
+        action="store_true",
+        help="run routine stages until the next operator checkpoint",
+    )
+    actions.add_argument(
         "--accept-status",
         action="store_true",
         help="acknowledge the latest reviewed validation status 1",
@@ -367,6 +465,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if (
                 args.start
                 or args.run_next
+                or args.run
                 or args.accept_status
                 or args.confirm_quarantine
             ):
@@ -429,6 +528,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             _require_matching_options(option_overrides, state)
             if args.run_next:
                 return _run_next(log_dir, state_path, state, args.apply)
+            if args.run:
+                return _run_until_checkpoint(log_dir, state_path, state)
             if args.accept_status:
                 return _accept_status(state_path, state)
             if args.confirm_quarantine:

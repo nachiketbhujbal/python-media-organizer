@@ -23,6 +23,8 @@ contract; it does not prove whole-device recovery.
   command-line paths.
 - Version 0.5.13 reconciles this runbook with the verified 0.5.12 release. It
   changes no workflow or command behavior.
+- Version 0.6.0 adds `migrate --run`, which advances routine successful stages
+  in one foreground invocation and stops at every existing decision boundary.
 
 Perform only stages supported by the installed version and keep every
 transition human-reviewed. Do not use a loose shell script as the production
@@ -38,15 +40,16 @@ for validation acknowledgement and quarantine confirmation, and manual movement
 of the duplicate review tree. Long media analysis magnifies that supervision
 cost even when the underlying work and cache reuse are correct.
 
-That is a usability finding, not permission to skip checkpoints in the current
-release. Continue using the exact v0.5.13 procedure below until later behavior
-ships. The version 0.6 plan in
-[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) uses small releases
-to add a safe operator loop, interactive checkpoints, concise human and machine
-reports, saved resume context, logging and visibility policy, pymo-owned
-duplicate disposition, a sequential manifest-backed queue, and
-benchmark-gated parallel scheduling while retaining fresh evidence and
-explicit decision boundaries.
+Version 0.6.0 reduces that repetition without skipping a checkpoint. Its safe
+operator loop pauses after every successful validation for review, stops before
+every apply, after any nonzero child status, at the external-quarantine
+checkpoint, and after final evidence becomes eligible for human sign-off. It
+asks no questions and grants no mutation authority.
+[ADR 0087](adrs/0087-operator-first-migration-roadmap.md) keeps interactive
+checkpoints, reports, saved context, logging and visibility policy, duplicate
+disposition, queues, and benchmark-gated scheduling as separate later releases;
+[ADR 0088](adrs/0088-safe-migration-operator-loop.md) records this first loop
+boundary.
 
 ## Collection roles
 
@@ -98,31 +101,42 @@ at `--start` are fixed in schema-1 restart state and carried only to applicable
 child commands. Later explicit options must agree with that state. Use the same
 released pymo version for the complete sequence.
 
-Inspect current state without advancing it, or execute exactly one pending
-stage:
+Inspect current state without advancing it, execute exactly one pending stage,
+or advance routine work to the next operator checkpoint:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-collection" \
   --log-dir "/path/to/private-logs"
 pymo migrate "/path/to/baseline" "/path/to/working-collection" \
   --log-dir "/path/to/private-logs" --run-next
+pymo migrate "/path/to/baseline" "/path/to/working-collection" \
+  --log-dir "/path/to/private-logs" --run
 ```
 
-Successful previews advance to distinct mutation checkpoints. After reviewing
-the preview, authorize only that pending child command:
+`--run` chains only routine successful evidence and preview children. It reloads
+the strict restart lifecycle, requires exactly one new successful attempt for
+the child it dispatched, retains its roots, version, options, and creation
+binding, and verifies both collection-directory identities between stages. It
+pauses after every successful validation because warning-only findings return
+status 0. A successful preview pauses before its distinct mutation checkpoint.
+After reviewing that preview, authorize only the pending child:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-collection" \
   --log-dir "/path/to/private-logs" --run-next --apply
 ```
 
-A nonzero child status is recorded, returned unchanged, and stops progress.
+Then use `--run` again to continue routine evidence work. Use `--run-next`
+instead whenever exactly one child stage is desired.
+
+A nonzero child status is recorded, returned unchanged, and stops both modes.
 Rerun after resolving the cause. Status 1 from a validation checkpoint may be
 advanced only after human review with `--accept-status`; the original status
 remains in state. Verification, mutation, configuration, discovery, and native
 tool failures cannot be acknowledged away.
 
-After the successful without-`dups` simulation, the coordinator stops. Move or
+After the successful without-`dups` simulation, `--run` stops normally and
+returns 0 at the expected external-quarantine checkpoint. Move or
 retain the complete review tree outside the working collection using a
 separately reviewed procedure; pymo performs no move. Once the working `dups`
 path is absent, record the human checkpoint:
@@ -133,8 +147,10 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
 ```
 
 That confirmation proves only path absence plus the operator's acknowledgement,
-not quarantine retention. Final fresh validation and ordinary observed
-verification still run as separate later stages. Restart state and stage logs
+not quarantine retention. A later `--run` performs final fresh validation and
+pauses for review. One more `--run` performs ordinary observed verification,
+then stops at the human-signoff boundary.
+Restart state and stage logs
 are private operational records, not the collection action journal, current
 media evidence, or deletion authority. An interrupted apply may have committed
 its own append-only action run even if coordinator state did not advance; review
@@ -304,7 +320,9 @@ separation. It also resolves every coordinator path before any requested log
 state is created. Case or Unicode aliases cannot make one physical directory
 serve both collection roles or hide a log directory inside either collection.
 Coordinator setup, unsafe-state, and invocation errors return status 2; a
-`--run-next` attempt returns the child command's real status.
+`--run-next` attempt returns the child command's real status. Version 0.6.0's
+`--run` selector retains that exact status behavior while chaining only routine
+successes and revalidating collection identities between them.
 
 The released coordinator does not yet synthesize the final operator report.
 Record initial and final inventory and health, extension corrections,

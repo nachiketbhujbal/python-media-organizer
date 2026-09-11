@@ -96,6 +96,12 @@ The same adversarial method was repeated after the first validation release.
 | GUIDE-R01 | High | Lexical root comparisons allowed one directory reached through case or Unicode aliases to serve as both baseline and working collection, or allowed private logs inside a collection, making the nominally unchanged baseline mutable and contaminating evidence. | 0.5.11 | Resolved with device-and-inode ancestry checks for existing roots and not-yet-created log-directory leaves, plus a filesystem-aware regression that preserves genuinely distinct case-sensitive directories; independently closed at `f073132` |
 | GUIDE-R02 | Low | Coordinator setup and unsafe-state failures returned status 1, colliding with real child findings and the established invalid-setup status 2. | 0.5.11 | Resolved by returning status 2 for every `MigrationCoordinatorError`, preserving real child status 1 and documenting the distinction; independently closed at `f073132` |
 | GUIDE-R03 | Medium | Guided migration resolved baseline and working roots before its controlled error boundary; a self-referential symbolic link in either position returned status 1 with a traceback and absolute-path disclosure. Configuration and native-tool paths could fail similarly only after creating private log state. | 0.5.12 | Resolved by routing all six command-line path roles through a generic path-private setup-status-2 boundary and resolving optional paths before any log directory or lock creation; real symmetric symbolic-link-cycle and injected `OSError`/`RuntimeError` zero-write regressions passed, and independent review accepted exact head `be36189` without findings |
+| GUIDE-007 | High | A foreground loop could treat successful previews as authority to run the following mutations, silently collapsing the explicit apply boundary. | 0.6.0 | Resolved by allowing `--run` to dispatch only read and preview modes, returning a normal checkpoint pause before every apply, and retaining `--run-next --apply` as the sole mutation authorization |
+| GUIDE-008 | High | Automatic advancement could hide a child's finding or failure behind a later stage result. | 0.6.0 | Resolved by returning every nonzero child status unchanged, recording the attempt without advancement, and dispatching no later child; validation status 1 still requires separate `--accept-status` |
+| GUIDE-009 | Medium | A long-lived coordinator could continue after either collection root was replaced between child processes, unlike a fresh invocation that repeats root setup. | 0.6.0 | Resolved by capturing no-follow device-and-inode identities for both declared roots, checking them before every child and again before final sign-off, and stopping path-privately with setup status 2 before another dispatch if either changes |
+| GUIDE-010 | Medium | Reloading restart state without retaining the invocation binding could accept a substituted but structurally valid state with different roots, tool version, options, or creation identity between chained children. | 0.6.0 | Resolved by comparing every reloaded state with the initial bound roots, exact tool version, complete coordinator options, and creation timestamp before another child can run |
+| GUIDE-R04 | High | Warning-only validation returns status 0, so a loop that stops only on nonzero status can cross visible findings and dispatch later stages without a review opportunity. | 0.6.0 | Resolved by typed stage policy that pauses `--run` after every successful validation, including a real warning-only regression that proves no later child is dispatched |
+| GUIDE-R05 | High | A schema-valid restart-state substitution with the same roots, version, options, and creation timestamp could fabricate several successful attempts and jump the loop across decision boundaries. | 0.6.0 | Resolved by requiring each reload to preserve the exact prior attempt prefix and add exactly one status-0 non-apply run attempt for the dispatched stage with `next_stage` advanced by one |
 
 ## Scan review findings
 
@@ -371,6 +377,14 @@ The same adversarial method was repeated after the first validation release.
 
 ## Independent review evidence
 
+- Independent review rejected v0.6.0 candidate `6e700f0` with GUIDE-R04 and
+  GUIDE-R05 after reproducing a warning-only validation that the loop crossed
+  and a schema-valid same-binding lifecycle substitution that skipped six
+  stages. The owner correction at exact head `e4746a1` pauses after every
+  successful validation and requires exactly one expected successful state
+  transition. Renewed independent review reproduced both attacks, reran all 485
+  tests at 88 percent subprocess-aware coverage, verified hosted run
+  `34638137395`, and reported no findings.
 - Renewed independent review rejected PR #44 exact head `18c6573` with
   MIG-R03, GUIDE-R03, and two release-truth contradictions. The earlier hosted
   run `34138191253` passed every platform and the aggregate gate at that head,
