@@ -92,3 +92,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0084](0084-guided-single-collection-migration.md) | Guided single-collection migration |
 | [0085](0085-filesystem-identity-migration-roots.md) | Filesystem-identity migration roots |
 | [0086](0086-authoritative-release-documentation.md) | Authoritative release documentation and operational evidence |
+| [0087](0087-operator-first-migration-roadmap.md) | Operator-first version 0.6 migration roadmap |
