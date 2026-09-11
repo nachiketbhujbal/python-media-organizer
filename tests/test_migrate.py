@@ -432,7 +432,7 @@ def test_safe_operator_loop_advances_routine_stages_and_pauses_before_apply(
     baseline, working = collections(tmp_path)
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
-    _state_at(log_dir, baseline, working, 0)
+    _state_at(log_dir, baseline, working, 4)
     observed: list[list[str]] = []
 
     def completed(
@@ -458,7 +458,7 @@ def test_safe_operator_loop_advances_routine_stages_and_pauses_before_apply(
     assert [attempt.stage for attempt in state.attempts] == [
         stage.identifier for stage in migrate._stages()[:6]
     ]
-    assert len(observed) == 6
+    assert len(observed) == 2
     assert all("--apply" not in command for command in observed)
     assert any("paused at an operator checkpoint" in message for message, _ in messages)
     assert any("--run-next --apply" in message for message, _ in messages)
@@ -599,6 +599,90 @@ def test_safe_operator_loop_stops_if_restart_binding_is_substituted(
     assert real_load_state(state_file(log_dir)).next_stage == 1
 
 
+def test_safe_operator_loop_rejects_same_binding_lifecycle_jump(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 0)
+    real_load_state = migrate._load_state
+    load_count = 0
+
+    def substituted_lifecycle(path: Path) -> migrate.MigrationState:
+        nonlocal load_count
+        load_count += 1
+        state = real_load_state(path)
+        if load_count != 2:
+            return state
+        now = "2026-08-29T12:00:01-04:00"
+        skipped = tuple(
+            migrate.Attempt(
+                stage.identifier,
+                "run",
+                0,
+                now,
+                f"substituted-{index}.log",
+                stage.mode == "apply",
+            )
+            for index, stage in enumerate(migrate._stages()[1:7], start=2)
+        )
+        return migrate.MigrationState(
+            state.tool_version,
+            state.baseline,
+            state.working,
+            state.options,
+            7,
+            (*state.attempts, *skipped),
+            state.created_at,
+            now,
+        )
+
+    observed: list[list[str]] = []
+    monkeypatch.setattr(migrate, "_load_state", substituted_lifecycle)
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: (
+            observed.append(command) or subprocess.CompletedProcess(command, 0)
+        ),
+    )
+
+    arguments = [str(baseline), str(working), "--log-dir", str(log_dir), "--run"]
+    assert migrate.main(arguments) == 2
+    assert len(observed) == 1
+    assert real_load_state(state_file(log_dir)).next_stage == 1
+
+
+def test_safe_operator_loop_pauses_after_successful_validation_for_review(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 2)
+    observed: list[list[str]] = []
+    messages: list[tuple[str, object]] = []
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: (
+            observed.append(command) or subprocess.CompletedProcess(command, 0)
+        ),
+    )
+    monkeypatch.setattr(
+        migrate,
+        "print",
+        lambda message, *, file=None: messages.append((message, file)),
+    )
+
+    arguments = [str(baseline), str(working), "--log-dir", str(log_dir), "--run"]
+    assert migrate.main(arguments) == 0
+    assert len(observed) == 1
+    assert migrate._load_state(state_file(log_dir)).next_stage == 3
+    assert any("paused for validation review" in message for message, _ in messages)
+
+
 def test_safe_operator_loop_preserves_validation_acknowledgement_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -645,12 +729,16 @@ def test_safe_operator_loop_finishes_with_human_signoff_still_pending(
 
     arguments = [str(baseline), str(working), "--log-dir", str(log_dir), "--run"]
     assert migrate.main(arguments) == 0
+    assert migrate._load_state(state_file(log_dir)).next_stage == 23
+    assert any("paused for validation review" in message for message, _ in messages)
+
+    assert migrate.main(arguments) == 0
     assert migrate._load_state(state_file(log_dir)).next_stage == len(stages)
     assert any("final sign-off boundary" in message for message, _ in messages)
     assert any("eligible for human sign-off only" in message for message, _ in messages)
 
 
-def test_safe_operator_loop_runs_real_children_until_first_apply_checkpoint(
+def test_safe_operator_loop_runs_real_children_until_validation_review(
     tmp_path: Path,
 ) -> None:
     baseline, working = collections(tmp_path)
@@ -663,15 +751,36 @@ def test_safe_operator_loop_runs_real_children_until_first_apply_checkpoint(
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Running one migration stage: baseline-scan" in result.stdout
-    assert "Stage complete: extension-preview" in result.stdout
-    assert "Safe operator loop paused at an operator checkpoint" in result.stdout
-    assert "Next checkpoint: extension-apply" in result.stdout
+    assert "Stage complete: baseline-validation" in result.stdout
+    assert "Safe operator loop paused for validation review" in result.stdout
+    assert "Next checkpoint: working-validation" in result.stdout
     state = migrate._load_state(state_file(log_dir))
-    assert state.next_stage == 6
-    assert len(state.attempts) == 6
-    assert len(list(log_dir.glob("*.log"))) == 6
+    assert state.next_stage == 3
+    assert len(state.attempts) == 3
+    assert len(list(log_dir.glob("*.log"))) == 3
     assert list(baseline.iterdir()) == []
     assert list(working.iterdir()) == []
+
+
+def test_safe_operator_loop_does_not_cross_warning_only_validation(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    (baseline / "note.jpg").write_text("not image content\n", encoding="utf-8")
+    (working / "note.jpg").write_text("not image content\n", encoding="utf-8")
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 2)
+
+    result = run_pymo("migrate", baseline, working, "--log-dir", log_dir, "--run")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "WARNING extension_content_mismatch" in result.stdout
+    assert "Safe operator loop paused for validation review" in result.stdout
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == 3
+    assert state.attempts[-1].stage == "baseline-validation"
+    assert len(list(log_dir.glob("*.log"))) == 1
 
 
 def test_real_child_status_stops_and_only_validation_one_can_be_acknowledged(

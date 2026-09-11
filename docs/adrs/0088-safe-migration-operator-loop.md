@@ -18,15 +18,18 @@ as routine work.
 Version 0.6.0 adds a foreground operator loop over the existing restartable
 one-stage coordinator. The loop may automatically advance only stages that
 finish successfully and require no operator decision. It stops at every
-validation-finding acknowledgement, mutation authorization, duplicate
-quarantine, final-signoff, nonzero-status, ambiguous-state, and unsafe-state
-boundary.
+validation review, mutation authorization, duplicate quarantine, final-signoff,
+nonzero-status, ambiguous-state, and unsafe-state boundary. Because validation
+warnings return status 0, the loop conservatively pauses after every successful
+validation rather than trying to infer a warning-free result from exit status.
 
 The one-stage engine and its persisted attempt lifecycle remain authoritative.
 The loop reloads and validates that lifecycle after each successful child,
-retains its root, tool-version, option, and creation binding, and verifies both
-collection directory identities between stages. Existing stage-at-a-time
-operation remains supported. The loop does not add
+requiring the exact prior attempt prefix plus one successful non-apply attempt
+for the dispatched stage and a one-stage advance. It retains its root,
+tool-version, option, and creation binding, and verifies both collection
+directory identities between stages. Existing stage-at-a-time operation remains
+supported. The loop does not add
 interactive prompts, pre-authorized mutation, reporting contracts, saved
 invocation shortcuts, duplicate disposition, queueing, or parallel execution.
 

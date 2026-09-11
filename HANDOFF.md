@@ -38,7 +38,8 @@ version 0.5.12. Version 0.5.13 reconciles the authoritative documentation with
 those verified releases and begins a privacy-preserving operational-evidence
 phase without changing product behavior.
 The version 0.6.0 candidate adds a foreground `migrate --run` loop that advances
-routine successful stages while retaining every existing operator checkpoint.
+routine successful stages while retaining every existing operator checkpoint
+and pausing after each successful validation for review.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -678,10 +679,10 @@ collection argument. Configuration and ignored-path options are not applicable
 to `cache status` and are rejected rather than silently ignored.
 `migrate` coordinates the existing commands through the restartable one-stage
 engine. `--run-next` executes one child; version 0.6.0's `--run` may chain only
-routine successful read and preview stages before pausing at the next operator
-checkpoint. It rejects the global single `--log-file`; its explicit `--log-dir`
-owns private restart state and one child log per attempt outside both
-collections.
+routine successful read and preview stages before pausing after a validation or
+at the next operator checkpoint. It rejects the global single `--log-file`; its
+explicit `--log-dir` owns private restart state and one child log per attempt
+outside both collections.
 
 ## Shared configuration and collection layout
 
@@ -1168,9 +1169,11 @@ executed children retain their actual statuses.
 `--run-next` invokes the installed child CLI through the same interpreter and
 executes at most one checkpoint. Version 0.6.0 adds `--run`, which invokes that
 same path repeatedly only while routine evidence or preview children succeed. It
-reloads the strict persisted lifecycle, retains its initial roots, version,
-options, and creation binding, and revalidates both collection directory
-identities between children. A failure is recorded, returned with
+reloads the strict persisted lifecycle, requires exactly one new successful
+attempt for the dispatched child, retains its initial roots, version, options,
+and creation binding, and revalidates both collection directory identities
+between children. Every successful validation pauses for review because
+warning-only findings return status 0. A failure is recorded, returned with
 its exact status, and stops the loop. Validation status 1 alone can advance
 after separate `--accept-status`; other statuses must be resolved and rerun.
 Each mutating preview precedes a distinct apply stage that stops `--run` and
@@ -1181,10 +1184,10 @@ that own them, and each attempt receives a unique private log.
 After the successful counterfactual simulation, `--run` pauses and the
 coordinator performs no quarantine operation. `--confirm-quarantine` requires
 the working `dups` path to be absent and records only the human checkpoint, not
-proof of external retention. A later `--run` may execute final full validation
-and ordinary observed verification as separate fresh children, then reaches
-the final human-signoff boundary. A completed sequence remains eligible for
-human sign-off only and does not authorize removal of source, baseline,
+proof of external retention. A later `--run` executes final full validation and
+pauses for review; one more `--run` executes ordinary observed verification and
+reaches the final human-signoff boundary. A completed sequence remains eligible
+for human sign-off only and does not authorize removal of source, baseline,
 quarantine, or working data.
 
 Operational trials confirm that this fixed sequence reaches the intended

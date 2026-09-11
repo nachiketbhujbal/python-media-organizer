@@ -279,13 +279,15 @@ pymo migrate "/path/to/baseline" "/path/to/working-copy" \
   --log-dir "/path/to/private-logs" --run
 ```
 
-`--run` executes routine successful evidence and preview stages until it reaches the
-next apply, validation-finding, external-quarantine, failure, or final-signoff
-boundary. It does not answer questions or authorize a mutation. A successful
-preview therefore pauses before the separate apply checkpoint, where both
-`--run-next` and `--apply` remain required. Resume routine work with `--run`
-after that single reviewed apply. The original `--run-next` selector remains
-available when exactly one pending child stage is desired.
+`--run` executes routine successful evidence and preview stages until it reaches
+the next validation review, apply, external-quarantine, failure, or final-signoff
+boundary. It pauses after every successful validation because warnings retain
+status 0 and must remain visible for review. It does not answer questions or
+authorize a mutation. A successful preview therefore pauses before the separate
+apply checkpoint, where both `--run-next` and `--apply` remain required. Resume
+routine work with `--run` after that single reviewed apply. The original
+`--run-next` selector remains available when exactly one pending child stage is
+desired.
 
 A status-1 validation result stops and returns status 1 until it is rerun or
 explicitly acknowledged with `--accept-status`; other failures cannot be
@@ -293,7 +295,8 @@ waived. At the duplicate-review boundary, pymo stops for the operator to retain
 the complete `dups` tree outside the working collection.
 `--confirm-quarantine` records the human checkpoint only when the working
 `dups` path is absent. A following `--run` performs final fresh validation and
-ordinary verification, then reports that human sign-off is still required.
+pauses for review; one more `--run` performs ordinary verification, then reports
+that human sign-off is still required.
 
 Coordinator setup, unsafe-state, and invocation errors return status 2, keeping
 them distinct from a child's status-1 findings. Both `--run` and `--run-next`
@@ -301,8 +304,9 @@ return an executed child's nonzero status unchanged. Reaching an expected
 operator checkpoint with `--run` returns 0 after clearly reporting the pause;
 status 1 from external-quarantine confirmation means the working `dups` path is
 still present. The safe loop revalidates both collection-directory identities
-between stages, preserves the initial restart-state binding, and stops with
-status 2 if either changes.
+between stages, preserves the initial restart-state binding, requires every
+reload to add exactly the one expected successful attempt, and stops with status
+2 if any of those invariants changes.
 
 The schema-1 restart file records canonical roots, the installed pymo version,
 fixed common options, attempts, statuses, and private log names. Collection and

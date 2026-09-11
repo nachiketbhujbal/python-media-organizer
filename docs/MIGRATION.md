@@ -41,9 +41,10 @@ of the duplicate review tree. Long media analysis magnifies that supervision
 cost even when the underlying work and cache reuse are correct.
 
 Version 0.6.0 reduces that repetition without skipping a checkpoint. Its safe
-operator loop stops before every apply, after any nonzero child status, at the
-external-quarantine checkpoint, and after final evidence becomes eligible for
-human sign-off. It asks no questions and grants no mutation authority.
+operator loop pauses after every successful validation for review, stops before
+every apply, after any nonzero child status, at the external-quarantine
+checkpoint, and after final evidence becomes eligible for human sign-off. It
+asks no questions and grants no mutation authority.
 [ADR 0087](adrs/0087-operator-first-migration-roadmap.md) keeps interactive
 checkpoints, reports, saved context, logging and visibility policy, duplicate
 disposition, queues, and benchmark-gated scheduling as separate later releases;
@@ -113,9 +114,11 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
 ```
 
 `--run` chains only routine successful evidence and preview children. It reloads
-the strict restart lifecycle without changing its roots, version, options, or
-creation binding, and verifies both collection-directory identities between
-stages. A successful preview pauses before its distinct mutation checkpoint.
+the strict restart lifecycle, requires exactly one new successful attempt for
+the child it dispatched, retains its roots, version, options, and creation
+binding, and verifies both collection-directory identities between stages. It
+pauses after every successful validation because warning-only findings return
+status 0. A successful preview pauses before its distinct mutation checkpoint.
 After reviewing that preview, authorize only the pending child:
 
 ```bash
@@ -145,7 +148,8 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
 
 That confirmation proves only path absence plus the operator's acknowledgement,
 not quarantine retention. A later `--run` performs final fresh validation and
-ordinary observed verification, then stops at the human-signoff boundary.
+pauses for review. One more `--run` performs ordinary observed verification,
+then stops at the human-signoff boundary.
 Restart state and stage logs
 are private operational records, not the collection action journal, current
 media evidence, or deletion authority. An interrupted apply may have committed

@@ -258,11 +258,18 @@ def _run_until_checkpoint(
             print("Safe operator loop paused at an operator checkpoint.")
             _print_status(state)
             return 0
+        previous_state = state
         status = _run_next(log_dir, state_path, state, apply=False)
         if status != 0:
             return status
         state = _load_state(state_path)
+        _require_successful_transition(previous_state, state, stage)
         _require_operator_binding(state, binding)
+        _require_collection_identities(state, identities)
+        if stage.review_after_success:
+            print("Safe operator loop paused for validation review.")
+            _print_status(state)
+            return 0
     _require_collection_identities(state, identities)
     print("Safe operator loop reached the final sign-off boundary.")
     _print_status(state)
@@ -279,6 +286,30 @@ def _require_operator_binding(state: MigrationState, expected: MigrationState) -
     ):
         raise MigrationCoordinatorError(
             "migration restart binding changed during the safe operator loop"
+        )
+
+
+def _require_successful_transition(
+    previous: MigrationState, current: MigrationState, stage: Stage
+) -> None:
+    if (
+        current.next_stage != previous.next_stage + 1
+        or len(current.attempts) != len(previous.attempts) + 1
+        or current.attempts[:-1] != previous.attempts
+    ):
+        raise MigrationCoordinatorError(
+            "migration restart lifecycle changed unexpectedly during the safe operator loop"
+        )
+    attempt = current.attempts[-1]
+    if (
+        attempt.stage != stage.identifier
+        or attempt.action != "run"
+        or attempt.exit_status != 0
+        or attempt.log_file is None
+        or attempt.apply
+    ):
+        raise MigrationCoordinatorError(
+            "migration restart lifecycle changed unexpectedly during the safe operator loop"
         )
 
 

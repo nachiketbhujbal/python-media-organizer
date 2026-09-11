@@ -179,10 +179,12 @@ never duplicate the version in source or static project metadata.
   recovery or authorizes automatic deletion.
 - `migrate` must retain its one-stage-at-a-time engine. The foreground `--run`
   loop may chain only routine successful read and preview stages, must reload
-  strict state without changing its root/version/options/creation binding,
-  revalidate both collection identities between children, and stop at every
-  finding, apply, external-quarantine, failure, unsafe-state, and final-signoff
-  boundary. Without an explicit private log directory it is
+  strict state as exactly one expected successful attempt without changing its
+  root/version/options/creation binding, revalidate both collection identities
+  between children, pause after every successful validation so warning-only
+  findings remain reviewable, and stop at every apply, external-quarantine,
+  failure, unsafe-state, and final-signoff boundary. Without an explicit private
+  log directory it is
   zero-write. Restart state is bookkeeping rather than evidence or action
   history; bind it to the exact roots, pymo version, options, and ordered
   attempt lifecycle. Preserve every preview and explicit apply boundary, return
