@@ -406,5 +406,9 @@ and organization from exact mapped-or-protected packaged policy, with full
 image-frame decoding and ambiguous evidence left untouched. Version 0.5.10 adds zero-write migration
 simulation without `dups`, and version 0.5.11 coordinates the documented
 single-collection baseline/working workflow without rescue copying or automatic
-deletion. Full copy and multi-collection queue orchestration remain later
-research.
+deletion. Version 0.5.12 makes standalone verification and guided setup reject
+aliased, nested, unstable, or unresolvable migration roots through the shared
+filesystem-identity boundary. Version 0.5.13 reconciles the authoritative
+release documentation and begins privacy-preserving workflow trials on existing
+real collections without changing product behavior. Full copy and
+multi-collection queue orchestration remain later research.
