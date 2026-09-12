@@ -134,6 +134,26 @@ The same adversarial method was repeated after the first validation release.
 | --- | --- | --- | --- | --- |
 | VIS-R01 | Medium | The first v0.6.7 candidate forwarded full-profile disclosure options into top-level cache help and enabled debug logging before child help, so `pymo --visibility full cache --help` emitted a timestamped diagnostic and failed instead of printing clean help. | 0.6.7 | Resolved by recognizing child help before logging, suppressing human logging for every child-help projection, forwarding ignored-path disclosure only to cache warm and refresh, and covering cache top-level/status plus ordinary command help with subprocess regressions |
 
+## Retained duplicate disposition review
+
+Independent Terra-medium review accepted exact v0.6.8 implementation head
+`c34285f5ce8f0ed70707005bbfaac8eff87019e4` against exact released base
+`e69a8e64db2939a6d7be215468c76be9c96f1869` without findings. The reviewer
+checked retained-in-place and external-quarantine disposition, strict restart
+lifecycle and schema changes, interactive, unattended, and resume behavior,
+no-follow duplicate-review-path inspection, path-private report schema 2,
+release truth, and documentation consistency. Six focused disposition tests,
+61 migration lifecycle/report/unattended tests, Ruff, Black, mypy, and diff
+integrity passed in the separate clean detached worktree.
+
+The complete owner gate passed all 615 synthetic and real-FFmpeg tests at 88
+percent subprocess-aware coverage plus Ruff, Black, mypy, pre-commit, source
+and wheel builds, artifact inspection, and isolated installed-wheel acceptance.
+The installed candidate completed a duplicate-bearing retained-in-place
+migration, kept the review bytes physically present, reported no pymo storage
+reclamation, reached fresh observed complete preservation, and emitted the
+documented path-private schema-2 disposition.
+
 Independent Terra-medium review accepted corrected exact v0.6.7 implementation
 head `76f79bdb45552ed9451ad77673fd312b0e179b65` against exact released base
 `e795fc5eb26488b51be01fe6981895fc07e9f790` without findings. The reviewer

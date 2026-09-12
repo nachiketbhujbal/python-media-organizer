@@ -753,9 +753,9 @@ a stronger contract than an `--apply` option on either duplicate finder:
 [ADR 0087](adrs/0087-operator-first-migration-roadmap.md) promotes an honest
 retained-in-place duplicate disposition into version 0.6.8,
 same-filesystem managed quarantine into 0.6.9, and explicit cross-filesystem
-quarantine into 0.6.10. Their journal schema, confirmation ceremony,
-portability across macOS/Linux/WSL, and preservation-evidence binding still
-require dedicated implementation ADRs. Permanent deletion remains research
+quarantine into 0.6.10. ADR 0103 defines the retained-in-place contract; the
+movement releases still require dedicated journal, confirmation, portability,
+and preservation-evidence decisions. Permanent deletion remains research
 and is not implied by any planned quarantine workflow.
 
 Ordinary migration verification continues to describe the physical target that
@@ -767,8 +767,8 @@ physical destination review tree, reports it separately, excludes those regular
 files only from counterfactual destination evidence, performs no writes, and
 labels every verdict simulated. A non-complete result blocks quarantine review;
 a simulated complete result still requires retained quarantine plus ordinary
-fresh post-move verification. Version 0.6.8 must integrate the simulation into
-an honest retained-in-place outcome without weakening ordinary verification;
+fresh post-move verification. Version 0.6.8 integrates the simulation into an
+honest retained-in-place outcome without weakening ordinary verification;
 versions 0.6.9 and 0.6.10 then automate same-filesystem and cross-filesystem
 quarantine without weakening either evidence boundary.
 

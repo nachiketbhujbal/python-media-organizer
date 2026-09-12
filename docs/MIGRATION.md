@@ -35,6 +35,12 @@ contract; it does not prove whole-device recovery.
   directory without searching for state or changing any checkpoint.
 - Version 0.6.4 adds stable, deterministic, path-private migration-report
   schema 1 over those validated existing outcomes.
+- Version 0.6.5 adds exact private pre-authorization for unattended operation;
+  versions 0.6.6 and 0.6.7 add independent logging levels and visibility
+  profiles.
+- Version 0.6.8 adds explicit retained-in-place duplicate disposition,
+  advances the coordinator report to schema 2, and keeps the established
+  human-managed external-quarantine path available.
 
 Perform only stages supported by the installed version and keep every
 transition human-reviewed. Do not use a loose shell script as the production
@@ -52,7 +58,7 @@ cost even when the underlying work and cache reuse are correct.
 
 Version 0.6.0 reduces that repetition without skipping a checkpoint. Its safe
 operator loop pauses after every successful validation for review, stops before
-every apply, after any nonzero child status, at the external-quarantine
+every apply, after any nonzero child status, at the duplicate-disposition
 checkpoint, and after final evidence becomes eligible for human sign-off. It
 asks no questions and grants no mutation authority. Version 0.6.1's explicit
 interactive mode asks separately at those same boundaries; an answer applies
@@ -67,7 +73,8 @@ consent. [ADR 0091](adrs/0091-typed-human-migration-synopsis.md) records the
 private typed-outcome and human-synopsis boundary. [ADR 0093](adrs/0093-explicit-private-migration-resume.md)
 records the saved locator, and
 [ADR 0095](adrs/0095-stable-migration-report-artifact.md) records the public
-report projection.
+report projection. [ADR 0103](adrs/0103-retained-in-place-duplicate-disposition.md)
+records the first duplicate-disposition choice.
 
 ## Collection roles
 
@@ -107,7 +114,7 @@ expansion and resolution failure before private state can be created.
 Version 0.6.3 adds an explicit private resume-directory shorthand without
 changing the stage engine or any checkpoint.
 Version 0.6.5 adds a separately specified private policy that may cross only
-the exact validation, apply, external-quarantine, and final-signoff results the
+the exact validation, apply, duplicate-disposition, and final-signoff results the
 operator authorized in advance.
 Version 0.6.6 adds independently saved console and private stage-file logging
 thresholds without changing the stage sequence, checkpoint authority, path
@@ -115,6 +122,9 @@ disclosure, or opt-in persistence boundary.
 Version 0.6.7 adds explicit visibility profiles over the already-saved console
 and disclosure settings without changing restart schema, workflow authority,
 or the path-private migration-report contract.
+Version 0.6.8 advances restart state to schema 4, unattended policy to schema
+2, and the migration report to schema 2 so retained-in-place and external
+quarantine remain explicit, distinct decisions.
 First inspect the zero-write plan, then explicitly initialize one dedicated
 private directory outside and non-nested with both collections:
 
@@ -127,7 +137,7 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
 Common `--config`, `--show-ignored`, `--show-files`, `--verbose`/`--quiet`,
 `--console-log-level`, `--file-log-level`, timestamp, `--workers`, `--no-cache`,
 ffmpeg/ffprobe, and decode-timeout choices supplied at `--start` are fixed in
-schema-3 restart state and carried only to applicable child commands. Later
+schema-4 restart state and carried only to applicable child commands. Later
 explicit options must agree with that state. `--console-log-level` and
 `--file-log-level` accept `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.
 The console selector cannot be combined with `--verbose` or `--quiet`; the file
@@ -146,7 +156,7 @@ pymo --visibility full migrate "/path/to/baseline" "/path/to/working-collection"
 
 Full resolves to console `DEBUG` plus `--show-files` and `--show-ignored`;
 private resolves to console `INFO` with paths hidden; quiet resolves to console
-`WARNING` with paths hidden. The resolved values are stored in schema-3 state,
+`WARNING` with paths hidden. The resolved values are stored in schema-4 state,
 so `--resume` recovers them without repeating the profile. A profile cannot be
 combined with an individual console or disclosure selector. It never changes
 the private stage-file threshold or creates persistence by itself. Full
@@ -206,8 +216,8 @@ instead whenever exactly one child stage is desired.
 
 Use `--interactive` only from a real terminal. It runs routine stages like
 `--run`, then asks a separate `[y/N]` question for a successful or status-one
-validation review, one pending reviewed apply, external-quarantine
-confirmation, and final human sign-off. Only `y` or `yes` authorizes the
+validation review, one pending reviewed apply, duplicate disposition, and
+final human sign-off. Only `y` or `yes` authorizes the
 current checkpoint. `n`, `no`, or an empty line pauses normally except that a
 pending status-one validation continues to return its recorded status 1 until
 it is acknowledged. Invalid input, end-of-file, and redirected non-terminal
@@ -240,7 +250,7 @@ exact expected aggregate; one authorization never covers another.
 A missing or mismatched current authorization returns status 1 without
 crossing it, while unsafe or changed authority returns setup status 2. An
 unexpected child status remains exact. The full private file requirements,
-schema-1 fields, checkpoint order, and resume behavior are in
+schema-2 fields, checkpoint order, and resume behavior are in
 [MIGRATION_POLICY.md](MIGRATION_POLICY.md).
 
 A nonzero child status is recorded, returned unchanged, and stops both modes.
@@ -250,10 +260,24 @@ remains in state. Verification, mutation, configuration, discovery, and native
 tool failures cannot be acknowledged away.
 
 After the successful without-`dups` simulation, `--run` stops normally and
-returns 0 at the expected external-quarantine checkpoint. Move or
-retain the complete review tree outside the working collection using a
-separately reviewed procedure; pymo performs no move. Once the working `dups`
-path is absent, record the human checkpoint:
+returns 0 at the duplicate-disposition checkpoint. To keep the complete
+review tree inside the working collection, record retained-in-place
+disposition:
+
+```bash
+pymo migrate "/path/to/baseline" "/path/to/working-collection" --log-dir "/path/to/private-logs" --retain-dups
+pymo migrate --resume "/path/to/private-logs" --retain-dups
+```
+
+When the simulation found review files, `dups` must still be a real directory;
+a missing, symbolic-link, or non-directory path returns status 1 without
+advancing. Pymo leaves the tree and its contents untouched and reports that it
+reclaimed no physical storage. When no review files exist, the same action
+records that disposition is not applicable.
+
+The established alternative remains available: move the complete review tree
+outside the working collection using a separately reviewed procedure, then,
+once the working `dups` path is absent, record the human checkpoint:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-collection" \
@@ -262,11 +286,13 @@ pymo migrate --resume "/path/to/private-logs" --confirm-quarantine
 ```
 
 That confirmation proves only path absence plus the operator's acknowledgement,
-not quarantine retention. A later `--run` performs final fresh validation and
+not quarantine retention. Neither choice is deletion authority. A later
+`--run` performs final fresh validation and
 pauses for review. One more `--run` performs ordinary observed verification,
 then stops at the human-signoff boundary. `--interactive` performs the same
-absence check and asks for final sign-off; its accepted review and sign-off
-attempts support honest resume but remain bookkeeping rather than evidence.
+applicable disposition check and asks for final sign-off; its accepted review
+and sign-off attempts support honest resume but remain bookkeeping rather than
+evidence.
 Restart state and stage logs
 are private operational records, not the collection action journal, current
 media evidence, or deletion authority. An interrupted apply may have committed
@@ -280,19 +306,21 @@ directory. The synopsis reports only stages that actually ran, keeps paths and
 filenames private, labels previewed versus isolated duplicates and simulated
 versus observed preservation, and reports only measured child duration. A
 potentially reclaimable duplicate total is not a claim that storage has been
-reclaimed; even after external confirmation, pymo has proved only path absence
-and recorded the operator's acknowledgement. The synopsis is convenient
+reclaimed. Retained-in-place disposition explicitly reports no pymo storage
+reclamation; even after external confirmation, pymo has proved only path
+absence and recorded the operator's acknowledgement. The synopsis is convenient
 bookkeeping, not fresh evidence, action history, quarantine proof, sign-off, or
 deletion authority.
 
 Use `--json` when a local program needs the same selected facts without parsing
 the human synopsis. It is mutually exclusive with every workflow action,
 requires existing private coordinator state and its existing lock, performs no
-media analysis, and changes no state. It emits one compact schema-1 object to
+media analysis, and changes no state. It emits one compact schema-2 object to
 standard output with no timestamps, progress, or runtime line. The report
 distinguishes workflow progress and sign-off, previewed and observed duplicate
-analysis, simulated and observed preservation, and potential versus externally
-retained-but-unverified review storage. It contains no collection roots,
+analysis, simulated and observed preservation, and pending, retained-in-place,
+not-applicable, or externally retained-but-unverified review storage. It
+contains no collection roots,
 filenames, private record names, attempt identifiers, or timestamps. See the
 [stable migration report contract](MIGRATION_REPORT.md) for every field and
 compatibility rule.
@@ -408,10 +436,11 @@ pymo --log-file "/path/to/private-logs/15-video-dups-apply.log" \
 
 Image groups prove exact displayed pixels and video groups prove strict decoded
 playback; neither finder is limited to byte-identical files. Nothing is deleted.
-The `dups` tree remains part of ordinary migration verification until an
-explicit simulation or external quarantine removes it from the working root.
+The `dups` tree remains part of ordinary migration verification. An explicit
+simulation excludes it only from counterfactual evidence; external quarantine
+removes it from the working root.
 
-## Stage 6: simulate and quarantine duplicate review material
+## Stage 6: simulate and choose duplicate disposition
 
 Version 0.5.10 provides the required zero-write preview:
 
@@ -427,15 +456,18 @@ byte, pixel, or playback coverage. It also removes those files from simulated
 multiplicity and destination-only accounting while retaining fail-closed unsafe,
 unreadable, unstable, ignored, and other excluded evidence. Schema-5 JSON and
 human output label every layer and final verdict simulated. A simulated
-complete result is eligible only for human quarantine review. Its status 0
-therefore does not mean observed final sign-off; machine consumers must require
-an ordinary observed result with `eligible-for-human-signoff` after the move.
+complete result is eligible only for human duplicate-disposition review. Its
+status 0 therefore does not mean observed final sign-off; machine consumers
+must require a later ordinary observed result with
+`eligible-for-human-signoff`.
 
-If the simulated evidence is acceptable after human review, move the complete
-review tree to retained quarantine outside the working root using a separately
-reviewed procedure. Do not delete it. Then run ordinary fresh verification
-against the physical working collection and compare it with the simulation.
-Only the ordinary post-move result can enter final sign-off.
+If the simulated evidence is acceptable after human review, either record
+`--retain-dups` and keep the complete review tree physically in place, or move
+the complete tree to retained quarantine outside the working root using a
+separately reviewed procedure and record `--confirm-quarantine`. Do not delete
+it. Then run ordinary fresh verification against the physical working
+collection. That observed result, not the simulation or disposition record,
+is the evidence that can enter final sign-off.
 
 ## Stage 7: final sign-off
 
@@ -447,8 +479,9 @@ Only the ordinary post-move result can enter final sign-off.
    log and that no interrupted run remains unresolved.
 5. Record the named byte, image, video, and final layered verdicts in the
    external migration tracker.
-6. Retain the baseline, source, and quarantine under the chosen backup policy.
-   Pymo completion never authorizes automatic deletion of any of them.
+6. Retain the baseline, source, and duplicate review storage under the chosen
+   backup policy. Pymo completion never authorizes automatic deletion of any of
+   them.
 
 Version 0.5.11 reduces repetition by carrying one declared baseline, working
 collection, and explicit private log directory through these stages. It
@@ -470,6 +503,9 @@ the external migration record as the operator's durable record and do not treat
 the private outcome files as a stable interchange format. Version 0.6.4 exposes
 only their selected aggregate projection as the separate versioned
 machine-readable report contract.
+Version 0.6.8 advances that projection to schema 2 and distinguishes pending,
+retained-in-place, not-applicable, and externally retained-but-unverified
+review storage. It does not change the final ordinary evidence requirement.
 Before any resumed action, the coordinator revalidates every required private
 outcome through its pinned private-directory boundary. Missing, replaced,
 publicly readable, or malformed history stops before another child is run.

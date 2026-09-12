@@ -196,8 +196,8 @@ def _stages() -> tuple[Stage, ...]:
             "read",
         ),
         Stage(
-            "external-quarantine",
-            "move the complete dups tree to retained external quarantine",
+            "duplicate-disposition",
+            "retain the dups tree in place or confirm human-managed external quarantine",
             None,
             "checkpoint",
             "checkpoint",

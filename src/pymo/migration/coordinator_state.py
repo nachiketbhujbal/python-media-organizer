@@ -16,9 +16,10 @@ from typing import Any, Literal
 
 from pymo.migration.workflow import CoordinatorOptions, _stages
 
-# This identifies the private restart-state compatibility contract. Version 3
-# adds independently bound console and stage-file logging thresholds.
-MIGRATION_STATE_SCHEMA_VERSION = 3
+# This identifies the private restart-state compatibility contract. Version 4
+# replaces the quarantine-only checkpoint with an explicit duplicate
+# disposition and records retained-in-place acknowledgement separately.
+MIGRATION_STATE_SCHEMA_VERSION = 4
 
 
 class MigrationCoordinatorError(RuntimeError):
@@ -33,6 +34,7 @@ class Attempt:
         "acknowledge-status",
         "acknowledge-review",
         "confirm-quarantine",
+        "retain-dups",
         "signoff",
     ]
     exit_status: int
@@ -344,6 +346,7 @@ def _attempt_from_json(value: object) -> Attempt:
         "acknowledge-status",
         "acknowledge-review",
         "confirm-quarantine",
+        "retain-dups",
         "signoff",
     }:
         raise MigrationCoordinatorError("migration restart attempt has invalid action")
@@ -476,7 +479,7 @@ def _validate_attempt_order(attempts: tuple[Attempt, ...], next_stage: int) -> N
                 or attempt.apply
             ):
                 raise MigrationCoordinatorError(
-                    "migration quarantine confirmation is invalid"
+                    "migration duplicate disposition is invalid"
                 )
             expected += 1
         previous = attempt

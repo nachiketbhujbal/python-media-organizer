@@ -9,6 +9,7 @@ import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from PIL import Image
@@ -236,6 +237,9 @@ def _zero_unattended_policy(
     options: dict[str, object] | None = None,
     overrides: dict[str, dict[str, object]] | None = None,
     omitted: set[str] | None = None,
+    duplicate_disposition: Literal["confirm-quarantine", "retain-dups"] = (
+        "retain-dups"
+    ),
 ) -> Path:
     expected_options: dict[str, object] = {
         "verbose": False,
@@ -268,7 +272,7 @@ def _zero_unattended_policy(
         "rename-apply",
         "image-duplicates-apply",
         "video-duplicates-apply",
-        "external-quarantine",
+        "duplicate-disposition",
         "final-working-validation",
         "final-signoff",
     ):
@@ -312,8 +316,8 @@ def _zero_unattended_policy(
                     [],
                 ),
             }
-        elif checkpoint == "external-quarantine":
-            decision = "confirm-quarantine"
+        elif checkpoint == "duplicate-disposition":
+            decision = duplicate_disposition
             expected = {
                 "status": 0,
                 "review_files": 0,
@@ -352,7 +356,7 @@ def _zero_unattended_policy(
             }
         )
     policy = {
-        "schema_version": 1,
+        "schema_version": 2,
         "tool_version": __version__,
         "baseline": str(baseline.resolve()),
         "working": str(working.resolve()),
@@ -373,7 +377,7 @@ def test_zero_write_plan_requires_explicit_private_state(tmp_path: Path) -> None
     assert "Guided single-collection migration plan" in result.stdout
     assert "Zero-write plan only" in result.stdout
     assert "extension-apply" in result.stdout
-    assert "external-quarantine" in result.stdout
+    assert "duplicate-disposition" in result.stdout
     assert list(baseline.iterdir()) == []
     assert list(working.iterdir()) == []
     assert sorted(path.name for path in tmp_path.iterdir()) == ["baseline", "working"]
@@ -585,7 +589,7 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
     assert "Migration synopsis" in started.stdout
     assert "Workflow: not started" in started.stdout
     payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert payload["tool_version"] == __version__
     assert payload["baseline"] == str(baseline.resolve())
     assert payload["working"] == str(working.resolve())
@@ -849,6 +853,23 @@ def test_resume_supports_external_quarantine_confirmation(tmp_path: Path) -> Non
     assert resumed.attempts[-1].action == "confirm-quarantine"
 
 
+def test_resume_supports_retained_in_place_duplicate_disposition(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 21)
+    _set_simulation_review(log_dir)
+    (working / "dups").mkdir()
+
+    assert migrate.main(["--resume", str(log_dir), "--retain-dups"]) == 0
+    resumed = migrate._load_state(state_file(log_dir))
+    assert resumed.next_stage == 22
+    assert resumed.attempts[-1].action == "retain-dups"
+    assert (working / "dups").is_dir()
+
+
 def test_resume_interactive_decline_preserves_the_pending_apply(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -951,7 +972,16 @@ def stat_mode(path: Path) -> int:
     return path.stat().st_mode & 0o777
 
 
-def _state_at(log_dir: Path, baseline: Path, working: Path, next_stage: int) -> None:
+def _state_at(
+    log_dir: Path,
+    baseline: Path,
+    working: Path,
+    next_stage: int,
+    *,
+    duplicate_disposition: Literal["confirm-quarantine", "retain-dups"] = (
+        "confirm-quarantine"
+    ),
+) -> None:
     log_dir.chmod(0o700)
     now = "2026-08-29T12:00:00-04:00"
     options = migrate.CoordinatorOptions(
@@ -975,7 +1005,7 @@ def _state_at(log_dir: Path, baseline: Path, working: Path, next_stage: int) -> 
             attempts.append(
                 migrate.Attempt(
                     stage.identifier,
-                    "confirm-quarantine",
+                    duplicate_disposition,
                     0,
                     now,
                     None,
@@ -1017,6 +1047,21 @@ def _state_at(log_dir: Path, baseline: Path, working: Path, next_stage: int) -> 
         now,
     )
     migrate._write_state(state_file(log_dir), state)
+
+
+def _set_simulation_review(
+    log_dir: Path, *, review_files: int = 1, review_bytes: int = 16
+) -> None:
+    stage_number = next(
+        index
+        for index, stage in enumerate(migrate._stages(), start=1)
+        if stage.identifier == "without-dups-simulation"
+    )
+    path = log_dir / f"{stage_number}.outcome.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["data"]["review_files"] = review_files
+    payload["data"]["review_bytes"] = review_bytes
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
 
 def _create_private_state_lock(log_dir: Path) -> Path:
@@ -1090,11 +1135,12 @@ def test_stable_report_is_deterministic_path_private_and_read_only(
     assert first.stderr == second.stderr == ""
     assert first.stdout == second.stdout
     report = json.loads(first.stdout)
-    assert report["schema_version"] == 1
+    assert report["schema_version"] == 2
     assert report["report_type"] == "pymo-migration-report"
     assert report["tool_version"] == __version__
     assert report["workflow"] == {
         "completed_stages": len(migrate._stages()),
+        "duplicate_disposition": "external-quarantine",
         "external_quarantine_confirmed": True,
         "human_signoff_recorded": False,
         "latest_exit_status": None,
@@ -1192,6 +1238,46 @@ def test_stable_report_distinguishes_completed_signoff(tmp_path: Path) -> None:
     assert report["preservation"]["result_kind"] == "observed"
 
 
+def test_stable_report_distinguishes_retained_and_not_applicable_disposition(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(
+        log_dir,
+        baseline,
+        working,
+        len(migrate._stages()),
+        duplicate_disposition="retain-dups",
+    )
+    _create_private_state_lock(log_dir)
+
+    empty = run_pymo("migrate", "--resume", log_dir, "--json")
+    assert empty.returncode == 0, empty.stdout + empty.stderr
+    empty_report = json.loads(empty.stdout)
+    assert empty_report["workflow"]["duplicate_disposition"] == "not-applicable"
+    assert empty_report["workflow"]["external_quarantine_confirmed"] is False
+    assert empty_report["exact_duplicates"]["review_storage"]["state"] == (
+        "not-applicable"
+    )
+
+    _set_simulation_review(log_dir)
+    retained = run_pymo("migrate", "--resume", log_dir, "--json")
+    assert retained.returncode == 0, retained.stdout + retained.stderr
+    retained_report = json.loads(retained.stdout)
+    assert retained_report["workflow"]["duplicate_disposition"] == ("retained-in-place")
+    assert retained_report["exact_duplicates"]["review_storage"]["state"] == (
+        "retained-in-place"
+    )
+    assert (
+        retained_report["exact_duplicates"]["review_storage"][
+            "physical_storage_reclaimed"
+        ]
+        is False
+    )
+
+
 @pytest.mark.parametrize(
     "action",
     (
@@ -1201,6 +1287,7 @@ def test_stable_report_distinguishes_completed_signoff(tmp_path: Path) -> None:
         "--interactive",
         "--accept-status",
         "--confirm-quarantine",
+        "--retain-dups",
     ),
 )
 def test_stable_report_rejects_workflow_actions_before_any_write(
@@ -1605,16 +1692,25 @@ def test_interactive_declines_pending_status_one_with_original_status(
     assert state_file(log_dir).read_bytes() == expected
 
 
-def test_interactive_quarantine_confirmation_remains_fail_closed(
+def test_interactive_retention_rechecks_dups_after_the_prompt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     baseline, working = collections(tmp_path)
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
     _state_at(log_dir, baseline, working, 21)
-    (working / "dups").mkdir()
+    _set_simulation_review(log_dir)
+    dups = working / "dups"
+    dups.mkdir()
     before = state_file(log_dir).read_bytes()
+
+    def remove_before_approval(question: str) -> bool:
+        assert "Retain the complete dups tree" in question
+        dups.rmdir()
+        return True
+
     monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\n"))
+    monkeypatch.setattr(migrate, "_prompt_yes_no", remove_before_approval)
 
     assert (
         migrate.main(
@@ -1623,6 +1719,37 @@ def test_interactive_quarantine_confirmation_remains_fail_closed(
         == 1
     )
     assert state_file(log_dir).read_bytes() == before
+
+
+@pytest.mark.parametrize("review_files", (0, 1))
+def test_interactive_records_the_applicable_retained_disposition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, review_files: int
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 21)
+    if review_files:
+        _set_simulation_review(log_dir, review_files=review_files)
+        (working / "dups").mkdir()
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("yes\nno\n"))
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: completed_child(command),
+    )
+
+    assert (
+        migrate.main(
+            [str(baseline), str(working), "--log-dir", str(log_dir), "--interactive"]
+        )
+        == 0
+    )
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == 23
+    assert any(attempt.action == "retain-dups" for attempt in state.attempts)
+    assert not any(attempt.action == "confirm-quarantine" for attempt in state.attempts)
+    assert (working / "dups").exists() is bool(review_files)
 
 
 def test_interactive_records_final_signoff_once(
@@ -2098,7 +2225,12 @@ def test_unattended_quarantine_stops_until_dups_is_absent(
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
     _state_at(log_dir, baseline, working, 21)
-    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    policy = _zero_unattended_policy(
+        tmp_path / "policy.json",
+        baseline,
+        working,
+        duplicate_disposition="confirm-quarantine",
+    )
     dups = working / "dups"
     dups.mkdir()
     observed: list[list[str]] = []
@@ -2127,6 +2259,48 @@ def test_unattended_quarantine_stops_until_dups_is_absent(
     state = migrate._load_state(state_file(log_dir))
     assert state.next_stage == len(migrate._stages())
     assert state.attempts[-1].action == "signoff"
+
+
+def test_unattended_retains_review_tree_under_explicit_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 21)
+    _set_simulation_review(log_dir)
+    review = working / "dups"
+    review.mkdir()
+    (review / "copy.bin").write_bytes(b"copy")
+    policy = _zero_unattended_policy(
+        tmp_path / "policy.json",
+        baseline,
+        working,
+        overrides={"duplicate-disposition": {"review_files": 1, "review_bytes": 16}},
+    )
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: completed_child(command),
+    )
+
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 0
+    )
+    state = migrate._load_state(state_file(log_dir))
+    assert any(attempt.action == "retain-dups" for attempt in state.attempts)
+    assert state.attempts[-1].action == "signoff"
+    assert (review / "copy.bin").read_bytes() == b"copy"
 
 
 def test_unattended_rejects_unsafe_or_mismatched_policy_without_state(
@@ -2193,6 +2367,11 @@ def test_unattended_selector_is_exclusive_and_never_accepts_apply() -> None:
         lambda value: value["authorizations"].reverse(),
         lambda value: value["authorizations"].append(value["authorizations"][0].copy()),
         lambda value: value["authorizations"][0].update(decision="accept-all"),
+        lambda value: next(
+            item
+            for item in value["authorizations"]
+            if item["checkpoint"] == "duplicate-disposition"
+        ).update(decision="delete-dups"),
         lambda value: value["authorizations"][0]["expected"].update(cache_issue=True),
     ],
 )
@@ -3145,6 +3324,45 @@ def test_external_quarantine_confirmation_requires_absent_dups_path(
     assert state.attempts[-1].action == "confirm-quarantine"
 
 
+def test_retained_disposition_requires_the_review_tree_and_never_moves_it(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 21)
+    _set_simulation_review(log_dir)
+    before = state_file(log_dir).read_bytes()
+    arguments = [
+        str(baseline),
+        str(working),
+        "--log-dir",
+        str(log_dir),
+        "--retain-dups",
+    ]
+
+    assert migrate.main(arguments) == 1
+    assert state_file(log_dir).read_bytes() == before
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    dups = working / "dups"
+    dups.symlink_to(outside, target_is_directory=True)
+    assert migrate.main(arguments) == 1
+    assert state_file(log_dir).read_bytes() == before
+    dups.unlink()
+
+    dups.mkdir()
+    marker = dups / "review.bin"
+    marker.write_bytes(b"review")
+    assert migrate.main(arguments) == 0
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == 22
+    assert state.attempts[-1].action == "retain-dups"
+    assert marker.read_bytes() == b"review"
+    assert list(outside.iterdir()) == []
+
+
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
@@ -3222,8 +3440,8 @@ def test_complete_empty_collection_sequence_is_restartable_and_stage_logged(
         if next_stage == len(migrate._stages()):
             break
         stage = migrate._stages()[next_stage]
-        if stage.identifier == "external-quarantine":
-            result = run_pymo(*common, "--confirm-quarantine")
+        if stage.identifier == "duplicate-disposition":
+            result = run_pymo(*common, "--retain-dups")
         else:
             arguments: list[object] = [*common, "--run-next"]
             if stage.identifier in apply_stages:
@@ -3253,6 +3471,9 @@ def test_complete_empty_collection_sequence_is_restartable_and_stage_logged(
         and attempt["duration_milliseconds"] >= 0
         for attempt in final_state["attempts"]
     )
+    assert any(
+        attempt["action"] == "retain-dups" for attempt in final_state["attempts"]
+    )
     assert list(baseline.iterdir()) == []
     assert (working / "pics").is_dir()
     assert (working / "vids").is_dir()
@@ -3280,7 +3501,7 @@ def test_complete_media_sequence_preserves_bytes_through_external_quarantine(
         if next_stage == len(migrate._stages()):
             break
         stage = migrate._stages()[next_stage]
-        if stage.identifier == "external-quarantine":
+        if stage.identifier == "duplicate-disposition":
             review = working / "dups"
             assert len(list((review / "pics").iterdir())) == 1
             review.rename(quarantine)
@@ -3319,6 +3540,62 @@ def test_complete_media_sequence_preserves_bytes_through_external_quarantine(
     assert status.returncode == 0, status.stdout + status.stderr
     assert "Migration synopsis" in status.stdout
     assert str(tmp_path) not in status.stdout
+
+
+def test_complete_media_sequence_retains_duplicate_review_bytes_in_place(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    source = baseline / "first.jpg"
+    Image.new("RGB", (4, 3), (20, 40, 60)).save(source, format="PNG")
+    shutil.copyfile(source, baseline / "second.jpg")
+    shutil.copytree(baseline, working, dirs_exist_ok=True)
+    original_bytes = source.read_bytes()
+    log_dir = tmp_path / "private-logs"
+    common = ["migrate", baseline, working, "--log-dir", log_dir]
+    started = run_pymo(*common, "--start", "--no-cache", "--no-timestamps")
+    assert started.returncode == 0, started.stdout + started.stderr
+
+    while True:
+        state = migrate._load_state(state_file(log_dir))
+        if state.next_stage == len(migrate._stages()):
+            break
+        stage = migrate._stages()[state.next_stage]
+        arguments: list[object] = [*common]
+        if stage.identifier == "duplicate-disposition":
+            arguments.append("--retain-dups")
+        else:
+            arguments.append("--run-next")
+            if stage.mode == "apply":
+                arguments.append("--apply")
+        result = run_pymo(*arguments)
+        assert result.returncode == 0, result.stdout + result.stderr
+
+    retained = list((working / "pics").iterdir())
+    reviewed = list((working / "dups" / "pics").iterdir())
+    assert len(retained) == len(reviewed) == 1
+    assert retained[0].read_bytes() == reviewed[0].read_bytes() == original_bytes
+    final_state = migrate._load_state(state_file(log_dir))
+    assert any(attempt.action == "retain-dups" for attempt in final_state.attempts)
+    assert "Workflow: complete; human sign-off pending" in result.stdout
+    assert "Duplicate disposition selected: retain in place" in result.stdout
+    assert "Physical storage reclaimed by pymo: none" in result.stdout
+    assert "Observed preservation: COMPLETE; 1/1" in result.stdout
+    synopsis = result.stdout.split("Migration synopsis", maxsplit=1)[1]
+    assert str(tmp_path) not in synopsis
+
+    report = run_pymo("migrate", "--resume", log_dir, "--json")
+    assert report.returncode == 0, report.stdout + report.stderr
+    payload = json.loads(report.stdout)
+    assert payload["schema_version"] == 2
+    assert payload["workflow"]["duplicate_disposition"] == "retained-in-place"
+    assert payload["workflow"]["external_quarantine_confirmed"] is False
+    assert payload["exact_duplicates"]["review_storage"] == {
+        "bytes": len(original_bytes),
+        "files": 1,
+        "physical_storage_reclaimed": False,
+        "state": "retained-in-place",
+    }
 
 
 def test_successful_child_without_typed_outcome_fails_before_state_advance(

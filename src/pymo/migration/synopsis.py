@@ -14,7 +14,8 @@ from pymo.progress import format_bytes, format_duration
 
 # This identifies the public machine-readable migration-report contract. A
 # schema change is required before any field, type, or meaning may change.
-MIGRATION_REPORT_SCHEMA_VERSION = 1
+# Version 2 reports explicit retained-in-place duplicate disposition.
+MIGRATION_REPORT_SCHEMA_VERSION = 2
 
 
 class MigrationSynopsisError(RuntimeError):
@@ -387,10 +388,28 @@ def build_report(log_dir: Path, state: MigrationState) -> dict[str, Any]:
     quarantine_confirmed = any(
         attempt.action == "confirm-quarantine" for attempt in state.attempts
     )
+    retained_dups = any(attempt.action == "retain-dups" for attempt in state.attempts)
+    duplicate_disposition = (
+        "retained-in-place"
+        if retained_dups and review_files
+        else (
+            "not-applicable"
+            if retained_dups
+            else "external-quarantine" if quarantine_confirmed else None
+        )
+    )
     review_state = (
-        "external-retention-confirmed-unverified"
-        if quarantine_confirmed
-        else "potentially-reclaimable" if duplicates else "not-assessed"
+        "retained-in-place"
+        if duplicate_disposition == "retained-in-place"
+        else (
+            "not-applicable"
+            if duplicate_disposition == "not-applicable"
+            else (
+                "external-retention-confirmed-unverified"
+                if quarantine_confirmed
+                else "potentially-reclaimable" if duplicates else "not-assessed"
+            )
+        )
     )
     cache_results = [outcome["cache"] for outcome in duplicates]
 
@@ -427,6 +446,7 @@ def build_report(log_dir: Path, state: MigrationState) -> dict[str, Any]:
                 attempt.action == "acknowledge-status" for attempt in state.attempts
             ),
             "external_quarantine_confirmed": quarantine_confirmed,
+            "duplicate_disposition": duplicate_disposition,
             "human_signoff_recorded": any(
                 attempt.action == "signoff" for attempt in state.attempts
             ),
@@ -528,7 +548,17 @@ def print_synopsis(log_dir: Path, state: MigrationState) -> None:
         )
         print(f"  Exact duplicates: {rendered}.")
         review = report["exact_duplicates"]["review_storage"]
-        if review["state"] == "external-retention-confirmed-unverified":
+        if review["state"] == "retained-in-place":
+            print(
+                "  Duplicate disposition selected: retain in place "
+                f"(simulation: {review['files']} review file(s), "
+                f"{format_bytes(review['bytes'])})."
+            )
+            print("  Physical storage reclaimed by pymo: none.")
+        elif review["state"] == "not-applicable":
+            print("  Duplicate disposition: no review files required retention.")
+            print("  Physical storage reclaimed by pymo: none.")
+        elif review["state"] == "external-retention-confirmed-unverified":
             print(
                 "  Duplicate review storage before external retention: "
                 f"{review['files']} file(s), {format_bytes(review['bytes'])} isolated "

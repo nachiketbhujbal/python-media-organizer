@@ -1,6 +1,6 @@
 # Stable migration report
 
-`pymo migrate --json` emits schema 1 of the public, path-private migration
+`pymo migrate --json` emits schema 2 of the public, path-private migration
 report. It projects the coordinator's already-recorded strict stage outcomes;
 it does not scan either collection, create new evidence, advance the workflow,
 or authorize a mutation or deletion.
@@ -38,21 +38,21 @@ changed, or conflicting input returns setup status 2 without producing a
 report or creating coordinator state.
 
 `--json` cannot be combined with `--start`, `--run-next`, `--run`,
-`--interactive`, `--accept-status`, or `--confirm-quarantine`. It is a report
-action only. Because schema 1 is always path-private, it also rejects
+`--interactive`, `--accept-status`, `--confirm-quarantine`, or `--retain-dups`.
+It is a report action only. Because schema 2 is always path-private, it also rejects
 `--show-files` and `--show-ignored` rather than changing the report shape or
 disclosing paths.
 
-## Schema 1 compatibility
+## Schema 2 compatibility
 
 The top-level object has exactly these fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `schema_version` | integer | Always `1` for this contract. |
+| `schema_version` | integer | Always `2` for this contract. |
 | `report_type` | string | Always `pymo-migration-report`. |
 | `tool_version` | string | Exact pymo version bound to the restart state. |
-| `workflow` | object | Coordinator progress, reviews, quarantine confirmation, and sign-off bookkeeping. |
+| `workflow` | object | Coordinator progress, reviews, duplicate disposition, and sign-off bookkeeping. |
 | `observed_child_work` | object | Count and summed measured duration of recorded child attempts. |
 | `inventory` | object | Baseline and initial-working scan aggregates, or `null` before those stages. |
 | `health` | object | Baseline and latest-working validation aggregates, or `null` before those stages. |
@@ -80,9 +80,11 @@ unchanged valid state produces byte-identical output.
 stage identifier or `null` at completion. `stopped_stage` and
 `latest_exit_status` are populated only for `stopped`. Separate counters record
 all successful-validation and status-one acknowledgements.
-`external_quarantine_confirmed` records only the existing human checkpoint;
-it does not prove the external destination. `human_signoff_recorded` records
-only explicit operator sign-off and does not alter preservation evidence.
+`duplicate_disposition` is `null`, `not-applicable`, `retained-in-place`, or
+`external-quarantine`. `external_quarantine_confirmed` remains a compatibility
+boolean and is true only for the latter; it does not prove the external
+destination. `human_signoff_recorded` records only explicit operator sign-off
+and does not alter preservation evidence.
 
 ### Recorded result kinds
 
@@ -97,16 +99,23 @@ The duplicate `review_storage.state` is one of:
 
 - `not-assessed`: no successful duplicate result exists;
 - `potentially-reclaimable`: duplicate copies were previewed or isolated, but
-  the external-retention checkpoint has not been confirmed;
+  no disposition has been recorded;
+- `not-applicable`: retained disposition was recorded and the successful
+  simulation found no review files;
+- `retained-in-place`: the operator selected retention inside the working
+  collection; the file and byte counts are the earlier simulation totals, not
+  a fresh report-time inventory;
 - `external-retention-confirmed-unverified`: the operator confirmed the
   working `dups` path was absent, but pymo did not inspect an external
   destination or prove physical capacity was reclaimed.
 
-`physical_storage_reclaimed` is therefore `false` in schema 1.
+`physical_storage_reclaimed` is therefore `false` in schema 2. In particular,
+retained-in-place means pymo performed no move or deletion and reclaimed no
+physical storage; it is not a deletion estimate or cleanup claim.
 
 ### Privacy and authority
 
-Schema 1 never includes collection roots, filenames, ignored path names,
+Schema 2 never includes collection roots, filenames, ignored path names,
 private directory paths, state or outcome filenames, attempt identifiers,
 timestamps, or action-journal entries. It deliberately omits free-form private
 cache issue text and includes only cache booleans and counts.
@@ -118,5 +127,5 @@ The report does not replace the baseline, retained quarantine, child logs,
 action journal, or ordinary fresh final verification.
 
 The schema version is the compatibility boundary. A future release must use a
-new schema version before changing any schema 1 field name, type, allowed value,
+new schema version before changing any schema 2 field name, type, allowed value,
 or meaning. Human synopsis wording is not part of this machine contract.

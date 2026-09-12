@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import stat
 import subprocess
 import sys
 import time
@@ -226,11 +227,11 @@ def _print_status(state: MigrationState) -> None:
         print("Migration sequence complete: final observed verification succeeded.")
         if any(attempt.action == "signoff" for attempt in state.attempts):
             print(
-                "Human sign-off is recorded in private restart state; retain source, baseline, and quarantine."
+                "Human sign-off is recorded in private restart state; retain source, baseline, and any duplicate review storage."
             )
         else:
             print(
-                "The result is eligible for human sign-off only; retain source, baseline, and quarantine."
+                "The result is eligible for human sign-off only; retain source, baseline, and any duplicate review storage."
             )
         if any(attempt.action == "acknowledge-status" for attempt in state.attempts):
             print(
@@ -244,7 +245,8 @@ def _print_status(state: MigrationState) -> None:
         print("Run this reviewed mutation with --run-next --apply.")
     elif stage.mode == "checkpoint":
         print(
-            "Move or retain the complete dups tree externally, then use --confirm-quarantine."
+            "Use --retain-dups to keep review copies in place without reclaiming storage, "
+            "or move the complete tree externally and use --confirm-quarantine."
         )
     else:
         print("Run routine stages with --run, or only this stage with --run-next.")
@@ -260,7 +262,7 @@ def _run_next(
     stage = _stages()[state.next_stage]
     if stage.mode == "checkpoint":
         print(
-            "External quarantine is a human checkpoint; use --confirm-quarantine.",
+            "Duplicate disposition is a human checkpoint; use --retain-dups or --confirm-quarantine.",
             file=sys.stderr,
         )
         return 2
@@ -524,18 +526,39 @@ def _accept_status(state_path: Path, state: MigrationState) -> int:
     return 0
 
 
+def _dups_metadata(state: MigrationState) -> os.stat_result | None:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        working_descriptor = os.open(state.working, flags)
+    except OSError as error:
+        raise MigrationCoordinatorError(
+            "the working collection cannot be inspected safely"
+        ) from error
+    try:
+        try:
+            return os.stat("dups", dir_fd=working_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            return None
+        except OSError as error:
+            raise MigrationCoordinatorError(
+                "the working duplicate review path cannot be inspected safely"
+            ) from error
+    finally:
+        os.close(working_descriptor)
+
+
 def _confirm_quarantine(state_path: Path, state: MigrationState) -> int:
     if state.next_stage == len(_stages()):
-        print("There is no pending external-quarantine checkpoint.", file=sys.stderr)
+        print("There is no pending duplicate-disposition checkpoint.", file=sys.stderr)
         return 2
     stage = _stages()[state.next_stage]
-    if stage.identifier != "external-quarantine":
+    if stage.identifier != "duplicate-disposition":
         print(
             "External quarantine cannot be confirmed before its checkpoint.",
             file=sys.stderr,
         )
         return 2
-    if os.path.lexists(state.working / "dups"):
+    if _dups_metadata(state) is not None:
         print(
             "The working collection still contains its dups path; pymo will not move or delete it.",
             file=sys.stderr,
@@ -546,6 +569,59 @@ def _confirm_quarantine(state_path: Path, state: MigrationState) -> int:
     print(
         "External quarantine checkpoint confirmed; the working collection has no dups path."
     )
+    return 0
+
+
+def _duplicate_review_files(log_dir: Path, state: MigrationState) -> int:
+    outcome = _recorded_outcome(log_dir, state, "without-dups-simulation")
+    data = outcome["data"]
+    review_files = data["review_files"]  # type: ignore[index]
+    if not isinstance(review_files, int):  # pragma: no cover - outcome owns schema.
+        raise MigrationCoordinatorError(
+            "duplicate disposition has invalid private simulation evidence"
+        )
+    return review_files
+
+
+def _retain_dups(log_dir: Path, state_path: Path, state: MigrationState) -> int:
+    if state.next_stage == len(_stages()):
+        print("There is no pending duplicate-disposition checkpoint.", file=sys.stderr)
+        return 2
+    stage = _stages()[state.next_stage]
+    if stage.identifier != "duplicate-disposition":
+        print(
+            "Duplicate retention cannot be recorded before its checkpoint.",
+            file=sys.stderr,
+        )
+        return 2
+
+    review_files = _duplicate_review_files(log_dir, state)
+
+    metadata = _dups_metadata(state)
+    if metadata is None:
+        if review_files:
+            print(
+                "The reviewed dups tree is no longer present in the working collection.",
+                file=sys.stderr,
+            )
+            return 1
+    elif not stat.S_ISDIR(metadata.st_mode):
+        print(
+            "The working dups path is not a safe retained directory.",
+            file=sys.stderr,
+        )
+        return 1
+
+    attempt = Attempt(stage.identifier, "retain-dups", 0, _now(), None, False)
+    _write_state(state_path, _updated_state(state, attempt, advance=True))
+    if review_files:
+        print(
+            "Duplicate review disposition recorded as retained in place; pymo moved or deleted nothing and reclaimed no physical storage."
+        )
+    else:
+        print(
+            "No duplicate review files require disposition; pymo reclaimed no physical storage."
+        )
     return 0
 
 
@@ -812,12 +888,16 @@ def _run_unattended(
 
             if stage.mode == "checkpoint":
                 outcome = _recorded_outcome(log_dir, state, "without-dups-simulation")
-                policy.require_checkpoint("external-quarantine", outcome)
+                decision = policy.require_checkpoint("duplicate-disposition", outcome)
                 state = _reload_unattended(
                     log_dir, state_path, state, binding, identities, policy
                 )
                 previous_state = state
-                status = _confirm_quarantine(state_path, state)
+                status = (
+                    _retain_dups(log_dir, state_path, state)
+                    if decision == "retain-dups"
+                    else _confirm_quarantine(state_path, state)
+                )
                 if status != 0:
                     _require_collection_identities(state, identities)
                     require_unattended_policy_binding(log_dir, state, policy)
@@ -828,7 +908,7 @@ def _run_unattended(
                     previous_state,
                     state,
                     stage,
-                    action="confirm-quarantine",
+                    action=decision,
                     status=0,
                     advance=True,
                 )
@@ -978,15 +1058,27 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
             continue
 
         if stage.mode == "checkpoint":
-            if not _prompt_yes_no(
-                "Confirm the complete dups tree is retained externally and absent from the working collection?"
-            ):
-                print("Interactive migration paused at external quarantine review.")
+            review_files = _duplicate_review_files(log_dir, state)
+            dups_present = _dups_metadata(state) is not None
+            if not review_files:
+                question = "Record that no duplicate review files require disposition and no storage was reclaimed?"
+                action = "retain-dups"
+            elif dups_present:
+                question = "Retain the complete dups tree in the working collection with no storage reclaimed?"
+                action = "retain-dups"
+            else:
+                question = "Confirm the complete dups tree is retained externally and absent from the working collection?"
+                action = "confirm-quarantine"
+            if not _prompt_yes_no(question):
+                print("Interactive migration paused at duplicate disposition review.")
                 print_synopsis(log_dir, state)
                 return 0
             state = _reload_after_prompt(state_path, state, binding, identities)
             previous_state = state
-            status = _confirm_quarantine(state_path, state)
+            if action == "retain-dups":
+                status = _retain_dups(log_dir, state_path, state)
+            else:
+                status = _confirm_quarantine(state_path, state)
             if status != 0:
                 _require_collection_identities(state, identities)
                 print_synopsis(log_dir, state)
@@ -996,7 +1088,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
                 previous_state,
                 state,
                 stage,
-                action="confirm-quarantine",
+                action=action,
                 status=0,
                 advance=True,
             )
@@ -1062,6 +1154,10 @@ def _dispatch_existing_state(
         status = _confirm_quarantine(state_path, state)
         print_synopsis(log_dir, _load_state(state_path))
         return status
+    if args.retain_dups:
+        status = _retain_dups(log_dir, state_path, state)
+        print_synopsis(log_dir, _load_state(state_path))
+        return status
     _print_status(state)
     _print_plan(state.next_stage)
     print_synopsis(log_dir, state)
@@ -1121,6 +1217,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--confirm-quarantine",
         action="store_true",
         help="confirm the human-managed dups quarantine checkpoint",
+    )
+    actions.add_argument(
+        "--retain-dups",
+        action="store_true",
+        help="retain the reviewed dups tree in place without reclaiming storage",
     )
     parser.add_argument(
         "--apply",
@@ -1186,6 +1287,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.unattended is not None,
             args.accept_status,
             args.confirm_quarantine,
+            args.retain_dups,
         )
     )
     if args.json and selected_action:
@@ -1298,6 +1400,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 or args.unattended is not None
                 or args.accept_status
                 or args.confirm_quarantine
+                or args.retain_dups
                 or args.json
             ):
                 raise MigrationCoordinatorError(
