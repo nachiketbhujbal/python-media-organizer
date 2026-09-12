@@ -95,6 +95,16 @@ def test_dispatched_help_and_argument_errors_remain_unprefixed(
     assert error_result.stderr.startswith("usage: pymo cache")
     assert "Stopped cache" not in error_result.stderr
 
+    for profile_help in (
+        run_pymo("--visibility", "full", "cache", "--help"),
+        run_pymo("--visibility", "full", "cache", "status", "--help"),
+        run_pymo("--visibility", "full", "validate", "--help"),
+    ):
+        assert profile_help.returncode == 0
+        assert profile_help.stdout.startswith("usage:")
+        assert "Dispatching pymo command" not in profile_help.stdout
+        assert profile_help.stderr == ""
+
 
 def test_cli_does_not_create_persistent_logs_by_default(tmp_path: Path) -> None:
     collection = tmp_path / "collection"

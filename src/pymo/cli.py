@@ -65,6 +65,10 @@ def _supports_show_files(command: str, cache_action: str | None) -> bool:
     )
 
 
+def _supports_show_ignored(command: str, cache_action: str | None) -> bool:
+    return command != "cache" or cache_action in {"warm", "refresh"}
+
+
 def _contains_option(arguments: Sequence[str], options: set[str]) -> bool:
     return any(value.partition("=")[0] in options for value in arguments)
 
@@ -145,6 +149,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     cache_action = (
         args.arguments[0] if args.command == "cache" and args.arguments else None
     )
+    child_help = _contains_option(args.arguments, {"-h", "--help"})
     explicit_child_disclosure = _contains_option(
         args.arguments, {"--show-files", "--show-ignored"}
     )
@@ -164,6 +169,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.command == "cache"
         and cache_action == "status"
         and args.visibility == "full"
+        and not child_help
     ):
         parser.error("--visibility full is not used by cache status")
     if (
@@ -189,22 +195,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--visibility full cannot be combined with migrate --json")
     profile_console_level = _profile_console_level(args.visibility)
     show_full_details = args.visibility == "full"
+    suppress_human_logging = structured_json or child_help
     try:
         configure_logging(
-            verbose=args.verbose and not structured_json,
-            quiet=args.quiet and not structured_json,
+            verbose=args.verbose and not suppress_human_logging,
+            quiet=args.quiet and not suppress_human_logging,
             log_file=args.log_file,
-            timestamps=args.timestamps is not False and not structured_json,
+            timestamps=args.timestamps is not False and not suppress_human_logging,
             console_level=(
                 "INFO"
-                if structured_json
+                if suppress_human_logging
                 else profile_console_level or args.console_log_level
             ),
             file_level=args.file_log_level if args.log_file is not None else None,
         )
     except LoggingConfigurationError as error:
         parser.error(str(error))
-    if not structured_json:
+    if not suppress_human_logging:
         logging.getLogger("pymo").debug("Dispatching pymo command: %s", args.command)
     commands = _commands()
     command_arguments = list(args.arguments)
@@ -215,7 +222,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     ):
         parser.error("--config and --show-ignored are not used by cache status")
     forwarded_options: list[str] = []
-    if args.show_ignored or show_full_details:
+    if (args.show_ignored or show_full_details) and _supports_show_ignored(
+        args.command, cache_action
+    ):
         forwarded_options.append("--show-ignored")
     if show_full_details and _supports_show_files(args.command, cache_action):
         forwarded_options.append("--show-files")
