@@ -47,6 +47,12 @@ from pymo.migration.synopsis import (
     print_synopsis,
     validate_synopsis_history,
 )
+from pymo.migration.unattended_binding import (
+    create_unattended_policy_binding,
+    load_unattended_policy_binding,
+    require_unattended_policy_binding,
+    unattended_policy_binding_path,
+)
 from pymo.migration.workflow import (
     CoordinatorOptions,
     Stage,
@@ -604,6 +610,7 @@ def _recorded_outcome(
 
 
 def _reload_unattended(
+    log_dir: Path,
     state_path: Path,
     expected_state: MigrationState,
     binding: MigrationState,
@@ -619,14 +626,26 @@ def _reload_unattended(
     _require_operator_binding(state, binding)
     _require_collection_identities(state, identities)
     policy.require_binding(state)
+    require_unattended_policy_binding(log_dir, state, policy)
     return state
 
 
 def _bind_unattended_policy(
+    log_dir: Path,
     state_path: Path,
     state: MigrationState,
     policy: MigrationPreauthorization,
 ) -> MigrationState:
+    policy.require_run_binding(state)
+    binding_path = unattended_policy_binding_path(log_dir)
+    if not os.path.lexists(binding_path):
+        if state.unattended_policy_sha256 is not None:
+            raise MigrationCoordinatorError(
+                "unattended policy binding is missing for the bound migration"
+            )
+        create_unattended_policy_binding(log_dir, state, policy)
+    binding = load_unattended_policy_binding(log_dir)
+    binding.require_run_binding(state, policy)
     if state.unattended_policy_sha256 is None:
         state = replace(
             state,
@@ -639,6 +658,7 @@ def _bind_unattended_policy(
         raise MigrationCoordinatorError(
             "pre-authorization policy differs from the policy bound to this migration"
         )
+    binding.require(state, policy)
     return state
 
 
@@ -657,6 +677,7 @@ def _run_unattended(
             _require_collection_identities(state, identities)
             policy.require_current()
             policy.require_binding(state)
+            require_unattended_policy_binding(log_dir, state, policy)
 
             successful_review = _successful_validation_review(state)
             if successful_review is not None:
@@ -665,7 +686,7 @@ def _run_unattended(
                 )
                 policy.require_checkpoint(successful_review.identifier, outcome)
                 state = _reload_unattended(
-                    state_path, state, binding, identities, policy
+                    log_dir, state_path, state, binding, identities, policy
                 )
                 previous_state = state
                 _acknowledge_review(state_path, state, successful_review)
@@ -687,7 +708,7 @@ def _run_unattended(
                 )
                 policy.require_checkpoint(status_one_review.identifier, outcome)
                 state = _reload_unattended(
-                    state_path, state, binding, identities, policy
+                    log_dir, state_path, state, binding, identities, policy
                 )
                 previous_state = state
                 status = _accept_status(state_path, state)
@@ -714,7 +735,7 @@ def _run_unattended(
                 outcome = _recorded_outcome(log_dir, state, final_stage.identifier)
                 policy.require_checkpoint("final-signoff", outcome)
                 state = _reload_unattended(
-                    state_path, state, binding, identities, policy
+                    log_dir, state_path, state, binding, identities, policy
                 )
                 previous_state = state
                 _record_signoff(state_path, state)
@@ -729,6 +750,7 @@ def _run_unattended(
                 )
                 _require_operator_binding(state, binding)
                 _require_collection_identities(state, identities)
+                require_unattended_policy_binding(log_dir, state, policy)
                 print(
                     "Pre-authorized final sign-off recorded in private migration state."
                 )
@@ -742,7 +764,7 @@ def _run_unattended(
                 outcome = _recorded_outcome(log_dir, state, preview)
                 policy.require_checkpoint(stage.identifier, outcome)
                 state = _reload_unattended(
-                    state_path, state, binding, identities, policy
+                    log_dir, state_path, state, binding, identities, policy
                 )
                 previous_state = state
                 status = _run_next(log_dir, state_path, state, apply=True)
@@ -754,6 +776,7 @@ def _run_unattended(
                 _require_collection_identities(state, identities)
                 policy.require_current()
                 policy.require_binding(state)
+                require_unattended_policy_binding(log_dir, state, policy)
                 if status != 0:
                     print_synopsis(log_dir, state)
                     return status
@@ -763,12 +786,13 @@ def _run_unattended(
                 outcome = _recorded_outcome(log_dir, state, "without-dups-simulation")
                 policy.require_checkpoint("external-quarantine", outcome)
                 state = _reload_unattended(
-                    state_path, state, binding, identities, policy
+                    log_dir, state_path, state, binding, identities, policy
                 )
                 previous_state = state
                 status = _confirm_quarantine(state_path, state)
                 if status != 0:
                     _require_collection_identities(state, identities)
+                    require_unattended_policy_binding(log_dir, state, policy)
                     print_synopsis(log_dir, state)
                     return status
                 state = _load_state(state_path)
@@ -792,6 +816,7 @@ def _run_unattended(
             _require_collection_identities(state, identities)
             policy.require_current()
             policy.require_binding(state)
+            require_unattended_policy_binding(log_dir, state, policy)
             if status != 0 and not (stage.review_after_success and status == 1):
                 print_synopsis(log_dir, state)
                 return status
@@ -997,8 +1022,9 @@ def _dispatch_existing_state(
         policy = load_preauthorization(
             args.unattended, roots=(state.baseline, state.working)
         )
-        state = _bind_unattended_policy(state_path, state, policy)
+        state = _bind_unattended_policy(log_dir, state_path, state, policy)
         policy.require_binding(state)
+        require_unattended_policy_binding(log_dir, state, policy)
         return _run_unattended(log_dir, state_path, state, policy)
     if args.accept_status:
         status = _accept_status(state_path, state)
@@ -1285,6 +1311,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 assert policy is not None
                 policy.require_binding(state)
                 policy.require_current()
+                create_unattended_policy_binding(log_dir, state, policy)
                 _write_state(state_path, state)
                 print(f"Initialized private migration state: {state_path}")
                 return _run_unattended(log_dir, state_path, state, policy)

@@ -198,6 +198,10 @@ def state_file(log_dir: Path) -> Path:
     return log_dir / "pymo-migration-state.json"
 
 
+def policy_binding_file(log_dir: Path) -> Path:
+    return log_dir / "pymo-unattended-policy-binding.json"
+
+
 def _zero_validation_expected(status: int = 0) -> dict[str, object]:
     failed = status == 1
     return {
@@ -1797,6 +1801,14 @@ def test_unattended_policy_completes_every_authorized_empty_stage(
     assert len(observed) == len(migrate._stages()) - 1
     assert sum("--apply" in command for command in observed) == 5
     assert policy.read_text(encoding="utf-8")
+    binding_path = policy_binding_file(log_dir)
+    binding = json.loads(binding_path.read_bytes())
+    assert binding["policy_sha256"] == state.unattended_policy_sha256
+    assert binding["created_at"] == state.created_at
+    assert binding["baseline"] == str(baseline)
+    assert binding["working"] == str(working)
+    assert binding_path.stat().st_nlink == 1
+    assert binding_path.stat().st_mode & 0o077 == 0
 
 
 def test_unattended_accepts_only_the_expected_status_one_validation(
@@ -1865,6 +1877,7 @@ def test_unattended_preview_mismatch_stops_before_apply(
         },
     )
     migrate._bind_unattended_policy(
+        log_dir,
         state_file(log_dir),
         migrate._load_state(state_file(log_dir)),
         migrate.load_preauthorization(policy, roots=(baseline, working)),
@@ -2164,18 +2177,30 @@ def test_unattended_failure_rejects_policy_binding_state_substitution(
             observed.append(command) or subprocess.CompletedProcess(command, 7)
         ),
     )
-    real_load_state = migrate._load_state
+    real_run_next = migrate._run_next
     substituted = False
 
-    def load_with_substitution(path: Path) -> migrate.MigrationState:
+    def run_then_substitute_state(
+        current_log_dir: Path,
+        path: Path,
+        state: migrate.MigrationState,
+        apply: bool,
+    ) -> int:
         nonlocal substituted
-        state = real_load_state(path)
-        if not substituted and state.attempts and state.attempts[-1].exit_status == 7:
+        status = real_run_next(current_log_dir, path, state, apply)
+        if not substituted and status == 7:
             substituted = True
-            return replace(state, unattended_policy_sha256=replacement_digest)
-        return state
+            persisted = migrate._load_state(path)
+            migrate._write_state(
+                path,
+                replace(
+                    persisted,
+                    unattended_policy_sha256=replacement_digest,
+                ),
+            )
+        return status
 
-    monkeypatch.setattr(migrate, "_load_state", load_with_substitution)
+    monkeypatch.setattr(migrate, "_run_next", run_then_substitute_state)
     assert (
         migrate.main(
             [
@@ -2191,8 +2216,12 @@ def test_unattended_failure_rejects_policy_binding_state_substitution(
     )
     assert substituted
     assert len(observed) == 1
+    persisted = migrate._load_state(state_file(log_dir))
+    assert persisted.unattended_policy_sha256 == replacement_digest
+    binding_path = policy_binding_file(log_dir)
+    binding_before_resume = binding_path.read_bytes()
 
-    monkeypatch.setattr(migrate, "_load_state", real_load_state)
+    monkeypatch.setattr(migrate, "_run_next", real_run_next)
     assert (
         migrate.main(
             [
@@ -2205,6 +2234,7 @@ def test_unattended_failure_rejects_policy_binding_state_substitution(
         == 2
     )
     assert len(observed) == 1
+    assert binding_path.read_bytes() == binding_before_resume
 
 
 def test_unattended_returns_exact_unexpected_child_status(

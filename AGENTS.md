@@ -198,8 +198,9 @@ never duplicate the version in source or static project metadata.
   root, version, separation, and checkpoint boundaries, and never auto-discover
   state or treat restart bookkeeping as evidence or authority.
 - `migrate --unattended` must bind the first accepted private policy payload
-  SHA-256 into restart state and require byte-identical authority on every
-  unattended resume. Bind reviewed mutation decisions to descriptor-pinned
+  SHA-256 into both a separate create-once no-replace private record and
+  restart state, and require all three surfaces to agree on every unattended
+  resume. Bind reviewed mutation decisions to descriptor-pinned
   planned source bytes, recompute before apply, and carry organization and
   rename evidence through the journaled move boundary. Never let a replacement
   at the same path or a substituted valid policy inherit prior authority.
@@ -255,6 +256,9 @@ never duplicate the version in source or static project metadata.
 - `src/pymo/migration/preauthorization.py`: strict private unattended-policy
   schema, file safety, binding, and aggregate checkpoint matching; it owns no
   child analysis, transformation, state transition, or quarantine behavior.
+- `src/pymo/migration/unattended_binding.py`: strict create-once private
+  policy-to-run binding, independent of replaceable restart state; it owns no
+  policy authority, child dispatch, or checkpoint transition.
 - `src/pymo/correct_extensions.py`: complete discovery, fresh evidence,
   collision planning, reversible apply/undo, and verified truthful-extension
   correction.

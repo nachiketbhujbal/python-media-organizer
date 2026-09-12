@@ -22,7 +22,9 @@ All notable changes to `python-media-organizer` will be recorded here.
   preserve every unexpected child status including interruption 130.
 - Permit one invocation to validate policy, create explicitly located private
   restart state, and drive a new run. Bind that run to the first policy payload
-  digest and require byte-identical policy content through explicit `--resume`.
+  digest in both a separate create-once no-replace private record and restart
+  state, and require both to agree with byte-identical policy content through
+  explicit `--resume`.
 - Keep policies outside both collections as stable private regular files with
   no group or other access. Keep pymo non-deleting and require the existing
   externally managed absent-`dups` boundary before final fresh evidence.

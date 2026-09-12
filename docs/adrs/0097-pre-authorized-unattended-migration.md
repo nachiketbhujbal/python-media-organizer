@@ -54,10 +54,15 @@ The policy is path-sensitive private data. It must be a stable no-follow
 regular file outside both collections, no larger than one MiB, with one hard
 link and no group or other permissions. Its exact bytes and filesystem identity
 are fixed for the invocation and rechecked throughout the loop. The first
-unattended use also stores the policy payload SHA-256 in private restart state;
-every later unattended resume requires the identical payload. The exact bytes
-may be relocated to another safe private path, but editing, reformatting, or
-substituting policy content is rejected. The coordinator also revalidates
+unattended use creates a separate private create-once, no-replace binding
+record containing the policy payload SHA-256 and the run's exact version,
+roots, options, and creation time, then stores the same digest in private
+restart state. The binding record, state, and byte-identical policy must agree
+on every later unattended resume. The exact policy bytes may be relocated to
+another safe private path, but editing, reformatting, or substituting policy
+content is rejected. Pymo never replaces the independent binding record and
+fails closed if it is missing, unsafe, malformed, or inconsistent. The
+coordinator also revalidates
 strict restart history, typed outcomes, the exact pymo version, saved options,
 roots, creation binding, and both live collection identities between children
 and immediately before a pre-authorized transition.

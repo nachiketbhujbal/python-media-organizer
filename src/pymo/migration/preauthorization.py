@@ -519,14 +519,20 @@ class MigrationPreauthorization:
                 "pre-authorization policy changed during unattended execution"
             )
 
-    def require_binding(self, state: MigrationState) -> None:
+    def require_run_binding(self, state: MigrationState) -> None:
         if (
             self.tool_version != state.tool_version
             or self.baseline != state.baseline
             or self.working != state.working
             or self.options != state.options.as_json()
-            or self.payload_sha256 != state.unattended_policy_sha256
         ):
+            raise MigrationPreauthorizationError(
+                "pre-authorization policy does not match the migration binding"
+            )
+
+    def require_binding(self, state: MigrationState) -> None:
+        self.require_run_binding(state)
+        if self.payload_sha256 != state.unattended_policy_sha256:
             raise MigrationPreauthorizationError(
                 "pre-authorization policy does not match the migration binding"
             )

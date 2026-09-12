@@ -34,14 +34,21 @@ The policy contains collection paths and is private. Its file must:
 - live outside both collection roots; and
 - remain byte-for-byte and identity-stable for the complete invocation.
 
-The first unattended invocation binds the policy payload SHA-256 into that
-run's private restart state. Every later unattended resume must present the
-identical bytes. An exact copy may be supplied from another safe private path,
-but reformatting or changing even otherwise valid policy JSON requires a new
+The first unattended invocation creates
+`pymo-unattended-policy-binding.json` as a separate private, create-once,
+no-replace record in the migration log directory and stores the same policy
+payload SHA-256 in restart state. The record binds the digest to the run's tool
+version, canonical roots, complete options, and creation time. The record,
+restart state, and supplied policy must agree on every later unattended resume.
+An exact policy copy may be supplied from another safe private path, but
+reformatting or changing even otherwise valid policy JSON requires a new
 migration run; it cannot broaden authority for an existing run.
 
-Keep the policy and migration log directory private. Neither is media evidence,
-the collection action journal, quarantine proof, or deletion authority.
+Keep the policy and migration log directory private. The binding record is
+restart authority bookkeeping, not media evidence, the collection action
+journal, quarantine proof, or deletion authority. Pymo creates it with private
+permissions, never replaces it, and fails closed if it is missing, unsafe,
+malformed, or disagrees with either of the other two authority surfaces.
 
 ## Schema 1
 
