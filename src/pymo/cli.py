@@ -73,7 +73,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--file-log-level",
         type=str.upper,
         choices=log_level_choices(),
-        help="minimum conventional level for an explicit diagnostic log",
+        help=(
+            "minimum conventional level for an explicit diagnostic log or "
+            "migration stage logs"
+        ),
     )
     timestamp_output = parser.add_mutually_exclusive_group()
     timestamp_output.add_argument(

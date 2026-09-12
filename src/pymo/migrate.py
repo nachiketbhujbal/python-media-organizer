@@ -1128,19 +1128,31 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="authorize only the pending reviewed apply stage with --run-next",
     )
     output = parser.add_mutually_exclusive_group()
-    output.add_argument("--verbose", action="store_true", default=None)
-    output.add_argument("--quiet", action="store_true", default=None)
+    output.add_argument(
+        "--verbose",
+        action="store_true",
+        default=None,
+        help="save and use DEBUG console and stage-log defaults",
+    )
+    output.add_argument(
+        "--quiet",
+        action="store_true",
+        default=None,
+        help="save and use WARNING console output",
+    )
     output.add_argument(
         "--console-log-level",
         type=str.upper,
         choices=log_level_choices(),
         default=None,
+        help="save the minimum human-readable console logging level",
     )
     parser.add_argument(
         "--file-log-level",
         type=str.upper,
         choices=log_level_choices(),
         default=None,
+        help="save the minimum private per-stage logging level",
     )
     timestamps = parser.add_mutually_exclusive_group()
     timestamps.add_argument("--timestamps", dest="timestamps", action="store_true")
