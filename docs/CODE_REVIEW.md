@@ -122,6 +122,16 @@ quality gates passed before annotated tag `v0.6.2` was created at merge
 `147b0e7`; its tag-triggered build and isolated install also passed. ADR 0092
 records the separate post-tag release-truth reconciliation.
 
+Independent Terra-medium review accepted exact v0.6.3 owner head `8ff9b40`
+without findings from a separate clean detached worktree. The reviewer verified
+the explicit locator and legacy forms, option and root recovery, version,
+lifecycle and outcome preflight, every existing action boundary, path-private
+unsafe-state handling, and no resume-specific parent-substitution regression.
+All 538 tests, including real FFmpeg coverage, passed in reviewer partitions at
+88 percent combined coverage; Ruff, Black, mypy, pre-commit, and package builds
+also passed. Merge, exact-main CI, and release evidence remain separate later
+boundaries.
+
 ## Scan review findings
 
 | ID | Severity | Finding | Resolution target | Status |
