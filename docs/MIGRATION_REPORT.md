@@ -39,7 +39,9 @@ report or creating coordinator state.
 
 `--json` cannot be combined with `--start`, `--run-next`, `--run`,
 `--interactive`, `--accept-status`, or `--confirm-quarantine`. It is a report
-action only.
+action only. Because schema 1 is always path-private, it also rejects
+`--show-files` and `--show-ignored` rather than changing the report shape or
+disclosing paths.
 
 ## Schema 1 compatibility
 

@@ -81,7 +81,7 @@ def completed_child(
             "warning_only": 0,
             "errors": int(failed),
             "findings": (
-                [{"severity": "error", "code": "test-finding", "count": 1}]
+                [{"severity": "error", "code": "invalid_image", "count": 1}]
                 if failed
                 else []
             ),
@@ -970,6 +970,23 @@ def test_stable_report_rejects_workflow_actions_before_any_write(
 
     assert result.returncode == 2
     assert "--json cannot be combined with a workflow action" in result.stderr
+    assert sorted(path.name for path in tmp_path.iterdir()) == before
+
+
+@pytest.mark.parametrize("disclosure", ("--show-files", "--show-ignored"))
+def test_stable_report_rejects_path_disclosure_options_before_any_write(
+    tmp_path: Path, disclosure: str
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    before = sorted(path.name for path in tmp_path.iterdir())
+
+    result = run_pymo(
+        "migrate", baseline, working, "--log-dir", log_dir, "--json", disclosure
+    )
+
+    assert result.returncode == 2
+    assert "--json is always path-private" in result.stderr
     assert sorted(path.name for path in tmp_path.iterdir()) == before
 
 

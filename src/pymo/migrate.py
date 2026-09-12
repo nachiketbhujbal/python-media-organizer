@@ -847,6 +847,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    if args.json and (args.show_files or args.show_ignored):
+        print(
+            "Migration coordinator cannot safely continue: --json is always path-private and cannot show files or ignored paths.",
+            file=sys.stderr,
+        )
+        return 2
     if args.apply and not args.run_next:
         print("--apply requires --run-next.", file=sys.stderr)
         return 2

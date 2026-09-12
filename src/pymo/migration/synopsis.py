@@ -217,13 +217,27 @@ def _inventory_data(outcome: dict[str, Any] | None) -> dict[str, Any] | None:
 
 def _finding_data(item: dict[str, Any]) -> dict[str, Any]:
     code = item["code"]
-    if (
-        not code.isascii()
-        or not code[0].isalnum()
-        or any(
-            not (character.isalnum() or character in {"-", "_"}) for character in code
-        )
-    ):
+    if code not in {
+        "additional_streams",
+        "changed_during_discovery",
+        "changed_during_validation",
+        "classification_fallback",
+        "container_extension_mismatch",
+        "empty_file",
+        "extension_content_mismatch",
+        "invalid_image",
+        "invalid_video",
+        "invalid_video_dimensions",
+        "missing_or_invalid_duration",
+        "missing_video_codec",
+        "missing_video_stream",
+        "multiple_audio_streams",
+        "multiple_video_streams",
+        "symbolic_link_skipped",
+        "unreadable_entry",
+        "unrecognized_media_extension",
+        "unsupported_image_format",
+    }:
         raise MigrationSynopsisError(
             "migration synopsis cannot expose an unsafe finding code"
         )

@@ -20,7 +20,7 @@ All notable changes to `python-media-organizer` will be recorded here.
 - Make report generation read-only: require existing state and its existing
   private lock, preflight the complete history, recheck lifecycle, outcomes,
   and collection identities before emission, and reject every workflow action
-  combined with `--json`.
+  or path-disclosure option combined with `--json`.
 - Keep structured output free of timestamps, debug messages, progress, and the
   normal final runtime line under every global console-output flag. Record the
   contract in ADR 0095 and `docs/MIGRATION_REPORT.md`.
