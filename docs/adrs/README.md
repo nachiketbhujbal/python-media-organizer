@@ -108,3 +108,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0100](0100-v0.6.6-release-truth.md) | V0.6.6 post-tag release truth |
 | [0101](0101-visibility-and-privacy-profiles.md) | Visibility and privacy profiles |
 | [0102](0102-v0.6.7-release-truth.md) | V0.6.7 post-tag release truth |
+| [0103](0103-retained-in-place-duplicate-disposition.md) | Retained-in-place duplicate disposition |
