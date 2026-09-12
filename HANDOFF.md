@@ -1327,9 +1327,9 @@ private state directory, recovered its saved roots and options, advanced three
 stages, and stopped at validation review. The iMac's uv-managed command reports
 `pymo 0.6.3`.
 
-Version 0.6.4 has a clean local release candidate at exact implementation head
-`383165e4fd04d1c087647de8536ba4cf2fb01725`, based on exact current product
-main `22bd3417d297d7e87240c9cf7c76d0d76152360b`. It adds stable, deterministic,
+Version 0.6.4 is released through PR #54 and exact merge
+`df50fcc1bf38150f4752b35d4baff1a07b02cdb6`, based on prior product main
+`22bd3417d297d7e87240c9cf7c76d0d76152360b`. It adds stable, deterministic,
 path-private migration-report schema 1 through explicit `migrate --json`, using
 the same selected aggregate projection as the human synopsis. It requires
 existing private state and lock, emits no ordinary console text, combines with
@@ -1337,23 +1337,39 @@ no workflow or disclosure action, and rechecks the exact lifecycle, outcomes,
 and collection identities before emission without new analysis or persistent
 writes.
 
-The complete owner gate passes all 555 synthetic and real-FFmpeg tests at 88
-percent subprocess-aware coverage, Ruff, Black, mypy, every pre-commit check,
-and clean source/wheel builds. Candidate wheel SHA-256 is
-`ca0b4b9c116c1c73ec964925b15f03c5b988750c91e7d09428f4139955b5e621`;
-source-distribution SHA-256 is
-`dcd5ba9fd94fe4f86e260d9a8463594d3c3c18c8823c33edc9ac43a60dc27ec0`.
-The isolated wheel reports `pymo 0.6.4.dev6+g383165e4f`; it drove all 24 empty
-synthetic stages to a complete observed verdict, emitted byte-identical reports
-through the positional and resume locators, and rejected path disclosure with
-status 2 and no JSON output.
+The final owner head `7c6dcea7036324c2375a406b2fed9456cb1d8e6a`
+passes all 555 synthetic and real-FFmpeg tests at 88 percent subprocess-aware
+coverage, Ruff, Black, mypy, every pre-commit check, clean source/wheel builds,
+and isolated installed-wheel acceptance. Independent Terra-medium review first
+accepted implementation head `5288f06` without findings. After disclosure and
+finding-code hardening, renewed review accepted exact corrected implementation
+head `383165e`; one final renewed review accepted the ledger-only owner head
+`7c6dcea`, all from the separate clean detached reviewer worktree.
 
-Independent Terra-medium review first accepted implementation head `5288f06`
-without findings. After the owner added disclosure-option rejection and a
-public finding-code allowlist, renewed review accepted exact corrected head
-`383165e` without findings in the separate clean detached reviewer worktree.
-No pull request, hosted CI, merge, tag, installed iMac tool change, real-media
-run, or cleanup has occurred for v0.6.4.
+PR run `34665569792` and exact-main run `34665786636` passed Ubuntu, pinned
+Fedora 42, macOS, and the unconditional quality gate. Annotated tag `v0.6.4`
+has object `b5f814db5441d49e3ccbe73f6c345cf5bbfa7013`, peels to the exact merge,
+and release run `34666044549` passed its mainline, tagged-build, version, and
+isolated-install checks. An independent tagged build produced wheel SHA-256
+`5032faeccbfcb2737061887bcb6d3a2ba4c28016f4da8c571e1bb3f350a3b9f6`
+and source-distribution SHA-256
+`409ba4d853a0b91d29ae5b9414647446c40c4d0d6ad26fbdc7738bd6ae022e6d`.
+The installed tagged wheel drove all 24 empty synthetic migration stages to an
+observed complete verdict, emitted byte-identical schema-1 reports through the
+positional and resume locators, and rejected path disclosure with status 2 and
+empty standard output. The iMac's uv-managed command reports `pymo 0.6.4`.
+
+Independent Terra-medium review accepted exact release-truth candidate
+`9617cd3f6874df108d5ce5d7df349edf89c56e12` without findings. The reviewer
+verified the six-file documentation-only range, first-commit ADR reservation,
+release date and status, hosted run evidence, local and remote annotated-tag
+identity, path privacy, pre-commit gate, and clean detached reviewer worktree.
+
+The completed implementation, reviewer, and tagged-build worktrees were clean
+and removed only after their exact contributions were confirmed on released
+`main`; the merged local implementation branch was deleted and its remote
+counterpart is absent. No real collection was run and no retained baseline,
+quarantine, comparison tree, media, or action history was changed or removed.
 
 ADR 0090 keeps candidate documentation truthful until publication evidence
 exists, then reconciles the latest `main` in a separate documentation-only
@@ -1364,6 +1380,8 @@ ADR 0092 applies that same boundary to v0.6.2 without moving or recreating its
 immutable tag.
 ADR 0094 applies that boundary to v0.6.3 without moving or recreating its
 immutable tag.
+ADR 0096 applies that boundary to v0.6.4 without moving or recreating its
+immutable tag.
 
 Operational trials confirm that this fixed sequence reaches the intended
 preservation outcomes, including reviewed validation findings and cache-backed
@@ -1373,8 +1391,8 @@ hours-long media analysis. Version 0.6.0 implements routine safe advancement
 without crossing a decision boundary. Version 0.6.1 adds in-process interactive
 checkpoint handling without weakening the stage engine's evidence or mutation
 boundaries. Version 0.6.2 adds the human synopsis, and version 0.6.3 implements
-the explicit saved-context locator. Version 0.6.4 is the current release
-candidate for stable migration-report schema 1; it does not include unattended
+the explicit saved-context locator. Version 0.6.4 releases stable
+migration-report schema 1; it does not include unattended
 authority, logging or visibility policy, duplicate disposition, queueing, or
 scheduling.
 

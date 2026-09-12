@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.6.4 - Unreleased
+## 0.6.4 - 2026-09-11
 
 - Add explicit `pymo migrate --json` reporting over an existing private
   coordinator run, including the shorter `--resume PRIVATE_STATE_DIRECTORY`

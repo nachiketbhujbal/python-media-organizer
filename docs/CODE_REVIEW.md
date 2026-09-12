@@ -161,7 +161,32 @@ existing-lock zero-write behavior, lifecycle/outcome/root rechecks, the human
 synopsis projection, documentation truth, and path-private failures. The owner
 gate passed all 555 tests at 88 percent subprocess-aware coverage plus Ruff,
 Black, mypy, pre-commit, clean builds, and isolated installed-wheel acceptance.
-Hosted pull-request, exact-main, tag, and release evidence remains pending.
+A final renewed review accepted the ledger-only exact owner head `7c6dcea`
+without findings and independently reproduced all 555 tests at 88 percent
+coverage.
+
+PR #54 run `34665569792` and exact-main run `34665786636` passed Ubuntu,
+pinned Fedora 42, macOS, and the unconditional quality gate. The protected
+merge produced `df50fcc1bf38150f4752b35d4baff1a07b02cdb6`. Annotated tag
+`v0.6.4` has object `b5f814db5441d49e3ccbe73f6c345cf5bbfa7013`, peels to that
+exact merge, and release run `34666044549` passed mainline, tagged-build,
+version, and isolated-install checks. An independent tagged build produced
+wheel SHA-256
+`5032faeccbfcb2737061887bcb6d3a2ba4c28016f4da8c571e1bb3f350a3b9f6`
+and source-distribution SHA-256
+`409ba4d853a0b91d29ae5b9414647446c40c4d0d6ad26fbdc7738bd6ae022e6d`.
+Installed-wheel acceptance completed all 24 empty synthetic stages, emitted an
+observed complete schema-1 report identically through both locators, and
+rejected path disclosure before JSON output. The iMac command reports
+`pymo 0.6.4`. ADR 0096 records the separate post-tag release-truth
+reconciliation.
+
+Independent Terra-medium review accepted exact release-truth candidate
+`9617cd3f6874df108d5ce5d7df349edf89c56e12` without findings. It verified the
+six-file documentation-only range, first-commit ADR reservation, release date
+and status, hosted evidence, local and remote annotated-tag identity, absence
+of private collection data, complete pre-commit gate, and clean detached
+reviewer worktree.
 
 ## Scan review findings
 
