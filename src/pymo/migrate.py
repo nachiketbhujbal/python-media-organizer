@@ -50,6 +50,7 @@ from pymo.migration.synopsis import (
 from pymo.migration.unattended_binding import (
     create_unattended_policy_binding,
     load_unattended_policy_binding,
+    require_private_unattended_log_directory,
     require_unattended_policy_binding,
     unattended_policy_binding_path,
 )
@@ -1199,6 +1200,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             log_dir = _resolve_argument_path(requested_log_dir)
             _prepare_log_dir(log_dir, create=False)
+            if args.unattended is not None:
+                require_private_unattended_log_directory(log_dir)
             state_path = _state_path(log_dir)
             if not os.path.lexists(state_path):
                 raise MigrationCoordinatorError(
@@ -1266,24 +1269,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         policy: MigrationPreauthorization | None = None
         if args.unattended is not None:
             policy = load_preauthorization(args.unattended, roots=(baseline, working))
-        state_path = _state_path(log_dir)
-        initial_unattended_state: MigrationState | None = None
-        if policy is not None and not os.path.lexists(state_path):
-            created = _now()
-            initial_unattended_state = MigrationState(
-                __version__,
-                baseline,
-                working,
-                _initial_options(option_overrides),
-                0,
-                (),
-                created,
-                created,
-                policy.payload_sha256,
-            )
-            policy.require_binding(initial_unattended_state)
-            policy.require_current()
         _prepare_log_dir(log_dir, create=args.start or policy is not None)
+        if policy is not None:
+            require_private_unattended_log_directory(log_dir)
+        state_path = _state_path(log_dir)
         with _state_lock(log_dir, create=not args.json):
             if args.start:
                 if os.path.lexists(state_path):
@@ -1306,12 +1295,31 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _print_status(state)
                 print_synopsis(log_dir, state)
                 return 0
-            if initial_unattended_state is not None and not os.path.lexists(state_path):
-                state = initial_unattended_state
+            if policy is not None and not os.path.lexists(state_path):
+                binding_path = unattended_policy_binding_path(log_dir)
+                created = (
+                    load_unattended_policy_binding(log_dir).created_at
+                    if os.path.lexists(binding_path)
+                    else _now()
+                )
+                state = MigrationState(
+                    __version__,
+                    baseline,
+                    working,
+                    _initial_options(option_overrides),
+                    0,
+                    (),
+                    created,
+                    created,
+                    policy.payload_sha256,
+                )
                 assert policy is not None
                 policy.require_binding(state)
                 policy.require_current()
-                create_unattended_policy_binding(log_dir, state, policy)
+                if os.path.lexists(binding_path):
+                    require_unattended_policy_binding(log_dir, state, policy)
+                else:
+                    create_unattended_policy_binding(log_dir, state, policy)
                 _write_state(state_path, state)
                 print(f"Initialized private migration state: {state_path}")
                 return _run_unattended(log_dir, state_path, state, policy)

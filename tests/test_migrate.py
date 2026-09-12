@@ -896,6 +896,7 @@ def stat_mode(path: Path) -> int:
 
 
 def _state_at(log_dir: Path, baseline: Path, working: Path, next_stage: int) -> None:
+    log_dir.chmod(0o700)
     now = "2026-08-29T12:00:00-04:00"
     options = migrate.CoordinatorOptions(
         False, False, True, None, False, False, None, None, None, None, False
@@ -1811,6 +1812,95 @@ def test_unattended_policy_completes_every_authorized_empty_stage(
     assert binding_path.stat().st_mode & 0o077 == 0
 
 
+def test_unattended_rejects_a_non_private_existing_log_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_dir.chmod(0o777)
+    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    observed: list[list[str]] = []
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: observed.append(command),
+    )
+
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 2
+    )
+    assert observed == []
+    assert list(log_dir.iterdir()) == []
+
+
+def test_unattended_recovers_binding_created_before_initial_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    real_write_state = migrate._write_state
+
+    def fail_initial_state(path: Path, state: migrate.MigrationState) -> None:
+        raise migrate.MigrationCoordinatorError("injected state publication failure")
+
+    monkeypatch.setattr(migrate, "_write_state", fail_initial_state)
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 2
+    )
+    binding_path = policy_binding_file(log_dir)
+    binding_before_retry = binding_path.read_bytes()
+    assert not state_file(log_dir).exists()
+
+    observed: list[list[str]] = []
+    monkeypatch.setattr(migrate, "_write_state", real_write_state)
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: (
+            observed.append(command) or subprocess.CompletedProcess(command, 7)
+        ),
+    )
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 7
+    )
+    assert len(observed) == 1
+    assert binding_path.read_bytes() == binding_before_retry
+    recovered = migrate._load_state(state_file(log_dir))
+    assert recovered.created_at == json.loads(binding_before_retry)["created_at"]
+
+
 def test_unattended_accepts_only_the_expected_status_one_validation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2235,6 +2325,73 @@ def test_unattended_failure_rejects_policy_binding_state_substitution(
     )
     assert len(observed) == 1
     assert binding_path.read_bytes() == binding_before_resume
+
+
+def test_unattended_rejects_replaced_authority_in_a_newly_public_log_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    original = _zero_unattended_policy(
+        tmp_path / "original-policy.json",
+        baseline,
+        working,
+        omitted={"working-validation"},
+    )
+    replacement_policy = _zero_unattended_policy(
+        tmp_path / "replacement-policy.json", baseline, working
+    )
+    replacement_digest = migrate.load_preauthorization(
+        replacement_policy, roots=(baseline, working)
+    ).payload_sha256
+    observed: list[list[str]] = []
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: (
+            observed.append(command) or subprocess.CompletedProcess(command, 7)
+        ),
+    )
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(original),
+            ]
+        )
+        == 7
+    )
+    state_path = state_file(log_dir)
+    migrate._write_state(
+        state_path,
+        replace(
+            migrate._load_state(state_path),
+            unattended_policy_sha256=replacement_digest,
+        ),
+    )
+    binding_path = policy_binding_file(log_dir)
+    binding = json.loads(binding_path.read_bytes())
+    binding["policy_sha256"] = replacement_digest
+    binding_path.write_text(json.dumps(binding) + "\n", encoding="utf-8")
+    binding_path.chmod(0o600)
+    log_dir.chmod(0o777)
+
+    assert (
+        migrate.main(
+            [
+                "--resume",
+                str(log_dir),
+                "--unattended",
+                str(replacement_policy),
+            ]
+        )
+        == 2
+    )
+    assert len(observed) == 1
 
 
 def test_unattended_returns_exact_unexpected_child_status(

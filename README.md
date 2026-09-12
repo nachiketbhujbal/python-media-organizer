@@ -332,7 +332,9 @@ transformation plans with the same counts remain distinct through a
 versioned digest of their private source/target decisions and exact planned
 source bytes. The first unattended use creates a separate no-replace private
 binding record and stores the same policy payload digest in restart state;
-both must agree with the byte-identical policy on every resume. A valid but
+both must agree with the byte-identical policy on every resume. Unattended
+operation also requires its log directory to remain owner-private with safe
+non-writable ancestry. A valid but
 missing or mismatched authorization stops with status 1 before crossing the
 checkpoint; malformed, unsafe, changed, or binding-mismatched authority stops
 with setup status 2. Pymo still never moves or deletes `dups`; a present review

@@ -200,7 +200,9 @@ never duplicate the version in source or static project metadata.
 - `migrate --unattended` must bind the first accepted private policy payload
   SHA-256 into both a separate create-once no-replace private record and
   restart state, and require all three surfaces to agree on every unattended
-  resume. Bind reviewed mutation decisions to descriptor-pinned
+  resume. Require the unattended log directory to remain owner-private with
+  non-writable ancestry, permitting only ownership-safe sticky ancestors. Bind
+  reviewed mutation decisions to descriptor-pinned
   planned source bytes, recompute before apply, and carry organization and
   rename evidence through the journaled move boundary. Never let a replacement
   at the same path or a substituted valid policy inherit prior authority.

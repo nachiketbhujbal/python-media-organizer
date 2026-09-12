@@ -25,6 +25,10 @@ All notable changes to `python-media-organizer` will be recorded here.
   digest in both a separate create-once no-replace private record and restart
   state, and require both to agree with byte-identical policy content through
   explicit `--resume`.
+- Require unattended log directories to be owner-private with safe non-writable
+  ancestry before opening the coordinator lock. Recover an interrupted first
+  state publication from an already-durable matching binding without replacing
+  it.
 - Keep policies outside both collections as stable private regular files with
   no group or other access. Keep pymo non-deleting and require the existing
   externally managed absent-`dups` boundary before final fresh evidence.

@@ -61,7 +61,13 @@ restart state. The binding record, state, and byte-identical policy must agree
 on every later unattended resume. The exact policy bytes may be relocated to
 another safe private path, but editing, reformatting, or substituting policy
 content is rejected. Pymo never replaces the independent binding record and
-fails closed if it is missing, unsafe, malformed, or inconsistent. The
+fails closed if it is missing, unsafe, malformed, or inconsistent. Unattended
+operation requires the log directory itself to be owner-private and rejects
+ancestry writable by another user except where sticky-directory ownership
+semantics protect the next component. It checks this before opening the
+coordinator lock. If binding creation succeeds but initial state publication
+does not, the same byte-identical policy may recover the recorded creation time
+and publish only the missing initial state; it never replaces the binding. The
 coordinator also revalidates
 strict restart history, typed outcomes, the exact pymo version, saved options,
 roots, creation binding, and both live collection identities between children

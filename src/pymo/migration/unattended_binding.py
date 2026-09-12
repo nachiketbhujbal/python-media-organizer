@@ -78,12 +78,46 @@ def _open_log_directory(log_dir: Path) -> int:
         not stat.S_ISDIR(opened.st_mode)
         or not stat.S_ISDIR(current.st_mode)
         or (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino)
+        or opened.st_uid != os.geteuid()
+        or opened.st_mode & 0o077
     ):
         os.close(descriptor)
         raise MigrationPreauthorizationError(
-            "unattended policy binding directory changed during access"
+            "unattended policy binding directory is unsafe or not private"
         )
+    child = opened
+    ancestor = log_dir
+    while ancestor.parent != ancestor:
+        ancestor = ancestor.parent
+        try:
+            parent = os.stat(ancestor, follow_symlinks=False)
+        except OSError as error:
+            os.close(descriptor)
+            raise MigrationPreauthorizationError(
+                "unattended policy binding ancestry cannot be inspected safely"
+            ) from error
+        if not stat.S_ISDIR(parent.st_mode):
+            os.close(descriptor)
+            raise MigrationPreauthorizationError(
+                "unattended policy binding ancestry is unsafe"
+            )
+        if parent.st_mode & 0o022 and not (
+            parent.st_mode & stat.S_ISVTX
+            and os.geteuid() in {parent.st_uid, child.st_uid}
+        ):
+            os.close(descriptor)
+            raise MigrationPreauthorizationError(
+                "unattended policy binding ancestry is writable by another user"
+            )
+        child = parent
     return descriptor
+
+
+def require_private_unattended_log_directory(log_dir: Path) -> None:
+    """Require an owner-private directory with non-substitutable ancestry."""
+
+    descriptor = _open_log_directory(log_dir)
+    os.close(descriptor)
 
 
 def _write_all(descriptor: int, payload: bytes) -> None:
