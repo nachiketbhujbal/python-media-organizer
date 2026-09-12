@@ -192,6 +192,11 @@ never duplicate the version in source or static project metadata.
   acknowledged, and require a human-managed absent-`dups` checkpoint before
   fresh final evidence. Never rescue-copy, quarantine, delete, batch past a
   checkpoint, or write persistent logs by default.
+- `migrate --resume` may locate only one explicitly named existing private
+  state directory. Recover roots and options from strict state, accept only
+  exactly matching option repetitions, revalidate all ordinary state, outcome,
+  root, version, separation, and checkpoint boundaries, and never auto-discover
+  state or treat restart bookkeeping as evidence or authority.
 
 ## Package layout and tools
 
@@ -230,7 +235,7 @@ never duplicate the version in source or static project metadata.
   mutation policy.
 - `src/pymo/migration/workflow.py` and
   `src/pymo/migration/coordinator_state.py`: ordered guided-runbook arguments
-  and private fail-closed schema-1 restart state respectively.
+  and private fail-closed schema-2 restart state respectively.
 - `src/pymo/correct_extensions.py`: complete discovery, fresh evidence,
   collision planning, reversible apply/undo, and verified truthful-extension
   correction.

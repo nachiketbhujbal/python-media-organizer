@@ -111,6 +111,9 @@ The same adversarial method was repeated after the first validation release.
 | OUT-R01 | High | Outcome creation checked parent separation by pathname and then opened the leaf by pathname, leaving a parent-substitution race that could redirect the private write; reads likewise lacked a pinned parent boundary. | 0.6.2 | Resolved by opening the outcome parent as a no-follow directory descriptor, rechecking its identity and collection separation, performing leaf reads and exclusive creation relative to that descriptor, validating leaf identity through access, and reproducing parent and leaf substitution refusals |
 | CACHE-R01 | Medium | A cold exact-image run labeled byte-identical same-run pixel memoization as persistent cache reuse in the private outcome and human synopsis. | 0.6.2 | Resolved by accounting persistent reuse, fresh computation, same-run memoization, and persisted records separately; a cold byte-identical pair now records zero persistent reuse, three computations, and three persisted records |
 | SYN-R01 | Medium | After external quarantine confirmation, the synopsis still described duplicate review bytes as currently reclaimable from the working collection even though the checkpoint required the working `dups` path to be absent. | 0.6.2 | Resolved by presenting the amount as historical review storage isolated before external retention, while retaining the explicit statement that pymo neither inspected external retention nor proved physical capacity reclaimed |
+| GUIDE-014 | High | Automatically discovering restart state could select or disclose the wrong collection, while accepting an ambiguous locator could dispatch a child against unintended roots. | 0.6.3 | Resolved by requiring one explicit private state directory and rejecting its combination with positional collections, `--log-dir`, or initialization |
+| GUIDE-015 | High | Resume-time option overrides or a shorthand dispatch path could weaken the recorded run binding, bypass a human checkpoint, or avoid strict outcome-history validation. | 0.6.3 | Resolved by recovering roots and options from strict state, accepting only exactly matching option repetitions, and routing every action through the existing checkpoint dispatcher after complete synopsis-history preflight |
+| GUIDE-016 | Medium | Making positional roots optional for the resume form could accidentally make incomplete or locator-free legacy invocations appear valid. | 0.6.3 | Resolved by requiring both positional collections whenever `--resume` is absent and returning setup status 2 without creating state or dispatching a child |
 
 Renewed independent review accepted exact v0.6.2 owner head `2fdcfed` without
 findings after reproducing the closures of STATE-R01, OUT-R01, CACHE-R01, and
@@ -118,6 +121,16 @@ SYN-R01 from a separate detached worktree. PR #50 and exact-main full-platform
 quality gates passed before annotated tag `v0.6.2` was created at merge
 `147b0e7`; its tag-triggered build and isolated install also passed. ADR 0092
 records the separate post-tag release-truth reconciliation.
+
+Independent Terra-medium review accepted exact v0.6.3 owner head `8ff9b40`
+without findings from a separate clean detached worktree. The reviewer verified
+the explicit locator and legacy forms, option and root recovery, version,
+lifecycle and outcome preflight, every existing action boundary, path-private
+unsafe-state handling, and no resume-specific parent-substitution regression.
+All 538 tests, including real FFmpeg coverage, passed in reviewer partitions at
+88 percent combined coverage; Ruff, Black, mypy, pre-commit, and package builds
+also passed. Merge, exact-main CI, and release evidence remain separate later
+boundaries.
 
 ## Scan review findings
 

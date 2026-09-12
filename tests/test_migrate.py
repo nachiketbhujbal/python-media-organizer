@@ -436,6 +436,246 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
     )
 
 
+def test_resume_status_recovers_recorded_collections_and_options(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 4)
+    before = state_file(log_dir).read_bytes()
+
+    result = run_pymo("migrate", "--resume", log_dir)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Migration progress: 4/24 stage(s) complete" in result.stdout
+    assert "Next checkpoint: initial-verification" in result.stdout
+    assert "Migration synopsis" in result.stdout
+    assert str(baseline) not in result.stdout + result.stderr
+    assert str(working) not in result.stdout + result.stderr
+    assert state_file(log_dir).read_bytes() == before
+
+
+def test_resume_run_dispatches_saved_context_and_stops_at_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 4)
+    state = migrate._load_state(state_file(log_dir))
+    saved_probe = tmp_path / "saved-ffprobe"
+    saved_options = migrate.CoordinatorOptions(
+        False,
+        False,
+        True,
+        None,
+        False,
+        True,
+        None,
+        str(saved_probe),
+        17,
+        None,
+        False,
+    )
+    migrate._write_state(
+        state_file(log_dir),
+        migrate.MigrationState(
+            state.tool_version,
+            state.baseline,
+            state.working,
+            saved_options,
+            state.next_stage,
+            state.attempts,
+            state.created_at,
+            state.updated_at,
+        ),
+    )
+    observed: list[list[str]] = []
+
+    def completed(
+        command: list[str], *, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        return completed_child(command)
+
+    monkeypatch.setattr(migrate.subprocess, "run", completed)
+
+    assert migrate.main(["--resume", str(log_dir), "--run"]) == 0
+
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == 6
+    assert len(observed) == 2
+    assert str(baseline.resolve()) in observed[0]
+    assert all(str(working.resolve()) in command for command in observed)
+    assert all("--apply" not in command for command in observed)
+    assert "--show-files" in observed[0]
+    assert str(saved_probe) in observed[0]
+    assert "17" in observed[0]
+    assert str(saved_probe) in observed[1]
+
+
+def test_resume_supports_the_existing_reviewed_apply_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    observed: list[list[str]] = []
+
+    def completed(
+        command: list[str], *, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        return completed_child(command)
+
+    monkeypatch.setattr(migrate.subprocess, "run", completed)
+
+    assert migrate.main(["--resume", str(log_dir), "--run-next", "--apply"]) == 0
+    assert len(observed) == 1
+    assert "correct-extensions" in observed[0]
+    assert observed[0][-1] == "--apply"
+    assert migrate._load_state(state_file(log_dir)).next_stage == 7
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ("--resume", "{log}", "{baseline}"),
+        ("--resume", "{log}", "--log-dir", "{other}"),
+        ("--resume", "{log}", "--start"),
+        ("{baseline}",),
+        (),
+    ),
+)
+def test_resume_and_collection_locator_forms_are_unambiguous(
+    tmp_path: Path,
+    arguments: tuple[str, ...],
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 0)
+    before = state_file(log_dir).read_bytes()
+    values = {
+        "{log}": str(log_dir),
+        "{baseline}": str(baseline),
+        "{other}": str(tmp_path / "other"),
+    }
+
+    result = migrate.main([values.get(argument, argument) for argument in arguments])
+
+    assert result == 2
+    assert state_file(log_dir).read_bytes() == before
+
+
+def test_resume_accepts_only_matching_recorded_option_repetitions(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 0)
+    before = state_file(log_dir).read_bytes()
+
+    assert migrate.main(["--resume", str(log_dir), "--timestamps"]) == 0
+    assert migrate.main(["--resume", str(log_dir), "--workers", "2"]) == 2
+    assert state_file(log_dir).read_bytes() == before
+
+
+def test_resume_requires_existing_state_without_creating_a_lock(tmp_path: Path) -> None:
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+
+    assert migrate.main(["--resume", str(log_dir)]) == 2
+    assert list(log_dir.iterdir()) == []
+
+
+def test_resume_supports_validation_acknowledgement(tmp_path: Path) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 2)
+    state = migrate._load_state(state_file(log_dir))
+    failed = _failed_validation_attempt(
+        log_dir, baseline, working, state, "baseline-validation"
+    )
+    migrate._write_state(
+        state_file(log_dir), migrate._updated_state(state, failed, advance=False)
+    )
+
+    assert migrate.main(["--resume", str(log_dir), "--accept-status"]) == 0
+    resumed = migrate._load_state(state_file(log_dir))
+    assert resumed.next_stage == 3
+    assert resumed.attempts[-1].action == "acknowledge-status"
+
+
+def test_resume_supports_external_quarantine_confirmation(tmp_path: Path) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 21)
+
+    assert migrate.main(["--resume", str(log_dir), "--confirm-quarantine"]) == 0
+    resumed = migrate._load_state(state_file(log_dir))
+    assert resumed.next_stage == 22
+    assert resumed.attempts[-1].action == "confirm-quarantine"
+
+
+def test_resume_interactive_decline_preserves_the_pending_apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    before = state_file(log_dir).read_bytes()
+    monkeypatch.setattr(migrate.sys, "stdin", TerminalInput("n\n"))
+
+    assert migrate.main(["--resume", str(log_dir), "--interactive"]) == 0
+    assert state_file(log_dir).read_bytes() == before
+
+
+def test_resume_rejects_linked_locator_and_changed_recorded_root_privately(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 0)
+    before = state_file(log_dir).read_bytes()
+    linked_log = tmp_path / "linked-private-logs"
+    linked_log.symlink_to(log_dir, target_is_directory=True)
+    messages: list[tuple[str, object]] = []
+    observed: list[list[str]] = []
+    monkeypatch.setattr(
+        migrate,
+        "print",
+        lambda message, *, file=None: messages.append((message, file)),
+    )
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: observed.append(command),
+    )
+
+    assert migrate.main(["--resume", str(linked_log), "--run-next"]) == 2
+    assert "symbolic link" in messages[-1][0]
+    assert str(tmp_path) not in messages[-1][0]
+
+    displaced = tmp_path / "displaced-baseline"
+    baseline.rename(displaced)
+    baseline.symlink_to(displaced, target_is_directory=True)
+    assert migrate.main(["--resume", str(log_dir), "--run-next"]) == 2
+    assert "no longer resolve to their saved paths" in messages[-1][0]
+    assert str(tmp_path) not in messages[-1][0]
+    assert observed == []
+    assert state_file(log_dir).read_bytes() == before
+
+
 def test_child_options_are_forwarded_only_to_applicable_stages(tmp_path: Path) -> None:
     baseline, working = collections(tmp_path)
     options = migrate.CoordinatorOptions(

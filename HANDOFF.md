@@ -46,6 +46,10 @@ records for accepted review and final sign-off.
 Version 0.6.2 adds a concise path-private human synopsis projected from strict
 private aggregate stage outcomes. It does not create preservation evidence,
 stabilize a public report schema, or grant deletion authority.
+Version 0.6.3 adds `migrate --resume PRIVATE_STATE_DIRECTORY` as an explicit
+locator for an existing strict coordinator run. It recovers the recorded roots,
+options, version, lifecycle, checkpoint, and outcome references without
+searching for state or adding evidence, authorization, or a new checkpoint.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -1214,6 +1218,17 @@ fresh evidence, action history, quarantine proof, a stable report API, or
 deletion authority. ADR 0091 records the boundary; version 0.6.4 remains the
 separate public machine-report contract.
 
+Version 0.6.3 adds `--resume PRIVATE_STATE_DIRECTORY` as an alternative locator
+for every existing continuation action. The named directory must already
+contain strict private state. The coordinator recovers its canonical roots and
+common options, requires the exact installed pymo version, revalidates root/log
+separation and all required outcomes, and then uses the same status,
+one-child, safe-loop, interactive, acknowledgement, quarantine, or reviewed
+apply path. It never auto-discovers state, accepts conflicting overrides, or
+turns restart bookkeeping into evidence or authority. The original positional
+roots plus `--log-dir` form remains supported. ADR 0093 records the decision;
+version 0.6.4 remains a separate report-artifact release.
+
 Version 0.6.1 adds `--interactive` over the same loop. It requires terminal
 input and asks one conservative `[y/N]` question for each successful or
 status-one validation review, each pending reviewed apply, external quarantine,
@@ -1292,6 +1307,8 @@ without crossing a decision boundary. Version 0.6.1 adds in-process interactive
 checkpoint handling without weakening the stage engine's evidence or mutation
 boundaries. Version 0.6.2 adds the human synopsis while leaving saved resume
 context and the stable machine-readable report as separate release units.
+Version 0.6.3 implements the explicit saved-context locator while leaving the
+stable machine-readable report to version 0.6.4.
 
 ## Media validation
 

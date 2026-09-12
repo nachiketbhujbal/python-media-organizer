@@ -706,16 +706,56 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
             return status
 
 
+def _dispatch_existing_state(
+    args: argparse.Namespace,
+    log_dir: Path,
+    state_path: Path,
+    state: MigrationState,
+) -> int:
+    validate_synopsis_history(log_dir, state)
+    if args.run_next:
+        status = _run_next(log_dir, state_path, state, args.apply)
+        updated = _load_state(state_path)
+        print_synopsis(log_dir, updated)
+        return status
+    if args.run:
+        return _run_until_checkpoint(log_dir, state_path, state)
+    if args.interactive:
+        return _run_interactive(log_dir, state_path, state)
+    if args.accept_status:
+        status = _accept_status(state_path, state)
+        print_synopsis(log_dir, _load_state(state_path))
+        return status
+    if args.confirm_quarantine:
+        status = _confirm_quarantine(state_path, state)
+        print_synopsis(log_dir, _load_state(state_path))
+        return status
+    _print_status(state)
+    _print_plan(state.next_stage)
+    print_synopsis(log_dir, state)
+    return 0
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Guide one baseline and working collection through the production runbook."
     )
-    parser.add_argument("baseline", type=Path, help="unchanged baseline collection")
-    parser.add_argument("working", type=Path, help="working collection to transform")
+    parser.add_argument(
+        "baseline", nargs="?", type=Path, help="unchanged baseline collection"
+    )
+    parser.add_argument(
+        "working", nargs="?", type=Path, help="working collection to transform"
+    )
     parser.add_argument(
         "--log-dir",
         type=Path,
         help="explicit private directory for restart state and per-stage logs",
+    )
+    parser.add_argument(
+        "--resume",
+        type=Path,
+        metavar="PRIVATE_STATE_DIRECTORY",
+        help="resume using roots and options from an existing private state directory",
     )
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument(
@@ -785,7 +825,73 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 2
 
+    if args.resume is not None:
+        if args.baseline is not None or args.working is not None:
+            print(
+                "Migration coordinator cannot safely continue: --resume cannot be combined with positional collections.",
+                file=sys.stderr,
+            )
+            return 2
+        if args.log_dir is not None:
+            print(
+                "Migration coordinator cannot safely continue: --resume cannot be combined with --log-dir.",
+                file=sys.stderr,
+            )
+            return 2
+        if args.start:
+            print(
+                "Migration coordinator cannot safely continue: --resume cannot initialize migration state.",
+                file=sys.stderr,
+            )
+            return 2
+    elif args.baseline is None or args.working is None:
+        print(
+            "Migration coordinator cannot safely continue: baseline and working collections are required unless --resume is used.",
+            file=sys.stderr,
+        )
+        return 2
+
     try:
+        option_overrides = _option_overrides(args)
+        if args.resume is not None:
+            requested_log_dir = _expand_argument_path(args.resume)
+            if requested_log_dir.is_symlink():
+                raise MigrationCoordinatorError(
+                    "private resume directory must not be a symbolic link"
+                )
+            log_dir = _resolve_argument_path(requested_log_dir)
+            _prepare_log_dir(log_dir, create=False)
+            state_path = _state_path(log_dir)
+            if not os.path.lexists(state_path):
+                raise MigrationCoordinatorError(
+                    "no migration restart state exists in the private resume directory"
+                )
+            with _state_lock(log_dir):
+                if not os.path.lexists(state_path):
+                    raise MigrationCoordinatorError(
+                        "no migration restart state exists in the private resume directory"
+                    )
+                state = _load_state(state_path)
+                if state.tool_version != __version__:
+                    raise MigrationCoordinatorError(
+                        "restart state was created by a different pymo version"
+                    )
+                baseline = _resolve_argument_path(state.baseline)
+                working = _resolve_argument_path(state.working)
+                if baseline != state.baseline or working != state.working:
+                    raise MigrationCoordinatorError(
+                        "recorded collection roots no longer resolve to their saved paths"
+                    )
+                _validate_roots(baseline, working)
+                if not _disjoint(log_dir, baseline) or not _disjoint(log_dir, working):
+                    raise MigrationCoordinatorError(
+                        "private resume directory must be distinct and non-nested with both collections"
+                    )
+                _require_matching_options(option_overrides, state)
+                return _dispatch_existing_state(args, log_dir, state_path, state)
+
+        assert args.baseline is not None
+        assert args.working is not None
         baseline = _resolve_argument_path(args.baseline)
         working = _resolve_argument_path(args.working)
         _validate_roots(baseline, working)
@@ -817,7 +923,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise MigrationCoordinatorError(
                 "private log directory must be distinct and non-nested with both collections"
             )
-        option_overrides = _option_overrides(args)
         _prepare_log_dir(log_dir, create=args.start)
         state_path = _state_path(log_dir)
         with _state_lock(log_dir):
@@ -856,28 +961,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "restart state was created by a different pymo version"
                 )
             _require_matching_options(option_overrides, state)
-            validate_synopsis_history(log_dir, state)
-            if args.run_next:
-                status = _run_next(log_dir, state_path, state, args.apply)
-                updated = _load_state(state_path)
-                print_synopsis(log_dir, updated)
-                return status
-            if args.run:
-                return _run_until_checkpoint(log_dir, state_path, state)
-            if args.interactive:
-                return _run_interactive(log_dir, state_path, state)
-            if args.accept_status:
-                status = _accept_status(state_path, state)
-                print_synopsis(log_dir, _load_state(state_path))
-                return status
-            if args.confirm_quarantine:
-                status = _confirm_quarantine(state_path, state)
-                print_synopsis(log_dir, _load_state(state_path))
-                return status
-            _print_status(state)
-            _print_plan(state.next_stage)
-            print_synopsis(log_dir, state)
-            return 0
+            return _dispatch_existing_state(args, log_dir, state_path, state)
     except (MigrationCoordinatorError, MigrationSynopsisError) as error:
         print(
             f"Migration coordinator cannot safely continue: {error}.", file=sys.stderr
