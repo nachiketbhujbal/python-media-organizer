@@ -1513,7 +1513,7 @@ without findings after checking the complete documentation delta, release and
 tag facts, artifact hashes, privacy boundary, ADR ordering, and locked
 documentation gate.
 
-Version 0.6.7 is an unreleased candidate under ADR 0101. It adds global
+Version 0.6.7 is released under ADR 0101. It adds global
 `--visibility full`, `private`, and `quiet` profiles over existing console and
 path-disclosure controls while preserving the path-private default, opt-in
 persistence, structured report schemas, and migration authority. Full selects
@@ -1525,14 +1525,35 @@ cache-status, and migration-report privacy contracts remain stronger than the
 full profile. Migration stores only the existing resolved schema-3 options, so
 resume semantics require no new private-state schema.
 
-The candidate changes only unified CLI selection and forwarding plus
-collection-neutral tests and documentation. It adds no diagnostic persistence,
-report-schema field, state discovery, media mutation, checkpoint authority,
-duplicate disposition, quarantine movement, queue, scheduler, deletion, or
-exact-media behavior. Independent exact-SHA review, complete local and hosted
-gates, protected merge, exact-main verification, annotated tag, installed
-artifact proof, and post-tag release truth remain required before calling
-version 0.6.7 released.
+Independent Terra-medium review accepted implementation head
+`76f79bdb45552ed9451ad77673fd312b0e179b65` without findings after the owner
+rejected the first candidate for a profiled child-help defect. Renewed no-drift
+review accepted final ledger head
+`d07acffe5befae5f202b61f7d0c3df8bd70d13cb`. The complete owner and reviewer
+gates passed all 606 synthetic and real-FFmpeg tests at 88 percent
+subprocess-aware coverage plus the locked static, pre-commit, build, and
+installed-candidate checks.
+
+PR #60 full-platform run `34715221308` passed before the protected merge
+produced `eac3a94a6d298ea87b56e470f106d7f3bb25746c`. Exact-main run
+`34715467561` passed the same platform set and unconditional gate. Annotated
+tag `v0.6.7` has object
+`e489836f597d08398cefb95d4eecc69b9090f23c`, peels to that merge, and release
+run `34715686329` passed. A detached tagged build produced wheel SHA-256
+`fad2c9b5fe9e5b57bc42f8dc585c122dc1abc085efe2eb676f0e8813912aefbc` and
+source-distribution SHA-256
+`fff46b1390ee3fdbcecbea00692c2b3b9fbe0b77594beab69704592fd4bfc641`.
+The artifacts carry version 0.6.7 and the exact Apache-2.0 license, packaging
+safety and isolated tagged-wheel checks passed, and the iMac's uv-managed
+command reports `pymo 0.6.7`.
+
+ADR 0102 applies the separate post-tag release-truth boundary without moving
+or recreating the immutable tag. The release changes only unified CLI
+selection and forwarding plus collection-neutral tests and documentation. It
+adds no diagnostic persistence, report-schema field, state discovery, media
+mutation, checkpoint authority, duplicate disposition, quarantine movement,
+queue, scheduler, deletion, or exact-media behavior. No retained private media
+collection or rollback evidence was used, changed, or removed.
 
 ## Media validation
 
@@ -1612,7 +1633,7 @@ behavioral tests.
   never reveals them.
 - No persistent log is created by default.
 
-The version 0.6.7 candidate adds `--visibility full`, `private`, and `quiet`.
+Version 0.6.7 adds `--visibility full`, `private`, and `quiet`.
 Full chooses console `DEBUG` and the existing ignored/file disclosure options;
 private chooses `INFO` without paths; quiet chooses `WARNING` without paths.
 The path-private default remains unchanged. Profiles conflict with individual
