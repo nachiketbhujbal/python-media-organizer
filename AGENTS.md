@@ -188,16 +188,20 @@ never duplicate the version in source or static project metadata.
   strict state as exactly one expected successful attempt without changing its
   root/version/options/creation binding, revalidate both collection identities
   between children, pause after every successful validation so warning-only
-  findings remain reviewable, and stop at every apply, external-quarantine,
+  findings remain reviewable, and stop at every apply, duplicate-disposition,
   failure, unsafe-state, and final-signoff boundary. Without an explicit private
   log directory it is
   zero-write. Restart state is bookkeeping rather than evidence or action
   history; bind it to the exact roots, pymo version, options, and ordered
   attempt lifecycle. Preserve every preview and explicit apply boundary, return
   real child statuses, permit only reviewed validation status 1 to be
-  acknowledged, and require a human-managed absent-`dups` checkpoint before
-  fresh final evidence. Never rescue-copy, quarantine, delete, batch past a
-  checkpoint, or write persistent logs by default.
+  acknowledged. At duplicate disposition, accept only an explicit
+  retained-in-place decision or the existing human-managed absent-`dups`
+  external-quarantine confirmation before fresh final evidence. Retention must
+  require a real non-symbolic `dups` directory when reviewed files exist, keep
+  it physically in place, and report that pymo reclaimed no storage. Never
+  rescue-copy, quarantine, delete, batch past a checkpoint, or write persistent
+  logs by default.
 - `migrate --resume` may locate only one explicitly named existing private
   state directory. Recover roots and options from strict state, accept only
   exactly matching option repetitions, revalidate all ordinary state, outcome,
@@ -216,7 +220,7 @@ never duplicate the version in source or static project metadata.
 - `migrate --json` is an explicit read-only projection of one existing strict
   coordinator run. Require its existing private state and lock, validate the
   complete lifecycle and typed outcome history, recheck state, outcomes, and
-  collection identities before emitting deterministic path-private schema 1,
+  collection identities before emitting deterministic path-private schema 2,
   and never combine it with a workflow action or create state. Keep the human
   synopsis on the same projection. Change the schema version before changing
   any public field, type, allowed value, or meaning.
@@ -258,9 +262,9 @@ never duplicate the version in source or static project metadata.
   mutation policy.
 - `src/pymo/migration/workflow.py` and
   `src/pymo/migration/coordinator_state.py`: ordered guided-runbook arguments
-  and private fail-closed schema-2 restart state respectively.
+  and private fail-closed schema-4 restart state respectively.
 - `src/pymo/migration/synopsis.py`: the selected aggregate projection shared by
-  stable migration-report schema 1 and its human synopsis rendering; it owns no
+  stable migration-report schema 2 and its human synopsis rendering; it owns no
   media analysis, workflow authority, or persistent output path.
 - `src/pymo/migration/preauthorization.py`: strict private unattended-policy
   schema, file safety, binding, and aggregate checkpoint matching; it owns no
@@ -474,5 +478,8 @@ private non-interactive policy bound to the exact version, roots, options,
 ordered checkpoint decisions, expected aggregate typed outcomes, stable source
 bytes, and the first policy payload digest stored in restart state; missing or
 changed authority stops before the transition, and external quarantine remains
-human-managed.
+human-managed. Version 0.6.8 adds an explicit retained-in-place duplicate
+disposition without moving or deleting review files, preserves the existing
+external-quarantine confirmation as a separate choice, and advances to fresh
+ordinary final evidence only after recording the selected disposition.
 Rescue copying and permanent deletion remain research.

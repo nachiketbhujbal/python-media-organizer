@@ -17,7 +17,9 @@ from pymo.migration.coordinator_state import (
 )
 
 # This identifies the public pre-authorization policy compatibility contract.
-MIGRATION_PREAUTHORIZATION_SCHEMA_VERSION = 1
+# Version 2 makes duplicate disposition explicit and preserves its selected
+# decision for unattended dispatch.
+MIGRATION_PREAUTHORIZATION_SCHEMA_VERSION = 2
 
 
 class MigrationPreauthorizationError(RuntimeError):
@@ -48,7 +50,7 @@ _CHECKPOINT_ORDER = {
     "rename-apply": 12,
     "image-duplicates-apply": 15,
     "video-duplicates-apply": 18,
-    "external-quarantine": 21,
+    "duplicate-disposition": 21,
     "final-working-validation": 22,
     "final-signoff": 24,
 }
@@ -255,18 +257,18 @@ def _validate_decision_digest(value: object) -> str:
     return value
 
 
-def _validate_quarantine_expected(value: object) -> dict[str, Any]:
+def _validate_disposition_expected(value: object) -> dict[str, Any]:
     expected = _require_exact_fields(
         value,
         {"status", "review_files", "review_bytes", "verdict", "disposition"},
-        "quarantine expectation",
+        "duplicate disposition expectation",
     )
     if expected["status"] != 0:
         raise MigrationPreauthorizationError(
-            "pre-authorization policy requires a successful quarantine simulation"
+            "pre-authorization policy requires a successful duplicate-disposition simulation"
         )
-    _require_int(expected["review_files"], "quarantine review files")
-    _require_int(expected["review_bytes"], "quarantine review bytes")
+    _require_int(expected["review_files"], "duplicate disposition review files")
+    _require_int(expected["review_bytes"], "duplicate disposition review bytes")
     if (
         expected["verdict"] != "complete"
         or expected["disposition"] != "eligible-for-human-quarantine-review"
@@ -319,7 +321,9 @@ def _validate_signoff_expected(value: object) -> dict[str, Any]:
     return expected
 
 
-def _validate_authorization(value: object) -> tuple[str, dict[str, Any]]:
+def _validate_authorization(
+    value: object,
+) -> tuple[str, tuple[str, dict[str, Any]]]:
     item = _require_exact_fields(
         value, {"checkpoint", "decision", "expected"}, "authorization"
     )
@@ -354,12 +358,12 @@ def _validate_authorization(value: object) -> tuple[str, dict[str, Any]]:
                 raise MigrationPreauthorizationError(
                     "pre-authorization policy operation does not match its checkpoint"
                 )
-    elif checkpoint == "external-quarantine":
-        if decision != "confirm-quarantine":
+    elif checkpoint == "duplicate-disposition":
+        if decision not in {"confirm-quarantine", "retain-dups"}:
             raise MigrationPreauthorizationError(
-                "pre-authorization policy has an unrecognized quarantine decision"
+                "pre-authorization policy has an unrecognized duplicate disposition"
             )
-        expected = _validate_quarantine_expected(item["expected"])
+        expected = _validate_disposition_expected(item["expected"])
     elif checkpoint == "final-signoff":
         if decision != "signoff":
             raise MigrationPreauthorizationError(
@@ -370,7 +374,7 @@ def _validate_authorization(value: object) -> tuple[str, dict[str, Any]]:
         raise MigrationPreauthorizationError(
             "pre-authorization policy has an unknown checkpoint"
         )
-    return checkpoint, expected
+    return checkpoint, (decision, expected)
 
 
 def _object_without_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -483,7 +487,7 @@ def _apply_projection(outcome: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _quarantine_projection(outcome: dict[str, Any]) -> dict[str, Any]:
+def _disposition_projection(outcome: dict[str, Any]) -> dict[str, Any]:
     data = outcome["data"]
     return {
         "status": outcome["status"],
@@ -507,7 +511,7 @@ class MigrationPreauthorization:
     baseline: Path
     working: Path
     options: dict[str, bool | int | str | None]
-    authorizations: dict[str, dict[str, Any]]
+    authorizations: dict[str, tuple[str, dict[str, Any]]]
 
     def require_current(self) -> None:
         payload, identity = _read_private_policy(self.path)
@@ -537,18 +541,19 @@ class MigrationPreauthorization:
                 "pre-authorization policy does not match the migration binding"
             )
 
-    def require_checkpoint(self, checkpoint: str, outcome: dict[str, Any]) -> None:
-        expected = self.authorizations.get(checkpoint)
-        if expected is None:
+    def require_checkpoint(self, checkpoint: str, outcome: dict[str, Any]) -> str:
+        authorization = self.authorizations.get(checkpoint)
+        if authorization is None:
             raise MigrationPreauthorizationMismatch(
                 f"checkpoint {checkpoint} is not pre-authorized"
             )
+        decision, expected = authorization
         if checkpoint in _VALIDATION_CHECKPOINTS:
             observed = _validation_projection(outcome)
         elif checkpoint in _APPLY_PREVIEWS:
             observed = _apply_projection(outcome)
-        elif checkpoint == "external-quarantine":
-            observed = _quarantine_projection(outcome)
+        elif checkpoint == "duplicate-disposition":
+            observed = _disposition_projection(outcome)
         elif checkpoint == "final-signoff":
             observed = _signoff_projection(outcome)
         else:  # pragma: no cover - parsed policies cannot reach this branch.
@@ -559,6 +564,7 @@ class MigrationPreauthorization:
             raise MigrationPreauthorizationMismatch(
                 f"observed result for {checkpoint} differs from its pre-authorization"
             )
+        return decision
 
 
 def load_preauthorization(

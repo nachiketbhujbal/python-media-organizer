@@ -307,7 +307,7 @@ supported.
 
 `--json` is a report-only action over an existing private coordinator run. It
 preflights the exact restart lifecycle and every typed outcome, rechecks state,
-outcomes, and both collection identities, and emits one compact schema-1 object
+outcomes, and both collection identities, and emits one compact schema-2 object
 without timestamps or other console text. It never scans media, advances a
 stage, creates state, writes either collection or action history, or grants
 quarantine, deletion, verification, or sign-off authority. It cannot be
@@ -315,7 +315,7 @@ combined with a workflow action. Schema fields and compatibility rules are in
 the [stable migration report contract](docs/MIGRATION_REPORT.md).
 
 `--run` executes routine successful evidence and preview stages until it reaches
-the next validation review, apply, external-quarantine, failure, or final-signoff
+the next validation review, apply, duplicate-disposition, failure, or final-signoff
 boundary. It pauses after every successful validation because warnings retain
 status 0 and must remain visible for review. It does not answer questions or
 authorize a mutation. A successful preview therefore pauses before the separate
@@ -325,7 +325,7 @@ routine work with `--run` after that single reviewed apply. The original
 desired.
 
 `--unattended PRIVATE_POLICY_JSON` uses the same one-stage engine without
-terminal questions. The private schema-1 policy binds the exact pymo version,
+terminal questions. The private schema-2 policy binds the exact pymo version,
 canonical roots, saved options, separately enumerated checkpoint decisions,
 and exact aggregate typed results expected at each boundary. Different
 transformation plans with the same counts remain distinct through a
@@ -337,14 +337,14 @@ operation also requires its log directory to remain owner-private with safe
 non-writable ancestry. A valid but
 missing or mismatched authorization stops with status 1 before crossing the
 checkpoint; malformed, unsafe, changed, or binding-mismatched authority stops
-with setup status 2. Pymo still never moves or deletes `dups`; a present review
-tree pauses the unattended run until the operator retains it externally and
-resumes with the same byte-identical policy payload. See the
+with setup status 2. The policy must select either retained-in-place or the
+existing external-quarantine confirmation at duplicate disposition. Pymo
+still never moves or deletes `dups`. See the
 [unattended policy contract](docs/MIGRATION_POLICY.md).
 
 `--interactive` uses the same one-stage engine and routine advancement, but
 keeps a terminal session open to ask separately about successful or status-one
-validation review, each pending reviewed apply, external quarantine, and final
+validation review, each pending reviewed apply, duplicate disposition, and final
 sign-off. Only `y` or `yes` authorizes the current question. `n`, `no`, or an
 empty answer pauses normally except that a pending status-one validation
 continues to return status 1; ambiguous input, end-of-file, or non-terminal
@@ -355,10 +355,13 @@ a later checkpoint.
 
 A status-1 validation result stops and returns status 1 until it is rerun or
 explicitly acknowledged with `--accept-status`; other failures cannot be
-waived. At the duplicate-review boundary, pymo stops for the operator to retain
-the complete `dups` tree outside the working collection.
-`--confirm-quarantine` records the human checkpoint only when the working
-`dups` path is absent. A following `--run` performs final fresh validation and
+waived. At the duplicate-review boundary, pymo stops for one explicit choice.
+`--retain-dups` records retained-in-place disposition only when a reviewed
+`dups` path is still a real directory, leaves every review file where it is,
+and reports that pymo reclaimed no physical storage. The established
+`--confirm-quarantine` alternative records the human checkpoint only when the
+working `dups` path is absent after a separately managed external move. A
+following `--run` performs final fresh validation and
 pauses for review; one more `--run` performs ordinary verification, then reports
 that human sign-off is still required. In interactive mode the same quarantine
 check remains human-managed, and an affirmative final question records sign-off
@@ -369,13 +372,13 @@ Coordinator setup, unsafe-state, and invocation errors return status 2, keeping
 them distinct from a child's status-1 findings. Both `--run` and `--run-next`
 return an executed child's nonzero status unchanged. Reaching an expected
 operator checkpoint with `--run` returns 0 after clearly reporting the pause;
-status 1 from external-quarantine confirmation means the working `dups` path is
-still present. The safe loop revalidates both collection-directory identities
+status 1 from a disposition mismatch leaves the checkpoint pending. The safe
+loop revalidates both collection-directory identities
 between stages, preserves the initial restart-state binding, requires every
 reload to add exactly the one expected successful attempt, and stops with status
 2 if any of those invariants changes.
 
-The schema-3 restart file records canonical roots, the installed pymo version,
+The schema-4 restart file records canonical roots, the installed pymo version,
 fixed common options, attempts, statuses, measured child durations, and private
 log and outcome names. Collection and log-directory separation is checked by
 filesystem identity, so aliases on a case-insensitive or normalizing filesystem
@@ -399,9 +402,11 @@ version 0.6.4 adds the documented stable report projection. Version 0.6.5 adds
 strict pre-authorized unattended checkpoints, and version 0.6.6 separates
 console and per-stage log thresholds without changing visibility. Version
 0.6.7 adds explicit full, private, and quiet visibility profiles while keeping
-the path-private default and opt-in diagnostic persistence. Pymo-owned
-duplicate disposition, a sequential manifest-backed queue, and
-benchmark-proven scheduling remain separate later releases.
+the path-private default and opt-in diagnostic persistence. Version 0.6.8 adds
+the explicit retained-in-place duplicate disposition while preserving the
+existing external-quarantine choice. Managed quarantine, a sequential
+manifest-backed queue, and benchmark-proven scheduling remain separate later
+releases.
 
 ### Verify a migration by exact bytes and media content
 
@@ -1141,7 +1146,10 @@ terminal-only checkpoint consent under
 explicit saved-context resume under
 [ADR 0093](docs/adrs/0093-explicit-private-migration-resume.md), and version 0.6.4
 defines stable migration-report schema 1 under
-[ADR 0095](docs/adrs/0095-stable-migration-report-artifact.md). Rescue copying,
+[ADR 0095](docs/adrs/0095-stable-migration-report-artifact.md). Version 0.6.8
+advances that report to schema 2 and adds retained-in-place duplicate
+disposition under
+[ADR 0103](docs/adrs/0103-retained-in-place-duplicate-disposition.md). Rescue copying,
 permanent deletion, damaged-media remediation, richer
 metadata, and similarity tooling remain later roadmap or research work. Full
 video decoding remains sequential until representative benchmarks show that

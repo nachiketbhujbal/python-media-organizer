@@ -3,7 +3,7 @@
 `pymo migrate --unattended PRIVATE_POLICY_JSON` is for a migration whose
 operator already knows the exact aggregate results they are willing to accept.
 It is intentionally stricter than a general “yes to all” option: every
-validation review, apply, quarantine confirmation, and final sign-off must be
+validation review, apply, duplicate disposition, and final sign-off must be
 named separately with the exact preceding result it may cross.
 
 For a new run:
@@ -62,14 +62,14 @@ the same command with the same byte-identical policy recovers the creation time
 from that binding and publishes the missing initial state without replacing the
 record. Any disagreement still fails closed.
 
-## Schema 1
+## Schema 2
 
 The top-level object has exactly these fields:
 
 ```json
 {
-  "schema_version": 1,
-  "tool_version": "0.6.6",
+  "schema_version": 2,
+  "tool_version": "0.6.8",
   "baseline": "/canonical/path/to/baseline",
   "working": "/canonical/path/to/working-collection",
   "options": {
@@ -105,7 +105,7 @@ Reaching an omitted checkpoint stops with status 1.
 | `rename-apply` | `apply` | Rename preview |
 | `image-duplicates-apply` | `apply` | Exact-image duplicate preview |
 | `video-duplicates-apply` | `apply` | Exact-video duplicate preview |
-| `external-quarantine` | `confirm-quarantine` | Complete without-`dups` simulation |
+| `duplicate-disposition` | `retain-dups` or `confirm-quarantine` | Complete without-`dups` simulation |
 | `final-working-validation` | `accept-validation` | Final working full validation |
 | `final-signoff` | `signoff` | Complete ordinary final verification |
 
@@ -174,7 +174,7 @@ obtained from private coordinator outcome evidence. The coordinator passes the
 reviewed digest to the apply child, which recomputes the current plan and stops
 before mutation if it differs. Organization and rename also carry the same
 file state and SHA-256 into the journaled move boundary. `media_kind` must match
-the image or video checkpoint. External quarantine uses the successful
+the image or video checkpoint. Duplicate disposition uses the successful
 simulation totals:
 
 ```json
@@ -186,6 +186,14 @@ simulation totals:
   "disposition": "eligible-for-human-quarantine-review"
 }
 ```
+
+The decision is exact authority. `retain-dups` requires the working `dups`
+path to remain a real directory whenever `review_files` is nonzero; it records
+that review storage remains in place and pymo reclaimed no physical storage.
+`confirm-quarantine` preserves the existing contract: the path must be absent
+after a separately managed external move. Neither decision authorizes pymo to
+move or delete content. A zero-file result may use `retain-dups` to record that
+disposition is not applicable.
 
 Final sign-off repeats every aggregate from the ordinary final verification:
 
@@ -216,15 +224,16 @@ Final sign-off repeats every aggregate from the ordinary final verification:
 - Status 0 means the authorized sequence completed and conditional sign-off was
   recorded, or an already signed-off run was inspected again.
 - Status 1 means valid authority did not match the current checkpoint, a
-  checkpoint was omitted, or the working `dups` path is still present.
+  checkpoint was omitted, or the selected duplicate disposition does not match
+  the working `dups` path.
 - Status 2 means policy, binding, state, outcome, root, or setup safety failed.
 - Any other child status, including 130 for interruption, is returned unchanged.
 
 An evidence mismatch never writes an acknowledgement or dispatches its pending
-apply. After a child failure, resolve the cause before resuming. At external
-quarantine, pymo still does not move or delete anything: retain the complete
-tree separately, confirm the working `dups` path is absent, then resume with the
-same unchanged policy.
+apply. After a child failure, resolve the cause before resuming. At duplicate
+disposition, pymo still does not move or delete anything: retain the complete
+tree in place, or move it separately and confirm the working `dups` path is
+absent, then resume with the same unchanged policy.
 
 Policies are most suitable for repeated or previously reviewed collection
 shapes whose exact aggregate evidence is already known. For an unfamiliar

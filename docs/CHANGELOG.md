@@ -2,6 +2,27 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.6.8 - Unreleased
+
+- Add explicit `pymo migrate --retain-dups` at the duplicate-disposition
+  checkpoint. Require a real non-symbolic working `dups` directory whenever
+  the successful simulation found review files, leave it and its contents
+  untouched, and report that pymo reclaimed no physical storage.
+- Preserve `--confirm-quarantine` as the distinct compatibility path for a
+  separately managed external move whose working `dups` path is absent. Neither
+  disposition grants movement, deletion, cleanup, or final-signoff authority.
+- Teach interactive and pre-authorized unattended operation to record the exact
+  selected disposition while retaining the one-stage engine, post-question
+  lifecycle and root revalidation, and fresh final full validation plus
+  ordinary verification.
+- Advance private restart state to schema 4, private unattended policy to
+  schema 2, and the public path-private migration report to schema 2. Report
+  pending, not-applicable, retained-in-place, and externally retained but
+  unverified review storage without claiming physical reclamation.
+- Record the contract in ADR 0103. Same-filesystem and cross-filesystem managed
+  quarantine remain separate later releases; permanent deletion remains
+  research.
+
 ## 0.6.7 - 2026-09-12
 
 - Add global `--visibility full`, `--visibility private`, and `--visibility

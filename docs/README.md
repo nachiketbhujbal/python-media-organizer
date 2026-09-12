@@ -13,7 +13,7 @@ needed by coding agents. Durable engineering documentation lives here:
   release procedure.
 - [Production migration runbook](MIGRATION.md) — the collection-by-collection
   baseline, transformation, verification, quarantine, and sign-off sequence.
-- [Stable migration report](MIGRATION_REPORT.md) — schema 1 invocation,
+- [Stable migration report](MIGRATION_REPORT.md) — schema 2 invocation,
   compatibility, privacy, and authority boundaries for `migrate --json`.
 - [Architecture](ARCHITECTURE.md) — package boundaries and allowed dependency
   direction.
@@ -46,3 +46,6 @@ concurrency. Version 0.6.0 adds only the foreground safe operator loop; ADR
 0088 records its automatic-success and explicit-checkpoint boundaries. Version
 0.6.1 adds the explicit terminal-only interactive selector; ADR 0089 records
 its conservative per-question consent and private resume-state boundaries.
+Version 0.6.8 adds retained-in-place duplicate disposition; ADR 0103 records
+its no-move, no-delete, no-storage-reclamation, and fresh-final-evidence
+boundaries.

@@ -406,7 +406,7 @@ def test_full_visibility_saves_canonical_migration_options(tmp_path: Path) -> No
 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads((log_dir / "pymo-migration-state.json").read_text())
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert payload["options"]["verbose"] is False
     assert payload["options"]["quiet"] is False
     assert payload["options"]["console_log_level"] == "DEBUG"
@@ -675,7 +675,7 @@ def test_migrate_json_stays_machine_readable_with_global_output_flags(
 
         assert result.returncode == 0, result.stdout + result.stderr
         report = json.loads(result.stdout)
-        assert report["schema_version"] == 1
+        assert report["schema_version"] == 2
         assert report["report_type"] == "pymo-migration-report"
         assert result.stderr == ""
         assert "Completed migrate" not in result.stdout

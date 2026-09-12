@@ -58,11 +58,18 @@ and collection identities, and emits only deterministic path-private JSON to
 standard output. It creates no evidence or state and grants no workflow,
 quarantine, deletion, or sign-off authority.
 Version 0.6.5 adds explicit `migrate --unattended PRIVATE_POLICY_JSON` over the
-same one-stage engine. A private schema-1 policy enumerates the exact reviewed
+same one-stage engine. Its original private schema-1 policy enumerates the exact reviewed
 checkpoint evidence and planned-source content authorized for one bound run;
 missing or changed authority stops before the decision. The mode retains the
 human-managed absent-`dups` checkpoint and grants no deletion or quarantine
 movement authority.
+Versions 0.6.6 and 0.6.7 add independent logging thresholds and visibility
+profiles without changing persistent-log opt-in or path-private defaults.
+Version 0.6.8 adds retained-in-place duplicate disposition while preserving the
+established external-quarantine alternative. It advances private restart state
+to schema 4, private unattended policy to schema 2, and the path-private
+migration report to schema 2. Pymo performs no move or deletion and reclaims no
+storage on the retained path; final ordinary verification remains fresh.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -1185,7 +1192,7 @@ from an ordinary observed result eligible for final sign-off.
 
 `src/pymo/migrate.py` coordinates `pymo migrate BASELINE WORKING` while
 `migration/workflow.py` owns the fixed ordered stages and child arguments and
-`migration/coordinator_state.py` owns private schema-3 restart state. The
+`migration/coordinator_state.py` owns private schema-4 restart state. The
 command with no `--log-dir` prints a zero-write plan. `--start` creates one
 explicit external private directory, binds canonical roots, exact pymo version,
 and common options, and publishes mode-0600 state atomically under a dedicated
@@ -1252,6 +1259,9 @@ and the final runtime line for the JSON surface. Selected aggregates omit roots,
 filenames, record names, identifiers, timestamps, action entries, and free-form
 cache issue text. `docs/MIGRATION_REPORT.md` is the compatibility contract;
 ADR 0095 records the decision.
+Version 0.6.8 advances this public projection to schema 2 solely to expose the
+explicit duplicate disposition and its retained-in-place or not-applicable
+review-storage state.
 
 Version 0.6.1 adds `--interactive` over the same loop. It requires terminal
 input and asks one conservative `[y/N]` question for each successful or
@@ -1264,14 +1274,17 @@ Successful-validation review and final sign-off are recorded in private restart
 state so resume does not invent consent; they do not become preservation
 evidence or deletion authority.
 
-After the successful counterfactual simulation, `--run` pauses and the
-coordinator performs no quarantine operation. `--confirm-quarantine` requires
-the working `dups` path to be absent and records only the human checkpoint, not
-proof of external retention. A later `--run` executes final full validation and
+After the successful counterfactual simulation, `--run` pauses at duplicate
+disposition and the coordinator performs no quarantine operation.
+`--retain-dups` requires a real working `dups` directory when the simulation
+found review files, keeps it in place, and records no pymo storage reclamation.
+`--confirm-quarantine` remains available when a separately managed external
+move has made the working `dups` path absent; it records only the human
+checkpoint, not proof of external retention. A later `--run` executes final full validation and
 pauses for review; one more `--run` executes ordinary observed verification and
 reaches the final human-signoff boundary. A completed sequence remains eligible
 for human sign-off only and does not authorize removal of source, baseline,
-quarantine, or working data.
+duplicate review storage, or working data.
 
 Version 0.6.0 is released through PR #47 and exact merge
 `9262b486a7c85b052d373c48c660aede1a64b39f`. Independent review accepted exact
@@ -1554,6 +1567,19 @@ adds no diagnostic persistence, report-schema field, state discovery, media
 mutation, checkpoint authority, duplicate disposition, quarantine movement,
 queue, scheduler, deletion, or exact-media behavior. No retained private media
 collection or rollback evidence was used, changed, or removed.
+
+Version 0.6.8 is an unreleased candidate under ADR 0103. It renames the
+quarantine-only workflow boundary to `duplicate-disposition` and adds the
+mutually exclusive `--retain-dups` action while preserving
+`--confirm-quarantine`. Retained disposition requires the reviewed tree to
+remain a real non-symbolic directory when review files exist, changes no media
+or collection layout, and explicitly reports that pymo reclaimed no physical
+storage. Interactive and schema-2 unattended modes bind the exact selected
+choice; schema-4 restart state records it; schema-2 path-private reports expose
+retained-in-place, not-applicable, pending, or external-unverified review
+storage. Final full validation and ordinary verification remain unchanged and
+fresh. The release adds no move, copy, delete, cleanup, queue, scheduler, or
+exact-media authority.
 
 ## Media validation
 
