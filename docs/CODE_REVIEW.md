@@ -129,7 +129,7 @@ The same adversarial method was repeated after the first validation release.
 | POLICY-R06 | High | The first safe-ancestry correction accepted a writable sticky parent when the current user owned only its child, even though an untrusted sticky-directory owner may remove any child and replace the complete log directory. | 0.6.5 | Resolved after renewed independent review by requiring every ancestry component to be owned by root or the current user and accepting group- or world-writable ancestors only when sticky, with direct differing-owner regressions for both ordinary and sticky parents |
 
 Independent Terra-medium review accepted exact v0.6.5 implementation head
-`a001bbe` without findings after rejecting three earlier policy-binding
+`a001bbe` without findings after rejecting earlier digest and policy-binding
 candidates. The reviewer reproduced descriptor-bound organization and rename,
 real persisted-state substitution, replacement-policy resume rejection,
 owner-private directory enforcement, jointly replaced authority rejection,
