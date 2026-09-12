@@ -1472,15 +1472,46 @@ recreating the immutable release tag. Detailed operational evidence from real
 collections remains in the private Agent Relay record; the public repository
 records only collection-neutral acceptance claims.
 
-Version 0.6.6 is an unreleased candidate on
-`codex/feat/v0.6.6-logging-surfaces`. ADR 0099 separates console logging,
+Version 0.6.6 is released under ADR 0099. It separates console logging,
 explicit durable diagnostics, migration-private state and stage logs, human
-synopses, and structured reports. The candidate adds independent conventional
-console and file thresholds, retains `--verbose` and `--quiet`, keeps every
-persistent surface explicit, and changes neither path disclosure nor migration
-authority. Its private coordinator state is schema 3 because the two saved
-thresholds are part of exact invocation context. Release, tag, hosted, and
-installed-version claims remain pending until their evidence exists.
+synopses, and structured reports. Independent conventional console and file
+thresholds retain `--verbose` and `--quiet`, keep every persistent surface
+explicit, and change neither path disclosure nor migration authority. Private
+coordinator state is schema 3 because the two saved thresholds are part of
+exact invocation context.
+
+Independent Terra-medium review accepted final implementation head
+`00c852264f0aa89c4e9bbc6d111413f9cb7c7278` without findings. The complete
+owner gate passed all 591 synthetic and real-FFmpeg tests at 88 percent
+subprocess-aware coverage plus Ruff, Black, mypy, pre-commit, builds, and
+installed-candidate checks. PR #58 run `34711419627` passed Ubuntu, pinned
+Fedora 42, macOS, and the unconditional quality gate before the protected
+merge produced `75bf41788297fc48570952d675f4af3e1d9ce8dd`. Exact-main run
+`34711660008` passed the same platform set and aggregate gate.
+
+Annotated tag `v0.6.6` has object
+`32903f38eee561bedfe0a7a92d8cada74ba5a561`, peels to the exact merge, and
+release run `34711926429` passed its mainline, tagged-build, version, and
+isolated-install checks. A separate detached tagged build produced wheel
+SHA-256
+`d5912bb1863fbcbd8b6c6620f412cae18747702228f5c1b4af91865a739394de`
+and source-distribution SHA-256
+`22785b3b78342d5cfdfcb176f140b640294b01684c5f3da58ba1eb74396e1378`.
+The wheel reports version 0.6.6, packages the exact repository Apache-2.0
+license, contains no unsafe member names, and passed an installed logging
+acceptance check. The iMac's uv-managed command reports `pymo 0.6.6`.
+
+ADR 0100 applies the post-tag release-truth boundary without moving or
+recreating the immutable release tag. No retained private media collection,
+historical result, quarantine, action history, or rollback evidence was used,
+changed, or removed for this logging-only release.
+
+Independent post-tag review rejected initial release-truth head `e0ed45e`
+because a later handoff paragraph still called 0.6.6 a candidate. The owner
+corrected that stale wording, and renewed review accepted exact head `48b1c65`
+without findings after checking the complete documentation delta, release and
+tag facts, artifact hashes, privacy boundary, ADR ordering, and locked
+documentation gate.
 
 ## Media validation
 
@@ -1562,7 +1593,7 @@ behavioral tests.
 
 Separating console output, explicitly requested durable diagnostics, restart
 state, and reports plus conventional log-level selection is the bounded
-version 0.6.6 candidate. Coherent visibility profiles, compatibility treatment,
+version 0.6.6 release. Coherent visibility profiles, compatibility treatment,
 and a possible `--debug` alias are planned for version 0.6.7 rather than current
 behavior.
 Whether diagnostic persistence ever becomes automatic remains undecided.
