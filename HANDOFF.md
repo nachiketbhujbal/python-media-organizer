@@ -50,6 +50,13 @@ Version 0.6.3 adds `migrate --resume PRIVATE_STATE_DIRECTORY` as an explicit
 locator for an existing strict coordinator run. It recovers the recorded roots,
 options, version, lifecycle, checkpoint, and outcome references without
 searching for state or adding evidence, authorization, or a new checkpoint.
+Version 0.6.4 adds explicit `migrate --json` over an existing coordinator run.
+Stable report schema 1 and the human synopsis consume the same selected
+aggregate projection. Report generation requires existing private state and
+its lock, validates all referenced outcomes, rechecks the lifecycle, projection,
+and collection identities, and emits only deterministic path-private JSON to
+standard output. It creates no evidence or state and grants no workflow,
+quarantine, deletion, or sign-off authority.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -1213,10 +1220,9 @@ Current status and automatic or interactive boundaries project those owned
 facts into a concise human synopsis. It distinguishes previewed from isolated
 duplicates, potential recovery from proven reclamation, simulated from observed
 preservation, and pending or stopped state from completed sign-off. Paths and
-filenames remain private. These records and the synopsis are bookkeeping, not
-fresh evidence, action history, quarantine proof, a stable report API, or
-deletion authority. ADR 0091 records the boundary; version 0.6.4 remains the
-separate public machine-report contract.
+filenames remain private. These private records are bookkeeping, not a stable
+interchange format, fresh evidence, action history, quarantine proof, or
+deletion authority. ADR 0091 records the boundary.
 
 Version 0.6.3 adds `--resume PRIVATE_STATE_DIRECTORY` as an alternative locator
 for every existing continuation action. The named directory must already
@@ -1227,7 +1233,19 @@ one-child, safe-loop, interactive, acknowledgement, quarantine, or reviewed
 apply path. It never auto-discovers state, accepts conflicting overrides, or
 turns restart bookkeeping into evidence or authority. The original positional
 roots plus `--log-dir` form remains supported. ADR 0093 records the decision;
-version 0.6.4 remains a separate report-artifact release.
+it does not change the report or workflow authority boundaries.
+
+Version 0.6.4 adds `--json` as a mutually exclusive report-only action. It
+accepts either the explicit resume locator or the original three-path locator,
+requires the existing state file and state lock, and validates every required
+private outcome before projecting schema 1. The coordinator reloads the exact
+state, rechecks both collection identities, and rebuilds the same report before
+emission so a lifecycle, collection, or outcome change cannot silently cross
+the output boundary. The CLI suppresses timestamps, debug messages, progress,
+and the final runtime line for the JSON surface. Selected aggregates omit roots,
+filenames, record names, identifiers, timestamps, action entries, and free-form
+cache issue text. `docs/MIGRATION_REPORT.md` is the compatibility contract;
+ADR 0095 records the decision.
 
 Version 0.6.1 adds `--interactive` over the same loop. It requires terminal
 input and asks one conservative `[y/N]` question for each successful or
@@ -1309,6 +1327,34 @@ private state directory, recovered its saved roots and options, advanced three
 stages, and stopped at validation review. The iMac's uv-managed command reports
 `pymo 0.6.3`.
 
+Version 0.6.4 has a clean local release candidate at exact implementation head
+`383165e4fd04d1c087647de8536ba4cf2fb01725`, based on exact current product
+main `22bd3417d297d7e87240c9cf7c76d0d76152360b`. It adds stable, deterministic,
+path-private migration-report schema 1 through explicit `migrate --json`, using
+the same selected aggregate projection as the human synopsis. It requires
+existing private state and lock, emits no ordinary console text, combines with
+no workflow or disclosure action, and rechecks the exact lifecycle, outcomes,
+and collection identities before emission without new analysis or persistent
+writes.
+
+The complete owner gate passes all 555 synthetic and real-FFmpeg tests at 88
+percent subprocess-aware coverage, Ruff, Black, mypy, every pre-commit check,
+and clean source/wheel builds. Candidate wheel SHA-256 is
+`ca0b4b9c116c1c73ec964925b15f03c5b988750c91e7d09428f4139955b5e621`;
+source-distribution SHA-256 is
+`dcd5ba9fd94fe4f86e260d9a8463594d3c3c18c8823c33edc9ac43a60dc27ec0`.
+The isolated wheel reports `pymo 0.6.4.dev6+g383165e4f`; it drove all 24 empty
+synthetic stages to a complete observed verdict, emitted byte-identical reports
+through the positional and resume locators, and rejected path disclosure with
+status 2 and no JSON output.
+
+Independent Terra-medium review first accepted implementation head `5288f06`
+without findings. After the owner added disclosure-option rejection and a
+public finding-code allowlist, renewed review accepted exact corrected head
+`383165e` without findings in the separate clean detached reviewer worktree.
+No pull request, hosted CI, merge, tag, installed iMac tool change, real-media
+run, or cleanup has occurred for v0.6.4.
+
 ADR 0090 keeps candidate documentation truthful until publication evidence
 exists, then reconciles the latest `main` in a separate documentation-only
 change. The immutable v0.6.1 tagged tree therefore retains its truthful
@@ -1326,10 +1372,11 @@ nearly every state transition is tiring, easy to misuse, and poorly suited to
 hours-long media analysis. Version 0.6.0 implements routine safe advancement
 without crossing a decision boundary. Version 0.6.1 adds in-process interactive
 checkpoint handling without weakening the stage engine's evidence or mutation
-boundaries. Version 0.6.2 adds the human synopsis while leaving saved resume
-context and the stable machine-readable report as separate release units.
-Version 0.6.3 implements the explicit saved-context locator while leaving the
-stable machine-readable report to version 0.6.4.
+boundaries. Version 0.6.2 adds the human synopsis, and version 0.6.3 implements
+the explicit saved-context locator. Version 0.6.4 is the current release
+candidate for stable migration-report schema 1; it does not include unattended
+authority, logging or visibility policy, duplicate disposition, queueing, or
+scheduling.
 
 ## Media validation
 

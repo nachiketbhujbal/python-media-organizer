@@ -31,6 +31,10 @@ contract; it does not prove whole-device recovery.
 - Version 0.6.2 adds a concise path-private synopsis of the stage outcomes
   already recorded by the coordinator. It creates no new preservation evidence
   and grants no deletion authority.
+- Version 0.6.3 adds explicit resume from one named existing private state
+  directory without searching for state or changing any checkpoint.
+- Version 0.6.4 adds stable, deterministic, path-private migration-report
+  schema 1 over those validated existing outcomes.
 
 Perform only stages supported by the installed version and keep every
 transition human-reviewed. Do not use a loose shell script as the production
@@ -60,7 +64,10 @@ benchmark-gated scheduling as separate later releases;
 boundary, and
 [ADR 0089](adrs/0089-interactive-migration-checkpoints.md) records interactive
 consent. [ADR 0091](adrs/0091-typed-human-migration-synopsis.md) records the
-private typed-outcome and human-synopsis boundary.
+private typed-outcome and human-synopsis boundary. [ADR 0093](adrs/0093-explicit-private-migration-resume.md)
+records the saved locator, and
+[ADR 0095](adrs/0095-stable-migration-report-artifact.md) records the public
+report projection.
 
 ## Collection roles
 
@@ -136,6 +143,7 @@ pymo migrate --resume "/path/to/private-logs"
 pymo migrate --resume "/path/to/private-logs" --run-next
 pymo migrate --resume "/path/to/private-logs" --run
 pymo migrate --resume "/path/to/private-logs" --interactive
+pymo migrate --resume "/path/to/private-logs" --json
 ```
 
 `--resume` never searches the current directory, collections, parents, or a
@@ -216,6 +224,18 @@ reclaimed; even after external confirmation, pymo has proved only path absence
 and recorded the operator's acknowledgement. The synopsis is convenient
 bookkeeping, not fresh evidence, action history, quarantine proof, sign-off, or
 deletion authority.
+
+Use `--json` when a local program needs the same selected facts without parsing
+the human synopsis. It is mutually exclusive with every workflow action,
+requires existing private coordinator state and its existing lock, performs no
+media analysis, and changes no state. It emits one compact schema-1 object to
+standard output with no timestamps, progress, or runtime line. The report
+distinguishes workflow progress and sign-off, previewed and observed duplicate
+analysis, simulated and observed preservation, and potential versus externally
+retained-but-unverified review storage. It contains no collection roots,
+filenames, private record names, attempt identifiers, or timestamps. See the
+[stable migration report contract](MIGRATION_REPORT.md) for every field and
+compatibility rule.
 
 ## Stage 1: establish readable evidence
 
@@ -387,9 +407,9 @@ successes and revalidating collection identities between them.
 
 Version 0.6.2 promotes the human synopsis to normal coordinator output. Retain
 the external migration record as the operator's durable record and do not treat
-the private outcome files as a stable interchange format. Version 0.6.4 defines
-the separate versioned machine-readable report artifact and compatibility
-contract.
+the private outcome files as a stable interchange format. Version 0.6.4 exposes
+only their selected aggregate projection as the separate versioned
+machine-readable report contract.
 Before any resumed action, the coordinator revalidates every required private
 outcome through its pinned private-directory boundary. Missing, replaced,
 publicly readable, or malformed history stops before another child is run.

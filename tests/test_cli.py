@@ -276,6 +276,41 @@ def test_validate_json_stays_machine_readable_with_global_output_flags(
         assert json.loads(result.stdout)["schema_version"] == 2
 
 
+def test_migrate_json_stays_machine_readable_with_global_output_flags(
+    tmp_path: Path,
+) -> None:
+    baseline = tmp_path / "baseline"
+    working = tmp_path / "working"
+    baseline.mkdir()
+    working.mkdir()
+    log_dir = tmp_path / "private-state"
+    started = run_pymo("migrate", baseline, working, "--log-dir", log_dir, "--start")
+    assert started.returncode == 0, started.stdout + started.stderr
+
+    for output_flags in (
+        (),
+        ("--verbose",),
+        ("--quiet",),
+        ("--timestamps",),
+        ("--no-timestamps",),
+    ):
+        result = run_pymo(
+            *output_flags,
+            "migrate",
+            "--resume",
+            log_dir,
+            "--json",
+        )
+
+        assert result.returncode == 0, result.stdout + result.stderr
+        report = json.loads(result.stdout)
+        assert report["schema_version"] == 1
+        assert report["report_type"] == "pymo-migration-report"
+        assert result.stderr == ""
+        assert "Completed migrate" not in result.stdout
+        assert not result.stdout.startswith("2026-")
+
+
 def test_cache_status_json_stays_machine_readable_and_read_only(
     tmp_path: Path,
 ) -> None:

@@ -197,6 +197,13 @@ never duplicate the version in source or static project metadata.
   exactly matching option repetitions, revalidate all ordinary state, outcome,
   root, version, separation, and checkpoint boundaries, and never auto-discover
   state or treat restart bookkeeping as evidence or authority.
+- `migrate --json` is an explicit read-only projection of one existing strict
+  coordinator run. Require its existing private state and lock, validate the
+  complete lifecycle and typed outcome history, recheck state, outcomes, and
+  collection identities before emitting deterministic path-private schema 1,
+  and never combine it with a workflow action or create state. Keep the human
+  synopsis on the same projection. Change the schema version before changing
+  any public field, type, allowed value, or meaning.
 
 ## Package layout and tools
 
@@ -236,6 +243,9 @@ never duplicate the version in source or static project metadata.
 - `src/pymo/migration/workflow.py` and
   `src/pymo/migration/coordinator_state.py`: ordered guided-runbook arguments
   and private fail-closed schema-2 restart state respectively.
+- `src/pymo/migration/synopsis.py`: the selected aggregate projection shared by
+  stable migration-report schema 1 and its human synopsis rendering; it owns no
+  media analysis, workflow authority, or persistent output path.
 - `src/pymo/correct_extensions.py`: complete discovery, fresh evidence,
   collision planning, reversible apply/undo, and verified truthful-extension
   correction.

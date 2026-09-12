@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -34,6 +35,7 @@ from pymo.migration.roots import (
 )
 from pymo.migration.synopsis import (
     MigrationSynopsisError,
+    build_report,
     print_synopsis,
     validate_synopsis_history,
 )
@@ -713,6 +715,21 @@ def _dispatch_existing_state(
     state: MigrationState,
 ) -> int:
     validate_synopsis_history(log_dir, state)
+    if args.json:
+        identities = _collection_identities(state)
+        report = build_report(log_dir, state)
+        current = _load_state(state_path)
+        if current != state:
+            raise MigrationCoordinatorError(
+                "migration restart lifecycle changed during report generation"
+            )
+        _require_collection_identities(current, identities)
+        if build_report(log_dir, current) != report:
+            raise MigrationCoordinatorError(
+                "private stage outcome history changed during report generation"
+            )
+        print(json.dumps(report, sort_keys=True, separators=(",", ":")))
+        return 0
     if args.run_next:
         status = _run_next(log_dir, state_path, state, args.apply)
         updated = _load_state(state_path)
@@ -804,11 +821,38 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--decode-timeout", type=int)
     parser.add_argument("--workers", type=int)
     parser.add_argument("--no-cache", action="store_true", default=None)
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the stable path-private migration report and exit",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    selected_action = any(
+        (
+            args.start,
+            args.run_next,
+            args.run,
+            args.interactive,
+            args.accept_status,
+            args.confirm_quarantine,
+        )
+    )
+    if args.json and selected_action:
+        print(
+            "Migration coordinator cannot safely continue: --json cannot be combined with a workflow action.",
+            file=sys.stderr,
+        )
+        return 2
+    if args.json and (args.show_files or args.show_ignored):
+        print(
+            "Migration coordinator cannot safely continue: --json is always path-private and cannot show files or ignored paths.",
+            file=sys.stderr,
+        )
+        return 2
     if args.apply and not args.run_next:
         print("--apply requires --run-next.", file=sys.stderr)
         return 2
@@ -866,7 +910,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise MigrationCoordinatorError(
                     "no migration restart state exists in the private resume directory"
                 )
-            with _state_lock(log_dir):
+            with _state_lock(log_dir, create=not args.json):
                 if not os.path.lexists(state_path):
                     raise MigrationCoordinatorError(
                         "no migration restart state exists in the private resume directory"
@@ -903,6 +947,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 or args.interactive
                 or args.accept_status
                 or args.confirm_quarantine
+                or args.json
             ):
                 raise MigrationCoordinatorError(
                     "an explicit --log-dir is required for restartable workflow actions"
@@ -925,7 +970,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         _prepare_log_dir(log_dir, create=args.start)
         state_path = _state_path(log_dir)
-        with _state_lock(log_dir):
+        with _state_lock(log_dir, create=not args.json):
             if args.start:
                 if os.path.lexists(state_path):
                     raise MigrationCoordinatorError(

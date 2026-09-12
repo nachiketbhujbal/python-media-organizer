@@ -114,6 +114,9 @@ The same adversarial method was repeated after the first validation release.
 | GUIDE-014 | High | Automatically discovering restart state could select or disclose the wrong collection, while accepting an ambiguous locator could dispatch a child against unintended roots. | 0.6.3 | Resolved by requiring one explicit private state directory and rejecting its combination with positional collections, `--log-dir`, or initialization |
 | GUIDE-015 | High | Resume-time option overrides or a shorthand dispatch path could weaken the recorded run binding, bypass a human checkpoint, or avoid strict outcome-history validation. | 0.6.3 | Resolved by recovering roots and options from strict state, accepting only exactly matching option repetitions, and routing every action through the existing checkpoint dispatcher after complete synopsis-history preflight |
 | GUIDE-016 | Medium | Making positional roots optional for the resume form could accidentally make incomplete or locator-free legacy invocations appear valid. | 0.6.3 | Resolved by requiring both positional collections whenever `--resume` is absent and returning setup status 2 without creating state or dispatching a child |
+| GUIDE-017 | High | Exporting private outcome dictionaries directly could accidentally stabilize internal fields, disclose free-form private diagnostics, or let human and machine summaries disagree. | 0.6.4 | Resolved with one explicit aggregate-field projection shared by schema-1 JSON and the human synopsis; the public contract omits paths, record names, identifiers, timestamps, action entries, and free-form cache issue text |
+| GUIDE-018 | High | A nominally read-only report action could create a missing lock or state, race lifecycle or outcome replacement, or emit facts after either collection root changed. | 0.6.4 | Resolved by requiring existing private state and lock, holding the existing exclusive coordinator lock, validating the complete outcome history, and rechecking exact state, report projection, and both collection identities before emission |
+| GUIDE-019 | Medium | Normal timestamps, debug logging, progress, or final runtime output could corrupt the JSON stream, while combining report export with a workflow action could create ambiguous authority. | 0.6.4 | Resolved by treating migrate JSON as structured output under every global console flag and rejecting its combination with initialization, advancement, interactive, acknowledgement, quarantine, or apply actions before any persistent write |
 
 Renewed independent review accepted exact v0.6.2 owner head `2fdcfed` without
 findings after reproducing the closures of STATE-R01, OUT-R01, CACHE-R01, and
@@ -146,6 +149,19 @@ The installed tagged wheel resumed a synthetic run using only its private state
 directory, recovered saved options and roots, ran three stages, and paused at
 validation review. The iMac's uv-managed command reports `pymo 0.6.3`. ADR
 0094 records the separate post-tag release-truth reconciliation.
+
+Independent Terra-medium review accepted exact v0.6.4 implementation head
+`5288f06d93ed4bb3820d3306d6f2dce10e331a00` without findings. The owner then
+added stricter early rejection of both path-disclosure flags and allowlisted
+every finding code admitted to public schema 1. Renewed review accepted exact
+corrected head `383165e4fd04d1c087647de8536ba4cf2fb01725` without findings from
+the same separate clean detached worktree. The reviewer verified the complete
+base range, the five-file correction delta, deterministic structured output,
+existing-lock zero-write behavior, lifecycle/outcome/root rechecks, the human
+synopsis projection, documentation truth, and path-private failures. The owner
+gate passed all 555 tests at 88 percent subprocess-aware coverage plus Ruff,
+Black, mypy, pre-commit, clean builds, and isolated installed-wheel acceptance.
+Hosted pull-request, exact-main, tag, and release evidence remains pending.
 
 ## Scan review findings
 
