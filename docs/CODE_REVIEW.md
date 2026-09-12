@@ -150,6 +150,19 @@ directory, recovered saved options and roots, ran three stages, and paused at
 validation review. The iMac's uv-managed command reports `pymo 0.6.3`. ADR
 0094 records the separate post-tag release-truth reconciliation.
 
+Independent Terra-medium review accepted exact v0.6.4 implementation head
+`5288f06d93ed4bb3820d3306d6f2dce10e331a00` without findings. The owner then
+added stricter early rejection of both path-disclosure flags and allowlisted
+every finding code admitted to public schema 1. Renewed review accepted exact
+corrected head `383165e4fd04d1c087647de8536ba4cf2fb01725` without findings from
+the same separate clean detached worktree. The reviewer verified the complete
+base range, the five-file correction delta, deterministic structured output,
+existing-lock zero-write behavior, lifecycle/outcome/root rechecks, the human
+synopsis projection, documentation truth, and path-private failures. The owner
+gate passed all 555 tests at 88 percent subprocess-aware coverage plus Ruff,
+Black, mypy, pre-commit, clean builds, and isolated installed-wheel acceptance.
+Hosted pull-request, exact-main, tag, and release evidence remains pending.
+
 ## Scan review findings
 
 | ID | Severity | Finding | Resolution target | Status |

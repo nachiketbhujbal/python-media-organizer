@@ -1327,6 +1327,34 @@ private state directory, recovered its saved roots and options, advanced three
 stages, and stopped at validation review. The iMac's uv-managed command reports
 `pymo 0.6.3`.
 
+Version 0.6.4 has a clean local release candidate at exact implementation head
+`383165e4fd04d1c087647de8536ba4cf2fb01725`, based on exact current product
+main `22bd3417d297d7e87240c9cf7c76d0d76152360b`. It adds stable, deterministic,
+path-private migration-report schema 1 through explicit `migrate --json`, using
+the same selected aggregate projection as the human synopsis. It requires
+existing private state and lock, emits no ordinary console text, combines with
+no workflow or disclosure action, and rechecks the exact lifecycle, outcomes,
+and collection identities before emission without new analysis or persistent
+writes.
+
+The complete owner gate passes all 555 synthetic and real-FFmpeg tests at 88
+percent subprocess-aware coverage, Ruff, Black, mypy, every pre-commit check,
+and clean source/wheel builds. Candidate wheel SHA-256 is
+`ca0b4b9c116c1c73ec964925b15f03c5b988750c91e7d09428f4139955b5e621`;
+source-distribution SHA-256 is
+`dcd5ba9fd94fe4f86e260d9a8463594d3c3c18c8823c33edc9ac43a60dc27ec0`.
+The isolated wheel reports `pymo 0.6.4.dev6+g383165e4f`; it drove all 24 empty
+synthetic stages to a complete observed verdict, emitted byte-identical reports
+through the positional and resume locators, and rejected path disclosure with
+status 2 and no JSON output.
+
+Independent Terra-medium review first accepted implementation head `5288f06`
+without findings. After the owner added disclosure-option rejection and a
+public finding-code allowlist, renewed review accepted exact corrected head
+`383165e` without findings in the separate clean detached reviewer worktree.
+No pull request, hosted CI, merge, tag, installed iMac tool change, real-media
+run, or cleanup has occurred for v0.6.4.
+
 ADR 0090 keeps candidate documentation truthful until publication evidence
 exists, then reconciles the latest `main` in a separate documentation-only
 change. The immutable v0.6.1 tagged tree therefore retains its truthful
