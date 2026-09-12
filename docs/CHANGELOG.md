@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.6.5 - Unreleased
+## 0.6.5 - 2026-09-12
 
 - Add `pymo migrate --unattended PRIVATE_POLICY_JSON` for an explicitly
   pre-authorized non-interactive run over the unchanged one-stage engine.

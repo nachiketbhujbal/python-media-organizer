@@ -137,7 +137,36 @@ partial-initialization recovery, direct ordinary and sticky cross-owner
 ancestry rejection, and successful use beneath the real root-owned sticky
 `/private/tmp` boundary. Ruff, Black, mypy, diff integrity, focused tests, and
 all 585 synthetic and real-FFmpeg tests at 88 percent subprocess-aware
-coverage passed in the separate clean detached review worktree.
+coverage passed in the separate clean detached review worktree. A renewed
+review found no issues in the final review-ledger-only owner delta at
+`784f05c1f86075c33137900c771e1388949589d2`.
+
+PR #56 run `34678436108` and exact-main run `34678575789` passed Ubuntu,
+pinned Fedora 42, macOS, and the unconditional quality gate. The protected
+merge produced `b4a4c48ab0ce80f3021f13b2bc65e237b9859dec`. Annotated tag
+`v0.6.5` has object `f3de0d009d9e92d7a093a08ba65be22eccca51bf`, peels to that
+exact merge, and release run `34678764296` passed its mainline, tagged-build,
+version, and isolated-install checks. An independent tagged build produced
+wheel SHA-256
+`b4ab05ba2575bfdc8ab8b00c6bf649754fdcd96c888c36eef3175394785b5eaf`
+and source-distribution SHA-256
+`9b262c46225f3e8788db654457476f0c6c00f192cfb2da7c79907d72ebad563f`.
+The iMac command reports `pymo 0.6.5`. ADR 0098 records the separate post-tag
+release-truth reconciliation.
+
+Post-tag acceptance used the tagged installed command on two retained real
+working-copy trials: one routine and one containing reviewed validation
+findings plus exact image and video duplicates. Fresh exact-path clones were
+run from separately reviewed policies. The routine case completed and signed
+off in one invocation; the complex case crossed only matching authorized
+checkpoints, stopped at the external-`dups` boundary, and completed after the
+intact review tree was moved and the same policy resumed. Both schema-1 reports
+recorded complete observed preservation and human sign-off. Independent
+SHA-256 inventories matched each final working namespace to its reviewed
+policy-source result by relative path and content instance, and did the same
+for the complex case's retained review tree. A group-writable mount ancestry
+was rejected for private authority storage as designed; owner-private storage
+below trusted ancestry succeeded. Detailed collection evidence remains private.
 
 Renewed independent review accepted exact v0.6.2 owner head `2fdcfed` without
 findings after reproducing the closures of STATE-R01, OUT-R01, CACHE-R01, and
