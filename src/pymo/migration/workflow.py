@@ -12,6 +12,8 @@ from typing import Literal
 class CoordinatorOptions:
     verbose: bool
     quiet: bool
+    console_log_level: str | None
+    file_log_level: str | None
     timestamps: bool
     config: str | None
     show_ignored: bool
@@ -26,6 +28,8 @@ class CoordinatorOptions:
         return {
             "verbose": self.verbose,
             "quiet": self.quiet,
+            "console_log_level": self.console_log_level,
+            "file_log_level": self.file_log_level,
             "timestamps": self.timestamps,
             "config": self.config,
             "show_ignored": self.show_ignored,
@@ -222,6 +226,10 @@ def _global_child_options(options: CoordinatorOptions, log_file: Path) -> list[s
         result.append("--verbose")
     elif options.quiet:
         result.append("--quiet")
+    elif options.console_log_level is not None:
+        result.extend(("--console-log-level", options.console_log_level))
+    if options.file_log_level is not None:
+        result.extend(("--file-log-level", options.file_log_level))
     result.append("--timestamps" if options.timestamps else "--no-timestamps")
     result.extend(("--log-file", str(log_file)))
     if options.config is not None:

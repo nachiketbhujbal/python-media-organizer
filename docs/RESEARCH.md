@@ -858,24 +858,20 @@ commands whose contract is report-only, complicate read-only collections and
 two-root migration verification, and require the log itself to be excluded
 consistently from scan, validation, mutation, and preservation scope.
 
-Version 0.6.6 now owns logging-surface and level behavior, while version 0.6.7
-owns the visibility-profile and default-privacy comparison. They should
-evaluate the current explicit `--log-file PATH` behavior against a possible
-private diagnostic profile and automatic coordinator records. Any default must
-define append/rotation and locking behavior, failure policy, filename privacy,
-which root owns a two-collection command's log, and whether read-only commands
-may create it at all. A safer alternative may be an explicit configured log
-directory outside media collections while the append-only action journal and a
-future history command provide the durable collection audit record.
+Version 0.6.6 resolves the logging-surface and threshold portion through
+[ADR 0099](adrs/0099-separate-logging-surfaces-and-levels.md). Console and
+explicit diagnostic or migration-stage files have independent conventional
+thresholds; ordinary persistent diagnostics remain opt-in and append-only; and
+pymo performs no automatic rotation, pruning, replacement, or deletion.
 
-Logging-level controls should also be normalized without proliferating
-ambiguous flags. Evaluate a conventional `--log-level
-{DEBUG,INFO,WARNING,ERROR,CRITICAL}` interface, a convenient `--debug` alias,
-separate console/file thresholds, coherent full/private/quiet visibility
-profiles, and compatibility treatment for the current `--verbose`, `--quiet`,
-`--show-files`, and `--show-ignored` options. The current default remains
-console INFO and explicit-file INFO, with DEBUG and path disclosure enabled
-only deliberately until that compatibility decision ships.
+Version 0.6.7 still owns the visibility-profile and default-privacy comparison,
+including any convenient `--debug` alias and compatibility treatment for the
+current `--verbose`, `--quiet`, `--show-files`, and `--show-ignored` options.
+Automatic coordinator diagnostics remain research because any default must
+define locking, failure policy, filename privacy, ownership for a two-root
+command, and whether a read-only command may create state at all. The current
+default remains console `INFO`, explicit-file `INFO`, and deliberate path
+disclosure only.
 
 ## AI-tool repository coordination
 

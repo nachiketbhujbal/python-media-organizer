@@ -240,6 +240,8 @@ def _zero_unattended_policy(
     expected_options: dict[str, object] = {
         "verbose": False,
         "quiet": False,
+        "console_log_level": None,
+        "file_log_level": None,
         "timestamps": True,
         "config": None,
         "show_ignored": False,
@@ -583,15 +585,17 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
     assert "Migration synopsis" in started.stdout
     assert "Workflow: not started" in started.stdout
     payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert payload["tool_version"] == __version__
     assert payload["baseline"] == str(baseline.resolve())
     assert payload["working"] == str(working.resolve())
     assert payload["options"] == {
         "config": str(config.resolve()),
+        "console_log_level": None,
         "decode_timeout": 15,
         "ffmpeg": None,
         "ffprobe": None,
+        "file_log_level": None,
         "no_cache": True,
         "quiet": False,
         "show_ignored": True,
@@ -613,6 +617,45 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
     assert (
         json.loads(state_file(log_dir).read_text(encoding="utf-8"))["next_stage"] == 0
     )
+
+
+def test_saved_log_levels_control_coordinator_console_and_stage_file(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+
+    started = run_pymo(
+        "migrate",
+        baseline,
+        working,
+        "--log-dir",
+        log_dir,
+        "--console-log-level",
+        "ERROR",
+        "--file-log-level",
+        "DEBUG",
+        "--start",
+    )
+
+    assert started.returncode == 0, started.stdout + started.stderr
+    assert started.stdout == ""
+    assert started.stderr == ""
+    payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
+    assert payload["options"]["console_log_level"] == "ERROR"
+    assert payload["options"]["file_log_level"] == "DEBUG"
+
+    advanced = run_pymo("migrate", "--resume", log_dir, "--run-next")
+
+    assert advanced.returncode == 0, advanced.stdout + advanced.stderr
+    assert advanced.stdout == ""
+    assert advanced.stderr == ""
+    payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
+    attempt = payload["attempts"][0]
+    stage_log = log_dir / attempt["log_file"]
+    contents = stage_log.read_text(encoding="utf-8")
+    assert "DEBUG pymo Dispatching pymo command: scan" in contents
+    assert "INFO pymo Collection scan" in contents
 
 
 def test_resume_status_recovers_recorded_collections_and_options(
@@ -647,6 +690,8 @@ def test_resume_run_dispatches_saved_context_and_stops_at_checkpoint(
     saved_options = migrate.CoordinatorOptions(
         False,
         False,
+        None,
+        None,
         True,
         None,
         False,
@@ -860,6 +905,8 @@ def test_child_options_are_forwarded_only_to_applicable_stages(tmp_path: Path) -
     options = migrate.CoordinatorOptions(
         verbose=True,
         quiet=False,
+        console_log_level=None,
+        file_log_level="ERROR",
         timestamps=False,
         config=str(tmp_path / "settings.toml"),
         show_ignored=True,
@@ -879,6 +926,13 @@ def test_child_options_are_forwarded_only_to_applicable_stages(tmp_path: Path) -
     }
 
     assert "--workers" in commands["baseline-scan"]
+    assert "--verbose" in commands["baseline-scan"]
+    assert (
+        commands["baseline-scan"][
+            commands["baseline-scan"].index("--file-log-level") + 1
+        ]
+        == "ERROR"
+    )
     assert "--show-files" not in commands["baseline-scan"]
     assert "--show-files" in commands["baseline-validation"]
     assert "--no-cache" in commands["baseline-validation"]
@@ -901,7 +955,19 @@ def _state_at(log_dir: Path, baseline: Path, working: Path, next_stage: int) -> 
     log_dir.chmod(0o700)
     now = "2026-08-29T12:00:00-04:00"
     options = migrate.CoordinatorOptions(
-        False, False, True, None, False, False, None, None, None, None, False
+        False,
+        False,
+        None,
+        None,
+        True,
+        None,
+        False,
+        False,
+        None,
+        None,
+        None,
+        None,
+        False,
     )
     attempts: list[migrate.Attempt] = []
     for index, stage in enumerate(migrate._stages()[:next_stage], start=1):

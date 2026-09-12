@@ -375,7 +375,7 @@ between stages, preserves the initial restart-state binding, requires every
 reload to add exactly the one expected successful attempt, and stops with status
 2 if any of those invariants changes.
 
-The schema-2 restart file records canonical roots, the installed pymo version,
+The schema-3 restart file records canonical roots, the installed pymo version,
 fixed common options, attempts, statuses, measured child durations, and private
 log and outcome names. Collection and log-directory separation is checked by
 filesystem identity, so aliases on a case-insensitive or normalizing filesystem
@@ -395,8 +395,10 @@ coordination. Version 0.6.0 adds routine automatic advancement and version
 0.6.1 adds conservative in-process checkpoint questions. Version 0.6.2 adds the
 concise human synopsis without claiming a stable machine interface. Version
 0.6.3 adds explicit resume from the already-private coordinator directory, and
-version 0.6.4 adds the documented stable report projection. Logging and
-visibility policy, pymo-owned duplicate disposition, a sequential
+version 0.6.4 adds the documented stable report projection. Version 0.6.5 adds
+strict pre-authorized unattended checkpoints, and version 0.6.6 separates
+console and per-stage log thresholds without changing visibility.
+Visibility profiles, pymo-owned duplicate disposition, a sequential
 manifest-backed queue, and benchmark-proven scheduling remain separate later
 releases.
 
@@ -980,9 +982,11 @@ terminal:
 ```bash
 pymo --verbose organize "/path/to/media-collection"
 pymo --quiet organize "/path/to/media-collection"
+pymo --console-log-level warning organize "/path/to/media-collection"
 pymo --no-timestamps organize "/path/to/media-collection"
 pymo --timestamps find-video-duplicates "/path/to/media-collection"
 pymo --log-file "/path/to/pymo.log" organize "/path/to/media-collection"
+pymo --file-log-level debug --log-file "/path/to/pymo.log" organize "/path/to/media-collection"
 pymo --show-ignored organize "/path/to/media-collection"
 ```
 
@@ -997,6 +1001,14 @@ Help, version, and argument-parser output also remain unprefixed. Explicit log
 files always
 include ISO timestamps, levels, and logger names on every line regardless of
 the console choice.
+`--console-log-level` and `--file-log-level` independently accept `DEBUG`,
+`INFO`, `WARNING`, `ERROR`, or `CRITICAL`, case-insensitively. The explicit
+console selector cannot be combined with `--verbose` or `--quiet`. An ordinary
+file threshold requires `--log-file`; `migrate --file-log-level` instead
+controls the per-stage files in its explicit private `--log-dir`. New ordinary
+diagnostic files use mode `0600`, append without truncation, and reject an
+unsafe symbolic-link, non-regular, or multiply linked leaf. Pymo never rotates,
+prunes, replaces, or deletes diagnostic logs; the operator owns retention.
 `--show-ignored` is a separate privacy opt-in and may appear globally or after
 the subcommand's collection argument.
 

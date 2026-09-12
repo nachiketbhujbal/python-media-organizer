@@ -14,6 +14,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from pymo import __version__
+from pymo.logging_config import configure_logging, log_level_choices
 from pymo.logging_config import emit as print
 from pymo.migration.coordinator_state import (
     Attempt,
@@ -108,6 +109,8 @@ def _option_overrides(args: argparse.Namespace) -> dict[str, object]:
     names = (
         "verbose",
         "quiet",
+        "console_log_level",
+        "file_log_level",
         "timestamps",
         "config",
         "show_ignored",
@@ -132,6 +135,8 @@ def _initial_options(overrides: dict[str, object]) -> CoordinatorOptions:
     values: dict[str, object] = {
         "verbose": False,
         "quiet": False,
+        "console_log_level": None,
+        "file_log_level": None,
         "timestamps": True,
         "config": None,
         "show_ignored": False,
@@ -144,6 +149,28 @@ def _initial_options(overrides: dict[str, object]) -> CoordinatorOptions:
     }
     values.update(overrides)
     return CoordinatorOptions(**values)  # type: ignore[arg-type]
+
+
+def _configure_requested_logging(args: argparse.Namespace) -> None:
+    """Apply invocation logging before restart state is available."""
+    configure_logging(
+        verbose=bool(args.verbose) and not args.json,
+        quiet=bool(args.quiet) and not args.json,
+        timestamps=args.timestamps is not False and not args.json,
+        console_level="INFO" if args.json else args.console_log_level,
+    )
+
+
+def _configure_saved_logging(
+    options: CoordinatorOptions, *, structured_json: bool
+) -> None:
+    """Apply the strict saved console contract without opening a stage log."""
+    configure_logging(
+        verbose=options.verbose and not structured_json,
+        quiet=options.quiet and not structured_json,
+        timestamps=options.timestamps and not structured_json,
+        console_level="INFO" if structured_json else options.console_log_level,
+    )
 
 
 def _require_matching_options(
@@ -1103,6 +1130,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     output = parser.add_mutually_exclusive_group()
     output.add_argument("--verbose", action="store_true", default=None)
     output.add_argument("--quiet", action="store_true", default=None)
+    output.add_argument(
+        "--console-log-level",
+        type=str.upper,
+        choices=log_level_choices(),
+        default=None,
+    )
+    parser.add_argument(
+        "--file-log-level",
+        type=str.upper,
+        choices=log_level_choices(),
+        default=None,
+    )
     timestamps = parser.add_mutually_exclusive_group()
     timestamps.add_argument("--timestamps", dest="timestamps", action="store_true")
     timestamps.add_argument("--no-timestamps", dest="timestamps", action="store_false")
@@ -1125,6 +1164,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+    _configure_requested_logging(args)
     selected_action = any(
         (
             args.start,
@@ -1217,6 +1257,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     raise MigrationCoordinatorError(
                         "restart state was created by a different pymo version"
                     )
+                _configure_saved_logging(state.options, structured_json=args.json)
                 baseline = _resolve_argument_path(state.baseline)
                 working = _resolve_argument_path(state.working)
                 if baseline != state.baseline or working != state.working:
@@ -1280,11 +1321,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "migration restart state already exists in this private log directory"
                     )
                 created = _now()
+                options = _initial_options(option_overrides)
+                _configure_saved_logging(options, structured_json=False)
                 state = MigrationState(
                     __version__,
                     baseline,
                     working,
-                    _initial_options(option_overrides),
+                    options,
                     0,
                     (),
                     created,
@@ -1302,11 +1345,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                     if os.path.lexists(binding_path)
                     else _now()
                 )
+                options = _initial_options(option_overrides)
+                _configure_saved_logging(options, structured_json=False)
                 state = MigrationState(
                     __version__,
                     baseline,
                     working,
-                    _initial_options(option_overrides),
+                    options,
                     0,
                     (),
                     created,
@@ -1336,6 +1381,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise MigrationCoordinatorError(
                     "restart state was created by a different pymo version"
                 )
+            _configure_saved_logging(state.options, structured_json=args.json)
             _require_matching_options(option_overrides, state)
             return _dispatch_existing_state(args, log_dir, state_path, state)
     except (
