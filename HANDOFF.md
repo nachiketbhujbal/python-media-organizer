@@ -1513,6 +1513,27 @@ without findings after checking the complete documentation delta, release and
 tag facts, artifact hashes, privacy boundary, ADR ordering, and locked
 documentation gate.
 
+Version 0.6.7 is an unreleased candidate under ADR 0101. It adds global
+`--visibility full`, `private`, and `quiet` profiles over existing console and
+path-disclosure controls while preserving the path-private default, opt-in
+persistence, structured report schemas, and migration authority. Full selects
+console `DEBUG`, ignored paths, and affected file paths where already
+supported; private selects `INFO` without paths; quiet selects `WARNING`
+without paths. Ambiguous combinations with individual console or disclosure
+selectors fail before logging or collection work. Aggregate duplicate summary,
+cache-status, and migration-report privacy contracts remain stronger than the
+full profile. Migration stores only the existing resolved schema-3 options, so
+resume semantics require no new private-state schema.
+
+The candidate changes only unified CLI selection and forwarding plus
+collection-neutral tests and documentation. It adds no diagnostic persistence,
+report-schema field, state discovery, media mutation, checkpoint authority,
+duplicate disposition, quarantine movement, queue, scheduler, deletion, or
+exact-media behavior. Independent exact-SHA review, complete local and hosted
+gates, protected merge, exact-main verification, annotated tag, installed
+artifact proof, and post-tag release truth remain required before calling
+version 0.6.7 released.
+
 ## Media validation
 
 `src/pymo/validate.py` implements media-non-mutating
@@ -1591,11 +1612,19 @@ behavioral tests.
   never reveals them.
 - No persistent log is created by default.
 
+The version 0.6.7 candidate adds `--visibility full`, `private`, and `quiet`.
+Full chooses console `DEBUG` and the existing ignored/file disclosure options;
+private chooses `INFO` without paths; quiet chooses `WARNING` without paths.
+The path-private default remains unchanged. Profiles conflict with individual
+console and disclosure selectors, do not select a private-file threshold or
+create a log, and cannot weaken an aggregate summary or stable path-private
+report mode.
+
 Separating console output, explicitly requested durable diagnostics, restart
 state, and reports plus conventional log-level selection is the bounded
-version 0.6.6 release. Coherent visibility profiles, compatibility treatment,
-and a possible `--debug` alias are planned for version 0.6.7 rather than current
-behavior.
+version 0.6.6 release. ADR 0101 defines the separate version 0.6.7 profile
+layer and declines a `--debug` alias because debug severity and full path
+disclosure are intentionally different choices.
 Whether diagnostic persistence ever becomes automatic remains undecided.
 Default path-bearing logs or default path disclosure would conflict with the
 present opt-in privacy rule, report-only command guarantees, read-only

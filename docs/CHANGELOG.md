@@ -2,6 +2,27 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.6.7 - Unreleased
+
+- Add global `--visibility full`, `--visibility private`, and `--visibility
+  quiet` profiles over the existing console and path-disclosure controls while
+  preserving the path-private default.
+- Make full visibility select console `DEBUG`, ignored-path disclosure, and
+  affected-file disclosure only where the command already supports it. Make
+  private select console `INFO` without paths and quiet select `WARNING`
+  without paths.
+- Keep explicit diagnostic persistence, file-log thresholds, timestamps,
+  structured schemas, migration evidence, and workflow authority independent
+  of visibility profiles.
+- Reject profile conflicts with legacy console or disclosure selectors before
+  logging or persistent work. Preserve aggregate duplicate summaries,
+  path-private cache status, and migration-report schema 1 by rejecting full
+  visibility where those contracts cannot honor it.
+- Store migration profiles as their existing canonical schema-3 option values
+  so exact resume works without adding a restart-state compatibility boundary.
+  Retain all legacy flags independently and decline an ambiguous `--debug`
+  alias. Record the contract in ADR 0101.
+
 ## 0.6.6 - 2026-09-12
 
 - Add independent conventional `--console-log-level` and `--file-log-level`

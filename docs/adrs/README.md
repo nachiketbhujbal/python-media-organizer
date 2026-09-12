@@ -106,3 +106,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0098](0098-v0.6.5-release-truth.md) | V0.6.5 post-tag release truth |
 | [0099](0099-separate-logging-surfaces-and-levels.md) | Separate logging surfaces and levels |
 | [0100](0100-v0.6.6-release-truth.md) | V0.6.6 post-tag release truth |
+| [0101](0101-visibility-and-privacy-profiles.md) | Visibility and privacy profiles |

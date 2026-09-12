@@ -31,6 +31,12 @@ never duplicate the version in source or static project metadata.
 - Keep processing local. No telemetry, analytics, automatic networking, cloud
   AI, hosted model fallback, or automatic downloads.
 - Persistent logs are opt-in because paths and filenames are sensitive.
+- Keep `--visibility full`, `private`, and `quiet` as explicit profiles over
+  existing console and disclosure controls. The default remains path-private;
+  no profile creates persistent output or changes its independent threshold.
+  Reject ambiguous profile/legacy-selector combinations before logging or
+  collection work, and never let full visibility weaken aggregate summary,
+  cache-status, or migration-report privacy contracts.
 - Prefix every physical line of normal human-readable console logging with an
   ISO timestamp by default. Keep `--no-timestamps` as the explicit console
   opt-out, retain `--timestamps` for compatibility, and never prefix structured

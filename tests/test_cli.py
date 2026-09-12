@@ -53,6 +53,8 @@ def test_cli_help_and_argument_errors_remain_unprefixed(tmp_path: Path) -> None:
     assert "--no-timestamps" in help_result.stdout
     assert "--console-log-level" in help_result.stdout
     assert "--file-log-level" in help_result.stdout
+    assert "--visibility" in help_result.stdout
+    assert "{full,private,quiet}" in help_result.stdout
     assert "verify-migration" in help_result.stdout
     assert "correct-extensions" in help_result.stdout
     assert "migrate" in help_result.stdout
@@ -92,6 +94,16 @@ def test_dispatched_help_and_argument_errors_remain_unprefixed(
     assert error_result.stdout == ""
     assert error_result.stderr.startswith("usage: pymo cache")
     assert "Stopped cache" not in error_result.stderr
+
+    for profile_help in (
+        run_pymo("--visibility", "full", "cache", "--help"),
+        run_pymo("--visibility", "full", "cache", "status", "--help"),
+        run_pymo("--visibility", "full", "validate", "--help"),
+    ):
+        assert profile_help.returncode == 0
+        assert profile_help.stdout.startswith("usage:")
+        assert "Dispatching pymo command" not in profile_help.stdout
+        assert profile_help.stderr == ""
 
 
 def test_cli_does_not_create_persistent_logs_by_default(tmp_path: Path) -> None:
@@ -195,6 +207,221 @@ def test_console_level_conflicts_with_legacy_console_selectors(
     assert result.returncode == 2
     assert result.stdout == ""
     assert result.stderr.startswith("usage: pymo")
+
+
+def test_visibility_profiles_compose_console_and_path_disclosure(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "collection"
+    pics = collection / "pics"
+    pics.mkdir(parents=True)
+    (pics / ".DS_Store").write_bytes(b"view state")
+    invalid = pics / "damaged.jpg"
+    invalid.write_bytes(b"")
+
+    default = run_pymo("--no-timestamps", "validate", collection, "--no-cache")
+    private = run_pymo(
+        "--visibility",
+        "private",
+        "--no-timestamps",
+        "validate",
+        collection,
+        "--no-cache",
+    )
+    full = run_pymo(
+        "--visibility",
+        "full",
+        "--no-timestamps",
+        "validate",
+        collection,
+        "--no-cache",
+    )
+    quiet = run_pymo(
+        "--visibility",
+        "quiet",
+        "--no-timestamps",
+        "validate",
+        collection,
+        "--no-cache",
+    )
+
+    assert default.returncode == private.returncode == full.returncode == 1
+    for private_output in (default.stdout, private.stdout):
+        assert "Evaluating 1 media file(s)." in private_output
+        assert "damaged.jpg" not in private_output
+        assert ".DS_Store" not in private_output
+        assert "Dispatching pymo command" not in private_output
+    assert "pics/damaged.jpg" in full.stdout
+    assert ".DS_Store" in full.stdout
+    assert "Dispatching pymo command: validate" in full.stdout
+    assert quiet.returncode == 1
+    assert quiet.stdout == ""
+    assert quiet.stderr == ""
+
+
+@pytest.mark.parametrize(
+    ("prefix", "suffix"),
+    (
+        (("--visibility", "full", "--verbose", "organize"), ()),
+        (("--visibility", "private", "--show-ignored", "organize"), ()),
+        (("--visibility", "quiet", "validate"), ("--show-files",)),
+        (("--visibility", "private", "migrate"), ("--quiet",)),
+        (
+            ("--visibility", "quiet", "migrate"),
+            ("--console-log-level=ERROR",),
+        ),
+        (
+            ("--visibility", "full", "find-image-duplicates"),
+            ("--summary",),
+        ),
+    ),
+)
+def test_visibility_profile_conflicts_fail_before_persistent_work(
+    tmp_path: Path,
+    prefix: tuple[str, ...],
+    suffix: tuple[str, ...],
+) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+    log_file = tmp_path / "unexpected.log"
+
+    result = run_pymo("--log-file", log_file, *prefix, collection, *suffix)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr.startswith("usage: pymo")
+    assert not log_file.exists()
+    assert list(collection.iterdir()) == []
+
+
+def test_full_visibility_rejects_path_private_cache_status_before_logging(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+    log_file = tmp_path / "unexpected.log"
+
+    result = run_pymo(
+        "--visibility",
+        "full",
+        "--log-file",
+        log_file,
+        "cache",
+        "status",
+        collection,
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "--visibility full is not used by cache status" in result.stderr
+    assert not log_file.exists()
+    assert list(collection.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    ("command", "arguments", "expected_prefix"),
+    (
+        (
+            "cache",
+            ("warm", "images", "collection"),
+            ("warm", "--show-ignored", "--show-files"),
+        ),
+        (
+            "cache",
+            ("refresh", "images", "collection"),
+            ("refresh", "--show-ignored", "--show-files"),
+        ),
+        (
+            "scan",
+            ("collection",),
+            ("--show-ignored", "collection"),
+        ),
+        (
+            "validate",
+            ("collection",),
+            ("--show-ignored", "--show-files", "collection"),
+        ),
+    ),
+)
+def test_full_visibility_forwards_only_supported_disclosure_options(
+    monkeypatch,
+    command: str,
+    arguments: tuple[str, ...],
+    expected_prefix: tuple[str, ...],
+) -> None:
+    received: list[str] = []
+
+    def capture(values) -> int:
+        received.extend(values)
+        return 0
+
+    monkeypatch.setattr(cli, "_commands", lambda: {command: capture})
+
+    assert cli.main(["--visibility", "full", command, *arguments]) == 0
+    assert received[: len(expected_prefix)] == list(expected_prefix)
+
+
+def test_full_visibility_does_not_raise_the_file_log_threshold(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+    log_file = tmp_path / "pymo.log"
+
+    result = run_pymo(
+        "--visibility",
+        "full",
+        "--no-timestamps",
+        "--log-file",
+        log_file,
+        "organize",
+        collection,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Dispatching pymo command: organize" in result.stdout
+    contents = log_file.read_text(encoding="utf-8")
+    assert "DEBUG pymo Dispatching" not in contents
+    assert "INFO pymo Dry run" in contents
+
+
+def test_full_visibility_saves_canonical_migration_options(tmp_path: Path) -> None:
+    baseline = tmp_path / "baseline"
+    working = tmp_path / "working"
+    baseline.mkdir()
+    working.mkdir()
+    log_dir = tmp_path / "private-state"
+
+    result = run_pymo(
+        "--visibility",
+        "full",
+        "--no-timestamps",
+        "migrate",
+        baseline,
+        working,
+        "--log-dir",
+        log_dir,
+        "--start",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    payload = json.loads((log_dir / "pymo-migration-state.json").read_text())
+    assert payload["schema_version"] == 3
+    assert payload["options"]["verbose"] is False
+    assert payload["options"]["quiet"] is False
+    assert payload["options"]["console_log_level"] == "DEBUG"
+    assert payload["options"]["file_log_level"] is None
+    assert payload["options"]["show_files"] is True
+    assert payload["options"]["show_ignored"] is True
+
+    state_before = (log_dir / "pymo-migration-state.json").read_bytes()
+    refused_json = run_pymo(
+        "--visibility", "full", "migrate", "--resume", log_dir, "--json"
+    )
+    assert refused_json.returncode == 2
+    assert refused_json.stdout == ""
+    assert refused_json.stderr.startswith("usage: pymo")
+    assert (log_dir / "pymo-migration-state.json").read_bytes() == state_before
 
 
 def test_explicit_log_is_private_append_only_and_rejects_a_link(
@@ -367,6 +594,8 @@ def test_scan_json_stays_machine_readable_with_global_output_flags(
         (),
         ("--verbose",),
         ("--quiet",),
+        ("--visibility", "private"),
+        ("--visibility", "quiet"),
         ("--timestamps",),
         ("--no-timestamps",),
         ("--console-log-level", "CRITICAL"),
@@ -375,6 +604,24 @@ def test_scan_json_stays_machine_readable_with_global_output_flags(
 
         assert result.returncode == 0, result.stdout + result.stderr
         assert json.loads(result.stdout)["schema_version"] == 1
+
+
+def test_full_visibility_keeps_json_clean_while_disclosing_supported_paths(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "media-collection"
+    pics = collection / "pics"
+    pics.mkdir(parents=True)
+    (pics / ".DS_Store").write_bytes(b"view state")
+
+    result = run_pymo("--visibility", "full", "scan", collection, "--json")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    assert report["schema_version"] == 1
+    assert report["ignored_paths"] == ["pics/.DS_Store"]
+    assert result.stderr == ""
+    assert "Dispatching pymo command" not in result.stdout
 
 
 def test_validate_json_stays_machine_readable_with_global_output_flags(
@@ -387,6 +634,8 @@ def test_validate_json_stays_machine_readable_with_global_output_flags(
         (),
         ("--verbose",),
         ("--quiet",),
+        ("--visibility", "private"),
+        ("--visibility", "quiet"),
         ("--timestamps",),
         ("--no-timestamps",),
     ):
@@ -411,6 +660,8 @@ def test_migrate_json_stays_machine_readable_with_global_output_flags(
         (),
         ("--verbose",),
         ("--quiet",),
+        ("--visibility", "private"),
+        ("--visibility", "quiet"),
         ("--timestamps",),
         ("--no-timestamps",),
     ):
@@ -441,6 +692,8 @@ def test_cache_status_json_stays_machine_readable_and_read_only(
         (),
         ("--verbose",),
         ("--quiet",),
+        ("--visibility", "private"),
+        ("--visibility", "quiet"),
         ("--timestamps",),
         ("--no-timestamps",),
     ):
