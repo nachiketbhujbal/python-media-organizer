@@ -122,15 +122,30 @@ quality gates passed before annotated tag `v0.6.2` was created at merge
 `147b0e7`; its tag-triggered build and isolated install also passed. ADR 0092
 records the separate post-tag release-truth reconciliation.
 
-Independent Terra-medium review accepted exact v0.6.3 owner head `8ff9b40`
-without findings from a separate clean detached worktree. The reviewer verified
-the explicit locator and legacy forms, option and root recovery, version,
-lifecycle and outcome preflight, every existing action boundary, path-private
-unsafe-state handling, and no resume-specific parent-substitution regression.
-All 538 tests, including real FFmpeg coverage, passed in reviewer partitions at
-88 percent combined coverage; Ruff, Black, mypy, pre-commit, and package builds
-also passed. Merge, exact-main CI, and release evidence remain separate later
-boundaries.
+Independent Terra-medium review accepted exact v0.6.3 implementation head
+`8ff9b40` without findings from a separate clean detached worktree. The
+reviewer verified the explicit locator and legacy forms, option and root
+recovery, version, lifecycle and outcome preflight, every existing action
+boundary, path-private unsafe-state handling, and no resume-specific
+parent-substitution regression. All 538 tests, including real FFmpeg coverage,
+passed in reviewer partitions at 88 percent combined coverage; Ruff, Black,
+mypy, pre-commit, and package builds also passed. A renewed review found no
+issues in the final review-ledger-only owner delta at `c468432`.
+
+PR #52 run `34661469979` and exact-main run `34661753796` passed Ubuntu,
+pinned Fedora 42, macOS, and the unconditional quality gate. The protected
+merge produced `564d6cbe7d6486923e857b49804824cc77fb3150`. Annotated tag
+`v0.6.3` has object `35291a0768f2bb52ac32446424a0cc0e45b9622c`, peels to that
+exact merge, and release run `34662104080` passed its mainline, tagged-build,
+version, and isolated-install checks. An independent tagged build produced
+wheel SHA-256
+`31b9fb0d3e4ac6efbfed64549e20851dd277a81d3b010f0c775d9d00cac64be3`
+and source-distribution SHA-256
+`a12b47674a0fe77b1c0d617f91311456ea2338116c8933366ffc26a8164e0021`.
+The installed tagged wheel resumed a synthetic run using only its private state
+directory, recovered saved options and roots, ran three stages, and paused at
+validation review. The iMac's uv-managed command reports `pymo 0.6.3`. ADR
+0094 records the separate post-tag release-truth reconciliation.
 
 ## Scan review findings
 
