@@ -397,10 +397,11 @@ concise human synopsis without claiming a stable machine interface. Version
 0.6.3 adds explicit resume from the already-private coordinator directory, and
 version 0.6.4 adds the documented stable report projection. Version 0.6.5 adds
 strict pre-authorized unattended checkpoints, and version 0.6.6 separates
-console and per-stage log thresholds without changing visibility.
-Visibility profiles, pymo-owned duplicate disposition, a sequential
-manifest-backed queue, and benchmark-proven scheduling remain separate later
-releases.
+console and per-stage log thresholds without changing visibility. Version
+0.6.7 adds explicit full, private, and quiet visibility profiles while keeping
+the path-private default and opt-in diagnostic persistence. Pymo-owned
+duplicate disposition, a sequential manifest-backed queue, and
+benchmark-proven scheduling remain separate later releases.
 
 ### Verify a migration by exact bytes and media content
 
@@ -982,6 +983,9 @@ terminal:
 ```bash
 pymo --verbose organize "/path/to/media-collection"
 pymo --quiet organize "/path/to/media-collection"
+pymo --visibility full validate "/path/to/media-collection"
+pymo --visibility private organize "/path/to/media-collection"
+pymo --visibility quiet organize "/path/to/media-collection"
 pymo --console-log-level warning organize "/path/to/media-collection"
 pymo --no-timestamps organize "/path/to/media-collection"
 pymo --timestamps find-video-duplicates "/path/to/media-collection"
@@ -1011,6 +1015,20 @@ unsafe symbolic-link, non-regular, or multiply linked leaf. Pymo never rotates,
 prunes, replaces, or deletes diagnostic logs; the operator owns retention.
 `--show-ignored` is a separate privacy opt-in and may appear globally or after
 the subcommand's collection argument.
+
+`--visibility full` selects console `DEBUG`, shows ignored paths, and shows
+affected file paths where the command already supports `--show-files`.
+`--visibility private` selects console `INFO` without either disclosure, and
+`--visibility quiet` selects `WARNING` without either disclosure. Omitting the
+profile keeps the existing private default. A profile cannot be combined with
+`--verbose`, `--quiet`, `--console-log-level`, `--show-files`, or
+`--show-ignored`; the individual flags remain supported when no profile is
+selected. Full visibility is also incompatible with aggregate duplicate
+`--summary`, path-private `cache status`, and path-private migration-report
+JSON. Private and quiet profiles leave structured JSON clean. Profiles never
+create a log file or change its independent threshold, timestamp policy,
+report schema, or workflow authority. Global profile options go before the
+subcommand.
 
 ## Tests
 

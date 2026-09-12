@@ -45,6 +45,30 @@ def _commands() -> dict[str, Callable[[Sequence[str] | None], int]]:
     }
 
 
+def _visibility_profile_choices() -> tuple[str, ...]:
+    return ("full", "private", "quiet")
+
+
+def _profile_console_level(profile: str | None) -> str | None:
+    if profile == "full":
+        return "DEBUG"
+    if profile == "private":
+        return "INFO"
+    if profile == "quiet":
+        return "WARNING"
+    return None
+
+
+def _supports_show_files(command: str, cache_action: str | None) -> bool:
+    return command in {"validate", "verify-migration", "migrate"} or (
+        command == "cache" and cache_action in {"warm", "refresh"}
+    )
+
+
+def _contains_option(arguments: Sequence[str], options: set[str]) -> bool:
+    return any(value.partition("=")[0] in options for value in arguments)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pymo",
@@ -63,6 +87,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=str.upper,
         choices=log_level_choices(),
         help="minimum conventional level for human-readable console logging",
+    )
+    output.add_argument(
+        "--visibility",
+        type=str.lower,
+        choices=_visibility_profile_choices(),
+        metavar="{full,private,quiet}",
+        help=(
+            "select a coherent console and path-disclosure profile; "
+            "the default remains private"
+        ),
     )
     parser.add_argument(
         "--log-file",
@@ -108,6 +142,36 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    cache_action = (
+        args.arguments[0] if args.command == "cache" and args.arguments else None
+    )
+    explicit_child_disclosure = _contains_option(
+        args.arguments, {"--show-files", "--show-ignored"}
+    )
+    if args.visibility is not None and (args.show_ignored or explicit_child_disclosure):
+        parser.error(
+            "--visibility cannot be combined with --show-files or --show-ignored"
+        )
+    explicit_child_console = _contains_option(
+        args.arguments, {"--verbose", "--quiet", "--console-log-level"}
+    )
+    if args.visibility is not None and explicit_child_console:
+        parser.error(
+            "--visibility cannot be combined with --verbose, --quiet, or "
+            "--console-log-level"
+        )
+    if (
+        args.command == "cache"
+        and cache_action == "status"
+        and args.visibility == "full"
+    ):
+        parser.error("--visibility full is not used by cache status")
+    if (
+        args.command in {"find-image-duplicates", "find-video-duplicates"}
+        and args.visibility == "full"
+        and _contains_option(args.arguments, {"--summary"})
+    ):
+        parser.error("--visibility full cannot be combined with --summary")
     if args.command == "migrate" and args.log_file is not None:
         parser.error("migrate uses --log-dir for explicit per-stage private logs")
     if (
@@ -121,13 +185,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.command in {"scan", "validate", "cache", "verify-migration", "migrate"}
         and "--json" in args.arguments
     )
+    if args.command == "migrate" and structured_json and args.visibility == "full":
+        parser.error("--visibility full cannot be combined with migrate --json")
+    profile_console_level = _profile_console_level(args.visibility)
+    show_full_details = args.visibility == "full"
     try:
         configure_logging(
             verbose=args.verbose and not structured_json,
             quiet=args.quiet and not structured_json,
             log_file=args.log_file,
             timestamps=args.timestamps is not False and not structured_json,
-            console_level=("INFO" if structured_json else args.console_log_level),
+            console_level=(
+                "INFO"
+                if structured_json
+                else profile_console_level or args.console_log_level
+            ),
             file_level=args.file_log_level if args.log_file is not None else None,
         )
     except LoggingConfigurationError as error:
@@ -136,9 +208,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         logging.getLogger("pymo").debug("Dispatching pymo command: %s", args.command)
     commands = _commands()
     command_arguments = list(args.arguments)
-    cache_action = (
-        args.arguments[0] if args.command == "cache" and args.arguments else None
-    )
     if (
         args.command == "cache"
         and cache_action == "status"
@@ -146,8 +215,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     ):
         parser.error("--config and --show-ignored are not used by cache status")
     forwarded_options: list[str] = []
-    if args.show_ignored:
+    if args.show_ignored or show_full_details:
         forwarded_options.append("--show-ignored")
+    if show_full_details and _supports_show_files(args.command, cache_action):
+        forwarded_options.append("--show-files")
     if args.config is not None:
         forwarded_options.extend(("--config", str(args.config)))
     if args.command == "migrate" and not structured_json:
@@ -155,6 +226,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             forwarded_options.append("--verbose")
         elif args.quiet:
             forwarded_options.append("--quiet")
+        elif profile_console_level is not None:
+            forwarded_options.extend(("--console-log-level", profile_console_level))
         elif args.console_log_level is not None:
             forwarded_options.extend(("--console-log-level", args.console_log_level))
         if args.file_log_level is not None:

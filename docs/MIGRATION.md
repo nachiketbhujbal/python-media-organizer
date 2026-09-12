@@ -112,6 +112,9 @@ operator authorized in advance.
 Version 0.6.6 adds independently saved console and private stage-file logging
 thresholds without changing the stage sequence, checkpoint authority, path
 disclosure, or opt-in persistence boundary.
+Version 0.6.7 adds explicit visibility profiles over the already-saved console
+and disclosure settings without changing restart schema, workflow authority,
+or the path-private migration-report contract.
 First inspect the zero-write plan, then explicitly initialize one dedicated
 private directory outside and non-nested with both collections:
 
@@ -133,6 +136,22 @@ Pymo appends no ordinary `--log-file` for the coordinator, rotates or prunes no
 stage log, and grants no new disclosure or persistence authority through a
 logging threshold.
 Use the same released pymo version for the complete sequence.
+
+As a shorthand for coherent console and path-disclosure choices, place one
+profile before `migrate`:
+
+```bash
+pymo --visibility full migrate "/path/to/baseline" "/path/to/working-collection" --log-dir "/path/to/private-logs" --start
+```
+
+Full resolves to console `DEBUG` plus `--show-files` and `--show-ignored`;
+private resolves to console `INFO` with paths hidden; quiet resolves to console
+`WARNING` with paths hidden. The resolved values are stored in schema-3 state,
+so `--resume` recovers them without repeating the profile. A profile cannot be
+combined with an individual console or disclosure selector. It never changes
+the private stage-file threshold or creates persistence by itself. Full
+visibility cannot be used with migration-report `--json`, which remains
+strictly path-private.
 
 Inspect current state without advancing it, execute exactly one pending stage,
 or advance routine work to the next operator checkpoint:

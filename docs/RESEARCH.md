@@ -864,14 +864,16 @@ explicit diagnostic or migration-stage files have independent conventional
 thresholds; ordinary persistent diagnostics remain opt-in and append-only; and
 pymo performs no automatic rotation, pruning, replacement, or deletion.
 
-Version 0.6.7 still owns the visibility-profile and default-privacy comparison,
-including any convenient `--debug` alias and compatibility treatment for the
-current `--verbose`, `--quiet`, `--show-files`, and `--show-ignored` options.
+Version 0.6.7 resolves the visibility-profile and default-privacy comparison
+through [ADR 0101](adrs/0101-visibility-and-privacy-profiles.md). Explicit
+`full`, `private`, and `quiet` profiles compose existing console and disclosure
+controls while the default remains console `INFO`, explicit-file `INFO`, and
+deliberate path disclosure only. A `--debug` alias was declined because debug
+severity, verbose compatibility, and full path disclosure are distinct choices.
+
 Automatic coordinator diagnostics remain research because any default must
 define locking, failure policy, filename privacy, ownership for a two-root
-command, and whether a read-only command may create state at all. The current
-default remains console `INFO`, explicit-file `INFO`, and deliberate path
-disclosure only.
+command, and whether a read-only command may create state at all.
 
 ## AI-tool repository coordination
 
