@@ -99,3 +99,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0091](0091-typed-human-migration-synopsis.md) | Typed human migration synopsis |
 | [0092](0092-v0.6.2-release-truth.md) | V0.6.2 post-tag release truth |
 | [0093](0093-explicit-private-migration-resume.md) | Explicit private migration resume |
+| [0094](0094-v0.6.3-release-truth.md) | V0.6.3 post-tag release truth |

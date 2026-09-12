@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.6.3 - Unreleased
+## 0.6.3 - 2026-09-11
 
 - Add `pymo migrate --resume PRIVATE_STATE_DIRECTORY` as an explicit shorthand
   for continuing one existing migration without repeating its baseline,
