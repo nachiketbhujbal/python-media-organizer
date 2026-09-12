@@ -126,7 +126,18 @@ The same adversarial method was repeated after the first validation release.
 | POLICY-R03 | High | The first policy-binding correction omitted the persisted digest from the active operator-binding comparison, so a schema-valid state substitution on a failing child path could replace the digest and let a later policy inherit the run. | 0.6.5 | Superseded by POLICY-R04: the active-loop comparison was added, but its first regression altered only an in-memory state object and did not prove persistence across processes |
 | POLICY-R04 | High | The POLICY-R03 regression did not rewrite persisted restart state, leaving that replaceable file as the sole provenance for a later process and allowing a substituted digest plus replacement policy to inherit the run. | 0.6.5 | Resolved after renewed independent review by creating a separate no-replace private binding record for the original policy and run creation fields, cross-checking it at every unattended boundary, and rewriting the real state file in the regression before proving both the current run and later replacement-policy resume stop without another child dispatch |
 | POLICY-R05 | High | An existing group- or world-writable log directory let another user replace both the restart state and supposedly create-once binding record, allowing substituted authority to appear internally consistent. | 0.6.5 | Superseded by POLICY-R06: the current candidate requires an owner-private log directory before lock creation and rejects jointly replaced authority after that directory becomes public, but its first sticky-ancestor exception trusted an untrusted parent owner |
-| POLICY-R06 | High | The first safe-ancestry correction accepted a writable sticky parent when the current user owned only its child, even though an untrusted sticky-directory owner may remove any child and replace the complete log directory. | 0.6.5 | Corrected in the current candidate by requiring every ancestry component to be owned by root or the current user and accepting group- or world-writable ancestors only when sticky, with direct differing-owner regressions for both ordinary and sticky parents; renewed independent acceptance is pending |
+| POLICY-R06 | High | The first safe-ancestry correction accepted a writable sticky parent when the current user owned only its child, even though an untrusted sticky-directory owner may remove any child and replace the complete log directory. | 0.6.5 | Resolved after renewed independent review by requiring every ancestry component to be owned by root or the current user and accepting group- or world-writable ancestors only when sticky, with direct differing-owner regressions for both ordinary and sticky parents |
+
+Independent Terra-medium review accepted exact v0.6.5 implementation head
+`a001bbe` without findings after rejecting three earlier policy-binding
+candidates. The reviewer reproduced descriptor-bound organization and rename,
+real persisted-state substitution, replacement-policy resume rejection,
+owner-private directory enforcement, jointly replaced authority rejection,
+partial-initialization recovery, direct ordinary and sticky cross-owner
+ancestry rejection, and successful use beneath the real root-owned sticky
+`/private/tmp` boundary. Ruff, Black, mypy, diff integrity, focused tests, and
+all 585 synthetic and real-FFmpeg tests at 88 percent subprocess-aware
+coverage passed in the separate clean detached review worktree.
 
 Renewed independent review accepted exact v0.6.2 owner head `2fdcfed` without
 findings after reproducing the closures of STATE-R01, OUT-R01, CACHE-R01, and

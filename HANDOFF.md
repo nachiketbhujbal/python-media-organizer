@@ -1413,6 +1413,17 @@ human-managed `dups` quarantine, and no-delete boundary. ADR 0097 and
 protected merge, exact-main CI, annotated tag, tagged artifact, and install
 evidence are complete.
 
+Independent Terra-medium review accepted exact v0.6.5 implementation head
+`a001bbe` without findings after the owner resolved DIGEST-R01 and POLICY-R02
+through POLICY-R06. The separate clean detached review reproduced the planned-
+source content boundary, real persisted-state and replacement-policy attack,
+owner-private directory and trusted-ancestry rules, real root-owned sticky
+temporary-directory case, and interrupted initial-state recovery. Its complete
+gate passed all 585 tests at 88 percent subprocess-aware coverage plus Ruff,
+Black, mypy, and diff integrity. The candidate remains unreleased and has not
+been published as a pull request; a ledger-only exact head and renewed review
+remain required before publication.
+
 ## Media validation
 
 `src/pymo/validate.py` implements media-non-mutating
