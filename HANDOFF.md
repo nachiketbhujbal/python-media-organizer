@@ -1586,7 +1586,7 @@ behavioral tests.
 
 Separating console output, explicitly requested durable diagnostics, restart
 state, and reports plus conventional log-level selection is the bounded
-version 0.6.6 candidate. Coherent visibility profiles, compatibility treatment,
+version 0.6.6 release. Coherent visibility profiles, compatibility treatment,
 and a possible `--debug` alias are planned for version 0.6.7 rather than current
 behavior.
 Whether diagnostic persistence ever becomes automatic remains undecided.
