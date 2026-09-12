@@ -1459,6 +1459,14 @@ group-writable mount ancestry failed closed, while an owner-private state and
 policy location below trusted ancestry succeeded. No baseline, historical
 result, retained review tree, action history, or rollback evidence was deleted.
 
+Independent post-tag review rejected initial documentation head `d7845cd`
+because the canonical ADR index still ended at 0096. The owner added ordered
+entries for the already-released product decision in ADR 0097 and this
+release-truth decision in ADR 0098. Renewed review accepted corrected exact head
+`368c876` without findings after checking the complete documentation-only diff,
+release facts, privacy boundary, ADR links, and locked project gate. The final
+review-ledger-only delta requires renewed exact-head review before publication.
+
 ADR 0098 applies the post-tag release-truth boundary without moving or
 recreating the immutable release tag. Detailed operational evidence from real
 collections remains in the private Agent Relay record; the public repository

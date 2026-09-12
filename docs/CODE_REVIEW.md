@@ -168,6 +168,14 @@ for the complex case's retained review tree. A group-writable mount ancestry
 was rejected for private authority storage as designed; owner-private storage
 below trusted ancestry succeeded. Detailed collection evidence remains private.
 
+Independent post-tag review rejected initial documentation head `d7845cd`
+with DOC-R02 because the canonical ADR index stopped at 0096. The owner added
+ordered entries for ADRs 0097 and 0098. Renewed review accepted corrected exact
+head `368c876` without findings after checking the full documentation-only
+range, release evidence, privacy language, ADR links, diff integrity, and the
+locked pre-commit gate. This review-record-only final delta requires renewed
+exact-head review before publication.
+
 Renewed independent review accepted exact v0.6.2 owner head `2fdcfed` without
 findings after reproducing the closures of STATE-R01, OUT-R01, CACHE-R01, and
 SYN-R01 from a separate detached worktree. PR #50 and exact-main full-platform
@@ -288,6 +296,7 @@ reviewer worktree.
 | ID | Severity | Finding | Resolution target | Status |
 | --- | --- | --- | --- | --- |
 | DOC-R01 | Medium | Current documentation continued to describe v0.5.12 as an unreleased candidate with review and release work pending after its independently accepted implementation, protected merge, exact-main checks, annotated tag, release checks, and installed-artifact verification had completed. | 0.5.13 | Resolved by an authoritative current-document sweep that records v0.5.12 and v0.5.13 as released, preserves the exact historical release evidence, and changes no product behavior |
+| DOC-R02 | Medium | The first v0.6.5 post-tag reconciliation added ADR 0098 while the canonical ADR index still ended at 0096, leaving both the product decision in ADR 0097 and its release-truth decision undiscoverable from the index. | 0.6.5 | Resolved after independent review by adding ordered canonical index entries for ADRs 0097 and 0098; renewed review accepted corrected exact head `368c876` without findings |
 
 ## CI portability findings
 
