@@ -197,6 +197,12 @@ never duplicate the version in source or static project metadata.
   exactly matching option repetitions, revalidate all ordinary state, outcome,
   root, version, separation, and checkpoint boundaries, and never auto-discover
   state or treat restart bookkeeping as evidence or authority.
+- `migrate --unattended` must bind the first accepted private policy payload
+  SHA-256 into restart state and require byte-identical authority on every
+  unattended resume. Bind reviewed mutation decisions to descriptor-pinned
+  planned source bytes, recompute before apply, and carry organization and
+  rename evidence through the journaled move boundary. Never let a replacement
+  at the same path or a substituted valid policy inherit prior authority.
 - `migrate --json` is an explicit read-only projection of one existing strict
   coordinator run. Require its existing private state and lock, validate the
   complete lifecycle and typed outcome history, recheck state, outcomes, and
@@ -452,7 +458,8 @@ review and sign-off decisions in private restart state, and never lets one
 answer authorize a later checkpoint. The remaining operator-experience
 sequence retains its later release slots. Version 0.6.5 adds an explicit
 private non-interactive policy bound to the exact version, roots, options,
-ordered checkpoint decisions, and expected aggregate typed outcomes; missing
-or changed authority stops before the transition, and external quarantine
-remains human-managed.
+ordered checkpoint decisions, expected aggregate typed outcomes, stable source
+bytes, and the first policy payload digest stored in restart state; missing or
+changed authority stops before the transition, and external quarantine remains
+human-managed.
 Rescue copying and permanent deletion remain research.

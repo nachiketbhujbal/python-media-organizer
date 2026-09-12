@@ -525,6 +525,7 @@ class MigrationPreauthorization:
             or self.baseline != state.baseline
             or self.working != state.working
             or self.options != state.options.as_json()
+            or self.payload_sha256 != state.unattended_policy_sha256
         ):
             raise MigrationPreauthorizationError(
                 "pre-authorization policy does not match the migration binding"

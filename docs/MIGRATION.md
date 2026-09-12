@@ -197,10 +197,12 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" --log-dir "/path/
 pymo migrate --resume "/path/to/private-logs" --unattended "/path/to/private-policy.json"
 ```
 
-The mode revalidates the unchanged private policy, strict lifecycle, typed
-outcomes, version and options binding, and both collection identities between
-children and immediately before each authorized transition. Every checkpoint
-has its own exact expected aggregate; one authorization never covers another.
+The mode binds the first policy payload digest into private restart state and
+requires byte-identical policy content on every unattended resume. It also
+revalidates the current policy file, strict lifecycle, typed outcomes, version
+and options binding, and both collection identities between children and
+immediately before each authorized transition. Every checkpoint has its own
+exact expected aggregate; one authorization never covers another.
 A missing or mismatched current authorization returns status 1 without
 crossing it, while unsafe or changed authority returns setup status 2. An
 unexpected child status remains exact. The full private file requirements,

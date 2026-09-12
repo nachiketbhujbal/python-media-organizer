@@ -10,6 +10,7 @@ import sys
 import time
 import uuid
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from pymo import __version__
@@ -620,6 +621,26 @@ def _reload_unattended(
     return state
 
 
+def _bind_unattended_policy(
+    state_path: Path,
+    state: MigrationState,
+    policy: MigrationPreauthorization,
+) -> MigrationState:
+    if state.unattended_policy_sha256 is None:
+        state = replace(
+            state,
+            unattended_policy_sha256=policy.payload_sha256,
+            updated_at=_now(),
+        )
+        _write_state(state_path, state)
+        state = _load_state(state_path)
+    if state.unattended_policy_sha256 != policy.payload_sha256:
+        raise MigrationCoordinatorError(
+            "pre-authorization policy differs from the policy bound to this migration"
+        )
+    return state
+
+
 def _run_unattended(
     log_dir: Path,
     state_path: Path,
@@ -973,6 +994,7 @@ def _dispatch_existing_state(
         policy = load_preauthorization(
             args.unattended, roots=(state.baseline, state.working)
         )
+        state = _bind_unattended_policy(state_path, state, policy)
         policy.require_binding(state)
         return _run_unattended(log_dir, state_path, state, policy)
     if args.accept_status:
@@ -1228,6 +1250,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 (),
                 created,
                 created,
+                policy.payload_sha256,
             )
             policy.require_binding(initial_unattended_state)
             policy.require_current()

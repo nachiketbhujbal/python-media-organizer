@@ -1402,6 +1402,9 @@ canonical roots, saved options, ordered checkpoint decisions, and exact
 aggregate typed evidence expected at every authorized boundary. Valid missing
 or mismatched authority stops before the checkpoint with status 1; malformed,
 unsafe, changed, or mismatched authority fails setup with status 2. The mode
+stores the first policy payload digest in private restart state, requires
+byte-identical authority on resume, and binds every reviewed mutation plan to
+descriptor-pinned source bytes through the journal boundary. It
 retains the existing one-stage engine, exact child statuses, external
 human-managed `dups` quarantine, and no-delete boundary. ADR 0097 and
 `docs/MIGRATION_POLICY.md` own the contract; no release claim exists until the

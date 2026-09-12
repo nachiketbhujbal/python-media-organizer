@@ -10,9 +10,9 @@ All notable changes to `python-media-organizer` will be recorded here.
   roots, saved coordinator options, ordered checkpoint decisions, and exact
   aggregate typed outcomes expected at each boundary.
 - Bind every transformation and duplicate apply to a versioned private digest
-  of its ordered source/target plan so equal aggregate counts cannot authorize
-  different files, and require the apply child to recompute that digest before
-  its first mutation.
+  of its ordered source/target plan and planned source bytes so equal aggregate
+  counts or different content at the same paths cannot inherit authority, and
+  require the apply child to recompute that digest before its first mutation.
 - Match successful and status-one validation findings, transformation and
   exact-duplicate previews, without-`dups` simulation totals, and ordinary
   final verification before recording the corresponding pre-authorized
@@ -21,8 +21,8 @@ All notable changes to `python-media-organizer` will be recorded here.
   status 2 for malformed, unsafe, changed, or binding-mismatched policy; and
   preserve every unexpected child status including interruption 130.
 - Permit one invocation to validate policy, create explicitly located private
-  restart state, and drive a new run, while supporting the same unchanged
-  policy through explicit `--resume`.
+  restart state, and drive a new run. Bind that run to the first policy payload
+  digest and require byte-identical policy content through explicit `--resume`.
 - Keep policies outside both collections as stable private regular files with
   no group or other access. Keep pymo non-deleting and require the existing
   externally managed absent-`dups` boundary before final fresh evidence.

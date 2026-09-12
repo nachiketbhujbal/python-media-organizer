@@ -39,10 +39,12 @@ sorted finding severity/code/count triples, and whether a cache issue exists.
 No policy may accept incomplete discovery or a cache issue. Apply authority
 binds the matching successful transformation or exact-duplicate preview,
 including its complete aggregate plan and a versioned SHA-256 digest of the
-ordered private source/target decisions. This prevents an equal-count but
-different-file plan from inheriting authority. The coordinator passes that
-reviewed digest privately to the apply child, which recomputes and compares the
-current plan before its first mutation. External-quarantine authority binds a
+ordered private source/target decisions and the descriptor-pinned SHA-256 of
+every planned source. This prevents an equal-count or same-path but different-
+content plan from inheriting authority. The coordinator passes that reviewed
+digest privately to the apply child, which recomputes and compares the current
+plan before its first mutation; organization and rename also carry that exact
+file evidence into the journaled move boundary. External-quarantine authority binds a
 successful complete without-`dups` simulation and its review-tree totals.
 Final-signoff authority binds a successful complete ordinary final
 verification with no unaccounted or unsupported source content. Policy
@@ -51,10 +53,14 @@ authority never substitutes for those freshly executed outcomes.
 The policy is path-sensitive private data. It must be a stable no-follow
 regular file outside both collections, no larger than one MiB, with one hard
 link and no group or other permissions. Its exact bytes and filesystem identity
-are fixed for the invocation and rechecked throughout the loop. The coordinator
-also revalidates strict restart history, typed outcomes, the exact pymo version,
-saved options, roots, creation binding, and both live collection identities
-between children and immediately before a pre-authorized transition.
+are fixed for the invocation and rechecked throughout the loop. The first
+unattended use also stores the policy payload SHA-256 in private restart state;
+every later unattended resume requires the identical payload. The exact bytes
+may be relocated to another safe private path, but editing, reformatting, or
+substituting policy content is rejected. The coordinator also revalidates
+strict restart history, typed outcomes, the exact pymo version, saved options,
+roots, creation binding, and both live collection identities between children
+and immediately before a pre-authorized transition.
 
 An exact match records the same existing checkpoint action used by interactive
 operation: successful review acknowledgement, status-one acknowledgement,

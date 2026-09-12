@@ -298,3 +298,39 @@ def test_organizer_uses_custom_classification_extensions(
     assert result.returncode == 0, result.stdout + result.stderr
     assert (tmp_path / "pics" / "specimen.garden").is_file()
     assert not source.exists()
+
+
+def test_coordinator_evidence_survives_until_organization_journal_boundary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "collection"
+    private = tmp_path / "private"
+    root.mkdir()
+    private.mkdir()
+    source = root / "photo.jpg"
+    Image.new("RGB", (2, 2), "red").save(source)
+    outcome = private / "organization.outcome.json"
+    assert organize.main([str(root), "--migration-outcome", str(outcome)]) == 0
+    digest = json.loads(outcome.read_text(encoding="utf-8"))["data"]["decision_digest"]
+    real_apply = organize.apply_organization_plan
+
+    def replace_before_journal(*args, **kwargs):
+        Image.new("RGB", (2, 2), "blue").save(source)
+        return real_apply(*args, **kwargs)
+
+    monkeypatch.setattr(organize, "apply_organization_plan", replace_before_journal)
+
+    assert (
+        organize.main(
+            [
+                str(root),
+                "--apply",
+                "--migration-decision-digest",
+                digest,
+            ]
+        )
+        == 1
+    )
+    assert source.exists()
+    assert not (root / "pics").exists()
+    assert not action_log_path(root).exists()

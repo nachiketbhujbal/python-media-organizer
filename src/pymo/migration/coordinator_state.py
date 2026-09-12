@@ -64,6 +64,7 @@ class MigrationState:
     attempts: tuple[Attempt, ...]
     created_at: str
     updated_at: str
+    unattended_policy_sha256: str | None = None
 
     def as_json(self) -> dict[str, Any]:
         return {
@@ -76,6 +77,7 @@ class MigrationState:
             "attempts": [attempt.as_json() for attempt in self.attempts],
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "unattended_policy_sha256": self.unattended_policy_sha256,
         }
 
 
@@ -222,6 +224,16 @@ def _require_optional_str(value: object, field: str) -> str | None:
     if value is not None and (not isinstance(value, str) or not value):
         raise MigrationCoordinatorError(f"migration restart state has invalid {field}")
     return value
+
+
+def _require_optional_sha256(value: object, field: str) -> str | None:
+    result = _require_optional_str(value, field)
+    if result is not None and (
+        len(result) != 64
+        or any(character not in "0123456789abcdef" for character in result)
+    ):
+        raise MigrationCoordinatorError(f"migration restart state has invalid {field}")
+    return result
 
 
 def _require_absolute_optional_path(value: object, field: str) -> str | None:
@@ -468,6 +480,7 @@ def _load_state(path: Path) -> MigrationState:
         "attempts",
         "created_at",
         "updated_at",
+        "unattended_policy_sha256",
     }
     if not isinstance(value, dict) or set(value) != expected:
         raise MigrationCoordinatorError("migration restart state is malformed")
@@ -480,6 +493,9 @@ def _load_state(path: Path) -> MigrationState:
     attempts_value = value["attempts"]
     created_at = value["created_at"]
     updated_at = value["updated_at"]
+    unattended_policy_sha256 = _require_optional_sha256(
+        value["unattended_policy_sha256"], "unattended policy digest"
+    )
     if tool_version is None or baseline is None or working is None:
         raise MigrationCoordinatorError("migration restart roots are malformed")
     if type(next_stage) is not int or not 0 <= next_stage <= len(_stages()):
@@ -499,6 +515,7 @@ def _load_state(path: Path) -> MigrationState:
         attempts=attempts,
         created_at=created_at,
         updated_at=updated_at,
+        unattended_policy_sha256=unattended_policy_sha256,
     )
 
 
@@ -514,4 +531,5 @@ def _updated_state(
         attempts=(*state.attempts, attempt),
         created_at=state.created_at,
         updated_at=_now(),
+        unattended_policy_sha256=state.unattended_policy_sha256,
     )

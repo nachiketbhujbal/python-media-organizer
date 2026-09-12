@@ -329,12 +329,14 @@ terminal questions. The private schema-1 policy binds the exact pymo version,
 canonical roots, saved options, separately enumerated checkpoint decisions,
 and exact aggregate typed results expected at each boundary. Different
 transformation plans with the same counts remain distinct through a
-versioned digest of their private source/target decisions. A valid but
+versioned digest of their private source/target decisions and exact planned
+source bytes. The first unattended use binds the policy payload digest into
+restart state, so resume cannot substitute different authority. A valid but
 missing or mismatched authorization stops with status 1 before crossing the
 checkpoint; malformed, unsafe, changed, or binding-mismatched authority stops
 with setup status 2. Pymo still never moves or deletes `dups`; a present review
 tree pauses the unattended run until the operator retains it externally and
-resumes with the same unchanged policy. See the
+resumes with the same byte-identical policy payload. See the
 [unattended policy contract](docs/MIGRATION_POLICY.md).
 
 `--interactive` uses the same one-stage engine and routine advancement, but

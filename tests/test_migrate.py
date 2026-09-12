@@ -1863,6 +1863,11 @@ def test_unattended_preview_mismatch_stops_before_apply(
             "extension-apply": {"decision_digest": "migration-decision-v1:" + "0" * 64}
         },
     )
+    migrate._bind_unattended_policy(
+        state_file(log_dir),
+        migrate._load_state(state_file(log_dir)),
+        migrate.load_preauthorization(policy, roots=(baseline, working)),
+    )
     before = state_file(log_dir).read_bytes()
     observed: list[list[str]] = []
     monkeypatch.setattr(
@@ -2079,6 +2084,60 @@ def test_unattended_policy_change_stops_after_current_child(
     assert migrate._load_state(state_file(log_dir)).next_stage == 1
 
 
+def test_unattended_resume_rejects_a_different_valid_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    original = _zero_unattended_policy(
+        tmp_path / "original-policy.json",
+        baseline,
+        working,
+        omitted={"working-validation"},
+    )
+    replacement = _zero_unattended_policy(
+        tmp_path / "replacement-policy.json", baseline, working
+    )
+    observed: list[list[str]] = []
+
+    def stopped(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        return subprocess.CompletedProcess(command, 7)
+
+    monkeypatch.setattr(migrate.subprocess, "run", stopped)
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(original),
+            ]
+        )
+        == 7
+    )
+    bound_state = migrate._load_state(state_file(log_dir))
+    assert bound_state.unattended_policy_sha256 is not None
+    assert len(observed) == 1
+
+    assert (
+        migrate.main(
+            [
+                "--resume",
+                str(log_dir),
+                "--unattended",
+                str(replacement),
+            ]
+        )
+        == 2
+    )
+    assert len(observed) == 1
+    assert migrate._load_state(state_file(log_dir)) == bound_state
+
+
 def test_unattended_returns_exact_unexpected_child_status(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2211,6 +2270,44 @@ def test_coordinator_bound_apply_refuses_a_changed_private_plan(
     assert not (collection / "pics").exists()
     assert not (collection / "vids").exists()
     assert not (collection / "collection-actions-log.jsonl").exists()
+
+
+@pytest.mark.parametrize("command", ["organize", "rename"])
+def test_coordinator_bound_apply_rejects_same_path_content_replacement(
+    tmp_path: Path, command: str
+) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+    if command == "rename":
+        (collection / "pics").mkdir()
+        image = collection / "pics" / "2026-01-02 03.04.05.jpg"
+    else:
+        image = collection / "2026-01-02 03.04.05.jpg"
+    Image.new("RGB", (2, 2), "red").save(image)
+    private = tmp_path / "private"
+    private.mkdir()
+    outcome = private / f"{command}-preview.outcome.json"
+
+    preview = run_pymo(command, collection, "--migration-outcome", outcome)
+    assert preview.returncode == 0, preview.stdout + preview.stderr
+    digest = json.loads(outcome.read_text(encoding="utf-8"))["data"]["decision_digest"]
+
+    Image.new("RGB", (2, 2), "blue").save(image)
+    applied = run_pymo(
+        command,
+        collection,
+        "--apply",
+        "--migration-decision-digest",
+        digest,
+    )
+
+    assert applied.returncode == 1
+    assert "current plan differs from the reviewed preview" in applied.stderr
+    assert image.exists()
+    assert not (collection / "collection-actions-log.jsonl").exists()
+    if command == "organize":
+        assert not (collection / "pics").exists()
+        assert not (collection / "vids").exists()
 
 
 def test_apply_checkpoint_requires_second_explicit_boundary(
@@ -2712,6 +2809,10 @@ def test_external_quarantine_confirmation_requires_absent_dups_path(
         (lambda value: value["options"].update(workers=33), "workers are out of range"),
         (lambda value: value.update(created_at="not-a-time"), "invalid creation time"),
         (lambda value: value.update(baseline="relative"), "non-absolute baseline"),
+        (
+            lambda value: value.update(unattended_policy_sha256="not-a-digest"),
+            "invalid unattended policy digest",
+        ),
     ],
 )
 def test_restart_state_fails_closed(tmp_path: Path, mutation, message: str) -> None:

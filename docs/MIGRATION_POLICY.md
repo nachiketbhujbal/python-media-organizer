@@ -34,6 +34,12 @@ The policy contains collection paths and is private. Its file must:
 - live outside both collection roots; and
 - remain byte-for-byte and identity-stable for the complete invocation.
 
+The first unattended invocation binds the policy payload SHA-256 into that
+run's private restart state. Every later unattended resume must present the
+identical bytes. An exact copy may be supplied from another safe private path,
+but reformatting or changing even otherwise valid policy JSON requires a new
+migration run; it cannot broaden authority for an existing run.
+
 Keep the policy and migration log directory private. Neither is media evidence,
 the collection action journal, quarantine proof, or deletion authority.
 
@@ -140,12 +146,15 @@ match its checkpoint. An exact-duplicate apply uses:
 ```
 
 The versioned digest covers the ordered private source/target decisions and
-relevant exact content identities; it prevents a different plan with identical
-aggregate counts from inheriting authority. It reveals no path by itself but is
+descriptor-pinned SHA-256 content for every source that would move; it prevents
+a different plan with identical aggregate counts, or different content at the
+same paths, from inheriting authority. It reveals no path by itself but is
 obtained from private coordinator outcome evidence. The coordinator passes the
 reviewed digest to the apply child, which recomputes the current plan and stops
-before mutation if it differs. `media_kind` must match the image or video
-checkpoint. External quarantine uses the successful simulation totals:
+before mutation if it differs. Organization and rename also carry the same
+file state and SHA-256 into the journaled move boundary. `media_kind` must match
+the image or video checkpoint. External quarantine uses the successful
+simulation totals:
 
 ```json
 {
