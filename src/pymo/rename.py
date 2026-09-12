@@ -29,6 +29,7 @@ from pymo.action_log import (
     NoUndoableRun,
     ToolId,
 )
+from pymo.cache.hashes import sha256_descriptor
 from pymo.classification import Classifier
 from pymo.config import (
     ConfigError,
@@ -39,10 +40,13 @@ from pymo.config import (
     load_config,
 )
 from pymo.discovery import DiscoveryError
+from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
 from pymo.migration.outcome import (
     MigrationOutcomeError,
     add_outcome_argument,
+    decision_digest,
+    decision_digest_matches,
     outcome_record,
     write_outcome,
 )
@@ -313,10 +317,26 @@ def undo_renames(root: Path, apply: bool) -> int:
     return 0
 
 
-def apply_rename_plan(root: Path, plan: list[RenameRecord]) -> Path:
-    actions = [
-        Action.for_file(root, record.source, record.target, "RENAME") for record in plan
-    ]
+def apply_rename_plan(
+    root: Path,
+    plan: list[RenameRecord],
+    evidence: dict[Path, tuple[FileState, str]] | None = None,
+) -> Path:
+    actions = []
+    for record in plan:
+        if evidence is None:
+            action = Action.for_file(root, record.source, record.target, "RENAME")
+        else:
+            state, byte_sha256 = evidence[record.source]
+            action = Action.for_evidenced_file(
+                root,
+                record.source,
+                record.target,
+                "RENAME",
+                state,
+                byte_sha256,
+            )
+        actions.append(action)
     log = ActionLog(root)
     with log.transaction(ToolId.RENAME) as transaction:
         for action in actions:
@@ -364,11 +384,15 @@ def _write_migration_outcome(
     root: Path,
     *,
     apply: bool,
+    decision_digest_value: str | None,
     files: int,
     status: int,
 ) -> int:
     if path is None:
         return status
+    if decision_digest_value is None:
+        print("Migration outcome could not be recorded safely.", file=sys.stderr)
+        return 1
     try:
         write_outcome(
             path,
@@ -382,6 +406,7 @@ def _write_migration_outcome(
                     "files": files,
                     "directories_created": 0,
                     "directories_removed": 0,
+                    "decision_digest": decision_digest_value,
                 },
             ),
             root,
@@ -390,6 +415,40 @@ def _write_migration_outcome(
         print("Migration outcome could not be recorded safely.", file=sys.stderr)
         return 1
     return status
+
+
+def _decision_digest(
+    root: Path,
+    plan: Sequence[RenameRecord],
+    evidence: dict[Path, tuple[FileState, str]],
+) -> str:
+    return decision_digest(
+        "rename",
+        [
+            {
+                "source": record.source.relative_to(root).as_posix(),
+                "target": record.target.relative_to(root).as_posix(),
+                "kind": record.kind,
+                "timestamp": record.timestamp,
+                "descriptor": record.descriptor,
+                "byte_sha256": evidence[record.source][1],
+            }
+            for record in plan
+        ],
+    )
+
+
+def _migration_decision(
+    root: Path, plan: Sequence[RenameRecord]
+) -> tuple[str, dict[Path, tuple[FileState, str]]]:
+    evidence: dict[Path, tuple[FileState, str]] = {}
+    for record in plan:
+        state = FileState.capture(record.source)
+        with open_stable_file(
+            root, record.source, state, "rename migration decision"
+        ) as descriptor:
+            evidence[record.source] = (state, sha256_descriptor(descriptor))
+    return _decision_digest(root, plan, evidence), evidence
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -433,6 +492,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     for number, message in enumerate(messages):
         print(f"\n{message}" if number == 0 else message)
 
+    decision_digest_value: str | None = None
+    migration_evidence: dict[Path, tuple[FileState, str]] | None = None
+    if args.migration_outcome is not None or args.migration_decision_digest is not None:
+        try:
+            decision_digest_value, migration_evidence = _migration_decision(root, plan)
+        except (FileChangedError, OSError):
+            print(
+                "Renaming stopped safely: a planned source could not be bound to stable content.",
+                file=sys.stderr,
+            )
+            return 1
+
     if not args.apply:
         print(f"\nWould rename {len(plan)} media file(s).")
         print(f"Already using this naming scheme: {already_named} file(s).")
@@ -442,19 +513,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.migration_outcome,
             root,
             apply=False,
+            decision_digest_value=decision_digest_value,
             files=len(plan),
             status=0,
         )
+
+    if not decision_digest_matches(
+        args.migration_decision_digest, decision_digest_value or ""
+    ):
+        print(
+            "Renaming stopped safely: the current plan differs from the reviewed preview.",
+            file=sys.stderr,
+        )
+        return 1
 
     if not plan:
         print("\nRenamed 0 media file(s).")
         print(f"Already using this naming scheme: {already_named} file(s).")
         return _write_migration_outcome(
-            args.migration_outcome, root, apply=True, files=0, status=0
+            args.migration_outcome,
+            root,
+            apply=True,
+            decision_digest_value=decision_digest_value,
+            files=0,
+            status=0,
         )
 
     try:
-        log_path = apply_rename_plan(root, plan)
+        log_path = apply_rename_plan(root, plan, migration_evidence)
     except (ActionConflict, ActionLogError, OSError) as error:
         print(f"\nRenaming stopped safely: {error}", file=sys.stderr)
         print(
@@ -475,6 +561,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.migration_outcome,
             root,
             apply=True,
+            decision_digest_value=decision_digest_value,
             files=len(plan),
             status=1,
         )
@@ -483,6 +570,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.migration_outcome,
         root,
         apply=True,
+        decision_digest_value=decision_digest_value,
         files=len(plan),
         status=0,
     )

@@ -4,8 +4,10 @@ import io
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -13,7 +15,13 @@ from PIL import Image
 
 from pymo import __version__, cli, migrate
 from pymo.logging_config import configure_logging
-from pymo.migration.outcome import OutcomeCategory, ResultKind, outcome_record
+from pymo.migration.outcome import (
+    OutcomeCategory,
+    ResultKind,
+    decision_digest,
+    outcome_record,
+)
+from pymo.migration.unattended_binding import _ancestor_is_safe
 from pymo.migration.workflow import child_command
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -130,6 +138,7 @@ def completed_child(
             "files": 0,
             "directories_created": 0,
             "directories_removed": 0,
+            "decision_digest": decision_digest(operations[child], []),
         }
     else:
         category = "duplicates"
@@ -141,6 +150,14 @@ def completed_child(
             "extra_copies": 0,
             "duplicate_bytes": 0,
             "skipped": 0,
+            "decision_digest": decision_digest(
+                (
+                    "image-duplicates"
+                    if child == "find-image-duplicates"
+                    else "video-duplicates"
+                ),
+                [],
+            ),
             "cache": {
                 "enabled": False,
                 "reused": 0,
@@ -181,6 +198,168 @@ def collections(tmp_path: Path) -> tuple[Path, Path]:
 
 def state_file(log_dir: Path) -> Path:
     return log_dir / "pymo-migration-state.json"
+
+
+def policy_binding_file(log_dir: Path) -> Path:
+    return log_dir / "pymo-unattended-policy-binding.json"
+
+
+def _zero_validation_expected(status: int = 0) -> dict[str, object]:
+    failed = status == 1
+    return {
+        "status": status,
+        "media_files": int(failed),
+        "media_bytes": 0,
+        "pictures": int(failed),
+        "videos": 0,
+        "other_files": 0,
+        "symbolic_links": 0,
+        "unreadable": 0,
+        "changed": 0,
+        "healthy": 0,
+        "warning_only": 0,
+        "errors": int(failed),
+        "findings": (
+            [{"severity": "error", "code": "invalid_image", "count": 1}]
+            if failed
+            else []
+        ),
+        "cache_issue": False,
+    }
+
+
+def _zero_unattended_policy(
+    path: Path,
+    baseline: Path,
+    working: Path,
+    *,
+    options: dict[str, object] | None = None,
+    overrides: dict[str, dict[str, object]] | None = None,
+    omitted: set[str] | None = None,
+) -> Path:
+    expected_options: dict[str, object] = {
+        "verbose": False,
+        "quiet": False,
+        "timestamps": True,
+        "config": None,
+        "show_ignored": False,
+        "show_files": False,
+        "ffmpeg": None,
+        "ffprobe": None,
+        "decode_timeout": None,
+        "workers": None,
+        "no_cache": False,
+    }
+    if options is not None:
+        expected_options.update(options)
+    transformations = {
+        "extension-apply": "extension-correction",
+        "organize-apply": "organization",
+        "rename-apply": "rename",
+    }
+    values: list[dict[str, object]] = []
+    for checkpoint in (
+        "baseline-validation",
+        "working-validation",
+        "extension-apply",
+        "organize-apply",
+        "rename-apply",
+        "image-duplicates-apply",
+        "video-duplicates-apply",
+        "external-quarantine",
+        "final-working-validation",
+        "final-signoff",
+    ):
+        if omitted and checkpoint in omitted:
+            continue
+        if checkpoint in {
+            "baseline-validation",
+            "working-validation",
+            "final-working-validation",
+        }:
+            decision = "accept-validation"
+            expected = _zero_validation_expected()
+        elif checkpoint in transformations:
+            decision = "apply"
+            expected = {
+                "status": 0,
+                "operation": transformations[checkpoint],
+                "files": 0,
+                "directories_created": 0,
+                "directories_removed": 0,
+                "decision_digest": decision_digest(transformations[checkpoint], []),
+            }
+        elif checkpoint.endswith("duplicates-apply"):
+            decision = "apply"
+            expected = {
+                "status": 0,
+                "media_kind": ("image" if checkpoint.startswith("image-") else "video"),
+                "scanned_files": 0,
+                "scanned_bytes": 0,
+                "groups": 0,
+                "extra_copies": 0,
+                "duplicate_bytes": 0,
+                "skipped": 0,
+                "cache_issue": False,
+                "decision_digest": decision_digest(
+                    (
+                        "image-duplicates"
+                        if checkpoint.startswith("image-")
+                        else "video-duplicates"
+                    ),
+                    [],
+                ),
+            }
+        elif checkpoint == "external-quarantine":
+            decision = "confirm-quarantine"
+            expected = {
+                "status": 0,
+                "review_files": 0,
+                "review_bytes": 0,
+                "verdict": "complete",
+                "disposition": "eligible-for-human-quarantine-review",
+            }
+        else:
+            decision = "signoff"
+            expected = {
+                "status": 0,
+                "source_files": 0,
+                "source_bytes": 0,
+                "source_unique_streams": 0,
+                "accounted_unique_streams": 0,
+                "accounted_source_files": 0,
+                "unaccounted_unique_streams": 0,
+                "unaccounted_source_files": 0,
+                "unsupported_unique_streams": 0,
+                "unsupported_source_files": 0,
+                "destination_files": 0,
+                "destination_bytes": 0,
+                "review_files": 0,
+                "review_bytes": 0,
+                "verdict": "complete",
+                "disposition": "eligible-for-human-signoff",
+                "reasons": [],
+            }
+        if overrides and checkpoint in overrides:
+            expected.update(overrides[checkpoint])
+        values.append(
+            {
+                "checkpoint": checkpoint,
+                "decision": decision,
+                "expected": expected,
+            }
+        )
+    policy = {
+        "schema_version": 1,
+        "tool_version": __version__,
+        "baseline": str(baseline.resolve()),
+        "working": str(working.resolve()),
+        "options": expected_options,
+        "authorizations": values,
+    }
+    path.write_text(json.dumps(policy), encoding="utf-8")
+    path.chmod(0o600)
+    return path
 
 
 def test_zero_write_plan_requires_explicit_private_state(tmp_path: Path) -> None:
@@ -719,6 +898,7 @@ def stat_mode(path: Path) -> int:
 
 
 def _state_at(log_dir: Path, baseline: Path, working: Path, next_stage: int) -> None:
+    log_dir.chmod(0o700)
     now = "2026-08-29T12:00:00-04:00"
     options = migrate.CoordinatorOptions(
         False, False, True, None, False, False, None, None, None, None, False
@@ -1587,6 +1767,833 @@ def test_interactive_selector_is_exclusive_and_never_accepts_apply() -> None:
     assert migrate.main(["baseline", "working", "--interactive", "--apply"]) == 2
 
 
+def test_unattended_policy_completes_every_authorized_empty_stage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    observed: list[list[str]] = []
+
+    def completed(
+        command: list[str], *, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        return completed_child(command)
+
+    monkeypatch.setattr(migrate.subprocess, "run", completed)
+
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 0
+    )
+
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == len(migrate._stages())
+    assert state.attempts[-1].action == "signoff"
+    assert len(observed) == len(migrate._stages()) - 1
+    assert sum("--apply" in command for command in observed) == 5
+    assert policy.read_text(encoding="utf-8")
+    binding_path = policy_binding_file(log_dir)
+    binding = json.loads(binding_path.read_bytes())
+    assert binding["policy_sha256"] == state.unattended_policy_sha256
+    assert binding["created_at"] == state.created_at
+    assert binding["baseline"] == str(baseline)
+    assert binding["working"] == str(working)
+    assert binding_path.stat().st_nlink == 1
+    assert binding_path.stat().st_mode & 0o077 == 0
+
+
+def test_unattended_rejects_a_non_private_existing_log_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_dir.chmod(0o777)
+    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    observed: list[list[str]] = []
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: observed.append(command),
+    )
+
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 2
+    )
+    assert observed == []
+    assert list(log_dir.iterdir()) == []
+
+
+def test_unattended_sticky_ancestry_requires_trusted_parent_and_child_owners() -> None:
+    class Entry:
+        def __init__(self, mode: int, uid: int) -> None:
+            self.st_mode = mode
+            self.st_uid = uid
+
+    effective_uid = os.geteuid()
+    trusted_child = Entry(stat.S_IFDIR | 0o700, effective_uid)
+    root_child = Entry(stat.S_IFDIR | 0o755, 0)
+    attacker_child = Entry(stat.S_IFDIR | 0o700, effective_uid + 1)
+    trusted_sticky = Entry(stat.S_IFDIR | 0o1777, effective_uid)
+    root_sticky = Entry(stat.S_IFDIR | 0o1777, 0)
+    attacker_sticky = Entry(stat.S_IFDIR | 0o1777, effective_uid + 1)
+    trusted_ordinary = Entry(stat.S_IFDIR | 0o755, effective_uid)
+    attacker_ordinary = Entry(stat.S_IFDIR | 0o755, effective_uid + 1)
+
+    assert _ancestor_is_safe(trusted_ordinary, trusted_child, effective_uid)
+    assert not _ancestor_is_safe(attacker_ordinary, trusted_child, effective_uid)
+    assert not _ancestor_is_safe(trusted_ordinary, attacker_child, effective_uid)
+    assert _ancestor_is_safe(trusted_sticky, trusted_child, effective_uid)
+    assert _ancestor_is_safe(root_sticky, trusted_child, effective_uid)
+    assert _ancestor_is_safe(root_sticky, root_child, effective_uid)
+    assert not _ancestor_is_safe(attacker_sticky, trusted_child, effective_uid)
+    assert not _ancestor_is_safe(trusted_sticky, attacker_child, effective_uid)
+
+
+def test_unattended_recovers_binding_created_before_initial_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    real_write_state = migrate._write_state
+
+    def fail_initial_state(path: Path, state: migrate.MigrationState) -> None:
+        raise migrate.MigrationCoordinatorError("injected state publication failure")
+
+    monkeypatch.setattr(migrate, "_write_state", fail_initial_state)
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 2
+    )
+    binding_path = policy_binding_file(log_dir)
+    binding_before_retry = binding_path.read_bytes()
+    assert not state_file(log_dir).exists()
+
+    observed: list[list[str]] = []
+    monkeypatch.setattr(migrate, "_write_state", real_write_state)
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: (
+            observed.append(command) or subprocess.CompletedProcess(command, 7)
+        ),
+    )
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 7
+    )
+    assert len(observed) == 1
+    assert binding_path.read_bytes() == binding_before_retry
+    recovered = migrate._load_state(state_file(log_dir))
+    assert recovered.created_at == json.loads(binding_before_retry)["created_at"]
+
+
+def test_unattended_accepts_only_the_expected_status_one_validation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 2)
+    policy = _zero_unattended_policy(
+        tmp_path / "policy.json",
+        baseline,
+        working,
+        overrides={"baseline-validation": _zero_validation_expected(1)},
+        omitted={"working-validation"},
+    )
+    statuses = iter((1, 0))
+
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: completed_child(command, next(statuses)),
+    )
+
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 1
+    )
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == 4
+    assert any(
+        attempt.stage == "baseline-validation"
+        and attempt.action == "acknowledge-status"
+        and attempt.exit_status == 1
+        for attempt in state.attempts
+    )
+    assert not any(
+        attempt.stage == "working-validation"
+        and attempt.action.startswith("acknowledge")
+        for attempt in state.attempts
+    )
+
+
+def test_unattended_preview_mismatch_stops_before_apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 6)
+    policy = _zero_unattended_policy(
+        tmp_path / "policy.json",
+        baseline,
+        working,
+        overrides={
+            "extension-apply": {"decision_digest": "migration-decision-v1:" + "0" * 64}
+        },
+    )
+    migrate._bind_unattended_policy(
+        log_dir,
+        state_file(log_dir),
+        migrate._load_state(state_file(log_dir)),
+        migrate.load_preauthorization(policy, roots=(baseline, working)),
+    )
+    before = state_file(log_dir).read_bytes()
+    observed: list[list[str]] = []
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: observed.append(command),
+    )
+
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 1
+    )
+    assert observed == []
+    assert state_file(log_dir).read_bytes() == before
+
+
+def test_unattended_quarantine_stops_until_dups_is_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 21)
+    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    dups = working / "dups"
+    dups.mkdir()
+    observed: list[list[str]] = []
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: (
+            observed.append(command) or completed_child(command)
+        ),
+    )
+    arguments = [
+        str(baseline),
+        str(working),
+        "--log-dir",
+        str(log_dir),
+        "--unattended",
+        str(policy),
+    ]
+
+    assert migrate.main(arguments) == 1
+    assert observed == []
+    assert migrate._load_state(state_file(log_dir)).next_stage == 21
+
+    dups.rmdir()
+    assert migrate.main(arguments) == 0
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == len(migrate._stages())
+    assert state.attempts[-1].action == "signoff"
+
+
+def test_unattended_rejects_unsafe_or_mismatched_policy_without_state(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    policy.chmod(0o644)
+
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 2
+    )
+    assert not log_dir.exists()
+
+    policy.chmod(0o600)
+    payload = json.loads(policy.read_text(encoding="utf-8"))
+    payload["tool_version"] = "0.0.0"
+    policy.write_text(json.dumps(payload), encoding="utf-8")
+    policy.chmod(0o600)
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 2
+    )
+    assert not state_file(log_dir).exists()
+
+
+def test_unattended_selector_is_exclusive_and_never_accepts_apply() -> None:
+    with pytest.raises(SystemExit) as conflict:
+        migrate.parse_args(
+            ["baseline", "working", "--interactive", "--unattended", "policy.json"]
+        )
+    assert conflict.value.code == 2
+    assert (
+        migrate.main(["baseline", "working", "--unattended", "policy.json", "--apply"])
+        == 2
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda value: value.update(extra=True),
+        lambda value: value.update(schema_version=99),
+        lambda value: value["authorizations"].reverse(),
+        lambda value: value["authorizations"].append(value["authorizations"][0].copy()),
+        lambda value: value["authorizations"][0].update(decision="accept-all"),
+        lambda value: value["authorizations"][0]["expected"].update(cache_issue=True),
+    ],
+)
+def test_unattended_malformed_authority_creates_no_state(
+    tmp_path: Path, mutation
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    payload = json.loads(policy.read_text(encoding="utf-8"))
+    mutation(payload)
+    policy.write_text(json.dumps(payload), encoding="utf-8")
+    policy.chmod(0o600)
+
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 2
+    )
+    assert not log_dir.exists()
+
+
+def test_unattended_rejects_duplicate_json_keys_and_collection_local_policy(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    duplicate = tmp_path / "duplicate.json"
+    duplicate.write_text('{"schema_version":1,"schema_version":1}', encoding="utf-8")
+    duplicate.chmod(0o600)
+    arguments = [
+        str(baseline),
+        str(working),
+        "--log-dir",
+        str(log_dir),
+        "--unattended",
+    ]
+    assert migrate.main([*arguments, str(duplicate)]) == 2
+    assert not log_dir.exists()
+
+    inside = _zero_unattended_policy(baseline / "policy.json", baseline, working)
+    assert migrate.main([*arguments, str(inside)]) == 2
+    assert not log_dir.exists()
+
+
+def test_unattended_policy_change_stops_after_current_child(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    observed: list[list[str]] = []
+
+    def change_policy(
+        command: list[str], *, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        completed = completed_child(command)
+        policy.write_text(policy.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+        policy.chmod(0o600)
+        return completed
+
+    monkeypatch.setattr(migrate.subprocess, "run", change_policy)
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 2
+    )
+    assert len(observed) == 1
+    assert migrate._load_state(state_file(log_dir)).next_stage == 1
+
+
+def test_unattended_resume_rejects_a_different_valid_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    original = _zero_unattended_policy(
+        tmp_path / "original-policy.json",
+        baseline,
+        working,
+        omitted={"working-validation"},
+    )
+    replacement = _zero_unattended_policy(
+        tmp_path / "replacement-policy.json", baseline, working
+    )
+    observed: list[list[str]] = []
+
+    def stopped(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        return subprocess.CompletedProcess(command, 7)
+
+    monkeypatch.setattr(migrate.subprocess, "run", stopped)
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(original),
+            ]
+        )
+        == 7
+    )
+    bound_state = migrate._load_state(state_file(log_dir))
+    assert bound_state.unattended_policy_sha256 is not None
+    assert len(observed) == 1
+
+    assert (
+        migrate.main(
+            [
+                "--resume",
+                str(log_dir),
+                "--unattended",
+                str(replacement),
+            ]
+        )
+        == 2
+    )
+    assert len(observed) == 1
+    assert migrate._load_state(state_file(log_dir)) == bound_state
+
+
+def test_unattended_failure_rejects_policy_binding_state_substitution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    original = _zero_unattended_policy(
+        tmp_path / "original-policy.json",
+        baseline,
+        working,
+        omitted={"working-validation"},
+    )
+    replacement_policy = _zero_unattended_policy(
+        tmp_path / "replacement-policy.json", baseline, working
+    )
+    replacement_digest = migrate.load_preauthorization(
+        replacement_policy, roots=(baseline, working)
+    ).payload_sha256
+    observed: list[list[str]] = []
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: (
+            observed.append(command) or subprocess.CompletedProcess(command, 7)
+        ),
+    )
+    real_run_next = migrate._run_next
+    substituted = False
+
+    def run_then_substitute_state(
+        current_log_dir: Path,
+        path: Path,
+        state: migrate.MigrationState,
+        apply: bool,
+    ) -> int:
+        nonlocal substituted
+        status = real_run_next(current_log_dir, path, state, apply)
+        if not substituted and status == 7:
+            substituted = True
+            persisted = migrate._load_state(path)
+            migrate._write_state(
+                path,
+                replace(
+                    persisted,
+                    unattended_policy_sha256=replacement_digest,
+                ),
+            )
+        return status
+
+    monkeypatch.setattr(migrate, "_run_next", run_then_substitute_state)
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(original),
+            ]
+        )
+        == 2
+    )
+    assert substituted
+    assert len(observed) == 1
+    persisted = migrate._load_state(state_file(log_dir))
+    assert persisted.unattended_policy_sha256 == replacement_digest
+    binding_path = policy_binding_file(log_dir)
+    binding_before_resume = binding_path.read_bytes()
+
+    monkeypatch.setattr(migrate, "_run_next", real_run_next)
+    assert (
+        migrate.main(
+            [
+                "--resume",
+                str(log_dir),
+                "--unattended",
+                str(replacement_policy),
+            ]
+        )
+        == 2
+    )
+    assert len(observed) == 1
+    assert binding_path.read_bytes() == binding_before_resume
+
+
+def test_unattended_rejects_replaced_authority_in_a_newly_public_log_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    original = _zero_unattended_policy(
+        tmp_path / "original-policy.json",
+        baseline,
+        working,
+        omitted={"working-validation"},
+    )
+    replacement_policy = _zero_unattended_policy(
+        tmp_path / "replacement-policy.json", baseline, working
+    )
+    replacement_digest = migrate.load_preauthorization(
+        replacement_policy, roots=(baseline, working)
+    ).payload_sha256
+    observed: list[list[str]] = []
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: (
+            observed.append(command) or subprocess.CompletedProcess(command, 7)
+        ),
+    )
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(original),
+            ]
+        )
+        == 7
+    )
+    state_path = state_file(log_dir)
+    migrate._write_state(
+        state_path,
+        replace(
+            migrate._load_state(state_path),
+            unattended_policy_sha256=replacement_digest,
+        ),
+    )
+    binding_path = policy_binding_file(log_dir)
+    binding = json.loads(binding_path.read_bytes())
+    binding["policy_sha256"] = replacement_digest
+    binding_path.write_text(json.dumps(binding) + "\n", encoding="utf-8")
+    binding_path.chmod(0o600)
+    log_dir.chmod(0o777)
+
+    assert (
+        migrate.main(
+            [
+                "--resume",
+                str(log_dir),
+                "--unattended",
+                str(replacement_policy),
+            ]
+        )
+        == 2
+    )
+    assert len(observed) == 1
+
+
+def test_unattended_returns_exact_unexpected_child_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 4)
+    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    observed: list[list[str]] = []
+
+    def failed(command: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        observed.append(command)
+        return subprocess.CompletedProcess(command, 7)
+
+    monkeypatch.setattr(migrate.subprocess, "run", failed)
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 7
+    )
+    assert len(observed) == 1
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == 4
+    assert state.attempts[-1].exit_status == 7
+
+
+def test_unattended_revalidates_collection_identity_after_child(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    policy = _zero_unattended_policy(tmp_path / "policy.json", baseline, working)
+    displaced = tmp_path / "displaced-working"
+
+    def replace_root(
+        command: list[str], *, check: bool
+    ) -> subprocess.CompletedProcess[str]:
+        assert check is False
+        completed = completed_child(command)
+        working.rename(displaced)
+        working.mkdir()
+        return completed
+
+    monkeypatch.setattr(migrate.subprocess, "run", replace_root)
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(policy),
+            ]
+        )
+        == 2
+    )
+    assert migrate._load_state(state_file(log_dir)).next_stage == 1
+
+
+def test_unattended_real_children_complete_an_empty_collection(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    policy = _zero_unattended_policy(
+        tmp_path / "policy.json",
+        baseline,
+        working,
+        overrides={
+            "organize-apply": {
+                "directories_created": 2,
+                "decision_digest": decision_digest(
+                    "organization",
+                    [
+                        {"action": "create-directory", "target": "pics"},
+                        {"action": "create-directory", "target": "vids"},
+                    ],
+                ),
+            }
+        },
+    )
+
+    result = run_pymo(
+        "migrate",
+        baseline,
+        working,
+        "--log-dir",
+        log_dir,
+        "--unattended",
+        policy,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Pre-authorized final sign-off recorded" in result.stdout
+    state = migrate._load_state(state_file(log_dir))
+    assert state.next_stage == len(migrate._stages())
+    assert state.attempts[-1].action == "signoff"
+    assert not (working / "dups").exists()
+
+
+def test_coordinator_bound_apply_refuses_a_changed_private_plan(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+    image = collection / "sample.jpg"
+    Image.new("RGB", (2, 2), "red").save(image)
+
+    result = run_pymo(
+        "organize",
+        collection,
+        "--apply",
+        "--migration-decision-digest",
+        "migration-decision-v1:" + "0" * 64,
+    )
+
+    assert result.returncode == 1
+    assert "current plan differs from the reviewed preview" in result.stderr
+    assert image.exists()
+    assert not (collection / "pics").exists()
+    assert not (collection / "vids").exists()
+    assert not (collection / "collection-actions-log.jsonl").exists()
+
+
+@pytest.mark.parametrize("command", ["organize", "rename"])
+def test_coordinator_bound_apply_rejects_same_path_content_replacement(
+    tmp_path: Path, command: str
+) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+    if command == "rename":
+        (collection / "pics").mkdir()
+        image = collection / "pics" / "2026-01-02 03.04.05.jpg"
+    else:
+        image = collection / "2026-01-02 03.04.05.jpg"
+    Image.new("RGB", (2, 2), "red").save(image)
+    private = tmp_path / "private"
+    private.mkdir()
+    outcome = private / f"{command}-preview.outcome.json"
+
+    preview = run_pymo(command, collection, "--migration-outcome", outcome)
+    assert preview.returncode == 0, preview.stdout + preview.stderr
+    digest = json.loads(outcome.read_text(encoding="utf-8"))["data"]["decision_digest"]
+
+    Image.new("RGB", (2, 2), "blue").save(image)
+    applied = run_pymo(
+        command,
+        collection,
+        "--apply",
+        "--migration-decision-digest",
+        digest,
+    )
+
+    assert applied.returncode == 1
+    assert "current plan differs from the reviewed preview" in applied.stderr
+    assert image.exists()
+    assert not (collection / "collection-actions-log.jsonl").exists()
+    if command == "organize":
+        assert not (collection / "pics").exists()
+        assert not (collection / "vids").exists()
+
+
 def test_apply_checkpoint_requires_second_explicit_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2086,6 +3093,10 @@ def test_external_quarantine_confirmation_requires_absent_dups_path(
         (lambda value: value["options"].update(workers=33), "workers are out of range"),
         (lambda value: value.update(created_at="not-a-time"), "invalid creation time"),
         (lambda value: value.update(baseline="relative"), "non-absolute baseline"),
+        (
+            lambda value: value.update(unattended_policy_sha256="not-a-digest"),
+            "invalid unattended policy digest",
+        ),
     ],
 )
 def test_restart_state_fails_closed(tmp_path: Path, mutation, message: str) -> None:

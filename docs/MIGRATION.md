@@ -106,6 +106,9 @@ authority. Version 0.5.12 additionally contains every command-line path
 expansion and resolution failure before private state can be created.
 Version 0.6.3 adds an explicit private resume-directory shorthand without
 changing the stage engine or any checkpoint.
+Version 0.6.5 adds a separately specified private policy that may cross only
+the exact validation, apply, external-quarantine, and final-signoff results the
+operator authorized in advance.
 First inspect the zero-write plan, then explicitly initialize one dedicated
 private directory outside and non-nested with both collections:
 
@@ -143,6 +146,7 @@ pymo migrate --resume "/path/to/private-logs"
 pymo migrate --resume "/path/to/private-logs" --run-next
 pymo migrate --resume "/path/to/private-logs" --run
 pymo migrate --resume "/path/to/private-logs" --interactive
+pymo migrate --resume "/path/to/private-logs" --unattended "/path/to/private-policy.json"
 pymo migrate --resume "/path/to/private-logs" --json
 ```
 
@@ -182,6 +186,33 @@ input return setup status 2 without advancing the checkpoint; Ctrl-C retains
 status 130. Accepted mutations still use the existing one-stage apply path and
 must pass the exact restart-transition and collection-identity checks before
 any later child can run.
+
+`--unattended PRIVATE_POLICY_JSON` is the non-interactive counterpart for a
+previously understood migration. With positional roots and `--log-dir`, it
+validates the policy, initializes new private state, and begins in one
+invocation. With `--resume`, it continues only that exact run:
+
+```bash
+pymo migrate "/path/to/baseline" "/path/to/working-collection" --log-dir "/path/to/private-logs" --unattended "/path/to/private-policy.json"
+pymo migrate --resume "/path/to/private-logs" --unattended "/path/to/private-policy.json"
+```
+
+The mode creates a separate no-replace private binding record on first use and
+also stores that policy payload digest in restart state. The binding record,
+restart state, and byte-identical policy must agree on every unattended resume.
+The log directory itself must remain owner-private and its ancestry must not
+permit another user to replace it; ownership-safe sticky ancestors such as the
+system temporary directory remain valid, but every ancestry component must be
+owned by root or the current user. It also revalidates the current policy file,
+strict lifecycle, typed outcomes, version and options binding, and both
+collection identities between children and immediately before each authorized
+transition. Every checkpoint has its own
+exact expected aggregate; one authorization never covers another.
+A missing or mismatched current authorization returns status 1 without
+crossing it, while unsafe or changed authority returns setup status 2. An
+unexpected child status remains exact. The full private file requirements,
+schema-1 fields, checkpoint order, and resume behavior are in
+[MIGRATION_POLICY.md](MIGRATION_POLICY.md).
 
 A nonzero child status is recorded, returned unchanged, and stops both modes.
 Rerun after resolving the cause. Status 1 from a validation checkpoint may be

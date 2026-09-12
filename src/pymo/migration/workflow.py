@@ -249,6 +249,7 @@ def child_command(
     stage: Stage,
     log_file: Path,
     outcome_file: Path | None = None,
+    decision_digest: str | None = None,
 ) -> list[str]:
     if stage.command is None:
         raise ValueError("checkpoint does not have a child command")
@@ -288,6 +289,10 @@ def child_command(
             command.append("--simulate-without-dups")
     if outcome_file is not None:
         command.extend(("--migration-outcome", str(outcome_file)))
+    if decision_digest is not None:
+        if stage.mode != "apply":
+            raise ValueError("decision digest is valid only for an apply stage")
+        command.extend(("--migration-decision-digest", decision_digest))
     if stage.mode == "apply":
         command.append("--apply")
     return command

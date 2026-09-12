@@ -1396,6 +1396,34 @@ migration-report schema 1; it does not include unattended
 authority, logging or visibility policy, duplicate disposition, queueing, or
 scheduling.
 
+Version 0.6.5 is a release candidate for deliberately pre-authorized
+unattended migration. Its private schema-1 policy binds the exact version,
+canonical roots, saved options, ordered checkpoint decisions, and exact
+aggregate typed evidence expected at every authorized boundary. Valid missing
+or mismatched authority stops before the checkpoint with status 1; malformed,
+unsafe, changed, or mismatched authority fails setup with status 2. The mode
+stores the first policy payload digest in a separate create-once private
+binding record and restart state, requires both to agree with byte-identical
+authority on resume, rejects a log directory that is not owner-private or has
+unsafe writable ancestry, and binds every reviewed mutation plan to
+descriptor-pinned source bytes through the journal boundary. It
+retains the existing one-stage engine, exact child statuses, external
+human-managed `dups` quarantine, and no-delete boundary. ADR 0097 and
+`docs/MIGRATION_POLICY.md` own the contract; no release claim exists until the
+protected merge, exact-main CI, annotated tag, tagged artifact, and install
+evidence are complete.
+
+Independent Terra-medium review accepted exact v0.6.5 implementation head
+`a001bbe` without findings after the owner resolved DIGEST-R01 and POLICY-R02
+through POLICY-R06. The separate clean detached review reproduced the planned-
+source content boundary, real persisted-state and replacement-policy attack,
+owner-private directory and trusted-ancestry rules, real root-owned sticky
+temporary-directory case, and interrupted initial-state recovery. Its complete
+gate passed all 585 tests at 88 percent subprocess-aware coverage plus Ruff,
+Black, mypy, and diff integrity. The candidate remains unreleased and has not
+been published as a pull request; a ledger-only exact head and renewed review
+remain required before publication.
+
 ## Media validation
 
 `src/pymo/validate.py` implements media-non-mutating

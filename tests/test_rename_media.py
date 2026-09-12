@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import errno
+import json
 from pathlib import Path
 
 import pytest
@@ -251,3 +252,41 @@ def test_renamer_uses_custom_noise_tokens(tmp_path: Path, run_script) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     assert "__undated__fern.png" in result.stdout
     assert "__undated__garden_fern.png" not in result.stdout
+
+
+def test_coordinator_evidence_survives_until_rename_journal_boundary(
+    tmp_path: Path, monkeypatch
+) -> None:
+    root = tmp_path / "collection"
+    private = tmp_path / "private"
+    pics = root / "pics"
+    pics.mkdir(parents=True)
+    (root / "vids").mkdir()
+    private.mkdir()
+    source = pics / "2026-01-02 03.04.05.jpg"
+    Image.new("RGB", (2, 2), "red").save(source)
+    outcome = private / "rename.outcome.json"
+    assert rename.main([str(root), "--migration-outcome", str(outcome)]) == 0
+    digest = json.loads(outcome.read_text(encoding="utf-8"))["data"]["decision_digest"]
+    real_apply = rename.apply_rename_plan
+
+    def replace_before_journal(*args, **kwargs):
+        Image.new("RGB", (2, 2), "blue").save(source)
+        return real_apply(*args, **kwargs)
+
+    monkeypatch.setattr(rename, "apply_rename_plan", replace_before_journal)
+
+    assert (
+        rename.main(
+            [
+                str(root),
+                "--apply",
+                "--migration-decision-digest",
+                digest,
+            ]
+        )
+        == 1
+    )
+    assert source.exists()
+    assert not list(pics.glob("collection__image_*.jpg"))
+    assert not action_log_path(root).exists()

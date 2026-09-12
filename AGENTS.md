@@ -197,6 +197,16 @@ never duplicate the version in source or static project metadata.
   exactly matching option repetitions, revalidate all ordinary state, outcome,
   root, version, separation, and checkpoint boundaries, and never auto-discover
   state or treat restart bookkeeping as evidence or authority.
+- `migrate --unattended` must bind the first accepted private policy payload
+  SHA-256 into both a separate create-once no-replace private record and
+  restart state, and require all three surfaces to agree on every unattended
+  resume. Require the unattended log directory to remain owner-private with
+  ancestry owned only by root or the current user, permitting a group- or
+  world-writable ancestor only when it is sticky. Bind reviewed mutation
+  decisions to descriptor-pinned
+  planned source bytes, recompute before apply, and carry organization and
+  rename evidence through the journaled move boundary. Never let a replacement
+  at the same path or a substituted valid policy inherit prior authority.
 - `migrate --json` is an explicit read-only projection of one existing strict
   coordinator run. Require its existing private state and lock, validate the
   complete lifecycle and typed outcome history, recheck state, outcomes, and
@@ -246,6 +256,12 @@ never duplicate the version in source or static project metadata.
 - `src/pymo/migration/synopsis.py`: the selected aggregate projection shared by
   stable migration-report schema 1 and its human synopsis rendering; it owns no
   media analysis, workflow authority, or persistent output path.
+- `src/pymo/migration/preauthorization.py`: strict private unattended-policy
+  schema, file safety, binding, and aggregate checkpoint matching; it owns no
+  child analysis, transformation, state transition, or quarantine behavior.
+- `src/pymo/migration/unattended_binding.py`: strict create-once private
+  policy-to-run binding, independent of replaceable restart state; it owns no
+  policy authority, child dispatch, or checkpoint transition.
 - `src/pymo/correct_extensions.py`: complete discovery, fresh evidence,
   collision planning, reversible apply/undo, and verified truthful-extension
   correction.
@@ -447,5 +463,10 @@ engine and stops at every existing decision boundary. Version 0.6.1 adds
 terminal-only, conservative questions at those existing checkpoints, records
 review and sign-off decisions in private restart state, and never lets one
 answer authorize a later checkpoint. The remaining operator-experience
-sequence retains its later release slots.
+sequence retains its later release slots. Version 0.6.5 adds an explicit
+private non-interactive policy bound to the exact version, roots, options,
+ordered checkpoint decisions, expected aggregate typed outcomes, stable source
+bytes, and the first policy payload digest stored in restart state; missing or
+changed authority stops before the transition, and external quarantine remains
+human-managed.
 Rescue copying and permanent deletion remain research.

@@ -2,6 +2,39 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.6.5 - Unreleased
+
+- Add `pymo migrate --unattended PRIVATE_POLICY_JSON` for an explicitly
+  pre-authorized non-interactive run over the unchanged one-stage engine.
+- Bind private policy schema 1 to the exact pymo version, canonical collection
+  roots, saved coordinator options, ordered checkpoint decisions, and exact
+  aggregate typed outcomes expected at each boundary.
+- Bind every transformation and duplicate apply to a versioned private digest
+  of its ordered source/target plan and planned source bytes so equal aggregate
+  counts or different content at the same paths cannot inherit authority, and
+  require the apply child to recompute that digest before its first mutation.
+- Match successful and status-one validation findings, transformation and
+  exact-duplicate previews, without-`dups` simulation totals, and ordinary
+  final verification before recording the corresponding pre-authorized
+  transition.
+- Stop with status 1 before a missing or mismatched checkpoint; fail setup with
+  status 2 for malformed, unsafe, changed, or binding-mismatched policy; and
+  preserve every unexpected child status including interruption 130.
+- Permit one invocation to validate policy, create explicitly located private
+  restart state, and drive a new run. Bind that run to the first policy payload
+  digest in both a separate create-once no-replace private record and restart
+  state, and require both to agree with byte-identical policy content through
+  explicit `--resume`.
+- Require unattended log directories to be owner-private with safe non-writable
+  ancestry before opening the coordinator lock. Recover an interrupted first
+  state publication from an already-durable matching binding without replacing
+  it.
+- Keep policies outside both collections as stable private regular files with
+  no group or other access. Keep pymo non-deleting and require the existing
+  externally managed absent-`dups` boundary before final fresh evidence.
+- Record the contract in ADR 0097 and `docs/MIGRATION_POLICY.md` without adding
+  logging, visibility, duplicate-movement, queue, or scheduling behavior.
+
 ## 0.6.4 - 2026-09-11
 
 - Add explicit `pymo migrate --json` reporting over an existing private

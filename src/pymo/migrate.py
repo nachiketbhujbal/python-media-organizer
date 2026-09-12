@@ -10,6 +10,7 @@ import sys
 import time
 import uuid
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from pymo import __version__
@@ -27,6 +28,13 @@ from pymo.migration.coordinator_state import (
     _write_state,
 )
 from pymo.migration.outcome import MigrationOutcomeError, ResultKind, read_outcome
+from pymo.migration.preauthorization import (
+    MigrationPreauthorization,
+    MigrationPreauthorizationError,
+    MigrationPreauthorizationMismatch,
+    apply_preview_stage,
+    load_preauthorization,
+)
 from pymo.migration.roots import (
     DirectoryIdentityError,
     directory_identity,
@@ -38,6 +46,13 @@ from pymo.migration.synopsis import (
     build_report,
     print_synopsis,
     validate_synopsis_history,
+)
+from pymo.migration.unattended_binding import (
+    create_unattended_policy_binding,
+    load_unattended_policy_binding,
+    require_private_unattended_log_directory,
+    require_unattended_policy_binding,
+    unattended_policy_binding_path,
 )
 from pymo.migration.workflow import (
     CoordinatorOptions,
@@ -234,6 +249,17 @@ def _run_next(
 
     log_file = _new_log_file(log_dir, state, stage)
     outcome_file = log_file.with_suffix(".outcome.json")
+    expected_decision_digest: str | None = None
+    if stage.mode == "apply":
+        preview = _recorded_outcome(
+            log_dir, state, apply_preview_stage(stage.identifier)
+        )
+        value = preview["data"]["decision_digest"]  # type: ignore[index]
+        if not isinstance(value, str):  # pragma: no cover - outcome validation owns it.
+            raise MigrationCoordinatorError(
+                "reviewed preview has an invalid private decision digest"
+            )
+        expected_decision_digest = value
     command = child_command(
         state.baseline,
         state.working,
@@ -241,6 +267,7 @@ def _run_next(
         stage,
         log_file,
         outcome_file,
+        expected_decision_digest,
     )
     print(f"Running one migration stage: {stage.identifier}.")
     print(f"Private stage log: {log_file}")
@@ -346,6 +373,7 @@ def _require_operator_binding(state: MigrationState, expected: MigrationState) -
         or state.working != expected.working
         or state.options != expected.options
         or state.created_at != expected.created_at
+        or state.unattended_policy_sha256 != expected.unattended_policy_sha256
     ):
         raise MigrationCoordinatorError(
             "migration restart binding changed during the safe operator loop"
@@ -547,6 +575,258 @@ def _record_signoff(state_path: Path, state: MigrationState) -> None:
     _write_state(state_path, _updated_state(state, attempt, advance=False))
 
 
+def _recorded_outcome(
+    log_dir: Path, state: MigrationState, stage_identifier: str
+) -> dict[str, object]:
+    stage = next(
+        (item for item in _stages() if item.identifier == stage_identifier), None
+    )
+    if stage is None or stage.command is None:
+        raise MigrationCoordinatorError(
+            "migration checkpoint refers to an unknown evidence stage"
+        )
+    attempt = next(
+        (
+            item
+            for item in reversed(state.attempts)
+            if item.stage == stage_identifier and item.action == "run"
+        ),
+        None,
+    )
+    if attempt is None or attempt.outcome_file is None:
+        raise MigrationCoordinatorError(
+            "migration checkpoint does not have a private typed outcome"
+        )
+    try:
+        return read_outcome(
+            log_dir / attempt.outcome_file,
+            expected_command=stage.command,
+            expected_status=attempt.exit_status,
+            expected_result_kind=_stage_result_kind(stage),
+        )
+    except MigrationOutcomeError as error:
+        raise MigrationCoordinatorError(
+            "migration checkpoint private typed outcome is invalid"
+        ) from error
+
+
+def _reload_unattended(
+    log_dir: Path,
+    state_path: Path,
+    expected_state: MigrationState,
+    binding: MigrationState,
+    identities: tuple[tuple[int, int], tuple[int, int]],
+    policy: MigrationPreauthorization,
+) -> MigrationState:
+    policy.require_current()
+    state = _load_state(state_path)
+    if state != expected_state:
+        raise MigrationCoordinatorError(
+            "migration restart lifecycle changed during unattended execution"
+        )
+    _require_operator_binding(state, binding)
+    _require_collection_identities(state, identities)
+    policy.require_binding(state)
+    require_unattended_policy_binding(log_dir, state, policy)
+    return state
+
+
+def _bind_unattended_policy(
+    log_dir: Path,
+    state_path: Path,
+    state: MigrationState,
+    policy: MigrationPreauthorization,
+) -> MigrationState:
+    policy.require_run_binding(state)
+    binding_path = unattended_policy_binding_path(log_dir)
+    if not os.path.lexists(binding_path):
+        if state.unattended_policy_sha256 is not None:
+            raise MigrationCoordinatorError(
+                "unattended policy binding is missing for the bound migration"
+            )
+        create_unattended_policy_binding(log_dir, state, policy)
+    binding = load_unattended_policy_binding(log_dir)
+    binding.require_run_binding(state, policy)
+    if state.unattended_policy_sha256 is None:
+        state = replace(
+            state,
+            unattended_policy_sha256=policy.payload_sha256,
+            updated_at=_now(),
+        )
+        _write_state(state_path, state)
+        state = _load_state(state_path)
+    if state.unattended_policy_sha256 != policy.payload_sha256:
+        raise MigrationCoordinatorError(
+            "pre-authorization policy differs from the policy bound to this migration"
+        )
+    binding.require(state, policy)
+    return state
+
+
+def _run_unattended(
+    log_dir: Path,
+    state_path: Path,
+    state: MigrationState,
+    policy: MigrationPreauthorization,
+) -> int:
+    binding = state
+    identities = _collection_identities(state)
+    try:
+        while True:
+            validate_synopsis_history(log_dir, state)
+            _require_operator_binding(state, binding)
+            _require_collection_identities(state, identities)
+            policy.require_current()
+            policy.require_binding(state)
+            require_unattended_policy_binding(log_dir, state, policy)
+
+            successful_review = _successful_validation_review(state)
+            if successful_review is not None:
+                outcome = _recorded_outcome(
+                    log_dir, state, successful_review.identifier
+                )
+                policy.require_checkpoint(successful_review.identifier, outcome)
+                state = _reload_unattended(
+                    log_dir, state_path, state, binding, identities, policy
+                )
+                previous_state = state
+                _acknowledge_review(state_path, state, successful_review)
+                state = _load_state(state_path)
+                _require_bookkeeping_transition(
+                    previous_state,
+                    state,
+                    successful_review,
+                    action="acknowledge-review",
+                    status=0,
+                    advance=False,
+                )
+                continue
+
+            status_one_review = _pending_status_one_validation(state)
+            if status_one_review is not None:
+                outcome = _recorded_outcome(
+                    log_dir, state, status_one_review.identifier
+                )
+                policy.require_checkpoint(status_one_review.identifier, outcome)
+                state = _reload_unattended(
+                    log_dir, state_path, state, binding, identities, policy
+                )
+                previous_state = state
+                status = _accept_status(state_path, state)
+                if status != 0:  # pragma: no cover - guarded by state inspection.
+                    return status
+                state = _load_state(state_path)
+                _require_bookkeeping_transition(
+                    previous_state,
+                    state,
+                    status_one_review,
+                    action="acknowledge-status",
+                    status=1,
+                    advance=True,
+                )
+                continue
+
+            if state.next_stage == len(_stages()):
+                if state.attempts and state.attempts[-1].action == "signoff":
+                    print("Unattended migration is already complete and signed off.")
+                    _print_status(state)
+                    print_synopsis(log_dir, state)
+                    return 0
+                final_stage = _stages()[-1]
+                outcome = _recorded_outcome(log_dir, state, final_stage.identifier)
+                policy.require_checkpoint("final-signoff", outcome)
+                state = _reload_unattended(
+                    log_dir, state_path, state, binding, identities, policy
+                )
+                previous_state = state
+                _record_signoff(state_path, state)
+                state = _load_state(state_path)
+                _require_bookkeeping_transition(
+                    previous_state,
+                    state,
+                    final_stage,
+                    action="signoff",
+                    status=0,
+                    advance=False,
+                )
+                _require_operator_binding(state, binding)
+                _require_collection_identities(state, identities)
+                require_unattended_policy_binding(log_dir, state, policy)
+                print(
+                    "Pre-authorized final sign-off recorded in private migration state."
+                )
+                _print_status(state)
+                print_synopsis(log_dir, state)
+                return 0
+
+            stage = _stages()[state.next_stage]
+            if stage.mode == "apply":
+                preview = apply_preview_stage(stage.identifier)
+                outcome = _recorded_outcome(log_dir, state, preview)
+                policy.require_checkpoint(stage.identifier, outcome)
+                state = _reload_unattended(
+                    log_dir, state_path, state, binding, identities, policy
+                )
+                previous_state = state
+                status = _run_next(log_dir, state_path, state, apply=True)
+                state = _load_state(state_path)
+                _require_run_transition(
+                    previous_state, state, stage, status=status, apply=True
+                )
+                _require_operator_binding(state, binding)
+                _require_collection_identities(state, identities)
+                policy.require_current()
+                policy.require_binding(state)
+                require_unattended_policy_binding(log_dir, state, policy)
+                if status != 0:
+                    print_synopsis(log_dir, state)
+                    return status
+                continue
+
+            if stage.mode == "checkpoint":
+                outcome = _recorded_outcome(log_dir, state, "without-dups-simulation")
+                policy.require_checkpoint("external-quarantine", outcome)
+                state = _reload_unattended(
+                    log_dir, state_path, state, binding, identities, policy
+                )
+                previous_state = state
+                status = _confirm_quarantine(state_path, state)
+                if status != 0:
+                    _require_collection_identities(state, identities)
+                    require_unattended_policy_binding(log_dir, state, policy)
+                    print_synopsis(log_dir, state)
+                    return status
+                state = _load_state(state_path)
+                _require_bookkeeping_transition(
+                    previous_state,
+                    state,
+                    stage,
+                    action="confirm-quarantine",
+                    status=0,
+                    advance=True,
+                )
+                continue
+
+            previous_state = state
+            status = _run_next(log_dir, state_path, state, apply=False)
+            state = _load_state(state_path)
+            _require_run_transition(
+                previous_state, state, stage, status=status, apply=False
+            )
+            _require_operator_binding(state, binding)
+            _require_collection_identities(state, identities)
+            policy.require_current()
+            policy.require_binding(state)
+            require_unattended_policy_binding(log_dir, state, policy)
+            if status != 0 and not (stage.review_after_success and status == 1):
+                print_synopsis(log_dir, state)
+                return status
+    except MigrationPreauthorizationMismatch as error:
+        print(f"Unattended migration stopped: {error}.", file=sys.stderr)
+        print_synopsis(log_dir, state)
+        return 1
+
+
 def _reload_after_prompt(
     state_path: Path,
     expected_state: MigrationState,
@@ -739,6 +1019,14 @@ def _dispatch_existing_state(
         return _run_until_checkpoint(log_dir, state_path, state)
     if args.interactive:
         return _run_interactive(log_dir, state_path, state)
+    if args.unattended is not None:
+        policy = load_preauthorization(
+            args.unattended, roots=(state.baseline, state.working)
+        )
+        state = _bind_unattended_policy(log_dir, state_path, state, policy)
+        policy.require_binding(state)
+        require_unattended_policy_binding(log_dir, state, policy)
+        return _run_unattended(log_dir, state_path, state, policy)
     if args.accept_status:
         status = _accept_status(state_path, state)
         print_synopsis(log_dir, _load_state(state_path))
@@ -792,6 +1080,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="run in one foreground process and ask at each operator checkpoint",
     )
     actions.add_argument(
+        "--unattended",
+        type=Path,
+        metavar="PRIVATE_POLICY_JSON",
+        help="run only checkpoints explicitly authorized by a private policy",
+    )
+    actions.add_argument(
         "--accept-status",
         action="store_true",
         help="acknowledge the latest reviewed validation status 1",
@@ -837,6 +1131,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.run_next,
             args.run,
             args.interactive,
+            args.unattended is not None,
             args.accept_status,
             args.confirm_quarantine,
         )
@@ -905,6 +1200,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             log_dir = _resolve_argument_path(requested_log_dir)
             _prepare_log_dir(log_dir, create=False)
+            if args.unattended is not None:
+                require_private_unattended_log_directory(log_dir)
             state_path = _state_path(log_dir)
             if not os.path.lexists(state_path):
                 raise MigrationCoordinatorError(
@@ -945,6 +1242,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 or args.run_next
                 or args.run
                 or args.interactive
+                or args.unattended is not None
                 or args.accept_status
                 or args.confirm_quarantine
                 or args.json
@@ -968,7 +1266,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise MigrationCoordinatorError(
                 "private log directory must be distinct and non-nested with both collections"
             )
-        _prepare_log_dir(log_dir, create=args.start)
+        policy: MigrationPreauthorization | None = None
+        if args.unattended is not None:
+            policy = load_preauthorization(args.unattended, roots=(baseline, working))
+        _prepare_log_dir(log_dir, create=args.start or policy is not None)
+        if policy is not None:
+            require_private_unattended_log_directory(log_dir)
         state_path = _state_path(log_dir)
         with _state_lock(log_dir, create=not args.json):
             if args.start:
@@ -992,6 +1295,34 @@ def main(argv: Sequence[str] | None = None) -> int:
                 _print_status(state)
                 print_synopsis(log_dir, state)
                 return 0
+            if policy is not None and not os.path.lexists(state_path):
+                binding_path = unattended_policy_binding_path(log_dir)
+                created = (
+                    load_unattended_policy_binding(log_dir).created_at
+                    if os.path.lexists(binding_path)
+                    else _now()
+                )
+                state = MigrationState(
+                    __version__,
+                    baseline,
+                    working,
+                    _initial_options(option_overrides),
+                    0,
+                    (),
+                    created,
+                    created,
+                    policy.payload_sha256,
+                )
+                assert policy is not None
+                policy.require_binding(state)
+                policy.require_current()
+                if os.path.lexists(binding_path):
+                    require_unattended_policy_binding(log_dir, state, policy)
+                else:
+                    create_unattended_policy_binding(log_dir, state, policy)
+                _write_state(state_path, state)
+                print(f"Initialized private migration state: {state_path}")
+                return _run_unattended(log_dir, state_path, state, policy)
             if not os.path.lexists(state_path):
                 raise MigrationCoordinatorError(
                     "no migration restart state exists; use --start first"
@@ -1007,7 +1338,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             _require_matching_options(option_overrides, state)
             return _dispatch_existing_state(args, log_dir, state_path, state)
-    except (MigrationCoordinatorError, MigrationSynopsisError) as error:
+    except (
+        MigrationCoordinatorError,
+        MigrationPreauthorizationError,
+        MigrationSynopsisError,
+    ) as error:
         print(
             f"Migration coordinator cannot safely continue: {error}.", file=sys.stderr
         )

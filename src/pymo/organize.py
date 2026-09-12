@@ -26,6 +26,7 @@ from pymo.action_log import (
     ToolId,
     is_action_log_path,
 )
+from pymo.cache.hashes import sha256_descriptor
 from pymo.classification import Classifier, desired_directory
 from pymo.collection import CollectionLayout
 from pymo.config import (
@@ -41,10 +42,13 @@ from pymo.discovery import (
     walk_complete,
     walk_entry_kind_complete,
 )
+from pymo.file_safety import FileChangedError, FileState, open_stable_file
 from pymo.logging_config import emit as print
 from pymo.migration.outcome import (
     MigrationOutcomeError,
     add_outcome_argument,
+    decision_digest,
+    decision_digest_matches,
     outcome_record,
     write_outcome,
 )
@@ -352,10 +356,23 @@ def apply_organization_plan(
     missing_destinations: list[Path],
     plan: list[MoveRecord],
     source_directories: list[Path],
+    evidence: dict[Path, tuple[FileState, str]] | None = None,
 ) -> OrganizationResult:
-    file_actions = [
-        Action.for_file(root, move.source, move.target, "MOVE") for move in plan
-    ]
+    file_actions = []
+    for move in plan:
+        if evidence is None:
+            action = Action.for_file(root, move.source, move.target, "MOVE")
+        else:
+            state, byte_sha256 = evidence[move.source]
+            action = Action.for_evidenced_file(
+                root,
+                move.source,
+                move.target,
+                "MOVE",
+                state,
+                byte_sha256,
+            )
+        file_actions.append(action)
     removed_count = 0
     log = ActionLog(root)
     with log.transaction(ToolId.ORGANIZE) as transaction:
@@ -435,6 +452,7 @@ def _write_migration_outcome(
     root: Path,
     *,
     apply: bool,
+    decision_digest_value: str | None,
     files: int,
     directories_created: int,
     directories_removed: int,
@@ -442,6 +460,9 @@ def _write_migration_outcome(
 ) -> int:
     if path is None:
         return status
+    if decision_digest_value is None:
+        print("Migration outcome could not be recorded safely.", file=sys.stderr)
+        return 1
     try:
         write_outcome(
             path,
@@ -455,6 +476,7 @@ def _write_migration_outcome(
                     "files": files,
                     "directories_created": directories_created,
                     "directories_removed": directories_removed,
+                    "decision_digest": decision_digest_value,
                 },
             ),
             root,
@@ -463,6 +485,64 @@ def _write_migration_outcome(
         print("Migration outcome could not be recorded safely.", file=sys.stderr)
         return 1
     return status
+
+
+def _decision_digest(
+    root: Path,
+    plan: Sequence[MoveRecord],
+    missing_destinations: Sequence[Path],
+    source_directories: Sequence[Path],
+    evidence: dict[Path, tuple[FileState, str]],
+) -> str:
+    return decision_digest(
+        "organization",
+        [
+            {
+                "action": "create-directory",
+                "target": path.relative_to(root).as_posix(),
+            }
+            for path in missing_destinations
+        ]
+        + [
+            {
+                "action": "move",
+                "source": record.source.relative_to(root).as_posix(),
+                "target": record.target.relative_to(root).as_posix(),
+                "kind": record.kind,
+                "mime_type": record.mime_type,
+                "byte_sha256": evidence[record.source][1],
+            }
+            for record in plan
+        ]
+        + [
+            {
+                "action": "remove-directory",
+                "source": path.relative_to(root).as_posix(),
+            }
+            for path in source_directories
+        ],
+    )
+
+
+def _migration_decision(
+    root: Path,
+    plan: Sequence[MoveRecord],
+    missing_destinations: Sequence[Path],
+    source_directories: Sequence[Path],
+) -> tuple[str, dict[Path, tuple[FileState, str]]]:
+    evidence: dict[Path, tuple[FileState, str]] = {}
+    for record in plan:
+        state = FileState.capture(record.source)
+        with open_stable_file(
+            root, record.source, state, "organization migration decision"
+        ) as descriptor:
+            evidence[record.source] = (state, sha256_descriptor(descriptor))
+    return (
+        _decision_digest(
+            root, plan, missing_destinations, source_directories, evidence
+        ),
+        evidence,
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -515,10 +595,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     missing_destinations = [path for path in (pics, vids) if not path.exists()]
     removed_count = 0
     log_path: Path | None = None
+    decision_digest_value: str | None = None
+    migration_evidence: dict[Path, tuple[FileState, str]] | None = None
+    if args.migration_outcome is not None or args.migration_decision_digest is not None:
+        try:
+            decision_digest_value, migration_evidence = _migration_decision(
+                root, plan, missing_destinations, source_directories
+            )
+        except (FileChangedError, OSError):
+            print(
+                "Organization stopped safely: a planned source could not be bound to stable content.",
+                file=sys.stderr,
+            )
+            return 1
+    if args.apply and not decision_digest_matches(
+        args.migration_decision_digest,
+        decision_digest_value or "",
+    ):
+        print(
+            "Organization stopped safely: the current plan differs from the reviewed preview.",
+            file=sys.stderr,
+        )
+        return 1
     if args.apply and (missing_destinations or plan or source_directories):
         try:
             result = apply_organization_plan(
-                root, missing_destinations, plan, source_directories
+                root,
+                missing_destinations,
+                plan,
+                source_directories,
+                migration_evidence,
             )
             removed_count = result.removed_directories
             log_path = result.log_path
@@ -568,6 +674,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.migration_outcome,
         root,
         apply=args.apply,
+        decision_digest_value=decision_digest_value,
         files=len(plan),
         directories_created=len(missing_destinations),
         directories_removed=(removed_count if args.apply else len(source_directories)),
