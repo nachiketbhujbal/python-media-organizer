@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.6.6 - Unreleased
+## 0.6.6 - 2026-09-12
 
 - Add independent conventional `--console-log-level` and `--file-log-level`
   thresholds using `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` without
