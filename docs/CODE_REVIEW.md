@@ -155,6 +155,21 @@ SHA-256 is
 source-distribution SHA-256 is
 `dfadd750fc76e885674a895b739b6d0ed29b7398bf4a811b9e52edf1694c0627`.
 
+PR #60 full-platform run `34715221308` passed at final owner head
+`d07acffe5befae5f202b61f7d0c3df8bd70d13cb`. The protected merge is
+`eac3a94a6d298ea87b56e470f106d7f3bb25746c`; exact-main run `34715467561`
+passed before annotated tag `v0.6.7` was created; and tag-triggered release run
+`34715686329` passed the mainline, build, tagged-version, and isolated-install
+boundaries. Tag object `e489836f597d08398cefb95d4eecc69b9090f23c` peels to the
+exact merge. A separate tagged build produced wheel SHA-256
+`fad2c9b5fe9e5b57bc42f8dc585c122dc1abc085efe2eb676f0e8813912aefbc` and
+source-distribution SHA-256
+`fff46b1390ee3fdbcecbea00692c2b3b9fbe0b77594beab69704592fd4bfc641`.
+The installed tagged wheel reproduced version 0.6.7, clean profiled help,
+full/private/quiet disclosure behavior, and migration profile recovery. ADR
+0102 records the separate post-tag release-truth reconciliation without moving
+the immutable tag.
+
 Independent Terra-medium review accepted exact v0.6.6 implementation head
 `d7bb6931a55fde0bd3164feefa74e0e64aa072c4` without findings. After the owner
 added explicit help for the new global and migration logging selectors, renewed

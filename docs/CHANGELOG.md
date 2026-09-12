@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.6.7 - Unreleased
+## 0.6.7 - 2026-09-12
 
 - Add global `--visibility full`, `--visibility private`, and `--visibility
   quiet` profiles over the existing console and path-disclosure controls while
