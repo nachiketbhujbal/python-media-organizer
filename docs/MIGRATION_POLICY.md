@@ -53,7 +53,9 @@ malformed, or disagrees with either of the other two authority surfaces.
 For unattended operation, the log directory must be owned by the current user
 and grant no permissions to group or other users; mode `0700` is appropriate.
 Its ancestors must not be writable by another user unless normal sticky-
-directory ownership rules protect the next component. This requirement is
+directory ownership rules protect the next component. Every component in the
+ancestry must be owned by root or the current user, so an untrusted owner cannot
+make a previously non-writable parent replaceable later. This requirement is
 checked before pymo creates or opens the coordinator lock. If the binding is
 durably created but initial restart-state publication is interrupted, retrying
 the same command with the same byte-identical policy recovers the creation time

@@ -4,6 +4,7 @@ import io
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 from dataclasses import replace
@@ -20,6 +21,7 @@ from pymo.migration.outcome import (
     decision_digest,
     outcome_record,
 )
+from pymo.migration.unattended_binding import _ancestor_is_safe
 from pymo.migration.workflow import child_command
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -1842,6 +1844,32 @@ def test_unattended_rejects_a_non_private_existing_log_directory(
     )
     assert observed == []
     assert list(log_dir.iterdir()) == []
+
+
+def test_unattended_sticky_ancestry_requires_trusted_parent_and_child_owners() -> None:
+    class Entry:
+        def __init__(self, mode: int, uid: int) -> None:
+            self.st_mode = mode
+            self.st_uid = uid
+
+    effective_uid = os.geteuid()
+    trusted_child = Entry(stat.S_IFDIR | 0o700, effective_uid)
+    root_child = Entry(stat.S_IFDIR | 0o755, 0)
+    attacker_child = Entry(stat.S_IFDIR | 0o700, effective_uid + 1)
+    trusted_sticky = Entry(stat.S_IFDIR | 0o1777, effective_uid)
+    root_sticky = Entry(stat.S_IFDIR | 0o1777, 0)
+    attacker_sticky = Entry(stat.S_IFDIR | 0o1777, effective_uid + 1)
+    trusted_ordinary = Entry(stat.S_IFDIR | 0o755, effective_uid)
+    attacker_ordinary = Entry(stat.S_IFDIR | 0o755, effective_uid + 1)
+
+    assert _ancestor_is_safe(trusted_ordinary, trusted_child, effective_uid)
+    assert not _ancestor_is_safe(attacker_ordinary, trusted_child, effective_uid)
+    assert not _ancestor_is_safe(trusted_ordinary, attacker_child, effective_uid)
+    assert _ancestor_is_safe(trusted_sticky, trusted_child, effective_uid)
+    assert _ancestor_is_safe(root_sticky, trusted_child, effective_uid)
+    assert _ancestor_is_safe(root_sticky, root_child, effective_uid)
+    assert not _ancestor_is_safe(attacker_sticky, trusted_child, effective_uid)
+    assert not _ancestor_is_safe(trusted_sticky, attacker_child, effective_uid)
 
 
 def test_unattended_recovers_binding_created_before_initial_state(

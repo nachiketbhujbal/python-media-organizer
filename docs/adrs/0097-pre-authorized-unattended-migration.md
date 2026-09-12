@@ -64,7 +64,9 @@ content is rejected. Pymo never replaces the independent binding record and
 fails closed if it is missing, unsafe, malformed, or inconsistent. Unattended
 operation requires the log directory itself to be owner-private and rejects
 ancestry writable by another user except where sticky-directory ownership
-semantics protect the next component. It checks this before opening the
+semantics protect the next component. Every ancestry component must be owned by
+root or the current user, preventing an untrusted owner from making a previously
+non-writable parent replaceable later. It checks this before opening the
 coordinator lock. If binding creation succeeds but initial state publication
 does not, the same byte-identical policy may recover the recorded creation time
 and publish only the missing initial state; it never replaces the binding. The

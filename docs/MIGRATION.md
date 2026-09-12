@@ -202,8 +202,9 @@ also stores that policy payload digest in restart state. The binding record,
 restart state, and byte-identical policy must agree on every unattended resume.
 The log directory itself must remain owner-private and its ancestry must not
 permit another user to replace it; ownership-safe sticky ancestors such as the
-system temporary directory remain valid. It also revalidates the current policy
-file, strict lifecycle, typed outcomes, version and options binding, and both
+system temporary directory remain valid, but every ancestry component must be
+owned by root or the current user. It also revalidates the current policy file,
+strict lifecycle, typed outcomes, version and options binding, and both
 collection identities between children and immediately before each authorized
 transition. Every checkpoint has its own
 exact expected aggregate; one authorization never covers another.

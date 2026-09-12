@@ -55,6 +55,17 @@ def _identity(value: os.stat_result) -> tuple[int, int, int, int, int, int, int]
     )
 
 
+def _ancestor_is_safe(
+    parent: os.stat_result, child: os.stat_result, effective_uid: int
+) -> bool:
+    trusted_owners = {0, effective_uid}
+    if parent.st_uid not in trusted_owners or child.st_uid not in trusted_owners:
+        return False
+    if not parent.st_mode & 0o022:
+        return True
+    return bool(parent.st_mode & stat.S_ISVTX)
+
+
 def _open_log_directory(log_dir: Path) -> int:
     flags = (
         os.O_RDONLY
@@ -101,10 +112,7 @@ def _open_log_directory(log_dir: Path) -> int:
             raise MigrationPreauthorizationError(
                 "unattended policy binding ancestry is unsafe"
             )
-        if parent.st_mode & 0o022 and not (
-            parent.st_mode & stat.S_ISVTX
-            and os.geteuid() in {parent.st_uid, child.st_uid}
-        ):
+        if not _ancestor_is_safe(parent, child, os.geteuid()):
             os.close(descriptor)
             raise MigrationPreauthorizationError(
                 "unattended policy binding ancestry is writable by another user"
