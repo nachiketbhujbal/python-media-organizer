@@ -181,6 +181,13 @@ rejected path disclosure before JSON output. The iMac command reports
 `pymo 0.6.4`. ADR 0096 records the separate post-tag release-truth
 reconciliation.
 
+Independent Terra-medium review accepted exact release-truth candidate
+`9617cd3f6874df108d5ce5d7df349edf89c56e12` without findings. It verified the
+six-file documentation-only range, first-commit ADR reservation, release date
+and status, hosted evidence, local and remote annotated-tag identity, absence
+of private collection data, complete pre-commit gate, and clean detached
+reviewer worktree.
+
 ## Scan review findings
 
 | ID | Severity | Finding | Resolution target | Status |
