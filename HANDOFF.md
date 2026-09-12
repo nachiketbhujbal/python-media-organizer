@@ -1396,6 +1396,18 @@ migration-report schema 1; it does not include unattended
 authority, logging or visibility policy, duplicate disposition, queueing, or
 scheduling.
 
+Version 0.6.5 is a release candidate for deliberately pre-authorized
+unattended migration. Its private schema-1 policy binds the exact version,
+canonical roots, saved options, ordered checkpoint decisions, and exact
+aggregate typed evidence expected at every authorized boundary. Valid missing
+or mismatched authority stops before the checkpoint with status 1; malformed,
+unsafe, changed, or mismatched authority fails setup with status 2. The mode
+retains the existing one-stage engine, exact child statuses, external
+human-managed `dups` quarantine, and no-delete boundary. ADR 0097 and
+`docs/MIGRATION_POLICY.md` own the contract; no release claim exists until the
+protected merge, exact-main CI, annotated tag, tagged artifact, and install
+evidence are complete.
+
 ## Media validation
 
 `src/pymo/validate.py` implements media-non-mutating

@@ -45,6 +45,8 @@ from pymo.logging_config import emit as print
 from pymo.migration.outcome import (
     MigrationOutcomeError,
     add_outcome_argument,
+    decision_digest,
+    decision_digest_matches,
     outcome_record,
     write_outcome,
 )
@@ -435,6 +437,9 @@ def _write_migration_outcome(
     root: Path,
     *,
     apply: bool,
+    plan: Sequence[MoveRecord],
+    missing_destinations: Sequence[Path],
+    source_directories: Sequence[Path],
     files: int,
     directories_created: int,
     directories_removed: int,
@@ -455,6 +460,9 @@ def _write_migration_outcome(
                     "files": files,
                     "directories_created": directories_created,
                     "directories_removed": directories_removed,
+                    "decision_digest": _decision_digest(
+                        root, plan, missing_destinations, source_directories
+                    ),
                 },
             ),
             root,
@@ -463,6 +471,41 @@ def _write_migration_outcome(
         print("Migration outcome could not be recorded safely.", file=sys.stderr)
         return 1
     return status
+
+
+def _decision_digest(
+    root: Path,
+    plan: Sequence[MoveRecord],
+    missing_destinations: Sequence[Path],
+    source_directories: Sequence[Path],
+) -> str:
+    return decision_digest(
+        "organization",
+        [
+            {
+                "action": "create-directory",
+                "target": path.relative_to(root).as_posix(),
+            }
+            for path in missing_destinations
+        ]
+        + [
+            {
+                "action": "move",
+                "source": record.source.relative_to(root).as_posix(),
+                "target": record.target.relative_to(root).as_posix(),
+                "kind": record.kind,
+                "mime_type": record.mime_type,
+            }
+            for record in plan
+        ]
+        + [
+            {
+                "action": "remove-directory",
+                "source": path.relative_to(root).as_posix(),
+            }
+            for path in source_directories
+        ],
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -515,6 +558,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     missing_destinations = [path for path in (pics, vids) if not path.exists()]
     removed_count = 0
     log_path: Path | None = None
+    if args.apply and not decision_digest_matches(
+        args.migration_decision_digest,
+        _decision_digest(root, plan, missing_destinations, source_directories),
+    ):
+        print(
+            "Organization stopped safely: the current plan differs from the reviewed preview.",
+            file=sys.stderr,
+        )
+        return 1
     if args.apply and (missing_destinations or plan or source_directories):
         try:
             result = apply_organization_plan(
@@ -568,6 +620,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.migration_outcome,
         root,
         apply=args.apply,
+        plan=plan,
+        missing_destinations=missing_destinations,
+        source_directories=source_directories,
         files=len(plan),
         directories_created=len(missing_destinations),
         directories_removed=(removed_count if args.apply else len(source_directories)),

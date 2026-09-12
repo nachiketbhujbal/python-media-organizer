@@ -246,6 +246,9 @@ never duplicate the version in source or static project metadata.
 - `src/pymo/migration/synopsis.py`: the selected aggregate projection shared by
   stable migration-report schema 1 and its human synopsis rendering; it owns no
   media analysis, workflow authority, or persistent output path.
+- `src/pymo/migration/preauthorization.py`: strict private unattended-policy
+  schema, file safety, binding, and aggregate checkpoint matching; it owns no
+  child analysis, transformation, state transition, or quarantine behavior.
 - `src/pymo/correct_extensions.py`: complete discovery, fresh evidence,
   collision planning, reversible apply/undo, and verified truthful-extension
   correction.
@@ -447,5 +450,9 @@ engine and stops at every existing decision boundary. Version 0.6.1 adds
 terminal-only, conservative questions at those existing checkpoints, records
 review and sign-off decisions in private restart state, and never lets one
 answer authorize a later checkpoint. The remaining operator-experience
-sequence retains its later release slots.
+sequence retains its later release slots. Version 0.6.5 adds an explicit
+private non-interactive policy bound to the exact version, roots, options,
+ordered checkpoint decisions, and expected aggregate typed outcomes; missing
+or changed authority stops before the transition, and external quarantine
+remains human-managed.
 Rescue copying and permanent deletion remain research.

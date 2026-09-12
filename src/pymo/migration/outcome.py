@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import stat
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
@@ -19,7 +20,10 @@ from pymo.migration.roots import (
 # This identifies private version-bound coordinator outcome records. Stable
 # migration-report schema 1 selects aggregates from them; it does not expose
 # this internal record contract.
-MIGRATION_OUTCOME_SCHEMA_VERSION = 1
+MIGRATION_OUTCOME_SCHEMA_VERSION = 2
+
+# This identifies the deterministic private mutation-decision digest contract.
+MIGRATION_DECISION_DIGEST_ALGORITHM = "migration-decision-v1"
 
 OutcomeCategory = Literal[
     "scan", "validation", "transformation", "duplicates", "verification"
@@ -37,6 +41,10 @@ def add_outcome_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--migration-outcome",
         type=Path,
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--migration-decision-digest",
         help=argparse.SUPPRESS,
     )
 
@@ -192,13 +200,20 @@ def _validate_validation(data: dict[str, Any]) -> None:
 def _validate_transformation(data: dict[str, Any]) -> None:
     value = _require_exact_fields(
         data,
-        {"operation", "files", "directories_created", "directories_removed"},
+        {
+            "operation",
+            "files",
+            "directories_created",
+            "directories_removed",
+            "decision_digest",
+        },
         "transformation data",
     )
     if value["operation"] not in {"extension-correction", "organization", "rename"}:
         raise MigrationOutcomeError("migration outcome has invalid operation")
     for field in ("files", "directories_created", "directories_removed"):
         _require_int(value[field], f"transformation {field}")
+    _validate_decision_digest(value["decision_digest"])
 
 
 def _validate_duplicates(data: dict[str, Any]) -> None:
@@ -213,6 +228,7 @@ def _validate_duplicates(data: dict[str, Any]) -> None:
             "duplicate_bytes",
             "skipped",
             "cache",
+            "decision_digest",
         },
         "duplicate data",
     )
@@ -228,6 +244,7 @@ def _validate_duplicates(data: dict[str, Any]) -> None:
     ):
         _require_int(value[field], f"duplicate {field}")
     _validate_cache(value["cache"])
+    _validate_decision_digest(value["decision_digest"])
     if (
         value["groups"] > value["extra_copies"]
         or value["extra_copies"] > value["scanned_files"]
@@ -427,6 +444,44 @@ def validate_outcome(
                 "migration outcome has unexplained incomplete verdict"
             )
     return outcome
+
+
+def _validate_decision_digest(value: object) -> str:
+    prefix = f"{MIGRATION_DECISION_DIGEST_ALGORITHM}:"
+    if (
+        not isinstance(value, str)
+        or not value.startswith(prefix)
+        or len(value) != len(prefix) + 64
+    ):
+        raise MigrationOutcomeError("migration outcome has invalid decision digest")
+    digest = value[len(prefix) :]
+    if any(character not in "0123456789abcdef" for character in digest):
+        raise MigrationOutcomeError("migration outcome has invalid decision digest")
+    return value
+
+
+def decision_digest(operation: str, decisions: Sequence[Mapping[str, object]]) -> str:
+    """Hash a deterministic private mutation plan without exposing its paths."""
+
+    payload = json.dumps(
+        {
+            "algorithm": MIGRATION_DECISION_DIGEST_ALGORITHM,
+            "operation": operation,
+            "decisions": list(decisions),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return (
+        f"{MIGRATION_DECISION_DIGEST_ALGORITHM}:{hashlib.sha256(payload).hexdigest()}"
+    )
+
+
+def decision_digest_matches(expected: str | None, observed: str) -> bool:
+    """Return whether a coordinator-bound apply still matches its preview."""
+
+    return expected is None or expected == observed
 
 
 def outcome_record(

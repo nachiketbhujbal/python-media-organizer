@@ -11,11 +11,29 @@ import pytest
 from pymo.migration import outcome as migration_outcome
 from pymo.migration.outcome import (
     MigrationOutcomeError,
+    decision_digest,
     outcome_record,
     read_outcome,
     validate_outcome,
     write_outcome,
 )
+
+
+def test_private_decision_digest_is_deterministic_and_plan_sensitive() -> None:
+    first = decision_digest(
+        "organization", [{"source": "incoming/a.jpg", "target": "pics/a.jpg"}]
+    )
+    reordered_fields = decision_digest(
+        "organization", [{"target": "pics/a.jpg", "source": "incoming/a.jpg"}]
+    )
+    changed = decision_digest(
+        "organization", [{"source": "incoming/b.jpg", "target": "pics/b.jpg"}]
+    )
+
+    assert first == reordered_fields
+    assert first != changed
+    assert first.startswith("migration-decision-v1:")
+    assert "incoming" not in first
 
 
 def scan_outcome() -> dict[str, object]:

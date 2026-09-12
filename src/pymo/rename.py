@@ -43,6 +43,8 @@ from pymo.logging_config import emit as print
 from pymo.migration.outcome import (
     MigrationOutcomeError,
     add_outcome_argument,
+    decision_digest,
+    decision_digest_matches,
     outcome_record,
     write_outcome,
 )
@@ -364,6 +366,7 @@ def _write_migration_outcome(
     root: Path,
     *,
     apply: bool,
+    plan: Sequence[RenameRecord],
     files: int,
     status: int,
 ) -> int:
@@ -382,6 +385,7 @@ def _write_migration_outcome(
                     "files": files,
                     "directories_created": 0,
                     "directories_removed": 0,
+                    "decision_digest": _decision_digest(root, plan),
                 },
             ),
             root,
@@ -390,6 +394,22 @@ def _write_migration_outcome(
         print("Migration outcome could not be recorded safely.", file=sys.stderr)
         return 1
     return status
+
+
+def _decision_digest(root: Path, plan: Sequence[RenameRecord]) -> str:
+    return decision_digest(
+        "rename",
+        [
+            {
+                "source": record.source.relative_to(root).as_posix(),
+                "target": record.target.relative_to(root).as_posix(),
+                "kind": record.kind,
+                "timestamp": record.timestamp,
+                "descriptor": record.descriptor,
+            }
+            for record in plan
+        ],
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -442,15 +462,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.migration_outcome,
             root,
             apply=False,
+            plan=plan,
             files=len(plan),
             status=0,
         )
+
+    if not decision_digest_matches(
+        args.migration_decision_digest, _decision_digest(root, plan)
+    ):
+        print(
+            "Renaming stopped safely: the current plan differs from the reviewed preview.",
+            file=sys.stderr,
+        )
+        return 1
 
     if not plan:
         print("\nRenamed 0 media file(s).")
         print(f"Already using this naming scheme: {already_named} file(s).")
         return _write_migration_outcome(
-            args.migration_outcome, root, apply=True, files=0, status=0
+            args.migration_outcome,
+            root,
+            apply=True,
+            plan=plan,
+            files=0,
+            status=0,
         )
 
     try:
@@ -475,6 +510,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.migration_outcome,
             root,
             apply=True,
+            plan=plan,
             files=len(plan),
             status=1,
         )
@@ -483,6 +519,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.migration_outcome,
         root,
         apply=True,
+        plan=plan,
         files=len(plan),
         status=0,
     )

@@ -58,6 +58,8 @@ from pymo.logging_config import emit as print
 from pymo.migration.outcome import (
     MigrationOutcomeError,
     add_outcome_argument,
+    decision_digest,
+    decision_digest_matches,
     outcome_record,
     write_outcome,
 )
@@ -228,6 +230,7 @@ def _write_migration_outcome(
     scanned_files: int,
     scanned_bytes: int,
     duplicate_groups: list[list[ImageRecord]],
+    move_plan: list[ImageMove],
     skipped: int,
     cache_enabled: bool,
     cache_reused: int,
@@ -253,6 +256,7 @@ def _write_migration_outcome(
                     "extra_copies": sum(len(group) - 1 for group in duplicate_groups),
                     "duplicate_bytes": _duplicate_bytes(duplicate_groups),
                     "skipped": skipped,
+                    "decision_digest": _decision_digest(root, move_plan),
                     "cache": {
                         "enabled": cache_enabled,
                         "reused": cache_reused,
@@ -268,6 +272,23 @@ def _write_migration_outcome(
         print("Migration outcome could not be recorded safely.", file=sys.stderr)
         return 1
     return status
+
+
+def _decision_digest(root: Path, move_plan: list[ImageMove]) -> str:
+    return decision_digest(
+        "image-duplicates",
+        [
+            {
+                "group": group,
+                "kept": kept.path.relative_to(root).as_posix(),
+                "kept_byte_sha256": kept.byte_sha256,
+                "source": duplicate.path.relative_to(root).as_posix(),
+                "source_byte_sha256": duplicate.byte_sha256,
+                "target": target.relative_to(root).as_posix(),
+            }
+            for group, kept, duplicate, target in move_plan
+        ],
+    )
 
 
 def undo_duplicate_run(root: Path, apply: bool, *, summary: bool = False) -> int:
@@ -710,6 +731,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(message)
 
     if not paths:
+        if args.apply and not decision_digest_matches(
+            args.migration_decision_digest, _decision_digest(root, [])
+        ):
+            print(
+                "Duplicate moves stopped safely: the current plan differs from the reviewed preview.",
+                file=sys.stderr,
+            )
+            return 1
         print("No image content required duplicate analysis.")
         verb = "Moved" if args.apply else "Would move"
         print(f"\n{verb} 0 duplicate(s) from 0 group(s).")
@@ -721,6 +750,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             scanned_files=0,
             scanned_bytes=0,
             duplicate_groups=[],
+            move_plan=[],
             skipped=0,
             cache_enabled=not args.no_cache,
             cache_reused=0,
@@ -751,6 +781,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     move_plan = plan_image_moves(
         duplicate_groups, destination, args.apply, summary=args.summary
     )
+
+    if args.apply and not decision_digest_matches(
+        args.migration_decision_digest, _decision_digest(root, move_plan)
+    ):
+        print(
+            "Duplicate moves stopped safely: the current plan differs from the reviewed preview.",
+            file=sys.stderr,
+        )
+        return 1
 
     if args.apply and move_plan:
         try:
@@ -802,6 +841,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         scanned_files=len(records),
         scanned_bytes=scanned_bytes,
         duplicate_groups=duplicate_groups,
+        move_plan=move_plan,
         skipped=len(skipped),
         cache_enabled=not args.no_cache,
         cache_reused=cache_use.reused,

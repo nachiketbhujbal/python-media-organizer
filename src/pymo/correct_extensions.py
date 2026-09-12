@@ -40,6 +40,8 @@ from pymo.logging_config import emit as print
 from pymo.migration.outcome import (
     MigrationOutcomeError,
     add_outcome_argument,
+    decision_digest,
+    decision_digest_matches,
     outcome_record,
     write_outcome,
 )
@@ -311,6 +313,7 @@ def _write_migration_outcome(
     root: Path,
     *,
     apply: bool,
+    plan: Sequence[CorrectionRecord],
     files: int,
     status: int,
 ) -> int:
@@ -329,6 +332,7 @@ def _write_migration_outcome(
                     "files": files,
                     "directories_created": 0,
                     "directories_removed": 0,
+                    "decision_digest": _decision_digest(root, plan),
                 },
             ),
             root,
@@ -337,6 +341,21 @@ def _write_migration_outcome(
         print("Migration outcome could not be recorded safely.", file=sys.stderr)
         return 1
     return status
+
+
+def _decision_digest(root: Path, plan: Sequence[CorrectionRecord]) -> str:
+    return decision_digest(
+        "extension-correction",
+        [
+            {
+                "source": record.source.relative_to(root).as_posix(),
+                "target": record.target.relative_to(root).as_posix(),
+                "kind": record.kind,
+                "byte_sha256": record.byte_sha256,
+            }
+            for record in plan
+        ],
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -389,15 +408,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.migration_outcome,
             root,
             apply=False,
+            plan=analysis.plan,
             files=len(analysis.plan),
             status=0,
         )
+
+    if not decision_digest_matches(
+        args.migration_decision_digest, _decision_digest(root, analysis.plan)
+    ):
+        print(
+            "Extension correction stopped safely: the current plan differs from the reviewed preview.",
+            file=sys.stderr,
+        )
+        return 1
 
     if not analysis.plan:
         print("\nCorrected 0 media extension(s).")
         report_evidence_counts(analysis)
         return _write_migration_outcome(
-            args.migration_outcome, root, apply=True, files=0, status=0
+            args.migration_outcome,
+            root,
+            apply=True,
+            plan=analysis.plan,
+            files=0,
+            status=0,
         )
 
     try:
@@ -423,6 +457,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.migration_outcome,
             root,
             apply=True,
+            plan=analysis.plan,
             files=len(analysis.plan),
             status=1,
         )
@@ -431,6 +466,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.migration_outcome,
         root,
         apply=True,
+        plan=analysis.plan,
         files=len(analysis.plan),
         status=0,
     )

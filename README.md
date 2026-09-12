@@ -266,8 +266,10 @@ decision boundary. Version 0.6.1 adds explicit terminal questions at those
 boundaries. Version 0.6.2 adds a concise path-private synopsis of the recorded
 stage outcomes. Version 0.6.3 adds an explicit private resume-directory
 shorthand for later invocations. Version 0.6.4 adds a deterministic, stable,
-path-private JSON report over those same recorded outcomes. With no log
-directory the coordinator writes nothing and prints the complete plan:
+path-private JSON report over those same recorded outcomes. Version 0.6.5 adds
+an explicit private policy for deliberately pre-authorized unattended
+checkpoints and stops before missing or changed authority. With no log directory
+the coordinator writes nothing and prints the complete plan:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-copy"
@@ -294,6 +296,7 @@ directory:
 pymo migrate --resume "/path/to/private-logs"
 pymo migrate --resume "/path/to/private-logs" --run
 pymo migrate --resume "/path/to/private-logs" --interactive
+pymo migrate --resume "/path/to/private-logs" --unattended "/path/to/private-policy.json"
 pymo migrate --resume "/path/to/private-logs" --json
 ```
 
@@ -320,6 +323,19 @@ apply checkpoint, where both `--run-next` and `--apply` remain required. Resume
 routine work with `--run` after that single reviewed apply. The original
 `--run-next` selector remains available when exactly one pending child stage is
 desired.
+
+`--unattended PRIVATE_POLICY_JSON` uses the same one-stage engine without
+terminal questions. The private schema-1 policy binds the exact pymo version,
+canonical roots, saved options, separately enumerated checkpoint decisions,
+and exact aggregate typed results expected at each boundary. Different
+transformation plans with the same counts remain distinct through a
+versioned digest of their private source/target decisions. A valid but
+missing or mismatched authorization stops with status 1 before crossing the
+checkpoint; malformed, unsafe, changed, or binding-mismatched authority stops
+with setup status 2. Pymo still never moves or deletes `dups`; a present review
+tree pauses the unattended run until the operator retains it externally and
+resumes with the same unchanged policy. See the
+[unattended policy contract](docs/MIGRATION_POLICY.md).
 
 `--interactive` uses the same one-stage engine and routine advancement, but
 keeps a terminal session open to ask separately about successful or status-one
