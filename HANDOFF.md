@@ -1185,7 +1185,7 @@ from an ordinary observed result eligible for final sign-off.
 
 `src/pymo/migrate.py` coordinates `pymo migrate BASELINE WORKING` while
 `migration/workflow.py` owns the fixed ordered stages and child arguments and
-`migration/coordinator_state.py` owns private schema-2 restart state. The
+`migration/coordinator_state.py` owns private schema-3 restart state. The
 command with no `--log-dir` prints a zero-write plan. `--start` creates one
 explicit external private directory, binds canonical roots, exact pymo version,
 and common options, and publishes mode-0600 state atomically under a dedicated
@@ -1472,6 +1472,16 @@ recreating the immutable release tag. Detailed operational evidence from real
 collections remains in the private Agent Relay record; the public repository
 records only collection-neutral acceptance claims.
 
+Version 0.6.6 is an unreleased candidate on
+`codex/feat/v0.6.6-logging-surfaces`. ADR 0099 separates console logging,
+explicit durable diagnostics, migration-private state and stage logs, human
+synopses, and structured reports. The candidate adds independent conventional
+console and file thresholds, retains `--verbose` and `--quiet`, keeps every
+persistent surface explicit, and changes neither path disclosure nor migration
+authority. Its private coordinator state is schema 3 because the two saved
+thresholds are part of exact invocation context. Release, tag, hosted, and
+installed-version claims remain pending until their evidence exists.
+
 ## Media validation
 
 `src/pymo/validate.py` implements media-non-mutating
@@ -1530,7 +1540,12 @@ behavioral tests.
 - Warnings/errors go to stderr.
 - `--verbose` enables diagnostic `DEBUG` output.
 - `--quiet` keeps only warnings and errors.
+- `--console-log-level` independently accepts `DEBUG`, `INFO`, `WARNING`,
+  `ERROR`, or `CRITICAL` and conflicts with `--verbose` and `--quiet`.
 - `--log-file PATH` creates a timestamped local log only at the requested path.
+- `--file-log-level` independently selects an explicit file's threshold. It
+  requires `--log-file` for ordinary commands; under `migrate` it controls the
+  already-private per-stage logs and is saved in restart state.
 - Normal human-readable command logging prefixes every physical console line
   with an ISO timestamp by default.
 - `--no-timestamps` omits console timestamps; `--timestamps` remains accepted
@@ -1538,14 +1553,18 @@ behavioral tests.
 - Structured JSON, help, version, and argument-parser output remain unprefixed.
 - Explicit log files timestamp every physical line, including lines contained
   inside one multi-line message, regardless of the console timestamp choice.
+- New explicit diagnostic files use mode `0600`, append without truncation,
+  and reject symbolic-link, non-regular, or multiply linked leaves. Pymo never
+  rotates, prunes, replaces, or deletes them.
 - `--show-ignored` explicitly adds relative ignored paths; `--verbose` alone
   never reveals them.
 - No persistent log is created by default.
 
 Separating console output, explicitly requested durable diagnostics, restart
-state, and reports plus conventional log-level selection is planned for version
-0.6.6. Coherent visibility profiles, compatibility treatment, and a possible
-`--debug` alias are planned for version 0.6.7 rather than current behavior.
+state, and reports plus conventional log-level selection is the bounded
+version 0.6.6 candidate. Coherent visibility profiles, compatibility treatment,
+and a possible `--debug` alias are planned for version 0.6.7 rather than current
+behavior.
 Whether diagnostic persistence ever becomes automatic remains undecided.
 Default path-bearing logs or default path disclosure would conflict with the
 present opt-in privacy rule, report-only command guarantees, read-only

@@ -109,6 +109,9 @@ changing the stage engine or any checkpoint.
 Version 0.6.5 adds a separately specified private policy that may cross only
 the exact validation, apply, external-quarantine, and final-signoff results the
 operator authorized in advance.
+Version 0.6.6 adds independently saved console and private stage-file logging
+thresholds without changing the stage sequence, checkpoint authority, path
+disclosure, or opt-in persistence boundary.
 First inspect the zero-write plan, then explicitly initialize one dedicated
 private directory outside and non-nested with both collections:
 
@@ -119,9 +122,16 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
 ```
 
 Common `--config`, `--show-ignored`, `--show-files`, `--verbose`/`--quiet`,
-timestamp, `--workers`, `--no-cache`, ffmpeg/ffprobe, and decode-timeout choices
-supplied at `--start` are fixed in schema-2 restart state and carried only to
-applicable child commands. Later explicit options must agree with that state.
+`--console-log-level`, `--file-log-level`, timestamp, `--workers`, `--no-cache`,
+ffmpeg/ffprobe, and decode-timeout choices supplied at `--start` are fixed in
+schema-3 restart state and carried only to applicable child commands. Later
+explicit options must agree with that state. `--console-log-level` and
+`--file-log-level` accept `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.
+The console selector cannot be combined with `--verbose` or `--quiet`; the file
+selector controls each already-private per-stage log created under `--log-dir`.
+Pymo appends no ordinary `--log-file` for the coordinator, rotates or prunes no
+stage log, and grants no new disclosure or persistence authority through a
+logging threshold.
 Use the same released pymo version for the complete sequence.
 
 Inspect current state without advancing it, execute exactly one pending stage,

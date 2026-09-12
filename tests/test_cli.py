@@ -51,12 +51,21 @@ def test_cli_help_and_argument_errors_remain_unprefixed(tmp_path: Path) -> None:
     assert help_result.returncode == 0
     assert "--timestamps" in help_result.stdout
     assert "--no-timestamps" in help_result.stdout
+    assert "--console-log-level" in help_result.stdout
+    assert "--file-log-level" in help_result.stdout
     assert "verify-migration" in help_result.stdout
     assert "correct-extensions" in help_result.stdout
     assert "migrate" in help_result.stdout
     assert help_result.stdout.startswith("usage: pymo")
     assert conflict_result.returncode == 2
     assert conflict_result.stderr.startswith("usage: pymo")
+
+    migrate_help = run_pymo("migrate", "--help")
+
+    assert migrate_help.returncode == 0
+    assert "save the minimum human-readable console" in migrate_help.stdout
+    assert "save the minimum private per-stage" in migrate_help.stdout
+    assert "Completed migrate" not in migrate_help.stdout
 
 
 def test_dispatched_help_and_argument_errors_remain_unprefixed(
@@ -121,6 +130,116 @@ def test_cli_explicit_log_file_and_verbose_mode(tmp_path: Path) -> None:
     contents = log_file.read_text(encoding="utf-8")
     assert "DEBUG pymo Dispatching pymo command: organize" in contents
     assert "Dry run" in contents
+
+
+def test_console_and_file_log_levels_are_independent(tmp_path: Path) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+    log_file = tmp_path / "private" / "pymo.log"
+
+    result = run_pymo(
+        "--console-log-level",
+        "ERROR",
+        "--file-log-level",
+        "debug",
+        "--log-file",
+        log_file,
+        "organize",
+        collection,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == ""
+    assert result.stderr == ""
+    contents = log_file.read_text(encoding="utf-8")
+    assert "DEBUG pymo Dispatching pymo command: organize" in contents
+    assert "INFO pymo Dry run" in contents
+
+
+def test_quiet_console_retains_default_file_information(tmp_path: Path) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+    log_file = tmp_path / "pymo.log"
+
+    result = run_pymo("--quiet", "--log-file", log_file, "organize", collection)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == ""
+    assert result.stderr == ""
+    assert "INFO pymo Dry run" in log_file.read_text(encoding="utf-8")
+
+
+def test_file_log_level_requires_an_explicit_file(tmp_path: Path) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+
+    result = run_pymo("--file-log-level", "DEBUG", "organize", collection)
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr.startswith("usage: pymo")
+    assert "--file-log-level requires --log-file" in result.stderr
+    assert list(collection.iterdir()) == []
+
+
+def test_console_level_conflicts_with_legacy_console_selectors(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+
+    result = run_pymo(
+        "--verbose", "--console-log-level", "INFO", "organize", collection
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert result.stderr.startswith("usage: pymo")
+
+
+def test_explicit_log_is_private_append_only_and_rejects_a_link(
+    tmp_path: Path,
+) -> None:
+    collection = tmp_path / "collection"
+    collection.mkdir()
+    log_file = tmp_path / "private" / "pymo.log"
+
+    first = run_pymo("--log-file", log_file, "organize", collection)
+    second = run_pymo("--log-file", log_file, "organize", collection)
+
+    assert first.returncode == second.returncode == 0
+    assert log_file.stat().st_mode & 0o777 == 0o600
+    assert log_file.read_text(encoding="utf-8").count("Completed organize") == 2
+
+    target = tmp_path / "target.log"
+    target.write_text("untouched\n", encoding="utf-8")
+    linked = tmp_path / "linked.log"
+    linked.symlink_to(target)
+    refused = run_pymo("--log-file", linked, "organize", collection)
+
+    assert refused.returncode == 2
+    assert refused.stdout == ""
+    assert refused.stderr.startswith("usage: pymo")
+    assert str(tmp_path) not in refused.stderr
+    assert target.read_text(encoding="utf-8") == "untouched\n"
+
+    hard_linked = tmp_path / "hard-linked.log"
+    hard_linked.hardlink_to(target)
+    refused_hard_link = run_pymo("--log-file", hard_linked, "organize", collection)
+
+    assert refused_hard_link.returncode == 2
+    assert refused_hard_link.stdout == ""
+    assert str(tmp_path) not in refused_hard_link.stderr
+    assert target.read_text(encoding="utf-8") == "untouched\n"
+
+    directory = tmp_path / "directory.log"
+    directory.mkdir()
+    refused_directory = run_pymo("--log-file", directory, "organize", collection)
+
+    assert refused_directory.returncode == 2
+    assert refused_directory.stdout == ""
+    assert str(tmp_path) not in refused_directory.stderr
+    assert list(directory.iterdir()) == []
 
 
 def test_cli_quiet_mode_suppresses_informational_output(tmp_path: Path) -> None:
@@ -250,6 +369,7 @@ def test_scan_json_stays_machine_readable_with_global_output_flags(
         ("--quiet",),
         ("--timestamps",),
         ("--no-timestamps",),
+        ("--console-log-level", "CRITICAL"),
     ):
         result = run_pymo(*output_flags, "scan", collection, "--json")
 

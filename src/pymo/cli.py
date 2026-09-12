@@ -21,7 +21,11 @@ from pymo import (
 from pymo.cache import cli as cache_cli
 from pymo.config import add_show_ignored_argument
 from pymo.duplicates import images, videos
-from pymo.logging_config import configure_logging
+from pymo.logging_config import (
+    LoggingConfigurationError,
+    configure_logging,
+    log_level_choices,
+)
 from pymo.progress import format_duration
 
 
@@ -54,10 +58,25 @@ def build_parser() -> argparse.ArgumentParser:
     output.add_argument(
         "--quiet", action="store_true", help="show only warnings and errors"
     )
+    output.add_argument(
+        "--console-log-level",
+        type=str.upper,
+        choices=log_level_choices(),
+        help="minimum conventional level for human-readable console logging",
+    )
     parser.add_argument(
         "--log-file",
         type=Path,
         help="also write detailed logs to this explicit local path",
+    )
+    parser.add_argument(
+        "--file-log-level",
+        type=str.upper,
+        choices=log_level_choices(),
+        help=(
+            "minimum conventional level for an explicit diagnostic log or "
+            "migration stage logs"
+        ),
     )
     timestamp_output = parser.add_mutually_exclusive_group()
     timestamp_output.add_argument(
@@ -91,17 +110,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "migrate" and args.log_file is not None:
         parser.error("migrate uses --log-dir for explicit per-stage private logs")
+    if (
+        args.file_log_level is not None
+        and args.log_file is None
+        and args.command != "migrate"
+    ):
+        parser.error("--file-log-level requires --log-file")
     started_at = time.monotonic()
     structured_json = (
         args.command in {"scan", "validate", "cache", "verify-migration", "migrate"}
         and "--json" in args.arguments
     )
-    configure_logging(
-        verbose=args.verbose and not structured_json,
-        quiet=args.quiet and not structured_json,
-        log_file=args.log_file,
-        timestamps=args.timestamps is not False and not structured_json,
-    )
+    try:
+        configure_logging(
+            verbose=args.verbose and not structured_json,
+            quiet=args.quiet and not structured_json,
+            log_file=args.log_file,
+            timestamps=args.timestamps is not False and not structured_json,
+            console_level=("INFO" if structured_json else args.console_log_level),
+            file_level=args.file_log_level if args.log_file is not None else None,
+        )
+    except LoggingConfigurationError as error:
+        parser.error(str(error))
     if not structured_json:
         logging.getLogger("pymo").debug("Dispatching pymo command: %s", args.command)
     commands = _commands()
@@ -125,6 +155,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             forwarded_options.append("--verbose")
         elif args.quiet:
             forwarded_options.append("--quiet")
+        elif args.console_log_level is not None:
+            forwarded_options.extend(("--console-log-level", args.console_log_level))
+        if args.file_log_level is not None:
+            forwarded_options.extend(("--file-log-level", args.file_log_level))
         if args.timestamps is not None:
             forwarded_options.append(
                 "--timestamps" if args.timestamps else "--no-timestamps"

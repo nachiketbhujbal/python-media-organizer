@@ -16,8 +16,9 @@ from typing import Any, Literal
 
 from pymo.migration.workflow import CoordinatorOptions, _stages
 
-# This identifies the private restart-state compatibility contract.
-MIGRATION_STATE_SCHEMA_VERSION = 2
+# This identifies the private restart-state compatibility contract. Version 3
+# adds independently bound console and stage-file logging thresholds.
+MIGRATION_STATE_SCHEMA_VERSION = 3
 
 
 class MigrationCoordinatorError(RuntimeError):
@@ -265,6 +266,8 @@ def _options_from_json(value: object) -> CoordinatorOptions:
     expected = {
         "verbose",
         "quiet",
+        "console_log_level",
+        "file_log_level",
         "timestamps",
         "config",
         "show_ignored",
@@ -280,6 +283,10 @@ def _options_from_json(value: object) -> CoordinatorOptions:
     options = CoordinatorOptions(
         verbose=_require_bool(value["verbose"], "verbose"),
         quiet=_require_bool(value["quiet"], "quiet"),
+        console_log_level=_require_optional_str(
+            value["console_log_level"], "console log level"
+        ),
+        file_log_level=_require_optional_str(value["file_log_level"], "file log level"),
         timestamps=_require_bool(value["timestamps"], "timestamps"),
         config=_require_absolute_optional_path(value["config"], "config"),
         show_ignored=_require_bool(value["show_ignored"], "show_ignored"),
@@ -292,6 +299,22 @@ def _options_from_json(value: object) -> CoordinatorOptions:
     )
     if options.verbose and options.quiet:
         raise MigrationCoordinatorError("migration restart output options conflict")
+    allowed_log_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+    if options.console_log_level is not None and (
+        options.verbose
+        or options.quiet
+        or options.console_log_level not in allowed_log_levels
+    ):
+        raise MigrationCoordinatorError(
+            "migration restart console logging level is invalid"
+        )
+    if (
+        options.file_log_level is not None
+        and options.file_log_level not in allowed_log_levels
+    ):
+        raise MigrationCoordinatorError(
+            "migration restart file logging level is invalid"
+        )
     if options.workers is not None and options.workers > 32:
         raise MigrationCoordinatorError("migration restart workers are out of range")
     return options

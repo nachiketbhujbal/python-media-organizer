@@ -2,6 +2,26 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.6.6 - Unreleased
+
+- Add independent conventional `--console-log-level` and `--file-log-level`
+  thresholds using `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` without
+  changing filename or ignored-path disclosure defaults.
+- Retain `--verbose` and `--quiet` as compatible console selectors. Preserve
+  the historical verbose `DEBUG` diagnostic-file default while allowing quiet
+  console output to keep the explicit file's default informational evidence.
+- Keep ordinary durable diagnostics behind explicit `--log-file`. Append
+  without truncation, create new files with private mode `0600`, reject unsafe
+  symbolic-link, non-regular, or multiply linked leaves, and perform no
+  automatic rotation, pruning, replacement, or deletion.
+- Bind migration console and per-stage file thresholds into private
+  restart-state schema 3, recover them through `--resume`, and forward them to
+  every applicable child without changing the one-stage engine, checkpoints,
+  outcomes, or preservation evidence.
+- Keep structured JSON, help, version, and argument-parser output unprefixed;
+  keep reports, restart state, stage outcomes, action history, and caches
+  separate from ordinary diagnostic logs. Record the contract in ADR 0099.
+
 ## 0.6.5 - 2026-09-12
 
 - Add `pymo migrate --unattended PRIVATE_POLICY_JSON` for an explicitly

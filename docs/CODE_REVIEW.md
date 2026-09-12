@@ -128,6 +128,20 @@ The same adversarial method was repeated after the first validation release.
 | POLICY-R05 | High | An existing group- or world-writable log directory let another user replace both the restart state and supposedly create-once binding record, allowing substituted authority to appear internally consistent. | 0.6.5 | Superseded by POLICY-R06: the current candidate requires an owner-private log directory before lock creation and rejects jointly replaced authority after that directory becomes public, but its first sticky-ancestor exception trusted an untrusted parent owner |
 | POLICY-R06 | High | The first safe-ancestry correction accepted a writable sticky parent when the current user owned only its child, even though an untrusted sticky-directory owner may remove any child and replace the complete log directory. | 0.6.5 | Resolved after renewed independent review by requiring every ancestry component to be owned by root or the current user and accepting group- or world-writable ancestors only when sticky, with direct differing-owner regressions for both ordinary and sticky parents |
 
+Independent Terra-medium review accepted exact v0.6.6 implementation head
+`d7bb6931a55fde0bd3164feefa74e0e64aa072c4` without findings. After the owner
+added explicit help for the new global and migration logging selectors, renewed
+review accepted corrected exact head
+`70e4096d26cae1a95a3c686173008b1cfbc60260` without findings. The reviewer
+checked independent console and file thresholds, legacy verbose and quiet
+compatibility, structured-output purity, explicit-log leaf safety and append
+behavior, schema-3 migration state and resume propagation, unattended-policy
+binding, and unchanged disclosure and authority boundaries. Eight focused
+tests plus Ruff, Black, mypy, and diff-integrity checks passed in the separate
+clean detached review worktree. The complete owner gate passed all 591
+synthetic and real-FFmpeg tests at 88 percent subprocess-aware coverage plus
+the locked static and pre-commit gates.
+
 Independent Terra-medium review accepted exact v0.6.5 implementation head
 `a001bbe` without findings after rejecting earlier digest and policy-binding
 candidates. The reviewer reproduced descriptor-bound organization and rename,

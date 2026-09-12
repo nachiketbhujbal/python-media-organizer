@@ -69,12 +69,14 @@ The top-level object has exactly these fields:
 ```json
 {
   "schema_version": 1,
-  "tool_version": "0.6.5",
+  "tool_version": "0.6.6",
   "baseline": "/canonical/path/to/baseline",
   "working": "/canonical/path/to/working-collection",
   "options": {
     "verbose": false,
     "quiet": false,
+    "console_log_level": null,
+    "file_log_level": null,
     "timestamps": true,
     "config": null,
     "show_ignored": false,
