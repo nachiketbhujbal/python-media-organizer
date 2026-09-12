@@ -153,6 +153,15 @@ boundaries. A separate tagged build and installed-command check reproduced
 version 0.6.6, safe distribution members, exact packaged-license identity,
 private diagnostic-file creation, and independent console/file thresholds.
 
+Independent post-tag review rejected initial v0.6.6 release-truth head
+`e0ed45ed20f945ccca66e4fd05aab771cbd8ff74` with one P2: a later handoff
+paragraph still called the now-released version a candidate. The owner
+corrected the stale wording at `48b1c65b424483a652c00b6ff4534746d120ab1e`.
+Renewed review accepted that exact SHA without findings after rechecking the
+complete six-file delta, hosted and tagged evidence, reproduced artifact
+hashes, privacy boundary, ADR ordering, release-status sweep, diff integrity,
+and the complete locked documentation gate.
+
 Independent Terra-medium review accepted exact v0.6.5 implementation head
 `a001bbe` without findings after rejecting earlier digest and policy-binding
 candidates. The reviewer reproduced descriptor-bound organization and rename,

@@ -1506,6 +1506,13 @@ recreating the immutable release tag. No retained private media collection,
 historical result, quarantine, action history, or rollback evidence was used,
 changed, or removed for this logging-only release.
 
+Independent post-tag review rejected initial release-truth head `e0ed45e`
+because a later handoff paragraph still called 0.6.6 a candidate. The owner
+corrected that stale wording, and renewed review accepted exact head `48b1c65`
+without findings after checking the complete documentation delta, release and
+tag facts, artifact hashes, privacy boundary, ADR ordering, and locked
+documentation gate.
+
 ## Media validation
 
 `src/pymo/validate.py` implements media-non-mutating
