@@ -264,8 +264,9 @@ and one working collection. Version 0.6.0 adds a foreground safe operator loop
 that advances routine stages in one invocation while preserving every existing
 decision boundary. Version 0.6.1 adds explicit terminal questions at those
 boundaries. Version 0.6.2 adds a concise path-private synopsis of the recorded
-stage outcomes. With no log directory the coordinator writes nothing and
-prints the complete plan:
+stage outcomes. Version 0.6.3 adds an explicit private resume-directory
+shorthand for later invocations. With no log directory the coordinator writes
+nothing and prints the complete plan:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-copy"
@@ -283,6 +284,21 @@ pymo migrate "/path/to/baseline" "/path/to/working-copy" \
 pymo migrate "/path/to/baseline" "/path/to/working-copy" \
   --log-dir "/path/to/private-logs" --interactive
 ```
+
+After initialization, the equivalent shorter forms recover the exact roots,
+saved options, and current checkpoint from that explicitly named private
+directory:
+
+```bash
+pymo migrate --resume "/path/to/private-logs"
+pymo migrate --resume "/path/to/private-logs" --run
+pymo migrate --resume "/path/to/private-logs" --interactive
+```
+
+Resume never searches for state. It cannot be combined with positional
+collections, `--log-dir`, or `--start`; any explicitly repeated common option
+must exactly match the saved value. The original two-root form remains
+supported.
 
 `--run` executes routine successful evidence and preview stages until it reaches
 the next validation review, apply, external-quarantine, failure, or final-signoff
@@ -344,8 +360,9 @@ Operational trials found that the stage engine produces the right media and
 preservation outcomes but asked the operator to perform too much repetitive
 coordination. Version 0.6.0 adds routine automatic advancement and version
 0.6.1 adds conservative in-process checkpoint questions. Version 0.6.2 adds the
-concise human synopsis without claiming a stable machine interface. The stable
-report artifact, saved resume context, logging and visibility policy, pymo-owned
+concise human synopsis without claiming a stable machine interface. Version
+0.6.3 adds explicit resume from the already-private coordinator directory. The
+stable report artifact, logging and visibility policy, pymo-owned
 duplicate disposition, a sequential manifest-backed queue, and benchmark-proven
 scheduling remain separate later releases.
 

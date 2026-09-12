@@ -97,6 +97,8 @@ copies on one physical device are not independent backups.
 The workflow introduced in v0.5.11 keeps the manual stages below as its
 authority. Version 0.5.12 additionally contains every command-line path
 expansion and resolution failure before private state can be created.
+Version 0.6.3 adds an explicit private resume-directory shorthand without
+changing the stage engine or any checkpoint.
 First inspect the zero-write plan, then explicitly initialize one dedicated
 private directory outside and non-nested with both collections:
 
@@ -126,6 +128,24 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
   --log-dir "/path/to/private-logs" --interactive
 ```
 
+Once initialized, later invocations may instead name only the exact private
+directory and the desired existing action:
+
+```bash
+pymo migrate --resume "/path/to/private-logs"
+pymo migrate --resume "/path/to/private-logs" --run-next
+pymo migrate --resume "/path/to/private-logs" --run
+pymo migrate --resume "/path/to/private-logs" --interactive
+```
+
+`--resume` never searches the current directory, collections, parents, or a
+default location. It cannot be combined with positional collections,
+`--log-dir`, or `--start`. Common options come from strict restart state;
+explicit repetitions are accepted only when they exactly match the recorded
+values. Before any status or action, the coordinator revalidates the private
+directory, exact pymo version, recorded roots, root/log separation, strict
+lifecycle, and every required private outcome.
+
 `--run` chains only routine successful evidence and preview children. It reloads
 the strict restart lifecycle, requires exactly one new successful attempt for
 the child it dispatched, retains its roots, version, options, and creation
@@ -137,6 +157,7 @@ After reviewing that preview, authorize only the pending child:
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-collection" \
   --log-dir "/path/to/private-logs" --run-next --apply
+pymo migrate --resume "/path/to/private-logs" --run-next --apply
 ```
 
 Then use `--run` again to continue routine evidence work. Use `--run-next`
@@ -169,6 +190,7 @@ path is absent, record the human checkpoint:
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-collection" \
   --log-dir "/path/to/private-logs" --confirm-quarantine
+pymo migrate --resume "/path/to/private-logs" --confirm-quarantine
 ```
 
 That confirmation proves only path absence plus the operator's acknowledgement,
@@ -371,3 +393,6 @@ contract.
 Before any resumed action, the coordinator revalidates every required private
 outcome through its pinned private-directory boundary. Missing, replaced,
 publicly readable, or malformed history stops before another child is run.
+Version 0.6.3 lets that same strict continuation be located with
+`--resume PRIVATE_STATE_DIRECTORY`; it adds no evidence or authorization and
+does not change the original two-root form.

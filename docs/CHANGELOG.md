@@ -2,6 +2,27 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.6.3 - Unreleased
+
+- Add `pymo migrate --resume PRIVATE_STATE_DIRECTORY` as an explicit shorthand
+  for continuing one existing migration without repeating its baseline,
+  working collection, private log directory, or saved common options.
+- Recover the canonical roots, exact pymo version, fixed options, ordered
+  attempts, current checkpoint, and private outcome references only from the
+  strict restart state in the named directory. Never search for restart state
+  automatically.
+- Permit the existing status, `--run-next`, `--run`, `--interactive`,
+  `--accept-status`, `--confirm-quarantine`, and reviewed
+  `--run-next --apply` actions through the shorthand. Resume-time option
+  repetitions must exactly match the recorded values.
+- Revalidate the private directory, strict state and outcome history, exact
+  version, recorded roots, root/log separation, and current collection setup
+  before dispatching a child or authorizing a mutation. Unsafe, ambiguous, or
+  conflicting input fails with path-private setup status 2.
+- Retain the original two-root interface, opt-in persistent-state boundary,
+  every human checkpoint, exact child statuses, fresh evidence requirements,
+  and all no-delete/no-overwrite guarantees. Record the decision in ADR 0093.
+
 ## 0.6.2 - 2026-09-11
 
 - Print a concise path-private migration synopsis whenever current coordinator
