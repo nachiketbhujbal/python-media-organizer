@@ -128,6 +128,33 @@ The same adversarial method was repeated after the first validation release.
 | POLICY-R05 | High | An existing group- or world-writable log directory let another user replace both the restart state and supposedly create-once binding record, allowing substituted authority to appear internally consistent. | 0.6.5 | Superseded by POLICY-R06: the current candidate requires an owner-private log directory before lock creation and rejects jointly replaced authority after that directory becomes public, but its first sticky-ancestor exception trusted an untrusted parent owner |
 | POLICY-R06 | High | The first safe-ancestry correction accepted a writable sticky parent when the current user owned only its child, even though an untrusted sticky-directory owner may remove any child and replace the complete log directory. | 0.6.5 | Resolved after renewed independent review by requiring every ancestry component to be owned by root or the current user and accepting group- or world-writable ancestors only when sticky, with direct differing-owner regressions for both ordinary and sticky parents |
 
+## Visibility-profile review findings
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| VIS-R01 | Medium | The first v0.6.7 candidate forwarded full-profile disclosure options into top-level cache help and enabled debug logging before child help, so `pymo --visibility full cache --help` emitted a timestamped diagnostic and failed instead of printing clean help. | 0.6.7 | Resolved by recognizing child help before logging, suppressing human logging for every child-help projection, forwarding ignored-path disclosure only to cache warm and refresh, and covering cache top-level/status plus ordinary command help with subprocess regressions |
+
+Independent Terra-medium review accepted corrected exact v0.6.7 implementation
+head `76f79bdb45552ed9451ad77673fd312b0e179b65` against exact released base
+`e795fc5eb26488b51be01fe6981895fc07e9f790` without findings. The reviewer
+checked the complete CLI and documentation delta, profile/legacy conflict
+matrix, fail-before-persistence behavior, structured output, duplicate-summary
+and cache-status privacy, migration schema-3 option persistence and resume,
+logging-threshold independence, and candidate release truth. It independently
+passed all 606 synthetic and real-FFmpeg tests plus Ruff, Black, mypy, focused
+CLI tests, direct installed-style child-help cases, and diff integrity in a
+clean detached worktree.
+
+The complete owner gate also passed all 606 tests at 88 percent
+subprocess-aware coverage, the locked static and pre-commit gates, clean source
+and wheel builds, and isolated installed-wheel acceptance. The installed
+candidate reproduced full/private/quiet path behavior, exact profile recovery
+through migration resume, and clean full-profile cache help. Candidate wheel
+SHA-256 is
+`8a6f52ac3db2975a41ae601de7c31e6717e635339d5fe40c630fab436ef1a6a8`;
+source-distribution SHA-256 is
+`dfadd750fc76e885674a895b739b6d0ed29b7398bf4a811b9e52edf1694c0627`.
+
 Independent Terra-medium review accepted exact v0.6.6 implementation head
 `d7bb6931a55fde0bd3164feefa74e0e64aa072c4` without findings. After the owner
 added explicit help for the new global and migration logging selectors, renewed
