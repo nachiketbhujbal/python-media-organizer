@@ -366,6 +366,7 @@ def _require_operator_binding(state: MigrationState, expected: MigrationState) -
         or state.working != expected.working
         or state.options != expected.options
         or state.created_at != expected.created_at
+        or state.unattended_policy_sha256 != expected.unattended_policy_sha256
     ):
         raise MigrationCoordinatorError(
             "migration restart binding changed during the safe operator loop"
@@ -752,6 +753,7 @@ def _run_unattended(
                 _require_operator_binding(state, binding)
                 _require_collection_identities(state, identities)
                 policy.require_current()
+                policy.require_binding(state)
                 if status != 0:
                     print_synopsis(log_dir, state)
                     return status
@@ -789,6 +791,7 @@ def _run_unattended(
             _require_operator_binding(state, binding)
             _require_collection_identities(state, identities)
             policy.require_current()
+            policy.require_binding(state)
             if status != 0 and not (stage.review_after_success and status == 1):
                 print_synopsis(log_dir, state)
                 return status

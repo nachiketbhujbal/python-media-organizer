@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -2136,6 +2137,74 @@ def test_unattended_resume_rejects_a_different_valid_policy(
     )
     assert len(observed) == 1
     assert migrate._load_state(state_file(log_dir)) == bound_state
+
+
+def test_unattended_failure_rejects_policy_binding_state_substitution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "logs"
+    original = _zero_unattended_policy(
+        tmp_path / "original-policy.json",
+        baseline,
+        working,
+        omitted={"working-validation"},
+    )
+    replacement_policy = _zero_unattended_policy(
+        tmp_path / "replacement-policy.json", baseline, working
+    )
+    replacement_digest = migrate.load_preauthorization(
+        replacement_policy, roots=(baseline, working)
+    ).payload_sha256
+    observed: list[list[str]] = []
+    monkeypatch.setattr(
+        migrate.subprocess,
+        "run",
+        lambda command, *, check: (
+            observed.append(command) or subprocess.CompletedProcess(command, 7)
+        ),
+    )
+    real_load_state = migrate._load_state
+    substituted = False
+
+    def load_with_substitution(path: Path) -> migrate.MigrationState:
+        nonlocal substituted
+        state = real_load_state(path)
+        if not substituted and state.attempts and state.attempts[-1].exit_status == 7:
+            substituted = True
+            return replace(state, unattended_policy_sha256=replacement_digest)
+        return state
+
+    monkeypatch.setattr(migrate, "_load_state", load_with_substitution)
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(log_dir),
+                "--unattended",
+                str(original),
+            ]
+        )
+        == 2
+    )
+    assert substituted
+    assert len(observed) == 1
+
+    monkeypatch.setattr(migrate, "_load_state", real_load_state)
+    assert (
+        migrate.main(
+            [
+                "--resume",
+                str(log_dir),
+                "--unattended",
+                str(replacement_policy),
+            ]
+        )
+        == 2
+    )
+    assert len(observed) == 1
 
 
 def test_unattended_returns_exact_unexpected_child_status(
