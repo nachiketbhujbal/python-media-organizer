@@ -14,12 +14,19 @@ without parsing prose or repeating expensive collection analysis.
 
 ## Decision
 
-Version 0.6.4 will export one explicit schema-versioned, deterministic,
-path-private machine-readable migration report from the same validated restart
-state and typed outcomes as the human synopsis. Report generation will
-preflight the complete required history, perform no media analysis, and leave
-collections, caches, action history, coordinator lifecycle, and private stage
-outcomes unchanged.
+Version 0.6.4 will export schema 1 through explicit `pymo migrate --json` over
+an existing private coordinator run. Both the original baseline/working/log
+locator and the shorter explicit `--resume PRIVATE_STATE_DIRECTORY` locator are
+supported. JSON is written only to standard output; a caller may explicitly
+capture it without giving pymo another filesystem-write boundary.
+
+The deterministic, path-private machine report and existing human synopsis
+will consume the same projection of validated restart state and typed outcomes.
+Report generation will acquire only the existing private coordinator lock,
+preflight the complete required history, recheck the state, outcome projection,
+and collection identities before emission, perform no media analysis, and
+leave collections, caches, action history, coordinator lifecycle, and private
+stage outcomes unchanged. It cannot be combined with a workflow action.
 
 The public schema will distinguish workflow progress, preview from apply,
 simulated from observed preservation, potential from proven storage recovery,
@@ -33,5 +40,8 @@ quarantine, deletion, verification, or sign-off authority.
 - Machine consumers receive a documented stable contract rather than private
   coordinator internals or human log text.
 - The existing human synopsis and migration selectors remain compatible.
+- `docs/MIGRATION_REPORT.md` defines every schema 1 field and allowed state.
+  A new schema version is required before changing a field name, type, allowed
+  value, or meaning; human wording is outside that compatibility contract.
 - Later unattended policy, logging, visibility, duplicate disposition, queue,
   and scheduling releases remain separate decisions.

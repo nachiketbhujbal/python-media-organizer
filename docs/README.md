@@ -13,6 +13,8 @@ needed by coding agents. Durable engineering documentation lives here:
   release procedure.
 - [Production migration runbook](MIGRATION.md) — the collection-by-collection
   baseline, transformation, verification, quarantine, and sign-off sequence.
+- [Stable migration report](MIGRATION_REPORT.md) — schema 1 invocation,
+  compatibility, privacy, and authority boundaries for `migrate --json`.
 - [Architecture](ARCHITECTURE.md) — package boundaries and allowed dependency
   direction.
 - [Architecture decisions](adrs/README.md) — one durable decision per record.

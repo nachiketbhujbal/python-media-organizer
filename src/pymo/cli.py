@@ -93,7 +93,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("migrate uses --log-dir for explicit per-stage private logs")
     started_at = time.monotonic()
     structured_json = (
-        args.command in {"scan", "validate", "cache", "verify-migration"}
+        args.command in {"scan", "validate", "cache", "verify-migration", "migrate"}
         and "--json" in args.arguments
     )
     configure_logging(
@@ -120,7 +120,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         forwarded_options.append("--show-ignored")
     if args.config is not None:
         forwarded_options.extend(("--config", str(args.config)))
-    if args.command == "migrate":
+    if args.command == "migrate" and not structured_json:
         if args.verbose:
             forwarded_options.append("--verbose")
         elif args.quiet:

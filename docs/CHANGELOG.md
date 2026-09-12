@@ -2,6 +2,29 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.6.4 - Unreleased
+
+- Add explicit `pymo migrate --json` reporting over an existing private
+  coordinator run, including the shorter `--resume PRIVATE_STATE_DIRECTORY`
+  locator.
+- Define public migration-report schema 1 with deterministic compact JSON,
+  explicit compatibility rules, aggregate workflow, inventory, health,
+  transformation, exact-duplicate, cache, preservation, and scope fields.
+- Project the human synopsis and machine report from the same strict typed
+  outcomes while distinguishing pending, stopped, complete, signed-off,
+  previewed, observed, simulated, potentially reclaimable, and externally
+  retained-but-unverified states.
+- Keep report output path-private by selecting only documented aggregate fields;
+  omit roots, filenames, private record names, attempt identifiers, timestamps,
+  action history, and free-form cache issue text.
+- Make report generation read-only: require existing state and its existing
+  private lock, preflight the complete history, recheck lifecycle, outcomes,
+  and collection identities before emission, and reject every workflow action
+  combined with `--json`.
+- Keep structured output free of timestamps, debug messages, progress, and the
+  normal final runtime line under every global console-output flag. Record the
+  contract in ADR 0095 and `docs/MIGRATION_REPORT.md`.
+
 ## 0.6.3 - 2026-09-11
 
 - Add `pymo migrate --resume PRIVATE_STATE_DIRECTORY` as an explicit shorthand

@@ -108,13 +108,10 @@ def _prepare_log_dir(log_dir: Path, *, create: bool) -> None:
 
 
 @contextmanager
-def _state_lock(log_dir: Path) -> Iterator[None]:
-    flags = (
-        os.O_RDWR
-        | os.O_CREAT
-        | getattr(os, "O_NOFOLLOW", 0)
-        | getattr(os, "O_NONBLOCK", 0)
-    )
+def _state_lock(log_dir: Path, *, create: bool = True) -> Iterator[None]:
+    flags = os.O_RDWR | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    if create:
+        flags |= os.O_CREAT
     try:
         descriptor = os.open(_lock_path(log_dir), flags, 0o600)
     except OSError as error:

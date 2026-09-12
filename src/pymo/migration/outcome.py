@@ -16,8 +16,9 @@ from pymo.migration.roots import (
     existing_directories_are_disjoint,
 )
 
-# This identifies private version-bound coordinator outcome records. It is not
-# the stable exported migration-report contract planned for a later release.
+# This identifies private version-bound coordinator outcome records. Stable
+# migration-report schema 1 selects aggregates from them; it does not expose
+# this internal record contract.
 MIGRATION_OUTCOME_SCHEMA_VERSION = 1
 
 OutcomeCategory = Literal[

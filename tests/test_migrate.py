@@ -773,6 +773,24 @@ def _state_at(log_dir: Path, baseline: Path, working: Path, next_stage: int) -> 
     migrate._write_state(state_file(log_dir), state)
 
 
+def _create_private_state_lock(log_dir: Path) -> Path:
+    lock = log_dir / "pymo-migration-state.lock"
+    lock.write_bytes(b"")
+    lock.chmod(0o600)
+    return lock
+
+
+def _tree_contents(root: Path) -> dict[str, tuple[str, bytes | None, int]]:
+    return {
+        str(path.relative_to(root)): (
+            "directory" if path.is_dir() else "file",
+            None if path.is_dir() else path.read_bytes(),
+            stat_mode(path),
+        )
+        for path in sorted(root.rglob("*"))
+    }
+
+
 def _failed_validation_attempt(
     log_dir: Path,
     baseline: Path,
@@ -802,6 +820,324 @@ def _failed_validation_attempt(
         0,
         outcome_name,
     )
+
+
+def test_stable_report_is_deterministic_path_private_and_read_only(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, len(migrate._stages()))
+    _create_private_state_lock(log_dir)
+    before = {
+        "baseline": _tree_contents(baseline),
+        "working": _tree_contents(working),
+        "logs": _tree_contents(log_dir),
+    }
+    common = ["migrate", baseline, working, "--log-dir", log_dir, "--json"]
+
+    first = run_pymo(*common)
+    second = run_pymo("migrate", "--resume", log_dir, "--json")
+
+    assert first.returncode == second.returncode == 0
+    assert first.stderr == second.stderr == ""
+    assert first.stdout == second.stdout
+    report = json.loads(first.stdout)
+    assert report["schema_version"] == 1
+    assert report["report_type"] == "pymo-migration-report"
+    assert report["tool_version"] == __version__
+    assert report["workflow"] == {
+        "completed_stages": len(migrate._stages()),
+        "external_quarantine_confirmed": True,
+        "human_signoff_recorded": False,
+        "latest_exit_status": None,
+        "next_stage": None,
+        "status": "complete",
+        "status_one_validations_acknowledged": 0,
+        "stopped_stage": None,
+        "total_stages": len(migrate._stages()),
+        "validation_reviews_recorded": 0,
+    }
+    assert report["observed_child_work"] == {
+        "attempts": len(migrate._stages()) - 1,
+        "duration_milliseconds": 0,
+    }
+    assert report["inventory"]["baseline"]["files"] == 0
+    assert report["inventory"]["baseline"]["result_kind"] == "observed"
+    assert report["health"]["latest_working"]["errors"] == 0
+    assert report["health"]["latest_working"]["result_kind"] == "observed"
+    assert all(
+        item["result_kind"] == "observed" for item in report["applied_transformations"]
+    )
+    assert [item["result_kind"] for item in report["exact_duplicates"]["analyses"]] == [
+        "observed",
+        "observed",
+    ]
+    assert report["exact_duplicates"]["review_storage"]["state"] == (
+        "external-retention-confirmed-unverified"
+    )
+    assert report["preservation"]["result_kind"] == "observed"
+    assert report["preservation"]["verdict"] == "complete"
+    assert report["scope"] == {
+        "action_history_writes": False,
+        "basis": "validated-private-stage-outcomes",
+        "collection_writes": False,
+        "deletion_authority": False,
+        "fresh_evidence": False,
+        "whole_device_recovery": False,
+    }
+    assert str(tmp_path) not in first.stdout
+    assert ".log" not in first.stdout
+    assert ".outcome.json" not in first.stdout
+    assert "2026-" not in first.stdout
+    assert before == {
+        "baseline": _tree_contents(baseline),
+        "working": _tree_contents(working),
+        "logs": _tree_contents(log_dir),
+    }
+
+
+def test_stable_report_distinguishes_stopped_and_simulated_evidence(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 22)
+    _create_private_state_lock(log_dir)
+    state = migrate._load_state(state_file(log_dir))
+    failed = _failed_validation_attempt(
+        log_dir, baseline, working, state, "final-working-validation"
+    )
+    migrate._write_state(
+        state_file(log_dir), migrate._updated_state(state, failed, advance=False)
+    )
+
+    result = run_pymo("migrate", "--resume", log_dir, "--json")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    assert report["workflow"]["status"] == "stopped"
+    assert report["workflow"]["stopped_stage"] == "final-working-validation"
+    assert report["workflow"]["latest_exit_status"] == 1
+    assert report["health"]["latest_working"]["status"] == 1
+    assert report["preservation"]["result_kind"] == "simulated"
+    assert report["preservation"]["disposition"] == (
+        "eligible-for-human-quarantine-review"
+    )
+
+
+def test_stable_report_distinguishes_completed_signoff(tmp_path: Path) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, len(migrate._stages()))
+    _create_private_state_lock(log_dir)
+    state = migrate._load_state(state_file(log_dir))
+    migrate._record_signoff(state_file(log_dir), state)
+
+    result = run_pymo("migrate", "--resume", log_dir, "--json")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    assert report["workflow"]["status"] == "complete"
+    assert report["workflow"]["human_signoff_recorded"] is True
+    assert report["preservation"]["result_kind"] == "observed"
+
+
+@pytest.mark.parametrize(
+    "action",
+    (
+        "--start",
+        "--run-next",
+        "--run",
+        "--interactive",
+        "--accept-status",
+        "--confirm-quarantine",
+    ),
+)
+def test_stable_report_rejects_workflow_actions_before_any_write(
+    tmp_path: Path, action: str
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    before = sorted(path.name for path in tmp_path.iterdir())
+
+    result = run_pymo(
+        "migrate", baseline, working, "--log-dir", log_dir, "--json", action
+    )
+
+    assert result.returncode == 2
+    assert "--json cannot be combined with a workflow action" in result.stderr
+    assert sorted(path.name for path in tmp_path.iterdir()) == before
+
+
+def test_stable_report_requires_the_existing_private_lock_without_creating_it(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 0)
+    before = _tree_contents(log_dir)
+
+    result = run_pymo("migrate", "--resume", log_dir, "--json")
+
+    assert result.returncode == 2
+    assert "migration state lock is unsafe" in result.stderr
+    assert _tree_contents(log_dir) == before
+    assert not (log_dir / "pymo-migration-state.lock").exists()
+
+
+def test_stable_report_rejects_an_unsafe_outcome_without_output_or_write(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 1)
+    _create_private_state_lock(log_dir)
+    state = migrate._load_state(state_file(log_dir))
+    outcome = log_dir / str(state.attempts[-1].outcome_file)
+    outcome.chmod(0o644)
+    before = _tree_contents(log_dir)
+
+    result = run_pymo("migrate", "--resume", log_dir, "--json")
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "cannot trust a private stage outcome" in result.stderr
+    assert str(tmp_path) not in result.stderr
+    assert _tree_contents(log_dir) == before
+
+
+def test_stable_report_rejects_a_path_bearing_finding_code(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 2)
+    _create_private_state_lock(log_dir)
+    state = migrate._load_state(state_file(log_dir))
+    failed = _failed_validation_attempt(
+        log_dir, baseline, working, state, "baseline-validation"
+    )
+    migrate._write_state(
+        state_file(log_dir), migrate._updated_state(state, failed, advance=False)
+    )
+    outcome = log_dir / str(failed.outcome_file)
+    payload = json.loads(outcome.read_text(encoding="utf-8"))
+    payload["data"]["findings"][0]["code"] = str(tmp_path)
+    outcome.write_text(json.dumps(payload), encoding="utf-8")
+    outcome.chmod(0o600)
+    before = _tree_contents(log_dir)
+
+    result = run_pymo("migrate", "--resume", log_dir, "--json")
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "unsafe finding code" in result.stderr
+    assert str(tmp_path) not in result.stderr
+    assert _tree_contents(log_dir) == before
+
+
+def test_stable_report_revalidates_state_and_collections_before_emitting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 0)
+    _create_private_state_lock(log_dir)
+    real_build_report = migrate.build_report
+    displaced = tmp_path / "displaced-working"
+    calls = 0
+
+    def replace_collection(path: Path, state: migrate.MigrationState):
+        nonlocal calls
+        report = real_build_report(path, state)
+        calls += 1
+        if calls == 1:
+            working.rename(displaced)
+            working.mkdir()
+        return report
+
+    monkeypatch.setattr(migrate, "build_report", replace_collection)
+    messages: list[tuple[str, object]] = []
+    monkeypatch.setattr(
+        migrate,
+        "print",
+        lambda message, *, file=None: messages.append((message, file)),
+    )
+
+    assert migrate.main(["--resume", str(log_dir), "--json"]) == 2
+    assert len(messages) == 1
+    assert "collection identity changed" in messages[0][0]
+    assert messages[0][1] is sys.stderr
+    assert str(tmp_path) not in messages[0][0]
+
+
+def test_stable_report_rejects_lifecycle_or_outcome_change_before_emitting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    baseline, working = collections(tmp_path)
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    _state_at(log_dir, baseline, working, 0)
+    _create_private_state_lock(log_dir)
+    real_load_state = migrate._load_state
+    load_calls = 0
+
+    def changed_lifecycle(path: Path) -> migrate.MigrationState:
+        nonlocal load_calls
+        load_calls += 1
+        state = real_load_state(path)
+        if load_calls == 2:
+            return migrate.MigrationState(
+                state.tool_version,
+                state.baseline,
+                state.working,
+                state.options,
+                state.next_stage,
+                state.attempts,
+                state.created_at,
+                "2026-08-29T12:00:01-04:00",
+            )
+        return state
+
+    messages: list[tuple[str, object]] = []
+    monkeypatch.setattr(migrate, "_load_state", changed_lifecycle)
+    monkeypatch.setattr(
+        migrate,
+        "print",
+        lambda message, *, file=None: messages.append((message, file)),
+    )
+
+    assert migrate.main(["--resume", str(log_dir), "--json"]) == 2
+    assert len(messages) == 1
+    assert "restart lifecycle changed" in messages[0][0]
+
+    monkeypatch.setattr(migrate, "_load_state", real_load_state)
+    real_build_report = migrate.build_report
+    report_calls = 0
+
+    def changed_outcome(path: Path, state: migrate.MigrationState):
+        nonlocal report_calls
+        report_calls += 1
+        report = real_build_report(path, state)
+        if report_calls == 2:
+            report = json.loads(json.dumps(report))
+            report["scope"]["fresh_evidence"] = True
+        return report
+
+    messages.clear()
+    monkeypatch.setattr(migrate, "build_report", changed_outcome)
+
+    assert migrate.main(["--resume", str(log_dir), "--json"]) == 2
+    assert len(messages) == 1
+    assert "outcome history changed" in messages[0][0]
 
 
 class TerminalInput(io.StringIO):

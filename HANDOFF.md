@@ -50,6 +50,13 @@ Version 0.6.3 adds `migrate --resume PRIVATE_STATE_DIRECTORY` as an explicit
 locator for an existing strict coordinator run. It recovers the recorded roots,
 options, version, lifecycle, checkpoint, and outcome references without
 searching for state or adding evidence, authorization, or a new checkpoint.
+Version 0.6.4 adds explicit `migrate --json` over an existing coordinator run.
+Stable report schema 1 and the human synopsis consume the same selected
+aggregate projection. Report generation requires existing private state and
+its lock, validates all referenced outcomes, rechecks the lifecycle, projection,
+and collection identities, and emits only deterministic path-private JSON to
+standard output. It creates no evidence or state and grants no workflow,
+quarantine, deletion, or sign-off authority.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -1213,10 +1220,9 @@ Current status and automatic or interactive boundaries project those owned
 facts into a concise human synopsis. It distinguishes previewed from isolated
 duplicates, potential recovery from proven reclamation, simulated from observed
 preservation, and pending or stopped state from completed sign-off. Paths and
-filenames remain private. These records and the synopsis are bookkeeping, not
-fresh evidence, action history, quarantine proof, a stable report API, or
-deletion authority. ADR 0091 records the boundary; version 0.6.4 remains the
-separate public machine-report contract.
+filenames remain private. These private records are bookkeeping, not a stable
+interchange format, fresh evidence, action history, quarantine proof, or
+deletion authority. ADR 0091 records the boundary.
 
 Version 0.6.3 adds `--resume PRIVATE_STATE_DIRECTORY` as an alternative locator
 for every existing continuation action. The named directory must already
@@ -1227,7 +1233,19 @@ one-child, safe-loop, interactive, acknowledgement, quarantine, or reviewed
 apply path. It never auto-discovers state, accepts conflicting overrides, or
 turns restart bookkeeping into evidence or authority. The original positional
 roots plus `--log-dir` form remains supported. ADR 0093 records the decision;
-version 0.6.4 remains a separate report-artifact release.
+it does not change the report or workflow authority boundaries.
+
+Version 0.6.4 adds `--json` as a mutually exclusive report-only action. It
+accepts either the explicit resume locator or the original three-path locator,
+requires the existing state file and state lock, and validates every required
+private outcome before projecting schema 1. The coordinator reloads the exact
+state, rechecks both collection identities, and rebuilds the same report before
+emission so a lifecycle, collection, or outcome change cannot silently cross
+the output boundary. The CLI suppresses timestamps, debug messages, progress,
+and the final runtime line for the JSON surface. Selected aggregates omit roots,
+filenames, record names, identifiers, timestamps, action entries, and free-form
+cache issue text. `docs/MIGRATION_REPORT.md` is the compatibility contract;
+ADR 0095 records the decision.
 
 Version 0.6.1 adds `--interactive` over the same loop. It requires terminal
 input and asks one conservative `[y/N]` question for each successful or
@@ -1326,10 +1344,11 @@ nearly every state transition is tiring, easy to misuse, and poorly suited to
 hours-long media analysis. Version 0.6.0 implements routine safe advancement
 without crossing a decision boundary. Version 0.6.1 adds in-process interactive
 checkpoint handling without weakening the stage engine's evidence or mutation
-boundaries. Version 0.6.2 adds the human synopsis while leaving saved resume
-context and the stable machine-readable report as separate release units.
-Version 0.6.3 implements the explicit saved-context locator while leaving the
-stable machine-readable report to version 0.6.4.
+boundaries. Version 0.6.2 adds the human synopsis, and version 0.6.3 implements
+the explicit saved-context locator. Version 0.6.4 is the current release
+candidate for stable migration-report schema 1; it does not include unattended
+authority, logging or visibility policy, duplicate disposition, queueing, or
+scheduling.
 
 ## Media validation
 

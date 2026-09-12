@@ -265,8 +265,9 @@ that advances routine stages in one invocation while preserving every existing
 decision boundary. Version 0.6.1 adds explicit terminal questions at those
 boundaries. Version 0.6.2 adds a concise path-private synopsis of the recorded
 stage outcomes. Version 0.6.3 adds an explicit private resume-directory
-shorthand for later invocations. With no log directory the coordinator writes
-nothing and prints the complete plan:
+shorthand for later invocations. Version 0.6.4 adds a deterministic, stable,
+path-private JSON report over those same recorded outcomes. With no log
+directory the coordinator writes nothing and prints the complete plan:
 
 ```bash
 pymo migrate "/path/to/baseline" "/path/to/working-copy"
@@ -293,12 +294,22 @@ directory:
 pymo migrate --resume "/path/to/private-logs"
 pymo migrate --resume "/path/to/private-logs" --run
 pymo migrate --resume "/path/to/private-logs" --interactive
+pymo migrate --resume "/path/to/private-logs" --json
 ```
 
 Resume never searches for state. It cannot be combined with positional
 collections, `--log-dir`, or `--start`; any explicitly repeated common option
 must exactly match the saved value. The original two-root form remains
 supported.
+
+`--json` is a report-only action over an existing private coordinator run. It
+preflights the exact restart lifecycle and every typed outcome, rechecks state,
+outcomes, and both collection identities, and emits one compact schema-1 object
+without timestamps or other console text. It never scans media, advances a
+stage, creates state, writes either collection or action history, or grants
+quarantine, deletion, verification, or sign-off authority. It cannot be
+combined with a workflow action. Schema fields and compatibility rules are in
+the [stable migration report contract](docs/MIGRATION_REPORT.md).
 
 `--run` executes routine successful evidence and preview stages until it reaches
 the next validation review, apply, external-quarantine, failure, or final-signoff
@@ -349,10 +360,11 @@ log and outcome names. Collection and log-directory separation is checked by
 filesystem identity, so aliases on a case-insensitive or normalizing filesystem
 cannot collapse the baseline and working roots or place private records inside
 either collection. The coordinator validates each aggregate child outcome
-before advancing. State, outcomes, and the human synopsis are workflow
-bookkeeping, not action history, fresh preservation evidence, or a stable
-machine-readable report. They cannot create the baseline or working copy, move
-quarantine, rescue-copy, delete, or authorize discarding any data. See the
+before advancing. State and outcomes are private workflow bookkeeping rather
+than a public interface. The human synopsis and stable JSON report are selected
+projections from those records, not action history, fresh preservation evidence,
+or authority. They cannot create the baseline or working copy, move quarantine,
+rescue-copy, delete, or authorize discarding any data. See the
 [production runbook](docs/MIGRATION.md) for the complete procedure and option
 examples.
 
@@ -361,10 +373,11 @@ preservation outcomes but asked the operator to perform too much repetitive
 coordination. Version 0.6.0 adds routine automatic advancement and version
 0.6.1 adds conservative in-process checkpoint questions. Version 0.6.2 adds the
 concise human synopsis without claiming a stable machine interface. Version
-0.6.3 adds explicit resume from the already-private coordinator directory. The
-stable report artifact, logging and visibility policy, pymo-owned
-duplicate disposition, a sequential manifest-backed queue, and benchmark-proven
-scheduling remain separate later releases.
+0.6.3 adds explicit resume from the already-private coordinator directory, and
+version 0.6.4 adds the documented stable report projection. Logging and
+visibility policy, pymo-owned duplicate disposition, a sequential
+manifest-backed queue, and benchmark-proven scheduling remain separate later
+releases.
 
 ### Verify a migration by exact bytes and media content
 
@@ -1073,7 +1086,11 @@ adds the foreground safe operator loop under
 terminal-only checkpoint consent under
 [ADR 0089](docs/adrs/0089-interactive-migration-checkpoints.md); and version
 0.6.2 adds the typed path-private human synopsis under
-[ADR 0091](docs/adrs/0091-typed-human-migration-synopsis.md). Rescue copying,
+[ADR 0091](docs/adrs/0091-typed-human-migration-synopsis.md). Version 0.6.3 adds
+explicit saved-context resume under
+[ADR 0093](docs/adrs/0093-explicit-private-migration-resume.md), and version 0.6.4
+defines stable migration-report schema 1 under
+[ADR 0095](docs/adrs/0095-stable-migration-report-artifact.md). Rescue copying,
 permanent deletion, damaged-media remediation, richer
 metadata, and similarity tooling remain later roadmap or research work. Full
 video decoding remains sequential until representative benchmarks show that
