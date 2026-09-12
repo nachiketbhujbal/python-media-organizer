@@ -1568,7 +1568,7 @@ mutation, checkpoint authority, duplicate disposition, quarantine movement,
 queue, scheduler, deletion, or exact-media behavior. No retained private media
 collection or rollback evidence was used, changed, or removed.
 
-Version 0.6.8 is an unreleased candidate under ADR 0103. It renames the
+Version 0.6.8 is released under ADR 0103. It renames the
 quarantine-only workflow boundary to `duplicate-disposition` and adds the
 mutually exclusive `--retain-dups` action while preserving
 `--confirm-quarantine`. Retained disposition requires the reviewed tree to
@@ -1580,6 +1580,28 @@ retained-in-place, not-applicable, pending, or external-unverified review
 storage. Final full validation and ordinary verification remain unchanged and
 fresh. The release adds no move, copy, delete, cleanup, queue, scheduler, or
 exact-media authority.
+
+Independent Terra-medium review accepted exact implementation head
+`c34285f5ce8f0ed70707005bbfaac8eff87019e4` without findings, and renewed
+review accepted final ledger head
+`55a24cf7be02dc15c6fc91f7c6be04a74dea2a2b`. The complete owner gate passed
+all 615 synthetic and real-FFmpeg tests at 88 percent subprocess-aware coverage
+plus the locked static, pre-commit, build, artifact, and installed-candidate
+checks.
+
+PR #62 full-platform run `34724550036` passed before the protected merge
+produced `07b250689332b1cb8d453aa578191bf75a253b5a`. Exact-main run
+`34724753050` passed the same platform set and unconditional gate. Annotated
+tag `v0.6.8` has object
+`991d04f70b1c94036a12d93fde71958f065513c8`, peels to that merge, and release
+run `34724948262` passed. A detached tagged build produced wheel SHA-256
+`4b7f311c9b86f4fc450c006891283715e999decc56d55a6bec5a3241e0785e69` and
+source-distribution SHA-256
+`b0081faa7aa8cacde761a490b5c8acf5ffa326145c1880cc9ed7f02e27686ed9`.
+The tagged artifacts carry version 0.6.8, safe relative members, and the exact
+Apache-2.0 license. Isolated and uv-managed installations report `pymo 0.6.8`.
+ADR 0104 records the separate post-tag release-truth reconciliation without
+moving or recreating the immutable tag.
 
 ## Media validation
 

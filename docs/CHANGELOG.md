@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.6.8 - Unreleased
+## 0.6.8 - 2026-09-12
 
 - Add explicit `pymo migrate --retain-dups` at the duplicate-disposition
   checkpoint. Require a real non-symbolic working `dups` directory whenever
