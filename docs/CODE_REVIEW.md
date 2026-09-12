@@ -154,6 +154,16 @@ migration, kept the review bytes physically present, reported no pymo storage
 reclamation, reached fresh observed complete preservation, and emitted the
 documented path-private schema-2 disposition.
 
+Independent post-tag review accepted exact v0.6.8 release-truth head
+`5c89af8e9fd64d0ca0c84a8d26e4c7d61a3810bb` against exact release merge
+`07b250689332b1cb8d453aa578191bf75a253b5a` without findings. The reviewer
+confirmed the five-file documentation-only scope, first-commit ADR 0104
+reservation and index, candidate-versus-released wording, PR and workflow
+identities, annotated-tag object and peeled commit, collection privacy, and
+active immutable-tag ruleset. The locked
+documentation/privacy gate and diff-integrity checks passed in the clean
+detached review worktree.
+
 Independent Terra-medium review accepted corrected exact v0.6.7 implementation
 head `76f79bdb45552ed9451ad77673fd312b0e179b65` against exact released base
 `e795fc5eb26488b51be01fe6981895fc07e9f790` without findings. The reviewer
