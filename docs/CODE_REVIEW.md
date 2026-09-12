@@ -159,8 +159,8 @@ Independent post-tag review accepted exact v0.6.8 release-truth head
 `07b250689332b1cb8d453aa578191bf75a253b5a` without findings. The reviewer
 confirmed the five-file documentation-only scope, first-commit ADR 0104
 reservation and index, candidate-versus-released wording, PR and workflow
-identities, annotated-tag object and peeled commit, artifact/version/license
-claims, collection privacy, and active immutable-tag ruleset. The locked
+identities, annotated-tag object and peeled commit, collection privacy, and
+active immutable-tag ruleset. The locked
 documentation/privacy gate and diff-integrity checks passed in the clean
 detached review worktree.
 
