@@ -1,8 +1,8 @@
 """Atomic same-filesystem retention of one collection's complete ``dups`` tree.
 
-The external destination is deliberately supplied for every operation.  It is
-not persisted in the portable collection journal; the journal binds the exact
-tree by manifest digest and filesystem identity instead.
+The external destination is deliberately supplied for every operation. Its
+path-private digest is persisted in the portable collection journal beside the
+exact tree manifest and filesystem identity.
 """
 
 from __future__ import annotations
@@ -63,6 +63,8 @@ class QuarantinePlan:
     collection_root: Path
     target: Path
     manifest: TreeManifest
+    target_parent_device: int
+    target_parent_inode: int
 
 
 @dataclass(frozen=True)
@@ -73,6 +75,8 @@ class QuarantineUndoPlan:
     target: Path
     target_run_id: str
     manifest: TreeManifest
+    target_parent_device: int
+    target_parent_inode: int
 
 
 @dataclass(frozen=True)
@@ -86,6 +90,7 @@ class QuarantineResult:
     total_bytes: int
     manifest_sha256: str
     reconciled: bool = False
+    disposition_complete: bool = True
 
 
 @dataclass(frozen=True)
@@ -104,6 +109,12 @@ def _private_error(message: str, error: BaseException | None = None) -> NoReturn
 
 def _normalized_absolute(path: Path) -> Path:
     return Path(os.path.abspath(os.fspath(path.expanduser())))
+
+
+def destination_binding_sha256(path: Path) -> str:
+    """Return the path-private exact binding for one normalized destination."""
+
+    return hashlib.sha256(os.fsencode(_normalized_absolute(path))).hexdigest()
 
 
 def _directory_flags() -> int:
@@ -560,15 +571,45 @@ def _same_manifest(observed: TreeManifest, expected: TreeManifest) -> bool:
     )
 
 
-def _manifest_from_action(action: Action) -> TreeManifest:
+def _action_destination(action: Action) -> tuple[str, int, int]:
+    if action.after is None:
+        _private_error("managed quarantine journal action is inconsistent")
+    parts = action.after.split(":")
+    if len(parts) != 4 or parts[0] != "external":
+        _private_error("managed quarantine journal action is inconsistent")
+    try:
+        return parts[1], int(parts[2]), int(parts[3])
+    except ValueError as error:  # pragma: no cover - Action owns strict parsing.
+        _private_error("managed quarantine journal action is inconsistent", error)
+
+
+def _manifest_from_action(
+    action: Action,
+    target: Path | None = None,
+    target_parent_identity: tuple[int, int] | None = None,
+) -> TreeManifest:
     if (
         action.operation != ActionOperation.QUARANTINE_TREE
         or action.before != "dups"
-        or action.after is not None
+        or action.after is None
         or action.entry_type != "directory"
         or action.identity is None
     ):
         _private_error("managed quarantine journal action is inconsistent")
+    destination_sha256, destination_device, destination_inode = _action_destination(
+        action
+    )
+    if target is not None and destination_sha256 != destination_binding_sha256(target):
+        _private_error("explicit quarantine target does not match the journal")
+    if (
+        target_parent_identity is not None
+        and (
+            destination_device,
+            destination_inode,
+        )
+        != target_parent_identity
+    ):
+        _private_error("quarantine destination identity changed")
     identity = action.identity
     assert identity is not None
     size = identity.get("size")
@@ -588,11 +629,19 @@ def _manifest_from_action(action: Action) -> TreeManifest:
     return TreeManifest(digest, 0, 0, size, device, inode)
 
 
-def _action_for_manifest(manifest: TreeManifest) -> Action:
+def _action_for_manifest(
+    manifest: TreeManifest,
+    target: Path,
+    target_parent_identity: tuple[int, int],
+) -> Action:
     return Action(
         operation=ActionOperation.QUARANTINE_TREE,
         before="dups",
-        after=None,
+        after=(
+            "external:"
+            + destination_binding_sha256(target)
+            + f":{target_parent_identity[0]}:{target_parent_identity[1]}"
+        ),
         entry_type="directory",
         identity=manifest.journal_identity,
     )
@@ -614,7 +663,13 @@ def _inspect_forward(collection_root: Path, target: Path) -> QuarantinePlan:
         _require_disjoint_same_filesystem(collection, manifest, target_parent)
         _require_directory_path_identity(collection.path, collection.identity)
         _require_directory_path_identity(target_parent.path, target_parent.identity)
-    return QuarantinePlan(collection.path, target_parent.path / target_name, manifest)
+    return QuarantinePlan(
+        collection.path,
+        target_parent.path / target_name,
+        manifest,
+        target_parent.identity[0],
+        target_parent.identity[1],
+    )
 
 
 def plan_managed_quarantine(collection_root: Path, target: Path) -> QuarantinePlan:
@@ -665,6 +720,7 @@ def _perform_move_and_verify(
     collection_root: Path,
     target: Path,
     expected: TreeManifest,
+    expected_target_parent_identity: tuple[int, int],
     *,
     restore: bool,
 ) -> TreeManifest:
@@ -673,6 +729,8 @@ def _perform_move_and_verify(
         _open_directory_path(collection_root) as collection,
         _open_directory_path(target_parent_path) as target_parent,
     ):
+        if target_parent.identity != expected_target_parent_identity:
+            _private_error("quarantine destination identity changed after planning")
         if restore:
             _require_target_absent(collection.descriptor, "dups")
             observed = _manifest_at(target_parent.descriptor, target_name)
@@ -730,9 +788,19 @@ def apply_managed_quarantine(plan: QuarantinePlan) -> QuarantineResult:
         transaction = ActionTransaction(
             log, handle, tool=ToolId.MANAGED_QUARANTINE.value
         )
-        action_id = transaction.plan(_action_for_manifest(plan.manifest))
+        target_parent_identity = (
+            plan.target_parent_device,
+            plan.target_parent_inode,
+        )
+        action_id = transaction.plan(
+            _action_for_manifest(plan.manifest, plan.target, target_parent_identity)
+        )
         verified = _perform_move_and_verify(
-            plan.collection_root, plan.target, plan.manifest, restore=False
+            plan.collection_root,
+            plan.target,
+            plan.manifest,
+            target_parent_identity,
+            restore=False,
         )
         transaction.complete(action_id)
         transaction.commit()
@@ -750,7 +818,6 @@ def _quarantine_action(run: RunRecord) -> tuple[str, Action]:
     if len(run.actions) != 1:
         _private_error("managed quarantine journal run is inconsistent")
     action_id, action = run.actions[0]
-    _manifest_from_action(action)
     return action_id, action
 
 
@@ -778,7 +845,7 @@ def _inspect_undo_locked(
 ) -> QuarantineUndoPlan:
     target_run = _undo_target(log, runs)
     _, action = _quarantine_action(target_run)
-    expected = _manifest_from_action(action)
+    expected = _manifest_from_action(action, target)
     target_parent_path, target_name = _target_parts(target)
     with (
         _open_directory_path(collection_root) as collection,
@@ -796,6 +863,8 @@ def _inspect_undo_locked(
         target_parent.path / target_name,
         target_run.run_id,
         observed,
+        target_parent.identity[0],
+        target_parent.identity[1],
     )
 
 
@@ -826,9 +895,19 @@ def apply_managed_quarantine_undo(plan: QuarantineUndoPlan) -> QuarantineResult:
             mode="UNDO",
             target_run_id=plan.target_run_id,
         )
-        action_id = transaction.plan(_action_for_manifest(plan.manifest))
+        target_parent_identity = (
+            plan.target_parent_device,
+            plan.target_parent_inode,
+        )
+        action_id = transaction.plan(
+            _action_for_manifest(plan.manifest, plan.target, target_parent_identity)
+        )
         verified = _perform_move_and_verify(
-            plan.collection_root, plan.target, plan.manifest, restore=True
+            plan.collection_root,
+            plan.target,
+            plan.manifest,
+            target_parent_identity,
+            restore=True,
         )
         transaction.complete(action_id)
         transaction.commit()
@@ -846,6 +925,7 @@ def _expected_state(
     collection_root: Path,
     target: Path,
     expected: TreeManifest,
+    action: Action,
     *,
     restore: bool,
 ) -> tuple[Literal["pending", "complete"], TreeManifest]:
@@ -854,6 +934,7 @@ def _expected_state(
         _open_directory_path(collection_root) as collection,
         _open_directory_path(target_parent_path) as target_parent,
     ):
+        _manifest_from_action(action, target, target_parent.identity)
         source_state = _leaf_state(collection.descriptor, "dups")
         target_state = _leaf_state(target_parent.descriptor, target_name)
         if source_state is not None and target_state is None:
@@ -883,6 +964,17 @@ def reconcile_managed_quarantine(
     with log._locked(create=True) as handle:
         runs = log._runs(log._read(handle))
         unresolved = _unresolved_runs(log, runs)
+        if not unresolved:
+            observed = _inspect_undo_locked(log, runs, collection_root, target)
+            return QuarantineResult(
+                observed.target_run_id,
+                "quarantine",
+                observed.manifest.file_count,
+                observed.manifest.directory_count,
+                observed.manifest.total_bytes,
+                observed.manifest.sha256,
+                True,
+            )
         if len(unresolved) != 1:
             _private_error("action journal does not contain one reconcilable operation")
         run = unresolved[0]
@@ -899,6 +991,7 @@ def reconcile_managed_quarantine(
                     0,
                     hashlib.sha256().hexdigest(),
                     True,
+                    False,
                 )
             original = next(
                 (
@@ -912,7 +1005,12 @@ def reconcile_managed_quarantine(
                 _private_error("interrupted undo target is missing")
             assert original is not None
             _, original_action = _quarantine_action(original)
-            action = original_action
+            original_manifest = _manifest_from_action(original_action, target)
+            target_parent_path, _ = _target_parts(target)
+            with _open_directory_path(target_parent_path) as target_parent:
+                action = _action_for_manifest(
+                    original_manifest, target, target_parent.identity
+                )
             action_id = str(uuid.uuid4())
             log._append(
                 handle,
@@ -925,17 +1023,22 @@ def reconcile_managed_quarantine(
             )
             run.actions.append((action_id, action))
         action_id, action = _quarantine_action(run)
-        expected = _manifest_from_action(action)
+        expected = _manifest_from_action(action, target)
         restore = run.mode == "UNDO"
-        state, observed = _expected_state(
-            collection_root, target, expected, restore=restore
+        endpoint_state, observed_manifest = _expected_state(
+            collection_root, target, expected, action, restore=restore
         )
-        if state == "pending":
+        if endpoint_state == "pending":
+            _, destination_device, destination_inode = _action_destination(action)
             verified = _perform_move_and_verify(
-                collection_root, target, expected, restore=restore
+                collection_root,
+                target,
+                expected,
+                (destination_device, destination_inode),
+                restore=restore,
             )
         else:
-            verified = observed
+            verified = observed_manifest
         if action_id not in run.completed_action_ids:
             _append_completion(log, handle, run, action_id)
         _append_commit(log, handle, run, 1)

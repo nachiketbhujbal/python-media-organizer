@@ -181,14 +181,53 @@ class Action:
             ):
                 raise ActionLogError("REMOVE_DIR requires only a before path")
         elif operation is ActionOperation.QUARANTINE_TREE:
+            external_parts = self.after.split(":") if self.after else []
+            destination_device: int | None = None
+            destination_inode: int | None = None
+            identity = self.identity or {}
+            size = identity.get("size")
+            digest = identity.get("sha256")
+            source_device = identity.get("device")
+            source_inode = identity.get("inode")
+            if len(external_parts) == 4:
+                try:
+                    destination_device = int(external_parts[2])
+                    destination_inode = int(external_parts[3])
+                except ValueError:
+                    pass
             if (
-                not self.before
-                or self.after is not None
+                self.before != "dups"
+                or not self.after
                 or self.entry_type != "directory"
-                or self.identity is None
+                or set(identity) != {"size", "sha256", "device", "inode"}
+                or isinstance(size, bool)
+                or not isinstance(size, int)
+                or size < 0
+                or not isinstance(digest, str)
+                or len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)
+                or isinstance(source_device, bool)
+                or not isinstance(source_device, int)
+                or source_device < 0
+                or isinstance(source_inode, bool)
+                or not isinstance(source_inode, int)
+                or source_inode < 0
+                or len(external_parts) != 4
+                or external_parts[0] != "external"
+                or len(external_parts[1]) != 64
+                or any(
+                    character not in "0123456789abcdef"
+                    for character in external_parts[1]
+                )
+                or destination_device is None
+                or destination_device < 0
+                or destination_inode is None
+                or destination_inode < 0
+                or external_parts[2] != str(destination_device)
+                or external_parts[3] != str(destination_inode)
             ):
                 raise ActionLogError(
-                    "QUARANTINE_TREE requires a source tree and manifest identity"
+                    "QUARANTINE_TREE requires a source tree, external binding, and manifest identity"
                 )
 
     @classmethod
@@ -635,7 +674,14 @@ class ActionLog:
                     raise ActionLogError(
                         f"duplicate action ID in run {run_id}: {action_id}"
                     )
-                current_run.actions.append((action_id, Action.from_dict(value)))
+                action = Action.from_dict(value)
+                if (action.operation == ActionOperation.QUARANTINE_TREE) != (
+                    current_run.tool == ToolId.MANAGED_QUARANTINE
+                ):
+                    raise ActionLogError(
+                        "managed quarantine journal action has an invalid tool binding"
+                    )
+                current_run.actions.append((action_id, action))
             elif name == "ACTION_COMPLETED":
                 self._require_event_fields(event, {"action_id"}, index)
                 action_id = event.get("action_id")
@@ -757,9 +803,17 @@ class ActionLog:
                 for _, action in run.actions
                 if (key := self._identity_key(action)) is not None
             }
-            if target_paths.intersection(
-                self._paths(run)
-            ) or target_identities.intersection(identities):
+            run_paths = self._paths(run)
+            path_overlap = any(
+                first == second
+                or first.startswith(second + "/")
+                or second.startswith(first + "/")
+                for first in target_paths
+                for second in run_paths
+                if not first.startswith("external:")
+                and not second.startswith("external:")
+            )
+            if path_overlap or target_identities.intersection(identities):
                 blockers.append(run)
         return blockers
 

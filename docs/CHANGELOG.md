@@ -2,6 +2,30 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## 0.6.9 - 2026-09-13
+
+- Add dry-run-first `pymo quarantine-dups COLLECTION DESTINATION` for one
+  complete reviewed `dups` tree. Revalidate a descriptor-pinned manifest,
+  require `--apply`, perform one atomic no-replace same-filesystem directory
+  rename, append collection action history, and rehash the retained tree before
+  claiming success.
+- Add exact `--undo` and interrupted-run `--recover` handling with the explicit
+  retained destination required on every operation. Refuse altered trees,
+  occupied restoration paths, aliases, nesting, symbolic or special entries,
+  unsafe ancestry, and cross-filesystem movement; never copy or delete.
+- Let `pymo migrate` save `--quarantine-destination` and use
+  `--quarantine-dups` at the existing duplicate-disposition checkpoint. Keep
+  preview and apply separate, preserve retained-in-place and human-managed
+  external choices, and require fresh final validation and ordinary
+  verification after the managed move.
+- Advance private restart state to schema 5, private unattended policy to
+  schema 3, private child outcomes to schema 3, and the public path-private
+  migration report to schema 3. Report bytes removed from the working
+  collection while truthfully claiming no physical storage reclaimed on the
+  shared filesystem.
+- Record the final version 0.6 contract in ADR 0106. Cross-filesystem copy and
+  publication begins separately in version 0.7.0; deletion remains unapproved.
+
 ## 0.6.8 - 2026-09-12
 
 - Add explicit `pymo migrate --retain-dups` at the duplicate-disposition

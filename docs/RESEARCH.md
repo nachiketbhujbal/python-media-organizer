@@ -755,10 +755,12 @@ retained-in-place duplicate disposition into version 0.6.8,
 same-filesystem managed quarantine into 0.6.9, and explicit cross-filesystem
 quarantine into 0.7.0 under the revised boundary in [ADR
 0105](adrs/0105-end-v0.6-at-single-filesystem-operation.md). ADR 0103 defines
-the retained-in-place contract; the
-movement releases still require dedicated journal, confirmation, portability,
-and preservation-evidence decisions. Permanent deletion remains research
-and is not implied by any planned quarantine workflow.
+the retained-in-place contract, and ADR 0106 delivers the same-filesystem
+movement contract with an exact tree manifest, atomic no-replace rename,
+append-only journal, recovery, and undo. Cross-filesystem movement still
+requires its distinct copy, publication, capacity, and recovery decisions.
+Permanent deletion remains research and is not implied by any quarantine
+workflow.
 
 Ordinary migration verification continues to describe the physical target that
 actually exists, including media under `dups`; silently excluding that tree by
@@ -770,9 +772,10 @@ files only from counterfactual destination evidence, performs no writes, and
 labels every verdict simulated. A non-complete result blocks quarantine review;
 a simulated complete result still requires retained quarantine plus ordinary
 fresh post-move verification. Version 0.6.8 integrates the simulation into an
-honest retained-in-place outcome without weakening ordinary verification;
-versions 0.6.9 and 0.7.0 then automate same-filesystem and cross-filesystem
-quarantine without weakening either evidence boundary.
+honest retained-in-place outcome without weakening ordinary verification.
+Version 0.6.9 adds the separate same-filesystem managed move and immediate exact
+retained-tree proof; version 0.7.0 retains the unresolved cross-filesystem
+boundary.
 
 ## Migration orchestration and queues
 

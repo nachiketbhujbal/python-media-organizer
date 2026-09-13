@@ -637,6 +637,31 @@ reviewer worktree.
 
 ## Independent review evidence
 
+### Same-filesystem managed-quarantine design review
+
+An independent Terra-medium design review was performed before implementation
+against exact base `fa1444a1`. It found that the existing file-action journal,
+coordinator binding, simulation aggregates, interruption model, and report
+schema could not safely be stretched into an external directory move without
+new explicit contracts.
+
+| ID | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| QUAR-001 | Blocker | Existing actions are collection-relative file or empty-directory operations and cannot truthfully journal one external atomic tree rename. | Resolved by a dedicated managed-tree action interpreted only through an explicit external target, while leaving ordinary schema-1 action parsing and execution fail-closed. |
+| QUAR-002 | Blocker | Restart and unattended policy did not bind an external destination or exact reviewed tree plan. | Resolved by restart schema 5, unattended schema 3, saved destination context, and an exact path-private plan digest required before managed apply. |
+| QUAR-003 | High | Simulation totals alone cannot authorize movement of a changing or unsafe review tree. | Resolved by complete descriptor-pinned no-follow manifest hashing, endpoint identity checks, pre-rename revalidation, and full post-rename rehashing. |
+| QUAR-004 | High | An interrupted directory rename needs explicit two-endpoint reconciliation and exact restoration behavior. | Resolved by recognizing only one intact source or target, refusing every ambiguous state, and providing exact-target recovery plus atomic no-replace undo. |
+| QUAR-005 | High | Ordinary final baseline-to-working verification does not prove the externally retained review tree. | Resolved by mandatory immediate retained-tree verification before committing the managed move, followed by the unchanged fresh final validation and ordinary migration verification. |
+| QUAR-006 | Medium | Existing report wording could conflate bytes removed from the working namespace with physical space reclaimed on the same filesystem. | Resolved by report schema 3 and synopsis wording that keeps those quantities separate and exposes no destination or manifest digest. |
+
+A subsequent read-only Terra-medium working-tree audit reported two additional
+P1 concerns before the release candidate was committed.
+
+| ID | Severity | Finding | Resolution |
+| --- | --- | --- | --- |
+| QUAR-R01 | P1 | Normal undo accepted the current destination-parent identity instead of requiring the parent inode recorded by the forward move. | Rejected as an unsafe overconstraint after tracing the evidence boundary. Undo is a new explicitly previewed plan: it still requires the exact destination-path digest and the exact retained tree manifest plus inode, then binds the current parent inode through apply. This safely permits a legitimate remount or parent replacement without accepting different content or a plan-to-apply substitution. ADR 0106 now states that distinction explicitly. |
+| QUAR-R02 | P1 | Schema-1 parsing accepted shallow malformed managed-tree actions and did not enforce the operation/tool association. | Resolved by exact `dups` source, identity-key/type/digest, destination-token, and bidirectional tool/operation validation during strict lifecycle parsing, with adversarial malformed-journal tests. |
+
 - Independent review rejected v0.6.0 candidate `6e700f0` with GUIDE-R04 and
   GUIDE-R05 after reproducing a warning-only validation that the loop crossed
   and a schema-valid same-binding lifecycle substitution that skipped six

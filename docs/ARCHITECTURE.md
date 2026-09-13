@@ -18,7 +18,10 @@ CLI dispatch
 - `organize.py`, `rename.py`, `correct_extensions.py`, `scan.py`, and
   `validate.py` are user-facing command coordinators. `verify_migration.py`
   coordinates the directional preservation report. `migrate.py` dispatches one
-  guided runbook checkpoint at a time without owning child media policy. Their
+  guided runbook checkpoint at a time without owning child media policy.
+  `quarantine.py` coordinates the standalone managed-review-tree operation;
+  `managed_quarantine.py` owns its complete descriptor-pinned manifest, atomic
+  same-filesystem move, explicit-target recovery, and undo boundary. Their
   staged functions remain directly testable.
 - `duplicates/` owns exact duplicate policy. Images and videos remain separate
   because their definitions of equivalent content and their native dependencies
@@ -46,7 +49,9 @@ CLI dispatch
   command policy and disposable cache ownership stay outside this domain.
 - `action_log.py` owns the authoritative append-only mutation journal. It is
   deliberately outside `cache/` because journal evidence is portable and
-  authoritative while cache state is derived and disposable.
+  authoritative while cache state is derived and disposable. The dedicated
+  managed-tree operation remains strict action history but cannot be interpreted
+  by the ordinary collection-relative file-action executor.
 - `classification.py`, `collection.py`, `config.py`, `discovery.py`,
   `file_safety.py`, `extension_truth.py`, `image_content.py`, `video_content.py`,
   `logging_config.py`, `progress.py`, and `video.py` are shared foundations.

@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 
 from pymo import managed_quarantine as quarantine_module
+from pymo import quarantine as quarantine_cli
 from pymo.action_log import (
+    Action,
     ActionLog,
     ActionLogError,
     ActionTransaction,
@@ -18,6 +20,7 @@ from pymo.managed_quarantine import (
     ManagedQuarantineError,
     apply_managed_quarantine,
     apply_managed_quarantine_undo,
+    destination_binding_sha256,
     plan_managed_quarantine,
     plan_managed_quarantine_undo,
     reconcile_managed_quarantine,
@@ -73,7 +76,11 @@ def test_apply_and_exact_undo_are_append_only_and_keep_external_path_private(
     events = [json.loads(line) for line in before_undo.splitlines()]
     planned = next(event for event in events if event["event"] == "ACTION_PLANNED")
     assert planned["action"] == {
-        "after": None,
+        "after": (
+            "external:"
+            + destination_binding_sha256(target)
+            + f":{target.parent.stat().st_dev}:{target.parent.stat().st_ino}"
+        ),
         "before": "dups",
         "entry_type": "directory",
         "identity": plan.manifest.journal_identity,
@@ -91,11 +98,64 @@ def test_apply_and_exact_undo_are_append_only_and_keep_external_path_private(
         plan_managed_quarantine_undo(root, target)
 
 
+def test_undo_refuses_same_tree_moved_to_a_different_explicit_target(
+    tmp_path: Path,
+) -> None:
+    root, _ = _collection(tmp_path)
+    recorded_target = tmp_path.resolve() / "recorded-target"
+    substituted_target = tmp_path.resolve() / "substituted-target"
+    apply_managed_quarantine(plan_managed_quarantine(root, recorded_target))
+    recorded_target.rename(substituted_target)
+
+    with pytest.raises(
+        ManagedQuarantineError, match="target does not match the journal"
+    ):
+        plan_managed_quarantine_undo(root, substituted_target)
+
+
+def test_active_quarantine_blocks_undo_of_actions_inside_dups(tmp_path: Path) -> None:
+    root = tmp_path.resolve() / "collection"
+    source = root / "pics" / "copy.jpg"
+    target_in_dups = root / "dups" / "pics" / "copy.jpg"
+    source.parent.mkdir(parents=True)
+    target_in_dups.parent.mkdir(parents=True)
+    source.write_bytes(b"content")
+    log = ActionLog(root)
+    with log.transaction("find_image_duplicates") as transaction:
+        transaction.perform(Action.for_file(root, source, target_in_dups, "MOVE"))
+        transaction.commit()
+    retained = tmp_path.resolve() / "retained"
+    apply_managed_quarantine(plan_managed_quarantine(root, retained))
+
+    with pytest.raises(ActionLogError, match="later active run"):
+        log.plan_undo("find_image_duplicates")
+
+
 def test_stale_forged_apply_plan_creates_no_journal(tmp_path: Path) -> None:
     root, review = _collection(tmp_path)
     target = tmp_path.resolve() / "target"
     plan = plan_managed_quarantine(root, target)
     (review / "pics" / "one.bin").write_bytes(b"changed")
+
+    with pytest.raises(ManagedQuarantineError, match="changed after planning"):
+        apply_managed_quarantine(plan)
+
+    assert review.is_dir()
+    assert not target.exists()
+    assert not action_log_path(root).exists()
+
+
+def test_apply_refuses_a_substituted_destination_parent_before_journaling(
+    tmp_path: Path,
+) -> None:
+    root, review = _collection(tmp_path)
+    target_parent = tmp_path.resolve() / "retained"
+    target_parent.mkdir()
+    target = target_parent / "review-tree"
+    plan = plan_managed_quarantine(root, target)
+    displaced = tmp_path.resolve() / "displaced-retained"
+    target_parent.rename(displaced)
+    target_parent.mkdir()
 
     with pytest.raises(ManagedQuarantineError, match="changed after planning"):
         apply_managed_quarantine(plan)
@@ -318,6 +378,147 @@ def test_apply_reconciles_interruption_after_atomic_move(
     assert undo.target_run_id == reconciled.run_id
 
 
+def test_reconcile_marks_an_empty_interrupted_apply_as_not_complete(
+    tmp_path: Path,
+) -> None:
+    root, review = _collection(tmp_path)
+    target = tmp_path.resolve() / "target"
+    log = ActionLog(root)
+    with log._locked(create=True) as handle:
+        ActionTransaction(log, handle, tool="managed_quarantine")  # RUN_STARTED only.
+
+    reconciled = reconcile_managed_quarantine(root, target)
+
+    assert reconciled.reconciled
+    assert not reconciled.disposition_complete
+    assert review.is_dir()
+    assert not target.exists()
+
+
+def test_cli_recovery_retries_the_reviewed_move_after_an_empty_journal_run(
+    tmp_path: Path,
+) -> None:
+    root, review = _collection(tmp_path)
+    target = tmp_path.resolve() / "target"
+    log = ActionLog(root)
+    with log._locked(create=True) as handle:
+        ActionTransaction(log, handle, tool="managed_quarantine")
+
+    assert quarantine_cli.main([str(root), str(target), "--recover", "--apply"]) == 0
+
+    assert not review.exists()
+    assert (target / "pics" / "one.bin").read_bytes() == b"first"
+    undo = plan_managed_quarantine_undo(root, target)
+    assert undo.manifest.file_count == 2
+
+
+def test_standalone_cli_is_preview_first_reversible_and_exact(tmp_path: Path) -> None:
+    root, review = _collection(tmp_path)
+    target = tmp_path.resolve() / "target"
+
+    assert quarantine_cli.main([str(root), str(target)]) == 0
+    assert review.is_dir()
+    assert not target.exists()
+
+    assert quarantine_cli.main([str(root), str(target), "--apply"]) == 0
+    assert not review.exists()
+    assert target.is_dir()
+
+    assert quarantine_cli.main([str(root), str(target), "--undo"]) == 0
+    assert not review.exists()
+    assert target.is_dir()
+
+    assert quarantine_cli.main([str(root), str(target), "--undo", "--apply"]) == 0
+    assert review.is_dir()
+    assert not target.exists()
+
+
+def test_reconcile_can_reobserve_a_committed_move_without_rewriting_journal(
+    tmp_path: Path,
+) -> None:
+    root, _ = _collection(tmp_path)
+    target = tmp_path.resolve() / "target"
+    applied = apply_managed_quarantine(plan_managed_quarantine(root, target))
+    before = action_log_path(root).read_bytes()
+
+    observed = reconcile_managed_quarantine(root, target)
+
+    assert observed.run_id == applied.run_id
+    assert observed.reconciled
+    assert observed.file_count == 2
+    assert action_log_path(root).read_bytes() == before
+
+
+def test_coordinator_bound_recovery_refuses_a_replaced_destination_parent(
+    tmp_path: Path,
+) -> None:
+    root, review = _collection(tmp_path)
+    target_parent = tmp_path.resolve() / "retained"
+    target_parent.mkdir()
+    target = target_parent / "review-tree"
+    private = tmp_path.resolve() / "private"
+    private.mkdir()
+    preview_outcome = private / "preview.json"
+    assert (
+        quarantine_cli.main(
+            [
+                str(root),
+                str(target),
+                "--migration-outcome",
+                str(preview_outcome),
+            ]
+        )
+        == 0
+    )
+    digest = json.loads(preview_outcome.read_text(encoding="utf-8"))["data"][
+        "decision_digest"
+    ]
+    assert (
+        quarantine_cli.main(
+            [
+                str(root),
+                str(target),
+                "--migration-decision-digest",
+                digest,
+                "--apply",
+            ]
+        )
+        == 0
+    )
+    assert not review.exists()
+
+    displaced = tmp_path.resolve() / "displaced-retained"
+    target_parent.rename(displaced)
+    target_parent.mkdir()
+    (displaced / "review-tree").rename(target)
+    recovery_outcome = private / "recovery.json"
+
+    assert (
+        quarantine_cli.main(
+            [
+                str(root),
+                str(target),
+                "--recover",
+                "--migration-outcome",
+                str(recovery_outcome),
+                "--migration-decision-digest",
+                digest,
+                "--apply",
+            ]
+        )
+        == 1
+    )
+    assert not recovery_outcome.exists()
+    assert target.is_dir()
+
+    # A normal undo is a separately reviewed plan bound to the current parent.
+    undo = plan_managed_quarantine_undo(root, target)
+    assert undo.target_parent_inode == target_parent.stat().st_ino
+    apply_managed_quarantine_undo(undo)
+    assert review.is_dir()
+    assert not target.exists()
+
+
 def test_undo_reconciles_interruption_after_atomic_restore(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -458,3 +659,74 @@ def test_malformed_quarantine_journal_action_fails_closed(tmp_path: Path) -> Non
 
     with pytest.raises(ActionLogError, match="requires a source tree"):
         ActionLog(root).plan_undo("managed_quarantine")
+
+
+@pytest.mark.parametrize(
+    ("tool", "before", "after", "identity"),
+    (
+        (
+            "organize_media",
+            "dups",
+            "external:" + "0" * 64 + ":1:2",
+            {"size": 0, "sha256": "0" * 64, "device": 1, "inode": 2},
+        ),
+        (
+            "managed_quarantine",
+            "other",
+            "external:" + "0" * 64 + ":1:2",
+            {"size": 0, "sha256": "0" * 64, "device": 1, "inode": 2},
+        ),
+        (
+            "managed_quarantine",
+            "dups",
+            "external:" + "0" * 64 + ":1:2",
+            {"size": 0, "sha256": "short", "device": 1, "inode": 2},
+        ),
+        (
+            "managed_quarantine",
+            "dups",
+            "external:" + "0" * 64 + ":+1:02",
+            {"size": 0, "sha256": "0" * 64, "device": 1, "inode": 2},
+        ),
+    ),
+)
+def test_quarantine_journal_requires_exact_action_and_tool_semantics(
+    tmp_path: Path,
+    tool: str,
+    before: str,
+    after: str,
+    identity: dict[str, int | str],
+) -> None:
+    root, _ = _collection(tmp_path)
+    action = {
+        "operation": "QUARANTINE_TREE",
+        "before": before,
+        "after": after,
+        "entry_type": "directory",
+        "identity": identity,
+    }
+    events = [
+        {
+            "schema_version": 1,
+            "timestamp": "2026-09-13T00:00:00+00:00",
+            "event": "RUN_STARTED",
+            "run_id": "run-1",
+            "tool": tool,
+            "mode": "APPLY",
+            "target_run_id": None,
+        },
+        {
+            "schema_version": 1,
+            "timestamp": "2026-09-13T00:00:01+00:00",
+            "event": "ACTION_PLANNED",
+            "run_id": "run-1",
+            "action_id": "action-1",
+            "action": action,
+        },
+    ]
+    action_log_path(root).write_text(
+        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+    )
+
+    with pytest.raises(ActionLogError):
+        ActionLog(root).plan_undo(tool)

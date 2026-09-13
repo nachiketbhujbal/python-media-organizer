@@ -23,6 +23,7 @@ class CoordinatorOptions:
     decode_timeout: int | None
     workers: int | None
     no_cache: bool
+    quarantine_destination: str | None = None
 
     def as_json(self) -> dict[str, bool | int | str | None]:
         return {
@@ -39,6 +40,7 @@ class CoordinatorOptions:
             "decode_timeout": self.decode_timeout,
             "workers": self.workers,
             "no_cache": self.no_cache,
+            "quarantine_destination": self.quarantine_destination,
         }
 
 
@@ -197,7 +199,7 @@ def _stages() -> tuple[Stage, ...]:
         ),
         Stage(
             "duplicate-disposition",
-            "retain the dups tree in place or confirm human-managed external quarantine",
+            "retain the dups tree, move it to a managed same-filesystem quarantine, or confirm human-managed external quarantine",
             None,
             "checkpoint",
             "checkpoint",

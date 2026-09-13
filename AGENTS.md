@@ -195,13 +195,14 @@ never duplicate the version in source or static project metadata.
   history; bind it to the exact roots, pymo version, options, and ordered
   attempt lifecycle. Preserve every preview and explicit apply boundary, return
   real child statuses, permit only reviewed validation status 1 to be
-  acknowledged. At duplicate disposition, accept only an explicit
-  retained-in-place decision or the existing human-managed absent-`dups`
-  external-quarantine confirmation before fresh final evidence. Retention must
-  require a real non-symbolic `dups` directory when reviewed files exist, keep
-  it physically in place, and report that pymo reclaimed no storage. Never
-  rescue-copy, quarantine, delete, batch past a checkpoint, or write persistent
-  logs by default.
+  acknowledged. At duplicate disposition, accept only explicit
+  retained-in-place, managed same-filesystem quarantine, or human-managed
+  absent-`dups` confirmation before fresh final evidence. Retention must require
+  a real non-symbolic `dups` directory when reviewed files exist. Managed
+  quarantine must preserve its separate preview and apply boundaries and
+  advance only after the dedicated child verifies its journaled move. Never
+  rescue-copy, cross-filesystem move, delete, batch past a checkpoint, or write
+  persistent logs by default.
 - `migrate --resume` may locate only one explicitly named existing private
   state directory. Recover roots and options from strict state, accept only
   exactly matching option repetitions, revalidate all ordinary state, outcome,
@@ -220,10 +221,18 @@ never duplicate the version in source or static project metadata.
 - `migrate --json` is an explicit read-only projection of one existing strict
   coordinator run. Require its existing private state and lock, validate the
   complete lifecycle and typed outcome history, recheck state, outcomes, and
-  collection identities before emitting deterministic path-private schema 2,
+  collection identities before emitting deterministic path-private schema 3,
   and never combine it with a workflow action or create state. Keep the human
   synopsis on the same projection. Change the schema version before changing
   any public field, type, allowed value, or meaning.
+- `quarantine-dups` may move only the complete working `dups` directory to one
+  explicit same-filesystem retained destination. Preview by default, require
+  `--apply`, bind the exact destination and descriptor-pinned tree manifest,
+  use one atomic descriptor-relative no-replace directory rename, append the
+  collection action history, and fully rehash after movement. Exact undo and
+  interruption recovery require the same explicit destination. Never copy,
+  delete, follow links, accept unsafe or changing tree entries, or claim that
+  a same-filesystem move reclaimed physical storage.
 
 ## Package layout and tools
 
@@ -262,9 +271,9 @@ never duplicate the version in source or static project metadata.
   mutation policy.
 - `src/pymo/migration/workflow.py` and
   `src/pymo/migration/coordinator_state.py`: ordered guided-runbook arguments
-  and private fail-closed schema-4 restart state respectively.
+  and private fail-closed schema-5 restart state respectively.
 - `src/pymo/migration/synopsis.py`: the selected aggregate projection shared by
-  stable migration-report schema 2 and its human synopsis rendering; it owns no
+  stable migration-report schema 3 and its human synopsis rendering; it owns no
   media analysis, workflow authority, or persistent output path.
 - `src/pymo/migration/preauthorization.py`: strict private unattended-policy
   schema, file safety, binding, and aggregate checkpoint matching; it owns no
@@ -278,6 +287,9 @@ never duplicate the version in source or static project metadata.
 - `src/pymo/extension_truth.py`: shared descriptor-based Pillow format and
   confidence-gated ffprobe container evidence without discovery, policy,
   reporting, or mutation ownership.
+- `src/pymo/managed_quarantine.py` and `src/pymo/quarantine.py`: exact safe-tree
+  evidence, atomic same-filesystem retained movement, append-only lifecycle,
+  explicit-target undo/recovery, and the standalone command respectively.
 - `src/pymo/action_log.py`: shared append-only mutation journal and guarded
   dependency-aware undo.
 - `src/pymo/cache/`: the disposable derived-cache subsystem. Its package facade

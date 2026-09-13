@@ -41,6 +41,9 @@ contract; it does not prove whole-device recovery.
 - Version 0.6.8 adds explicit retained-in-place duplicate disposition,
   advances the coordinator report to schema 2, and keeps the established
   human-managed external-quarantine path available.
+- Version 0.6.9 adds reversible same-filesystem managed quarantine for the
+  complete reviewed tree, advances restart state to schema 5, private outcomes
+  and unattended policy to schema 3, and the public report to schema 3.
 
 Perform only stages supported by the installed version and keep every
 transition human-reviewed. Do not use a loose shell script as the production
@@ -77,7 +80,9 @@ private typed-outcome and human-synopsis boundary. [ADR 0093](adrs/0093-explicit
 records the saved locator, and
 [ADR 0095](adrs/0095-stable-migration-report-artifact.md) records the public
 report projection. [ADR 0103](adrs/0103-retained-in-place-duplicate-disposition.md)
-records the first duplicate-disposition choice.
+records the first duplicate-disposition choice, and [ADR
+0106](adrs/0106-same-filesystem-managed-quarantine.md) records the managed
+same-filesystem movement boundary.
 
 ## Collection roles
 
@@ -128,6 +133,10 @@ or the path-private migration-report contract.
 Version 0.6.8 advances restart state to schema 4, unattended policy to schema
 2, and the migration report to schema 2 so retained-in-place and external
 quarantine remain explicit, distinct decisions.
+Version 0.6.9 advances those contracts to restart schema 5, unattended policy
+and private outcome schema 3, and public report schema 3. It adds an optional
+saved managed destination and exact managed preview/apply outcomes without
+changing the underlying 24-stage engine.
 First inspect the zero-write plan, then explicitly initialize one dedicated
 private directory outside and non-nested with both collections:
 
@@ -139,8 +148,9 @@ pymo migrate "/path/to/baseline" "/path/to/working-collection" \
 
 Common `--config`, `--show-ignored`, `--show-files`, `--verbose`/`--quiet`,
 `--console-log-level`, `--file-log-level`, timestamp, `--workers`, `--no-cache`,
-ffmpeg/ffprobe, and decode-timeout choices supplied at `--start` are fixed in
-schema-4 restart state and carried only to applicable child commands. Later
+ffmpeg/ffprobe, decode-timeout, and optional `--quarantine-destination` choices
+supplied at `--start` are fixed in schema-5 restart state and carried only to
+applicable child commands. Later
 explicit options must agree with that state. `--console-log-level` and
 `--file-log-level` accept `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.
 The console selector cannot be combined with `--verbose` or `--quiet`; the file
@@ -159,7 +169,7 @@ pymo --visibility full migrate "/path/to/baseline" "/path/to/working-collection"
 
 Full resolves to console `DEBUG` plus `--show-files` and `--show-ignored`;
 private resolves to console `INFO` with paths hidden; quiet resolves to console
-`WARNING` with paths hidden. The resolved values are stored in schema-4 state,
+`WARNING` with paths hidden. The resolved values are stored in schema-5 state,
 so `--resume` recovers them without repeating the profile. A profile cannot be
 combined with an individual console or disclosure selector. It never changes
 the private stage-file threshold or creates persistence by itself. Full
@@ -253,7 +263,7 @@ exact expected aggregate; one authorization never covers another.
 A missing or mismatched current authorization returns status 1 without
 crossing it, while unsafe or changed authority returns setup status 2. An
 unexpected child status remains exact. The full private file requirements,
-schema-2 fields, checkpoint order, and resume behavior are in
+schema-3 fields, checkpoint order, and resume behavior are in
 [MIGRATION_POLICY.md](MIGRATION_POLICY.md).
 
 A nonzero child status is recorded, returned unchanged, and stops both modes.
@@ -277,6 +287,24 @@ a missing, symbolic-link, or non-directory path returns status 1 without
 advancing. Pymo leaves the tree and its contents untouched and reports that it
 reclaimed no physical storage. When no review files exist, the same action
 records that disposition is not applicable.
+
+To have pymo retain the complete review tree elsewhere on the same filesystem,
+save the exact destination during setup, preview the move at the checkpoint,
+and then apply only that reviewed plan:
+
+```bash
+pymo migrate "/path/to/baseline" "/path/to/working-collection" --log-dir "/path/to/private-logs" --quarantine-destination "/path/to/retained-review-tree" --start
+pymo migrate --resume "/path/to/private-logs" --quarantine-dups
+pymo migrate --resume "/path/to/private-logs" --quarantine-dups --apply
+```
+
+The managed apply rehashes the full safe tree, uses one descriptor-relative
+atomic no-replace directory rename, appends the collection action journal, and
+rehashes the retained destination before advancing. It refuses an occupied or
+unsafe target and never falls back to a cross-filesystem copy. Preview exact
+undo with `pymo quarantine-dups COLLECTION DESTINATION --undo`; add `--apply`
+only after review. Moving within one filesystem removes the bytes from the
+working collection but does not reclaim physical capacity on that filesystem.
 
 The established alternative remains available: move the complete review tree
 outside the working collection using a separately reviewed procedure, then,
@@ -318,11 +346,12 @@ deletion authority.
 Use `--json` when a local program needs the same selected facts without parsing
 the human synopsis. It is mutually exclusive with every workflow action,
 requires existing private coordinator state and its existing lock, performs no
-media analysis, and changes no state. It emits one compact schema-2 object to
+media analysis, and changes no state. It emits one compact schema-3 object to
 standard output with no timestamps, progress, or runtime line. The report
 distinguishes workflow progress and sign-off, previewed and observed duplicate
 analysis, simulated and observed preservation, and pending, retained-in-place,
-not-applicable, or externally retained-but-unverified review storage. It
+managed same-filesystem, not-applicable, or externally retained-but-unverified
+review storage. It
 contains no collection roots,
 filenames, private record names, attempt identifiers, or timestamps. See the
 [stable migration report contract](MIGRATION_REPORT.md) for every field and
@@ -464,11 +493,11 @@ status 0 therefore does not mean observed final sign-off; machine consumers
 must require a later ordinary observed result with
 `eligible-for-human-signoff`.
 
-If the simulated evidence is acceptable after human review, either record
-`--retain-dups` and keep the complete review tree physically in place, or move
-the complete tree to retained quarantine outside the working root using a
-separately reviewed procedure and record `--confirm-quarantine`. Do not delete
-it. Then run ordinary fresh verification against the physical working
+If the simulated evidence is acceptable after human review, record
+`--retain-dups` and keep the complete review tree physically in place, use the
+reviewed same-filesystem managed quarantine, or move it through a separately
+reviewed procedure and record `--confirm-quarantine`. Do not delete it. Then
+run ordinary fresh verification against the physical working
 collection. That observed result, not the simulation or disposition record,
 is the evidence that can enter final sign-off.
 
@@ -509,6 +538,9 @@ machine-readable report contract.
 Version 0.6.8 advances that projection to schema 2 and distinguishes pending,
 retained-in-place, not-applicable, and externally retained-but-unverified
 review storage. It does not change the final ordinary evidence requirement.
+Version 0.6.9 advances the projection to schema 3, distinguishes verified
+managed same-filesystem quarantine, and reports working-namespace bytes
+released separately from physical storage reclamation, which remains false.
 Before any resumed action, the coordinator revalidates every required private
 outcome through its pinned private-directory boundary. Missing, replaced,
 publicly readable, or malformed history stops before another child is run.

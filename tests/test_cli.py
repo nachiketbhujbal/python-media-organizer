@@ -406,7 +406,7 @@ def test_full_visibility_saves_canonical_migration_options(tmp_path: Path) -> No
 
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads((log_dir / "pymo-migration-state.json").read_text())
-    assert payload["schema_version"] == 4
+    assert payload["schema_version"] == 5
     assert payload["options"]["verbose"] is False
     assert payload["options"]["quiet"] is False
     assert payload["options"]["console_log_level"] == "DEBUG"
@@ -675,7 +675,7 @@ def test_migrate_json_stays_machine_readable_with_global_output_flags(
 
         assert result.returncode == 0, result.stdout + result.stderr
         report = json.loads(result.stdout)
-        assert report["schema_version"] == 2
+        assert report["schema_version"] == 3
         assert report["report_type"] == "pymo-migration-report"
         assert result.stderr == ""
         assert "Completed migrate" not in result.stdout
@@ -734,6 +734,26 @@ def test_cache_status_rejects_irrelevant_global_configuration(tmp_path: Path) ->
     assert result.returncode == 2
     assert "not used by cache status" in result.stderr
     assert list(collection.iterdir()) == []
+
+
+@pytest.mark.parametrize("option", ("--config", "--show-ignored"))
+def test_managed_quarantine_rejects_irrelevant_global_configuration(
+    tmp_path: Path, option: str
+) -> None:
+    collection = tmp_path / "collection"
+    destination = tmp_path / "destination"
+    collection.mkdir()
+    arguments: list[object] = [option]
+    if option == "--config":
+        arguments.append(tmp_path / "settings.toml")
+    arguments.extend(("quarantine-dups", collection, destination))
+
+    result = run_pymo(*arguments)
+
+    assert result.returncode == 2
+    assert "not used by quarantine-dups" in result.stderr
+    assert list(collection.iterdir()) == []
+    assert not destination.exists()
 
 
 def test_cache_warm_receives_relevant_global_configuration(tmp_path: Path) -> None:
