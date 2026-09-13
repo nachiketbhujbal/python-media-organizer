@@ -70,6 +70,12 @@ established external-quarantine alternative. It advances private restart state
 to schema 4, private unattended policy to schema 2, and the path-private
 migration report to schema 2. Pymo performs no move or deletion and reclaims no
 storage on the retained path; final ordinary verification remains fresh.
+ADR 0105 makes same-filesystem managed quarantine in version 0.6.9 the final
+version 0.6 release. The former 0.6.10 through 0.6.17 plan retains its order and
+scope as version 0.7.0 through 0.7.7: cross-filesystem managed quarantine,
+queue planning and execution, recovery and reporting, scheduler measurement,
+and bounded scheduling. This is a roadmap correction only; no affected version
+was released under its former number.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -472,9 +478,10 @@ trials: the preservation and transformation engine is ready for continued real
 use, but the stage-by-stage operator experience is the dominant shortcoming.
 Version 0.6 is therefore planned as small, independently accepted releases
 covering the operator loop, interactive consent, human and machine reports,
-resume and unattended policy, logging and visibility, logical and physical
-duplicate disposition, sequential queue operation, and only then
-storage-aware bounded scheduling. The plan changes no current runtime behavior.
+resume and unattended policy, logging and visibility, and single-filesystem
+duplicate disposition. ADR 0105 makes version 0.6.9 its endpoint and continues
+cross-filesystem movement, sequential queue operation, and storage-aware
+bounded scheduling as version 0.7. The plan changes no current runtime behavior.
 Private collection identities, paths, statistics, and detailed timing evidence
 remain outside this public repository.
 
@@ -1872,8 +1879,9 @@ cautions, and open design questions that are not committed to a release.
 `docs/ROADMAP.md` is the promoted delivery plan, with one primary purpose per
 patch through the version 0.1 foundation, version 0.2 inspection and hardening,
 version 0.3 stabilization, version 0.4 preservation and cache foundation, and
-version 0.5 migration-verification and production-readiness sequence, and the
-version 0.6 operator-experience sequence promoted by ADR 0087.
+version 0.5 migration-verification and production-readiness sequence, the
+version 0.6 operator-experience sequence promoted by ADR 0087, and the version
+0.7 orchestration continuation allocated by ADR 0105.
 `docs/CHANGELOG.md` is the shipped-behavior record. Keep these roles separate
 instead of maintaining duplicate feature inventories.
 

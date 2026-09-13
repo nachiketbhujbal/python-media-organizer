@@ -404,9 +404,12 @@ console and per-stage log thresholds without changing visibility. Version
 0.6.7 adds explicit full, private, and quiet visibility profiles while keeping
 the path-private default and opt-in diagnostic persistence. Version 0.6.8 adds
 the explicit retained-in-place duplicate disposition while preserving the
-existing external-quarantine choice. Managed quarantine, a sequential
-manifest-backed queue, and benchmark-proven scheduling remain separate later
-releases.
+existing external-quarantine choice. Version 0.6.9 will add same-filesystem
+managed quarantine and close the version 0.6 line. Version 0.7.0 begins the
+distinct cross-filesystem copy-and-verify boundary; a sequential
+manifest-backed queue and benchmark-proven scheduling follow as separate
+version 0.7 releases under
+[ADR 0105](docs/adrs/0105-end-v0.6-at-single-filesystem-operation.md).
 
 ### Verify a migration by exact bytes and media content
 
@@ -1134,9 +1137,11 @@ filesystem-identity boundary and makes later root observations fail closed.
 Version 0.5.13 reconciles the authoritative documentation with the verified
 0.5.12 release and establishes privacy-preserving trials on existing real
 collections as the next evidence-gathering phase. Those trials validated the
-preservation engine and made operator supervision, outcome reporting, duplicate
-disposition, queueing, and measured scheduling the version 0.6 theme under
-[ADR 0087](docs/adrs/0087-operator-first-migration-roadmap.md). Version 0.6.0
+preservation engine and made operator supervision, outcome reporting, and
+single-filesystem duplicate disposition the version 0.6 theme under
+[ADR 0087](docs/adrs/0087-operator-first-migration-roadmap.md). ADR 0105 ends
+that line at version 0.6.9 and begins multi-filesystem and multi-collection
+orchestration at version 0.7.0. Version 0.6.0
 adds the foreground safe operator loop under
 [ADR 0088](docs/adrs/0088-safe-migration-operator-loop.md); version 0.6.1 adds
 terminal-only checkpoint consent under
@@ -1149,7 +1154,9 @@ defines stable migration-report schema 1 under
 [ADR 0095](docs/adrs/0095-stable-migration-report-artifact.md). Version 0.6.8
 advances that report to schema 2 and adds retained-in-place duplicate
 disposition under
-[ADR 0103](docs/adrs/0103-retained-in-place-duplicate-disposition.md). Rescue copying,
+[ADR 0103](docs/adrs/0103-retained-in-place-duplicate-disposition.md), while
+[ADR 0105](docs/adrs/0105-end-v0.6-at-single-filesystem-operation.md) records
+the revised roadmap boundary. Rescue copying,
 permanent deletion, damaged-media remediation, richer
 metadata, and similarity tooling remain later roadmap or research work. Full
 video decoding remains sequential until representative benchmarks show that

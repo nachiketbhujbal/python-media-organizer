@@ -40,12 +40,13 @@ current documentation with the verified 0.5.12 release and records
 privacy-preserving real-collection workflow trials as the next product phase;
 ADR 0086 records that documentation and evidence boundary.
 The resulting operational evidence promotes an operator-first version 0.6
-sequence; ADR 0087 records a fine-grained progression through operator control,
-reporting, visibility, duplicate disposition, queue execution, and measured
-concurrency. Version 0.6.0 adds only the foreground safe operator loop; ADR
+sequence; ADR 0087 records its original fine-grained progression, and ADR 0105
+ends version 0.6 at same-filesystem operation before continuing
+cross-filesystem movement, queue execution, and measured concurrency in version
+0.7. Version 0.6.0 adds only the foreground safe operator loop; ADR
 0088 records its automatic-success and explicit-checkpoint boundaries. Version
 0.6.1 adds the explicit terminal-only interactive selector; ADR 0089 records
 its conservative per-question consent and private resume-state boundaries.
 Version 0.6.8 adds retained-in-place duplicate disposition; ADR 0103 records
 its no-move, no-delete, no-storage-reclamation, and fresh-final-evidence
-boundaries.
+boundaries. ADR 0105 records the current version 0.6 and 0.7 roadmap boundary.
