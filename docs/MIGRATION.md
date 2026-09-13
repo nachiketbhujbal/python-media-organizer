@@ -65,7 +65,10 @@ interactive mode asks separately at those same boundaries; an answer applies
 only to its current question.
 [ADR 0087](adrs/0087-operator-first-migration-roadmap.md) keeps reports, saved
 context, logging and visibility policy, duplicate disposition, queues, and
-benchmark-gated scheduling as separate later releases;
+benchmark-gated scheduling as separate later releases; [ADR
+0105](adrs/0105-end-v0.6-at-single-filesystem-operation.md) ends version 0.6 at
+same-filesystem operation and continues the broader orchestration in version
+0.7;
 [ADR 0088](adrs/0088-safe-migration-operator-loop.md) records the first loop
 boundary, and
 [ADR 0089](adrs/0089-interactive-migration-checkpoints.md) records interactive

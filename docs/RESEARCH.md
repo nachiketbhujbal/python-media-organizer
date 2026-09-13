@@ -753,7 +753,9 @@ a stronger contract than an `--apply` option on either duplicate finder:
 [ADR 0087](adrs/0087-operator-first-migration-roadmap.md) promotes an honest
 retained-in-place duplicate disposition into version 0.6.8,
 same-filesystem managed quarantine into 0.6.9, and explicit cross-filesystem
-quarantine into 0.6.10. ADR 0103 defines the retained-in-place contract; the
+quarantine into 0.7.0 under the revised boundary in [ADR
+0105](adrs/0105-end-v0.6-at-single-filesystem-operation.md). ADR 0103 defines
+the retained-in-place contract; the
 movement releases still require dedicated journal, confirmation, portability,
 and preservation-evidence decisions. Permanent deletion remains research
 and is not implied by any planned quarantine workflow.
@@ -769,7 +771,7 @@ labels every verdict simulated. A non-complete result blocks quarantine review;
 a simulated complete result still requires retained quarantine plus ordinary
 fresh post-move verification. Version 0.6.8 integrates the simulation into an
 honest retained-in-place outcome without weakening ordinary verification;
-versions 0.6.9 and 0.6.10 then automate same-filesystem and cross-filesystem
+versions 0.6.9 and 0.7.0 then automate same-filesystem and cross-filesystem
 quarantine without weakening either evidence boundary.
 
 ## Migration orchestration and queues
@@ -788,10 +790,10 @@ Operational trials confirmed that a human should not have to re-enter the same
 coordinator shape for every stage or remain present merely to advance routine
 success. [ADR 0088](adrs/0088-safe-migration-operator-loop.md) implements that
 bounded foreground loop in 0.6.0 without crossing a decision and conservative
-terminal-only checkpoint questions in 0.6.1. ADR 0087 keeps manifest planning
-through queue reporting in
-versions 0.6.11 through 0.6.14, and measurement before bounded scheduling in
-versions 0.6.15 through 0.6.17. Rescue copying remains separate research.
+terminal-only checkpoint questions in 0.6.1. ADR 0087 promotes manifest
+planning through queue reporting and measurement before bounded scheduling;
+ADR 0105 assigns those units to versions 0.7.1 through 0.7.4 and 0.7.5 through
+0.7.7 respectively. Rescue copying remains separate research.
 
 The planned queue and the still-unplanned copy workflow must cover:
 
