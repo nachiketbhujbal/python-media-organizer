@@ -112,3 +112,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0104](0104-v0.6.8-release-truth.md) | V0.6.8 post-tag release truth |
 | [0105](0105-end-v0.6-at-single-filesystem-operation.md) | End version 0.6 at single-filesystem operation |
 | [0106](0106-same-filesystem-managed-quarantine.md) | Same-filesystem managed quarantine |
+| [0107](0107-v0.6.9-release-truth.md) | V0.6.9 post-tag release truth |

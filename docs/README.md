@@ -49,7 +49,7 @@ cross-filesystem movement, queue execution, and measured concurrency in version
 its conservative per-question consent and private resume-state boundaries.
 Version 0.6.8 adds retained-in-place duplicate disposition; ADR 0103 records
 its no-move, no-delete, no-storage-reclamation, and fresh-final-evidence
-boundaries. The version 0.6.9 release candidate adds reversible
-same-filesystem managed quarantine; ADR 0106 records its atomic no-replace,
-journal, undo, and fresh-verification boundaries. ADR 0105 records the current
-version 0.6 and 0.7 roadmap boundary.
+boundaries. Version 0.6.9 adds reversible same-filesystem managed quarantine;
+ADR 0106 records its atomic no-replace, journal, undo, and fresh-verification
+boundaries, and ADR 0107 records its post-tag release truth. ADR 0105 records
+the current version 0.6 and 0.7 roadmap boundary.
