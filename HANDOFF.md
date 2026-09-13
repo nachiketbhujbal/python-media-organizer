@@ -70,8 +70,8 @@ established external-quarantine alternative. It advances private restart state
 to schema 4, private unattended policy to schema 2, and the path-private
 migration report to schema 2. Pymo performs no move or deletion and reclaims no
 storage on the retained path; final ordinary verification remains fresh.
-Version 0.6.9 adds dry-run-first, reversible same-filesystem managed quarantine
-for the complete reviewed `dups` tree. It binds a descriptor-pinned tree
+The version 0.6.9 release candidate adds dry-run-first, reversible
+same-filesystem managed quarantine for the complete reviewed `dups` tree. It binds a descriptor-pinned tree
 manifest and explicit destination, uses one atomic no-replace directory rename,
 appends strict action history, fully verifies the retained tree, and supports
 exact-target undo plus interrupted-run recovery. The coordinator preserves

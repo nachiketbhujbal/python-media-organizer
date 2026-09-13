@@ -91,5 +91,8 @@ fallback, overwrite, or delete media.
 
 - A same-filesystem quarantine no longer requires manual shell movement.
 - Pymo can report exactly what it moved and can undo the reversible operation.
+- A collection journal containing the new managed-tree operation remains valid
+  schema-1 history for v0.6.9 and later; older strict readers safely reject the
+  unknown future operation rather than misinterpreting it.
 - Cross-filesystem quarantine remains version 0.7.0; queueing, scheduling, and
   irreversible cleanup remain later or unpromoted work.

@@ -655,12 +655,15 @@ new explicit contracts.
 | QUAR-006 | Medium | Existing report wording could conflate bytes removed from the working namespace with physical space reclaimed on the same filesystem. | Resolved by report schema 3 and synopsis wording that keeps those quantities separate and exposes no destination or manifest digest. |
 
 A subsequent read-only Terra-medium working-tree audit reported two additional
-P1 concerns before the release candidate was committed.
+P1 concerns before the release candidate was committed. Independent exact-SHA
+review then reported one release-truth finding and found no additional safety,
+privacy, recovery, undo, policy, report, or test defect.
 
 | ID | Severity | Finding | Resolution |
 | --- | --- | --- | --- |
 | QUAR-R01 | P1 | Normal undo accepted the current destination-parent identity instead of requiring the parent inode recorded by the forward move. | Rejected as an unsafe overconstraint after tracing the evidence boundary. Undo is a new explicitly previewed plan: it still requires the exact destination-path digest and the exact retained tree manifest plus inode, then binds the current parent inode through apply. This safely permits a legitimate remount or parent replacement without accepting different content or a plan-to-apply substitution. ADR 0106 now states that distinction explicitly. |
 | QUAR-R02 | P1 | Schema-1 parsing accepted shallow malformed managed-tree actions and did not enforce the operation/tool association. | Resolved by exact `dups` source, identity-key/type/digest, destination-token, and bidirectional tool/operation validation during strict lifecycle parsing, with adversarial malformed-journal tests. |
+| QUAR-R03 | P1 | Exact owner candidate `1f0f287` dated the v0.6.9 changelog and marked the roadmap release as shipped before protected publication evidence existed. | Resolved by restoring `Unreleased`, `Release candidate`, and planned-final-release wording. Per ADR 0090 and the tagged v0.6.8 precedent, only the separate post-tag release-truth change may promote those claims after the protected merge, exact-main gate, annotated tag, and tag workflow are observed. |
 
 - Independent review rejected v0.6.0 candidate `6e700f0` with GUIDE-R04 and
   GUIDE-R05 after reproducing a warning-only validation that the loop crossed

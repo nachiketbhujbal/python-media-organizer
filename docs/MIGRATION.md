@@ -305,6 +305,10 @@ unsafe target and never falls back to a cross-filesystem copy. Preview exact
 undo with `pymo quarantine-dups COLLECTION DESTINATION --undo`; add `--apply`
 only after review. Moving within one filesystem removes the bytes from the
 working collection but does not reclaim physical capacity on that filesystem.
+The standalone `pymo quarantine-dups COLLECTION DESTINATION` command exposes
+the same preview/apply/undo primitive. Its apply invocation freshly derives and
+revalidates the current plan; only the migration coordinator persists and
+enforces a prior preview digest across invocations.
 
 The established alternative remains available: move the complete review tree
 outside the working collection using a separately reviewed procedure, then,

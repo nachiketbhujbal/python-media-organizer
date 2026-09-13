@@ -371,10 +371,20 @@ pymo migrate --resume "/path/to/private-logs" --quarantine-dups --apply
 The preview hashes the complete safe tree and binds the destination. Apply
 rechecks that exact plan, performs one atomic no-replace directory move on the
 same filesystem, appends collection action history, and freshly verifies the
-retained tree. `pymo quarantine-dups COLLECTION DESTINATION --undo` previews
-the exact reverse operation; add `--apply` only after review. Moving the tree
-out of the working collection does not free physical space on the shared
-filesystem. The established `--confirm-quarantine` alternative records the human checkpoint only when the
+retained tree. The underlying standalone command follows the same dry-run
+default:
+
+```bash
+pymo quarantine-dups "/path/to/working-collection" "/path/to/retained-review-tree"
+pymo quarantine-dups "/path/to/working-collection" "/path/to/retained-review-tree" --apply
+```
+
+Standalone apply freshly derives and revalidates its plan within that
+invocation; only the migration coordinator persists and enforces the earlier
+preview digest across invocations. Add `--undo` to preview the exact reverse
+operation, then add `--apply` only after review. Moving the tree out of the
+working collection does not free physical space on the shared filesystem. The
+established `--confirm-quarantine` alternative records the human checkpoint only when the
 working `dups` path is absent after a separately managed external move. A
 following `--run` performs final fresh validation and
 pauses for review; one more `--run` performs ordinary verification, then reports
@@ -419,9 +429,9 @@ console and per-stage log thresholds without changing visibility. Version
 0.6.7 adds explicit full, private, and quiet visibility profiles while keeping
 the path-private default and opt-in diagnostic persistence. Version 0.6.8 adds
 the explicit retained-in-place duplicate disposition while preserving the
-existing external-quarantine choice. Version 0.6.9 adds reversible
-same-filesystem managed quarantine and closes the version 0.6 line. Version
-0.7.0 begins the
+existing external-quarantine choice. The version 0.6.9 release candidate adds
+reversible same-filesystem managed quarantine and is planned to close the
+version 0.6 line. Version 0.7.0 begins the
 distinct cross-filesystem copy-and-verify boundary; a sequential
 manifest-backed queue and benchmark-proven scheduling follow as separate
 version 0.7 releases under
