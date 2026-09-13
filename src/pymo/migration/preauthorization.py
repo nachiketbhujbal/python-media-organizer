@@ -17,9 +17,9 @@ from pymo.migration.coordinator_state import (
 )
 
 # This identifies the public pre-authorization policy compatibility contract.
-# Version 2 makes duplicate disposition explicit and preserves its selected
-# decision for unattended dispatch.
-MIGRATION_PREAUTHORIZATION_SCHEMA_VERSION = 2
+# Version 3 binds the optional managed-quarantine destination through saved
+# options and requires an exact reviewed tree-move plan before unattended apply.
+MIGRATION_PREAUTHORIZATION_SCHEMA_VERSION = 3
 
 
 class MigrationPreauthorizationError(RuntimeError):
@@ -257,12 +257,59 @@ def _validate_decision_digest(value: object) -> str:
     return value
 
 
-def _validate_disposition_expected(value: object) -> dict[str, Any]:
+def _validate_sha256(value: object, field: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise MigrationPreauthorizationError(
+            f"pre-authorization policy has invalid {field}"
+        )
+    return value
+
+
+def _validate_quarantine_expected(value: object) -> dict[str, Any]:
     expected = _require_exact_fields(
         value,
-        {"status", "review_files", "review_bytes", "verdict", "disposition"},
-        "duplicate disposition expectation",
+        {
+            "status",
+            "files",
+            "directories",
+            "bytes",
+            "manifest_sha256",
+            "destination_sha256",
+            "destination_parent_device",
+            "destination_parent_inode",
+            "decision_digest",
+        },
+        "managed quarantine expectation",
     )
+    if expected["status"] != 0:
+        raise MigrationPreauthorizationError(
+            "pre-authorization policy can apply only a successful quarantine preview"
+        )
+    for field in (
+        "files",
+        "directories",
+        "bytes",
+        "destination_parent_device",
+        "destination_parent_inode",
+    ):
+        _require_int(expected[field], f"managed quarantine {field}")
+    _validate_sha256(expected["manifest_sha256"], "quarantine manifest digest")
+    _validate_sha256(expected["destination_sha256"], "quarantine destination digest")
+    _validate_decision_digest(expected["decision_digest"])
+    return expected
+
+
+def _validate_disposition_expected(
+    value: object, *, managed: bool = False
+) -> dict[str, Any]:
+    fields = {"status", "review_files", "review_bytes", "verdict", "disposition"}
+    if managed:
+        fields.add("quarantine_plan")
+    expected = _require_exact_fields(value, fields, "duplicate disposition expectation")
     if expected["status"] != 0:
         raise MigrationPreauthorizationError(
             "pre-authorization policy requires a successful duplicate-disposition simulation"
@@ -275,6 +322,10 @@ def _validate_disposition_expected(value: object) -> dict[str, Any]:
     ):
         raise MigrationPreauthorizationError(
             "pre-authorization policy requires complete simulated preservation"
+        )
+    if managed:
+        expected["quarantine_plan"] = _validate_quarantine_expected(
+            expected["quarantine_plan"]
         )
     return expected
 
@@ -359,11 +410,17 @@ def _validate_authorization(
                     "pre-authorization policy operation does not match its checkpoint"
                 )
     elif checkpoint == "duplicate-disposition":
-        if decision not in {"confirm-quarantine", "retain-dups"}:
+        if decision not in {
+            "confirm-quarantine",
+            "retain-dups",
+            "quarantine-dups",
+        }:
             raise MigrationPreauthorizationError(
                 "pre-authorization policy has an unrecognized duplicate disposition"
             )
-        expected = _validate_disposition_expected(item["expected"])
+        expected = _validate_disposition_expected(
+            item["expected"], managed=decision == "quarantine-dups"
+        )
     elif checkpoint == "final-signoff":
         if decision != "signoff":
             raise MigrationPreauthorizationError(
@@ -560,11 +617,26 @@ class MigrationPreauthorization:
             raise MigrationPreauthorizationError(
                 "pre-authorization policy reached an unknown checkpoint"
             )
-        if observed != expected:
+        compared_expected = dict(expected)
+        if checkpoint == "duplicate-disposition" and decision == "quarantine-dups":
+            compared_expected.pop("quarantine_plan")
+        if observed != compared_expected:
             raise MigrationPreauthorizationMismatch(
                 f"observed result for {checkpoint} differs from its pre-authorization"
             )
         return decision
+
+    def require_quarantine_plan(self, outcome: dict[str, Any]) -> None:
+        authorization = self.authorizations.get("duplicate-disposition")
+        if authorization is None or authorization[0] != "quarantine-dups":
+            raise MigrationPreauthorizationMismatch(
+                "managed quarantine is not pre-authorized"
+            )
+        expected = authorization[1]["quarantine_plan"]
+        if outcome["status"] != 0 or outcome["data"] != expected:
+            raise MigrationPreauthorizationMismatch(
+                "observed managed-quarantine plan differs from its pre-authorization"
+            )
 
 
 def load_preauthorization(
@@ -647,6 +719,19 @@ def load_preauthorization(
     if checkpoints != sorted(checkpoints, key=_CHECKPOINT_ORDER.__getitem__):
         raise MigrationPreauthorizationError(
             "pre-authorization policy checkpoints are out of workflow order"
+        )
+    managed_quarantine = next(
+        (
+            authorization
+            for checkpoint, authorization in parsed
+            if checkpoint == "duplicate-disposition"
+            and authorization[0] == "quarantine-dups"
+        ),
+        None,
+    )
+    if managed_quarantine is not None and options["quarantine_destination"] is None:
+        raise MigrationPreauthorizationError(
+            "managed quarantine requires an explicit saved destination"
         )
     return MigrationPreauthorization(
         path=path,

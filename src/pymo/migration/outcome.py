@@ -18,15 +18,20 @@ from pymo.migration.roots import (
 )
 
 # This identifies private version-bound coordinator outcome records. Stable
-# migration-report schema 1 selects aggregates from them; it does not expose
+# Migration reports select aggregates from them; they do not expose
 # this internal record contract.
-MIGRATION_OUTCOME_SCHEMA_VERSION = 2
+MIGRATION_OUTCOME_SCHEMA_VERSION = 3
 
 # This identifies the deterministic private mutation-decision digest contract.
 MIGRATION_DECISION_DIGEST_ALGORITHM = "migration-decision-v1"
 
 OutcomeCategory = Literal[
-    "scan", "validation", "transformation", "duplicates", "verification"
+    "scan",
+    "validation",
+    "transformation",
+    "duplicates",
+    "verification",
+    "quarantine",
 ]
 ResultKind = Literal["observed", "simulated", "preview"]
 
@@ -315,6 +320,44 @@ def _validate_verification(data: dict[str, Any]) -> None:
         )
 
 
+def _validate_quarantine(data: dict[str, Any]) -> None:
+    value = _require_exact_fields(
+        data,
+        {
+            "status",
+            "files",
+            "directories",
+            "bytes",
+            "manifest_sha256",
+            "destination_sha256",
+            "destination_parent_device",
+            "destination_parent_inode",
+            "decision_digest",
+        },
+        "managed quarantine data",
+    )
+    for field in (
+        "status",
+        "files",
+        "directories",
+        "bytes",
+        "destination_parent_device",
+        "destination_parent_inode",
+    ):
+        _require_int(value[field], f"managed quarantine {field}")
+    if value["status"] > 255:
+        raise MigrationOutcomeError("migration outcome has invalid quarantine status")
+    for field in ("manifest_sha256", "destination_sha256"):
+        digest = _require_str(value[field], field)
+        if len(digest) != 64 or any(
+            character not in "0123456789abcdef" for character in digest
+        ):
+            raise MigrationOutcomeError(
+                f"migration outcome has invalid managed quarantine {field}"
+            )
+    _validate_decision_digest(value["decision_digest"])
+
+
 def validate_outcome(
     value: object,
     *,
@@ -347,6 +390,7 @@ def validate_outcome(
         "find-image-duplicates": "duplicates",
         "find-video-duplicates": "duplicates",
         "verify-migration": "verification",
+        "quarantine-dups": "quarantine",
     }
     if command not in command_categories or category != command_categories[command]:
         raise MigrationOutcomeError("migration outcome has invalid category")
@@ -371,6 +415,7 @@ def validate_outcome(
         "transformation": _validate_transformation,
         "duplicates": _validate_duplicates,
         "verification": _validate_verification,
+        "quarantine": _validate_quarantine,
     }
     validators[category](data)
     if category == "transformation":
@@ -443,6 +488,14 @@ def validate_outcome(
             raise MigrationOutcomeError(
                 "migration outcome has unexplained incomplete verdict"
             )
+    if category == "quarantine" and status != data["status"]:
+        raise MigrationOutcomeError(
+            "migration outcome quarantine status does not match its result"
+        )
+    if category == "quarantine" and result_kind not in {"preview", "observed"}:
+        raise MigrationOutcomeError(
+            "migration outcome quarantine result kind is unsupported"
+        )
     return outcome
 
 

@@ -62,14 +62,14 @@ the same command with the same byte-identical policy recovers the creation time
 from that binding and publishes the missing initial state without replacing the
 record. Any disagreement still fails closed.
 
-## Schema 2
+## Schema 3
 
 The top-level object has exactly these fields:
 
 ```json
 {
-  "schema_version": 2,
-  "tool_version": "0.6.8",
+  "schema_version": 3,
+  "tool_version": "0.6.9",
   "baseline": "/canonical/path/to/baseline",
   "working": "/canonical/path/to/working-collection",
   "options": {
@@ -85,7 +85,8 @@ The top-level object has exactly these fields:
     "ffprobe": null,
     "decode_timeout": null,
     "workers": null,
-    "no_cache": false
+    "no_cache": false,
+    "quarantine_destination": null
   },
   "authorizations": []
 }
@@ -105,7 +106,7 @@ Reaching an omitted checkpoint stops with status 1.
 | `rename-apply` | `apply` | Rename preview |
 | `image-duplicates-apply` | `apply` | Exact-image duplicate preview |
 | `video-duplicates-apply` | `apply` | Exact-video duplicate preview |
-| `duplicate-disposition` | `retain-dups` or `confirm-quarantine` | Complete without-`dups` simulation |
+| `duplicate-disposition` | `retain-dups`, `quarantine-dups`, or `confirm-quarantine` | Complete without-`dups` simulation; managed quarantine also binds its exact move preview |
 | `final-working-validation` | `accept-validation` | Final working full validation |
 | `final-signoff` | `signoff` | Complete ordinary final verification |
 
@@ -190,10 +191,41 @@ simulation totals:
 The decision is exact authority. `retain-dups` requires the working `dups`
 path to remain a real directory whenever `review_files` is nonzero; it records
 that review storage remains in place and pymo reclaimed no physical storage.
+`quarantine-dups` additionally requires the top-level
+`options.quarantine_destination` to be the exact canonical absolute destination
+saved in coordinator state. Its duplicate-disposition `expected` object adds
+one exact `quarantine_plan`:
+
+```json
+{
+  "status": 0,
+  "review_files": 2,
+  "review_bytes": 12,
+  "verdict": "complete",
+  "disposition": "eligible-for-human-quarantine-review",
+  "quarantine_plan": {
+    "status": 0,
+    "files": 2,
+    "directories": 3,
+    "bytes": 12,
+    "manifest_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "destination_sha256": "123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0",
+    "destination_parent_device": 1,
+    "destination_parent_inode": 2,
+    "decision_digest": "migration-decision-v1:23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01"
+  }
+}
+```
+
+The path-private plan is obtained from the private successful managed preview.
+It binds the complete descriptor-pinned tree manifest, exact destination,
+destination-parent identity, and aggregate counts. Unattended apply rechecks
+that plan before the journaled atomic move and stops if any field differs.
 `confirm-quarantine` preserves the existing contract: the path must be absent
-after a separately managed external move. Neither decision authorizes pymo to
-move or delete content. A zero-file result may use `retain-dups` to record that
-disposition is not applicable.
+after a separately managed external move. Managed quarantine authorizes only
+the reviewed same-filesystem move; no decision authorizes copying or deletion.
+A zero-file result may use `retain-dups` to record that disposition is not
+applicable.
 
 Final sign-off repeats every aggregate from the ordinary final verification:
 

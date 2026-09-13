@@ -307,7 +307,7 @@ supported.
 
 `--json` is a report-only action over an existing private coordinator run. It
 preflights the exact restart lifecycle and every typed outcome, rechecks state,
-outcomes, and both collection identities, and emits one compact schema-2 object
+outcomes, and both collection identities, and emits one compact schema-3 object
 without timestamps or other console text. It never scans media, advances a
 stage, creates state, writes either collection or action history, or grants
 quarantine, deletion, verification, or sign-off authority. It cannot be
@@ -325,7 +325,7 @@ routine work with `--run` after that single reviewed apply. The original
 desired.
 
 `--unattended PRIVATE_POLICY_JSON` uses the same one-stage engine without
-terminal questions. The private schema-2 policy binds the exact pymo version,
+terminal questions. The private schema-3 policy binds the exact pymo version,
 canonical roots, saved options, separately enumerated checkpoint decisions,
 and exact aggregate typed results expected at each boundary. Different
 transformation plans with the same counts remain distinct through a
@@ -337,9 +337,10 @@ operation also requires its log directory to remain owner-private with safe
 non-writable ancestry. A valid but
 missing or mismatched authorization stops with status 1 before crossing the
 checkpoint; malformed, unsafe, changed, or binding-mismatched authority stops
-with setup status 2. The policy must select either retained-in-place or the
-existing external-quarantine confirmation at duplicate disposition. Pymo
-still never moves or deletes `dups`. See the
+with setup status 2. The policy may select retained-in-place, exact managed
+same-filesystem quarantine, or the existing human-managed external
+confirmation at duplicate disposition. Managed movement requires the saved
+destination and exact reviewed manifest plan; no choice authorizes deletion. See the
 [unattended policy contract](docs/MIGRATION_POLICY.md).
 
 `--interactive` uses the same one-stage engine and routine advancement, but
@@ -358,8 +359,32 @@ explicitly acknowledged with `--accept-status`; other failures cannot be
 waived. At the duplicate-review boundary, pymo stops for one explicit choice.
 `--retain-dups` records retained-in-place disposition only when a reviewed
 `dups` path is still a real directory, leaves every review file where it is,
-and reports that pymo reclaimed no physical storage. The established
-`--confirm-quarantine` alternative records the human checkpoint only when the
+and reports that pymo reclaimed no physical storage. The managed alternative
+saves an explicit destination at setup:
+
+```bash
+pymo migrate "/path/to/baseline" "/path/to/working-collection" --log-dir "/path/to/private-logs" --quarantine-destination "/path/to/retained-review-tree" --start
+pymo migrate --resume "/path/to/private-logs" --quarantine-dups
+pymo migrate --resume "/path/to/private-logs" --quarantine-dups --apply
+```
+
+The preview hashes the complete safe tree and binds the destination. Apply
+rechecks that exact plan, performs one atomic no-replace directory move on the
+same filesystem, appends collection action history, and freshly verifies the
+retained tree. The underlying standalone command follows the same dry-run
+default:
+
+```bash
+pymo quarantine-dups "/path/to/working-collection" "/path/to/retained-review-tree"
+pymo quarantine-dups "/path/to/working-collection" "/path/to/retained-review-tree" --apply
+```
+
+Standalone apply freshly derives and revalidates its plan within that
+invocation; only the migration coordinator persists and enforces the earlier
+preview digest across invocations. Add `--undo` to preview the exact reverse
+operation, then add `--apply` only after review. Moving the tree out of the
+working collection does not free physical space on the shared filesystem. The
+established `--confirm-quarantine` alternative records the human checkpoint only when the
 working `dups` path is absent after a separately managed external move. A
 following `--run` performs final fresh validation and
 pauses for review; one more `--run` performs ordinary verification, then reports
@@ -378,7 +403,7 @@ between stages, preserves the initial restart-state binding, requires every
 reload to add exactly the one expected successful attempt, and stops with status
 2 if any of those invariants changes.
 
-The schema-4 restart file records canonical roots, the installed pymo version,
+The schema-5 restart file records canonical roots, the installed pymo version,
 fixed common options, attempts, statuses, measured child durations, and private
 log and outcome names. Collection and log-directory separation is checked by
 filesystem identity, so aliases on a case-insensitive or normalizing filesystem
@@ -404,8 +429,9 @@ console and per-stage log thresholds without changing visibility. Version
 0.6.7 adds explicit full, private, and quiet visibility profiles while keeping
 the path-private default and opt-in diagnostic persistence. Version 0.6.8 adds
 the explicit retained-in-place duplicate disposition while preserving the
-existing external-quarantine choice. Version 0.6.9 will add same-filesystem
-managed quarantine and close the version 0.6 line. Version 0.7.0 begins the
+existing external-quarantine choice. The version 0.6.9 release candidate adds
+reversible same-filesystem managed quarantine and is planned to close the
+version 0.6 line. Version 0.7.0 begins the
 distinct cross-filesystem copy-and-verify boundary; a sequential
 manifest-backed queue and benchmark-proven scheduling follow as separate
 version 0.7 releases under
@@ -1156,7 +1182,9 @@ advances that report to schema 2 and adds retained-in-place duplicate
 disposition under
 [ADR 0103](docs/adrs/0103-retained-in-place-duplicate-disposition.md), while
 [ADR 0105](docs/adrs/0105-end-v0.6-at-single-filesystem-operation.md) records
-the revised roadmap boundary. Rescue copying,
+the revised roadmap boundary. Version 0.6.9 advances the report to schema 3 and
+adds same-filesystem managed quarantine under
+[ADR 0106](docs/adrs/0106-same-filesystem-managed-quarantine.md). Rescue copying,
 permanent deletion, damaged-media remediation, richer
 metadata, and similarity tooling remain later roadmap or research work. Full
 video decoding remains sequential until representative benchmarks show that

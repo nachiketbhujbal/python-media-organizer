@@ -14,8 +14,8 @@ from pymo.progress import format_bytes, format_duration
 
 # This identifies the public machine-readable migration-report contract. A
 # schema change is required before any field, type, or meaning may change.
-# Version 2 reports explicit retained-in-place duplicate disposition.
-MIGRATION_REPORT_SCHEMA_VERSION = 2
+# Version 3 reports verified managed same-filesystem retained quarantine.
+MIGRATION_REPORT_SCHEMA_VERSION = 3
 
 
 class MigrationSynopsisError(RuntimeError):
@@ -32,22 +32,45 @@ def _outcomes(
     stages = _stage_map()
     values: list[tuple[Attempt, dict[str, Any]]] = []
     for attempt in state.attempts:
-        if attempt.action != "run" or attempt.outcome_file is None:
+        if (
+            attempt.action
+            not in {
+                "run",
+                "quarantine-preview",
+                "quarantine-apply",
+            }
+            or attempt.outcome_file is None
+        ):
             continue
         stage = stages.get(attempt.stage)
-        if stage is None or stage.command is None:
+        managed_quarantine = (
+            stage is not None
+            and stage.identifier == "duplicate-disposition"
+            and attempt.action in {"quarantine-preview", "quarantine-apply"}
+        )
+        if stage is None or (stage.command is None and not managed_quarantine):
             raise MigrationSynopsisError(
                 "migration synopsis references an unknown stage"
             )
         try:
             outcome = read_outcome(
                 log_dir / attempt.outcome_file,
-                expected_command=stage.command,
+                expected_command=(
+                    "quarantine-dups" if managed_quarantine else stage.command or ""
+                ),
                 expected_status=attempt.exit_status,
                 expected_result_kind=(
-                    "simulated"
-                    if stage.identifier == "without-dups-simulation"
-                    else "preview" if stage.mode == "preview" else "observed"
+                    "observed"
+                    if attempt.action == "quarantine-apply"
+                    else (
+                        "preview"
+                        if attempt.action == "quarantine-preview"
+                        else (
+                            "simulated"
+                            if stage.identifier == "without-dups-simulation"
+                            else "preview" if stage.mode == "preview" else "observed"
+                        )
+                    )
                 ),
             )
         except MigrationOutcomeError as error:
@@ -85,7 +108,15 @@ def _workflow_status(state: MigrationState) -> str:
         return "complete"
     if state.attempts:
         latest = state.attempts[-1]
-        if latest.action == "run" and latest.exit_status != 0:
+        if (
+            latest.action
+            in {
+                "run",
+                "quarantine-preview",
+                "quarantine-apply",
+            }
+            and latest.exit_status != 0
+        ):
             return "stopped"
     return "pending"
 
@@ -350,7 +381,11 @@ def build_report(log_dir: Path, state: MigrationState) -> dict[str, Any]:
     """Project strict private outcomes into the stable aggregate report schema."""
 
     values = _outcomes(log_dir, state)
-    run_attempts = [attempt for attempt in state.attempts if attempt.action == "run"]
+    run_attempts = [
+        attempt
+        for attempt in state.attempts
+        if attempt.action in {"run", "quarantine-preview", "quarantine-apply"}
+    ]
     workflow_status = _workflow_status(state)
     latest_attempt = state.attempts[-1] if state.attempts else None
     next_stage = (
@@ -389,25 +424,48 @@ def build_report(log_dir: Path, state: MigrationState) -> dict[str, Any]:
         attempt.action == "confirm-quarantine" for attempt in state.attempts
     )
     retained_dups = any(attempt.action == "retain-dups" for attempt in state.attempts)
+    managed_quarantine = _latest(values, "duplicate-disposition", successful=False)
+    managed_applied = any(
+        attempt.action == "quarantine-apply" and attempt.exit_status == 0
+        for attempt in state.attempts
+    )
+    if managed_applied:
+        if (
+            managed_quarantine is None
+            or managed_quarantine["result_kind"] != "observed"
+        ):
+            raise MigrationSynopsisError(
+                "migration synopsis is missing verified managed-quarantine evidence"
+            )
+        review_files = managed_quarantine["data"]["files"]
+        review_bytes = managed_quarantine["data"]["bytes"]
     duplicate_disposition = (
-        "retained-in-place"
-        if retained_dups and review_files
+        "managed-same-filesystem-quarantine"
+        if managed_applied
         else (
-            "not-applicable"
-            if retained_dups
-            else "external-quarantine" if quarantine_confirmed else None
+            "retained-in-place"
+            if retained_dups and review_files
+            else (
+                "not-applicable"
+                if retained_dups
+                else "external-quarantine" if quarantine_confirmed else None
+            )
         )
     )
     review_state = (
-        "retained-in-place"
-        if duplicate_disposition == "retained-in-place"
+        "managed-same-filesystem-quarantine"
+        if duplicate_disposition == "managed-same-filesystem-quarantine"
         else (
-            "not-applicable"
-            if duplicate_disposition == "not-applicable"
+            "retained-in-place"
+            if duplicate_disposition == "retained-in-place"
             else (
-                "external-retention-confirmed-unverified"
-                if quarantine_confirmed
-                else "potentially-reclaimable" if duplicates else "not-assessed"
+                "not-applicable"
+                if duplicate_disposition == "not-applicable"
+                else (
+                    "external-retention-confirmed-unverified"
+                    if quarantine_confirmed
+                    else "potentially-reclaimable" if duplicates else "not-assessed"
+                )
             )
         )
     )
@@ -446,6 +504,7 @@ def build_report(log_dir: Path, state: MigrationState) -> dict[str, Any]:
                 attempt.action == "acknowledge-status" for attempt in state.attempts
             ),
             "external_quarantine_confirmed": quarantine_confirmed,
+            "managed_quarantine_verified": managed_applied,
             "duplicate_disposition": duplicate_disposition,
             "human_signoff_recorded": any(
                 attempt.action == "signoff" for attempt in state.attempts
@@ -475,7 +534,22 @@ def build_report(log_dir: Path, state: MigrationState) -> dict[str, Any]:
                 "bytes": review_bytes,
                 "state": review_state,
                 "physical_storage_reclaimed": False,
+                "working_collection_bytes_released": (
+                    review_bytes if managed_applied else 0
+                ),
             },
+            "managed_quarantine": (
+                None
+                if managed_quarantine is None
+                else {
+                    "result_kind": managed_quarantine["result_kind"],
+                    "status": managed_quarantine["status"],
+                    "files": managed_quarantine["data"]["files"],
+                    "directories": managed_quarantine["data"]["directories"],
+                    "bytes": managed_quarantine["data"]["bytes"],
+                    "move_verified": managed_applied,
+                }
+            ),
             "cache": {
                 "reused": sum(item["reused"] for item in cache_results),
                 "computed": sum(item["computed"] for item in cache_results),
@@ -555,6 +629,15 @@ def print_synopsis(log_dir: Path, state: MigrationState) -> None:
                 f"{format_bytes(review['bytes'])})."
             )
             print("  Physical storage reclaimed by pymo: none.")
+        elif review["state"] == "managed-same-filesystem-quarantine":
+            print(
+                "  Duplicate disposition selected: verified managed same-filesystem "
+                f"quarantine ({review['files']} file(s), "
+                f"{format_bytes(review['bytes'])} removed from the working collection)."
+            )
+            print(
+                "  Physical storage reclaimed on the shared filesystem by pymo: none."
+            )
         elif review["state"] == "not-applicable":
             print("  Duplicate disposition: no review files required retention.")
             print("  Physical storage reclaimed by pymo: none.")

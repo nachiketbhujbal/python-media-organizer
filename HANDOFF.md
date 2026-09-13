@@ -70,12 +70,19 @@ established external-quarantine alternative. It advances private restart state
 to schema 4, private unattended policy to schema 2, and the path-private
 migration report to schema 2. Pymo performs no move or deletion and reclaims no
 storage on the retained path; final ordinary verification remains fresh.
-ADR 0105 makes same-filesystem managed quarantine in version 0.6.9 the final
-version 0.6 release. The former 0.6.10 through 0.6.17 plan retains its order and
-scope as version 0.7.0 through 0.7.7: cross-filesystem managed quarantine,
-queue planning and execution, recovery and reporting, scheduler measurement,
-and bounded scheduling. This is a roadmap correction only; no affected version
-was released under its former number.
+The version 0.6.9 release candidate adds dry-run-first, reversible
+same-filesystem managed quarantine for the complete reviewed `dups` tree. It binds a descriptor-pinned tree
+manifest and explicit destination, uses one atomic no-replace directory rename,
+appends strict action history, fully verifies the retained tree, and supports
+exact-target undo plus interrupted-run recovery. The coordinator preserves
+separate preview/apply authority and advances restart state, private outcomes,
+unattended policy, and path-private reports to schemas 5, 3, 3, and 3. It never
+copies, deletes, or claims physical storage reclamation for a same-filesystem
+move.
+ADR 0105 makes version 0.6.9 the final version 0.6 release. Version 0.7.0
+through 0.7.7 retain the former plan's order: cross-filesystem managed
+quarantine, queue planning and execution, recovery and reporting, scheduler
+measurement, and bounded scheduling.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -673,8 +680,10 @@ python-media-organizer/
       workflow.py
     action_log.py
     correct_extensions.py
+    managed_quarantine.py
     migrate.py
     organize.py
+    quarantine.py
     rename.py
     scan.py
     validate.py
@@ -701,11 +710,12 @@ pymo validate COLLECTION
 pymo verify-migration SOURCE DESTINATION
 pymo correct-extensions COLLECTION
 pymo migrate BASELINE WORKING
+pymo quarantine-dups COLLECTION DESTINATION
 pymo find-image-duplicates COLLECTION
 pymo find-video-duplicates COLLECTION
 ```
 
-The five mutating tools support dry-run/apply behavior and `--undo`, which is
+The six mutating tools support dry-run/apply behavior and `--undo`, which is
 also a preview unless combined with `--apply`. `scan` and `cache status` are
 strictly read-only. `validate` may write fresh disposable evidence unless
 `--no-cache` is explicit; `cache warm` and `cache refresh` write only
@@ -715,7 +725,8 @@ disposable cache state. Neither changes media or action history. Global
 `--show-ignored` options go before the subcommand. `--show-ignored` and
 command-specific options are also accepted by the selected command after its
 collection argument. Configuration and ignored-path options are not applicable
-to `cache status` and are rejected rather than silently ignored.
+to `cache status` or `quarantine-dups` and are rejected rather than silently
+ignored.
 `migrate` coordinates the existing commands through the restartable one-stage
 engine. `--run-next` executes one child; version 0.6.0's `--run` may chain only
 routine successful read and preview stages before pausing after a validation or
@@ -724,7 +735,8 @@ explicit `--log-dir` owns private restart state and one child log per attempt
 outside both collections.
 Version 0.6.1's `--interactive` selector retains that one-child dispatch path
 and asks in-process only at successful or status-one validation review, one
-pending apply, external-quarantine confirmation, and final sign-off. Only `y`
+pending apply, duplicate disposition, and final sign-off. A saved managed
+destination adds separate managed preview and apply questions. Only `y`
 or `yes` accepts the current question; negative or empty input pauses except
 that a pending status-one validation continues to return status 1, while
 ambiguous, ended, or non-terminal input fails closed. Accepted review and
@@ -1199,7 +1211,7 @@ from an ordinary observed result eligible for final sign-off.
 
 `src/pymo/migrate.py` coordinates `pymo migrate BASELINE WORKING` while
 `migration/workflow.py` owns the fixed ordered stages and child arguments and
-`migration/coordinator_state.py` owns private schema-4 restart state. The
+`migration/coordinator_state.py` owns private schema-5 restart state. The
 command with no `--log-dir` prints a zero-write plan. `--start` creates one
 explicit external private directory, binds canonical roots, exact pymo version,
 and common options, and publishes mode-0600 state atomically under a dedicated
@@ -1269,6 +1281,9 @@ ADR 0095 records the decision.
 Version 0.6.8 advances this public projection to schema 2 solely to expose the
 explicit duplicate disposition and its retained-in-place or not-applicable
 review-storage state.
+Version 0.6.9 advances the projection to schema 3 and adds only aggregate,
+path-private managed-quarantine evidence. It distinguishes bytes removed from
+the working namespace from physical storage reclaimed, which remains false.
 
 Version 0.6.1 adds `--interactive` over the same loop. It requires terminal
 input and asks one conservative `[y/N]` question for each successful or

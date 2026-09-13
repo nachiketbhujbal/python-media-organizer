@@ -16,10 +16,10 @@ from typing import Any, Literal
 
 from pymo.migration.workflow import CoordinatorOptions, _stages
 
-# This identifies the private restart-state compatibility contract. Version 4
-# replaces the quarantine-only checkpoint with an explicit duplicate
-# disposition and records retained-in-place acknowledgement separately.
-MIGRATION_STATE_SCHEMA_VERSION = 4
+# This identifies the private restart-state compatibility contract. Version 5
+# binds an optional same-filesystem quarantine destination and records its
+# preview/apply attempts without treating restart bookkeeping as move evidence.
+MIGRATION_STATE_SCHEMA_VERSION = 5
 
 
 class MigrationCoordinatorError(RuntimeError):
@@ -35,6 +35,8 @@ class Attempt:
         "acknowledge-review",
         "confirm-quarantine",
         "retain-dups",
+        "quarantine-preview",
+        "quarantine-apply",
         "signoff",
     ]
     exit_status: int
@@ -279,6 +281,7 @@ def _options_from_json(value: object) -> CoordinatorOptions:
         "decode_timeout",
         "workers",
         "no_cache",
+        "quarantine_destination",
     }
     if not isinstance(value, dict) or set(value) != expected:
         raise MigrationCoordinatorError("migration restart options are malformed")
@@ -298,6 +301,9 @@ def _options_from_json(value: object) -> CoordinatorOptions:
         decode_timeout=_require_optional_int(value["decode_timeout"], "decode_timeout"),
         workers=_require_optional_int(value["workers"], "workers"),
         no_cache=_require_bool(value["no_cache"], "no_cache"),
+        quarantine_destination=_require_absolute_optional_path(
+            value["quarantine_destination"], "quarantine destination"
+        ),
     )
     if options.verbose and options.quiet:
         raise MigrationCoordinatorError("migration restart output options conflict")
@@ -347,6 +353,8 @@ def _attempt_from_json(value: object) -> Attempt:
         "acknowledge-review",
         "confirm-quarantine",
         "retain-dups",
+        "quarantine-preview",
+        "quarantine-apply",
         "signoff",
     }:
         raise MigrationCoordinatorError("migration restart attempt has invalid action")
@@ -374,7 +382,8 @@ def _attempt_from_json(value: object) -> Attempt:
         raise MigrationCoordinatorError(
             "migration restart attempt has unsafe outcome file"
         )
-    if action != "run" and (duration != 0 or outcome_file is not None):
+    child_actions = {"run", "quarantine-preview", "quarantine-apply"}
+    if action not in child_actions and (duration != 0 or outcome_file is not None):
         raise MigrationCoordinatorError(
             "migration restart bookkeeping attempt has child result fields"
         )
@@ -399,7 +408,7 @@ def _validate_attempt_order(attempts: tuple[Attempt, ...], next_stage: int) -> N
         "working-validation",
         "final-working-validation",
     }
-    for attempt in attempts:
+    for attempt_index, attempt in enumerate(attempts):
         completed_stage = stages[expected - 1] if expected else None
         if attempt.action == "acknowledge-review":
             if (
@@ -471,6 +480,33 @@ def _validate_attempt_order(attempts: tuple[Attempt, ...], next_stage: int) -> N
                     "migration status acknowledgement is invalid"
                 )
             expected += 1
+        elif attempt.action in {"quarantine-preview", "quarantine-apply"}:
+            if (
+                stage.identifier != "duplicate-disposition"
+                or attempt.log_file is None
+                or attempt.apply != (attempt.action == "quarantine-apply")
+                or (attempt.exit_status == 0 and attempt.outcome_file is None)
+            ):
+                raise MigrationCoordinatorError(
+                    "migration managed-quarantine attempt is invalid"
+                )
+            if attempt.action == "quarantine-apply":
+                prior_preview = next(
+                    (
+                        item
+                        for item in reversed(attempts[:attempt_index])
+                        if item.stage == stage.identifier
+                        and item.action == "quarantine-preview"
+                        and item.exit_status == 0
+                    ),
+                    None,
+                )
+                if prior_preview is None:
+                    raise MigrationCoordinatorError(
+                        "migration managed quarantine has no reviewed preview"
+                    )
+            if attempt.exit_status == 0 and attempt.action == "quarantine-apply":
+                expected += 1
         else:
             if (
                 stage.mode != "checkpoint"

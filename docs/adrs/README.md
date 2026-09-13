@@ -111,3 +111,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0103](0103-retained-in-place-duplicate-disposition.md) | Retained-in-place duplicate disposition |
 | [0104](0104-v0.6.8-release-truth.md) | V0.6.8 post-tag release truth |
 | [0105](0105-end-v0.6-at-single-filesystem-operation.md) | End version 0.6 at single-filesystem operation |
+| [0106](0106-same-filesystem-managed-quarantine.md) | Same-filesystem managed quarantine |

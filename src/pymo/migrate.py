@@ -106,6 +106,27 @@ def _validate_roots(baseline: Path, working: Path) -> None:
         )
 
 
+def _validate_quarantine_destination(
+    destination: Path | None, baseline: Path, working: Path, log_dir: Path | None = None
+) -> None:
+    if destination is None:
+        return
+    if destination.name in {"", ".", ".."}:
+        raise MigrationCoordinatorError("quarantine destination is unsafe")
+    if not destination.parent.is_dir() or destination.parent.is_symlink():
+        raise MigrationCoordinatorError(
+            "quarantine destination parent is not a safe existing directory"
+        )
+    if not _disjoint(destination, baseline) or not _disjoint(destination, working):
+        raise MigrationCoordinatorError(
+            "quarantine destination must be distinct and non-nested with both collections"
+        )
+    if log_dir is not None and not _disjoint(destination, log_dir):
+        raise MigrationCoordinatorError(
+            "quarantine destination must be distinct and non-nested with the private log directory"
+        )
+
+
 def _option_overrides(args: argparse.Namespace) -> dict[str, object]:
     names = (
         "verbose",
@@ -121,6 +142,7 @@ def _option_overrides(args: argparse.Namespace) -> dict[str, object]:
         "decode_timeout",
         "workers",
         "no_cache",
+        "quarantine_destination",
     )
     overrides: dict[str, object] = {}
     for name in names:
@@ -147,6 +169,7 @@ def _initial_options(overrides: dict[str, object]) -> CoordinatorOptions:
         "decode_timeout": None,
         "workers": None,
         "no_cache": False,
+        "quarantine_destination": None,
     }
     values.update(overrides)
     return CoordinatorOptions(**values)  # type: ignore[arg-type]
@@ -244,10 +267,17 @@ def _print_status(state: MigrationState) -> None:
     if stage.mode == "apply":
         print("Run this reviewed mutation with --run-next --apply.")
     elif stage.mode == "checkpoint":
-        print(
+        choices = (
             "Use --retain-dups to keep review copies in place without reclaiming storage, "
             "or move the complete tree externally and use --confirm-quarantine."
         )
+        if state.options.quarantine_destination is not None:
+            choices = (
+                "Use --quarantine-dups to preview the saved same-filesystem retained "
+                "destination, --retain-dups to keep review copies in place, or "
+                "--confirm-quarantine after a human-managed external move."
+            )
+        print(choices)
     else:
         print("Run routine stages with --run, or only this stage with --run-next.")
 
@@ -262,7 +292,7 @@ def _run_next(
     stage = _stages()[state.next_stage]
     if stage.mode == "checkpoint":
         print(
-            "Duplicate disposition is a human checkpoint; use --retain-dups or --confirm-quarantine.",
+            "Duplicate disposition is a human checkpoint; use --quarantine-dups, --retain-dups, or --confirm-quarantine.",
             file=sys.stderr,
         )
         return 2
@@ -463,12 +493,15 @@ def _require_bookkeeping_transition(
             "migration restart lifecycle changed unexpectedly during the interactive operator loop"
         )
     attempt = current.attempts[-1]
+    quarantine_child = action in {"quarantine-preview", "quarantine-apply"}
     if (
         attempt.stage != stage.identifier
         or attempt.action != action
         or attempt.exit_status != status
-        or attempt.log_file is not None
-        or attempt.apply
+        or (attempt.log_file is None) == quarantine_child
+        or (not quarantine_child and attempt.outcome_file is not None)
+        or (quarantine_child and status == 0 and attempt.outcome_file is None)
+        or attempt.apply != (action == "quarantine-apply")
     ):
         raise MigrationCoordinatorError(
             "migration restart lifecycle changed unexpectedly during the interactive operator loop"
@@ -623,6 +656,174 @@ def _retain_dups(log_dir: Path, state_path: Path, state: MigrationState) -> int:
             "No duplicate review files require disposition; pymo reclaimed no physical storage."
         )
     return 0
+
+
+def _latest_quarantine_preview(
+    log_dir: Path, state: MigrationState
+) -> dict[str, object] | None:
+    attempt = next(
+        (
+            item
+            for item in reversed(state.attempts)
+            if item.stage == "duplicate-disposition"
+            and item.action == "quarantine-preview"
+            and item.exit_status == 0
+            and item.outcome_file is not None
+        ),
+        None,
+    )
+    if attempt is None:
+        return None
+    outcome_name = attempt.outcome_file
+    assert outcome_name is not None
+    try:
+        return read_outcome(
+            log_dir / outcome_name,
+            expected_command="quarantine-dups",
+            expected_status=0,
+            expected_result_kind="preview",
+        )
+    except MigrationOutcomeError as error:
+        raise MigrationCoordinatorError(
+            "managed-quarantine preview outcome is invalid"
+        ) from error
+
+
+def _run_managed_quarantine(
+    log_dir: Path,
+    state_path: Path,
+    state: MigrationState,
+    *,
+    apply: bool,
+) -> int:
+    if state.next_stage == len(_stages()):
+        print("There is no pending duplicate-disposition checkpoint.", file=sys.stderr)
+        return 2
+    stage = _stages()[state.next_stage]
+    if stage.identifier != "duplicate-disposition":
+        print("Managed quarantine cannot run before its checkpoint.", file=sys.stderr)
+        return 2
+    destination_value = state.options.quarantine_destination
+    if destination_value is None:
+        print(
+            "Managed quarantine requires a saved --quarantine-destination.",
+            file=sys.stderr,
+        )
+        return 2
+    if not _duplicate_review_files(log_dir, state):
+        print("No duplicate review files require managed quarantine.", file=sys.stderr)
+        return 2
+
+    preview: dict[str, object] | None = None
+    recover = False
+    if apply:
+        preview = _latest_quarantine_preview(log_dir, state)
+        if preview is None:
+            print(
+                "Managed quarantine must be previewed successfully before apply.",
+                file=sys.stderr,
+            )
+            return 2
+        latest = state.attempts[-1] if state.attempts else None
+        recover = _dups_metadata(state) is None or (
+            latest is not None
+            and latest.action == "quarantine-apply"
+            and latest.exit_status != 0
+        )
+
+    log_file = _new_log_file(log_dir, state, stage)
+    outcome_file = log_file.with_suffix(".outcome.json")
+    command = [sys.executable, "-m", "pymo"]
+    if state.options.verbose:
+        command.append("--verbose")
+    elif state.options.quiet:
+        command.append("--quiet")
+    elif state.options.console_log_level is not None:
+        command.extend(("--console-log-level", state.options.console_log_level))
+    if state.options.file_log_level is not None:
+        command.extend(("--file-log-level", state.options.file_log_level))
+    command.append("--timestamps" if state.options.timestamps else "--no-timestamps")
+    command.extend(("--log-file", str(log_file)))
+    command.extend(
+        (
+            "quarantine-dups",
+            str(state.working),
+            destination_value,
+            "--migration-outcome",
+            str(outcome_file),
+        )
+    )
+    if apply:
+        assert preview is not None
+        decision = preview["data"]["decision_digest"]  # type: ignore[index]
+        if recover:
+            command.extend(
+                (
+                    "--recover",
+                    "--migration-decision-digest",
+                    str(decision),
+                    "--apply",
+                )
+            )
+        else:
+            command.extend(("--migration-decision-digest", str(decision), "--apply"))
+
+    print(
+        "Applying reviewed managed same-filesystem quarantine."
+        if apply
+        else "Previewing managed same-filesystem quarantine."
+    )
+    print(f"Private stage log: {log_file}")
+    started_at = time.monotonic()
+    try:
+        completed = subprocess.run(command, check=False)
+        status = completed.returncode
+        if status < 0:
+            status = 128 + abs(status)
+    except OSError:
+        status = 127
+    duration_milliseconds = max(0, round((time.monotonic() - started_at) * 1000))
+    outcome_name: str | None = None
+    if os.path.lexists(outcome_file):
+        try:
+            read_outcome(
+                outcome_file,
+                expected_command="quarantine-dups",
+                expected_status=status,
+                expected_result_kind="observed" if apply else "preview",
+            )
+        except MigrationOutcomeError as error:
+            raise MigrationCoordinatorError(
+                "managed-quarantine private outcome is invalid"
+            ) from error
+        outcome_name = outcome_file.name
+    elif status == 0:
+        raise MigrationCoordinatorError(
+            "successful managed quarantine did not record its private typed outcome"
+        )
+    attempt = Attempt(
+        stage.identifier,
+        "quarantine-apply" if apply else "quarantine-preview",
+        status,
+        _now(),
+        log_file.name,
+        apply,
+        duration_milliseconds,
+        outcome_name,
+    )
+    _write_state(
+        state_path,
+        _updated_state(state, attempt, advance=apply and status == 0),
+    )
+    if status == 0:
+        print(
+            "Managed quarantine verified; duplicate disposition is complete."
+            if apply
+            else "Managed quarantine preview is ready for explicit --apply review."
+        )
+    else:
+        print(f"Managed quarantine stopped with exit status {status}.", file=sys.stderr)
+    return status
 
 
 def _prompt_yes_no(question: str) -> bool:
@@ -864,8 +1065,8 @@ def _run_unattended(
 
             stage = _stages()[state.next_stage]
             if stage.mode == "apply":
-                preview = apply_preview_stage(stage.identifier)
-                outcome = _recorded_outcome(log_dir, state, preview)
+                preview_stage = apply_preview_stage(stage.identifier)
+                outcome = _recorded_outcome(log_dir, state, preview_stage)
                 policy.require_checkpoint(stage.identifier, outcome)
                 state = _reload_unattended(
                     log_dir, state_path, state, binding, identities, policy
@@ -892,26 +1093,76 @@ def _run_unattended(
                 state = _reload_unattended(
                     log_dir, state_path, state, binding, identities, policy
                 )
-                previous_state = state
-                status = (
-                    _retain_dups(log_dir, state_path, state)
-                    if decision == "retain-dups"
-                    else _confirm_quarantine(state_path, state)
-                )
+                if decision == "quarantine-dups":
+                    managed_preview = _latest_quarantine_preview(log_dir, state)
+                    if managed_preview is None:
+                        previous_state = state
+                        status = _run_managed_quarantine(
+                            log_dir, state_path, state, apply=False
+                        )
+                        state = _load_state(state_path)
+                        _require_bookkeeping_transition(
+                            previous_state,
+                            state,
+                            stage,
+                            action="quarantine-preview",
+                            status=status,
+                            advance=False,
+                        )
+                        _require_operator_binding(state, binding)
+                        _require_collection_identities(state, identities)
+                        policy.require_current()
+                        policy.require_binding(state)
+                        require_unattended_policy_binding(log_dir, state, policy)
+                        if status != 0:
+                            print_synopsis(log_dir, state)
+                            return status
+                        managed_preview = _latest_quarantine_preview(log_dir, state)
+                    if managed_preview is None:  # pragma: no cover - child contract.
+                        raise MigrationCoordinatorError(
+                            "managed-quarantine preview outcome is missing"
+                        )
+                    policy.require_quarantine_plan(managed_preview)
+                    state = _reload_unattended(
+                        log_dir, state_path, state, binding, identities, policy
+                    )
+                    previous_state = state
+                    status = _run_managed_quarantine(
+                        log_dir, state_path, state, apply=True
+                    )
+                    state = _load_state(state_path)
+                    _require_bookkeeping_transition(
+                        previous_state,
+                        state,
+                        stage,
+                        action="quarantine-apply",
+                        status=status,
+                        advance=status == 0,
+                    )
+                else:
+                    previous_state = state
+                    status = (
+                        _retain_dups(log_dir, state_path, state)
+                        if decision == "retain-dups"
+                        else _confirm_quarantine(state_path, state)
+                    )
                 if status != 0:
                     _require_collection_identities(state, identities)
+                    policy.require_current()
+                    policy.require_binding(state)
                     require_unattended_policy_binding(log_dir, state, policy)
                     print_synopsis(log_dir, state)
                     return status
-                state = _load_state(state_path)
-                _require_bookkeeping_transition(
-                    previous_state,
-                    state,
-                    stage,
-                    action=decision,
-                    status=0,
-                    advance=True,
-                )
+                if decision != "quarantine-dups":
+                    state = _load_state(state_path)
+                    _require_bookkeeping_transition(
+                        previous_state,
+                        state,
+                        stage,
+                        action=decision,
+                        status=0,
+                        advance=True,
+                    )
                 continue
 
             previous_state = state
@@ -1060,6 +1311,49 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
         if stage.mode == "checkpoint":
             review_files = _duplicate_review_files(log_dir, state)
             dups_present = _dups_metadata(state) is not None
+            preview = _latest_quarantine_preview(log_dir, state)
+            if (
+                review_files
+                and state.options.quarantine_destination is not None
+                and (dups_present or preview is not None)
+            ):
+                question = (
+                    (
+                        "Recover and verify the reviewed managed same-filesystem quarantine?"
+                        if not dups_present
+                        else "Apply the reviewed managed same-filesystem quarantine?"
+                    )
+                    if preview is not None
+                    else "Preview the saved managed same-filesystem quarantine destination?"
+                )
+                if not _prompt_yes_no(question):
+                    print("Interactive migration paused at managed quarantine review.")
+                    print_synopsis(log_dir, state)
+                    return 0
+                state = _reload_after_prompt(state_path, state, binding, identities)
+                previous_state = state
+                status = _run_managed_quarantine(
+                    log_dir, state_path, state, apply=preview is not None
+                )
+                state = _load_state(state_path)
+                _require_bookkeeping_transition(
+                    previous_state,
+                    state,
+                    stage,
+                    action=(
+                        "quarantine-apply"
+                        if preview is not None
+                        else "quarantine-preview"
+                    ),
+                    status=status,
+                    advance=preview is not None and status == 0,
+                )
+                if status != 0:
+                    print_synopsis(log_dir, state)
+                    return status
+                _require_operator_binding(state, binding)
+                _require_collection_identities(state, identities)
+                continue
             if not review_files:
                 question = "Record that no duplicate review files require disposition and no storage was reclaimed?"
                 action = "retain-dups"
@@ -1154,6 +1448,10 @@ def _dispatch_existing_state(
         status = _confirm_quarantine(state_path, state)
         print_synopsis(log_dir, _load_state(state_path))
         return status
+    if args.quarantine_dups:
+        status = _run_managed_quarantine(log_dir, state_path, state, apply=args.apply)
+        print_synopsis(log_dir, _load_state(state_path))
+        return status
     if args.retain_dups:
         status = _retain_dups(log_dir, state_path, state)
         print_synopsis(log_dir, _load_state(state_path))
@@ -1223,6 +1521,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="retain the reviewed dups tree in place without reclaiming storage",
     )
+    actions.add_argument(
+        "--quarantine-dups",
+        action="store_true",
+        help="preview or apply the managed same-filesystem dups quarantine",
+    )
     parser.add_argument(
         "--apply",
         action="store_true",
@@ -1268,6 +1571,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--workers", type=int)
     parser.add_argument("--no-cache", action="store_true", default=None)
     parser.add_argument(
+        "--quarantine-destination",
+        type=Path,
+        help="save the explicit retained destination for managed dups quarantine",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="emit the stable path-private migration report and exit",
@@ -1288,6 +1596,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.accept_status,
             args.confirm_quarantine,
             args.retain_dups,
+            args.quarantine_dups,
         )
     )
     if args.json and selected_action:
@@ -1302,8 +1611,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    if args.apply and not args.run_next:
-        print("--apply requires --run-next.", file=sys.stderr)
+    if args.apply and not (args.run_next or args.quarantine_dups):
+        print("--apply requires --run-next or --quarantine-dups.", file=sys.stderr)
         return 2
     if args.decode_timeout is not None and args.decode_timeout <= 0:
         print("--decode-timeout must be positive.", file=sys.stderr)
@@ -1383,6 +1692,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                     raise MigrationCoordinatorError(
                         "private resume directory must be distinct and non-nested with both collections"
                     )
+                quarantine_destination = (
+                    Path(state.options.quarantine_destination)
+                    if state.options.quarantine_destination is not None
+                    else None
+                )
+                _validate_quarantine_destination(
+                    quarantine_destination, baseline, working, log_dir
+                )
                 _require_matching_options(option_overrides, state)
                 return _dispatch_existing_state(args, log_dir, state_path, state)
 
@@ -1401,6 +1718,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 or args.accept_status
                 or args.confirm_quarantine
                 or args.retain_dups
+                or args.quarantine_dups
                 or args.json
             ):
                 raise MigrationCoordinatorError(
@@ -1422,6 +1740,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise MigrationCoordinatorError(
                 "private log directory must be distinct and non-nested with both collections"
             )
+        quarantine_destination_value = option_overrides.get("quarantine_destination")
+        quarantine_destination = (
+            Path(quarantine_destination_value)
+            if isinstance(quarantine_destination_value, str)
+            else None
+        )
+        _validate_quarantine_destination(
+            quarantine_destination, baseline, working, log_dir
+        )
         policy: MigrationPreauthorization | None = None
         if args.unattended is not None:
             policy = load_preauthorization(args.unattended, roots=(baseline, working))
@@ -1498,6 +1825,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             _configure_saved_logging(state.options, structured_json=args.json)
             _require_matching_options(option_overrides, state)
+            saved_quarantine_destination = (
+                Path(state.options.quarantine_destination)
+                if state.options.quarantine_destination is not None
+                else None
+            )
+            _validate_quarantine_destination(
+                saved_quarantine_destination, baseline, working, log_dir
+            )
             return _dispatch_existing_state(args, log_dir, state_path, state)
     except (
         MigrationCoordinatorError,

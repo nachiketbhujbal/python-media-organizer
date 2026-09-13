@@ -13,6 +13,7 @@ from pymo import (
     correct_extensions,
     migrate,
     organize,
+    quarantine,
     rename,
     scan,
     validate,
@@ -38,6 +39,7 @@ def _commands() -> dict[str, Callable[[Sequence[str] | None], int]]:
         "verify-migration": verify_migration.main,
         "correct-extensions": correct_extensions.main,
         "migrate": migrate.main,
+        "quarantine-dups": quarantine.main,
         "organize": organize.main,
         "rename": rename.main,
         "find-image-duplicates": images.main,
@@ -66,7 +68,9 @@ def _supports_show_files(command: str, cache_action: str | None) -> bool:
 
 
 def _supports_show_ignored(command: str, cache_action: str | None) -> bool:
-    return command != "cache" or cache_action in {"warm", "refresh"}
+    return command not in {"cache", "quarantine-dups"} or (
+        command == "cache" and cache_action in {"warm", "refresh"}
+    )
 
 
 def _contains_option(arguments: Sequence[str], options: set[str]) -> bool:
@@ -221,6 +225,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         and (args.config is not None or args.show_ignored)
     ):
         parser.error("--config and --show-ignored are not used by cache status")
+    if args.command == "quarantine-dups" and (
+        args.config is not None or args.show_ignored
+    ):
+        parser.error("--config and --show-ignored are not used by quarantine-dups")
     forwarded_options: list[str] = []
     if (args.show_ignored or show_full_details) and _supports_show_ignored(
         args.command, cache_action

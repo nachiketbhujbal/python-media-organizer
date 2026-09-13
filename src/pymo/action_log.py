@@ -36,6 +36,7 @@ class ActionOperation(StrEnum):
     RENAME = "RENAME"
     CREATE_DIRECTORY = "CREATE_DIR"
     REMOVE_DIRECTORY = "REMOVE_DIR"
+    QUARANTINE_TREE = "QUARANTINE_TREE"
 
     @property
     def is_file(self) -> bool:
@@ -50,6 +51,7 @@ class ToolId(StrEnum):
     IMAGE_DUPLICATES = "find_image_duplicates"
     VIDEO_DUPLICATES = "find_video_duplicates"
     CORRECT_EXTENSIONS = "correct_extensions"
+    MANAGED_QUARANTINE = "managed_quarantine"
 
 
 def _tool_value(tool: str) -> str:
@@ -178,6 +180,55 @@ class Action:
                 or self.identity is not None
             ):
                 raise ActionLogError("REMOVE_DIR requires only a before path")
+        elif operation is ActionOperation.QUARANTINE_TREE:
+            external_parts = self.after.split(":") if self.after else []
+            destination_device: int | None = None
+            destination_inode: int | None = None
+            identity = self.identity or {}
+            size = identity.get("size")
+            digest = identity.get("sha256")
+            source_device = identity.get("device")
+            source_inode = identity.get("inode")
+            if len(external_parts) == 4:
+                try:
+                    destination_device = int(external_parts[2])
+                    destination_inode = int(external_parts[3])
+                except ValueError:
+                    pass
+            if (
+                self.before != "dups"
+                or not self.after
+                or self.entry_type != "directory"
+                or set(identity) != {"size", "sha256", "device", "inode"}
+                or isinstance(size, bool)
+                or not isinstance(size, int)
+                or size < 0
+                or not isinstance(digest, str)
+                or len(digest) != 64
+                or any(character not in "0123456789abcdef" for character in digest)
+                or isinstance(source_device, bool)
+                or not isinstance(source_device, int)
+                or source_device < 0
+                or isinstance(source_inode, bool)
+                or not isinstance(source_inode, int)
+                or source_inode < 0
+                or len(external_parts) != 4
+                or external_parts[0] != "external"
+                or len(external_parts[1]) != 64
+                or any(
+                    character not in "0123456789abcdef"
+                    for character in external_parts[1]
+                )
+                or destination_device is None
+                or destination_device < 0
+                or destination_inode is None
+                or destination_inode < 0
+                or external_parts[2] != str(destination_device)
+                or external_parts[3] != str(destination_inode)
+            ):
+                raise ActionLogError(
+                    "QUARANTINE_TREE requires a source tree, external binding, and manifest identity"
+                )
 
     @classmethod
     def for_file(
@@ -261,6 +312,10 @@ class Action:
         )
 
     def reversed(self) -> Action:
+        if self.operation == ActionOperation.QUARANTINE_TREE:
+            raise ActionLogError(
+                "managed quarantine undo requires its explicit external target"
+            )
         if ActionOperation(self.operation).is_file:
             return Action(
                 operation=self.operation,
@@ -386,6 +441,8 @@ class ActionTransaction:
         self.run_id = str(uuid.uuid4())
         self.committed = False
         self.action_count = 0
+        self._planned_action_ids: set[str] = set()
+        self._completed_action_ids: set[str] = set()
         self.log._append(
             handle,
             {
@@ -397,7 +454,9 @@ class ActionTransaction:
             },
         )
 
-    def perform(self, action: Action) -> None:
+    def plan(self, action: Action) -> str:
+        """Durably record one action before a caller-owned atomic operation."""
+
         action_id = str(uuid.uuid4())
         self.log._append(
             self.handle,
@@ -408,7 +467,16 @@ class ActionTransaction:
                 "action": action.as_dict(),
             },
         )
-        self.log._execute_action(action)
+        self._planned_action_ids.add(action_id)
+        return action_id
+
+    def complete(self, action_id: str) -> None:
+        """Durably record completion of one action already planned by this run."""
+
+        if action_id not in self._planned_action_ids:
+            raise ActionLogError("cannot complete an action that was not planned")
+        if action_id in self._completed_action_ids:
+            raise ActionLogError("cannot complete an action more than once")
         self.log._append(
             self.handle,
             {
@@ -417,11 +485,19 @@ class ActionTransaction:
                 "action_id": action_id,
             },
         )
+        self._completed_action_ids.add(action_id)
         self.action_count += 1
+
+    def perform(self, action: Action) -> None:
+        action_id = self.plan(action)
+        self.log._execute_action(action)
+        self.complete(action_id)
 
     def commit(self) -> None:
         if self.committed:
             raise ActionLogError("transaction is already committed")
+        if self._planned_action_ids != self._completed_action_ids:
+            raise ActionLogError("transaction contains an incomplete action")
         self.log._append(
             self.handle,
             {
@@ -598,7 +674,14 @@ class ActionLog:
                     raise ActionLogError(
                         f"duplicate action ID in run {run_id}: {action_id}"
                     )
-                current_run.actions.append((action_id, Action.from_dict(value)))
+                action = Action.from_dict(value)
+                if (action.operation == ActionOperation.QUARANTINE_TREE) != (
+                    current_run.tool == ToolId.MANAGED_QUARANTINE
+                ):
+                    raise ActionLogError(
+                        "managed quarantine journal action has an invalid tool binding"
+                    )
+                current_run.actions.append((action_id, action))
             elif name == "ACTION_COMPLETED":
                 self._require_event_fields(event, {"action_id"}, index)
                 action_id = event.get("action_id")
@@ -720,9 +803,17 @@ class ActionLog:
                 for _, action in run.actions
                 if (key := self._identity_key(action)) is not None
             }
-            if target_paths.intersection(
-                self._paths(run)
-            ) or target_identities.intersection(identities):
+            run_paths = self._paths(run)
+            path_overlap = any(
+                first == second
+                or first.startswith(second + "/")
+                or second.startswith(first + "/")
+                for first in target_paths
+                for second in run_paths
+                if not first.startswith("external:")
+                and not second.startswith("external:")
+            )
+            if path_overlap or target_identities.intersection(identities):
                 blockers.append(run)
         return blockers
 
@@ -854,6 +945,10 @@ class ActionLog:
             raise ActionConflict("moved file failed identity verification")
 
     def _execute_action(self, action: Action) -> None:
+        if action.operation == ActionOperation.QUARANTINE_TREE:
+            raise ActionLogError(
+                "managed quarantine requires its dedicated external-target boundary"
+            )
         before = _absolute_path(self.root, action.before) if action.before else None
         after = _absolute_path(self.root, action.after) if action.after else None
         if ActionOperation(action.operation).is_file:
@@ -893,6 +988,10 @@ class ActionLog:
             raise ActionConflict(f"directory is not empty: {action.before}") from error
 
     def _forward_state(self, action: Action) -> str:
+        if action.operation == ActionOperation.QUARANTINE_TREE:
+            raise ActionLogError(
+                "managed quarantine recovery requires its explicit external target"
+            )
         before = _absolute_path(self.root, action.before) if action.before else None
         after = _absolute_path(self.root, action.after) if action.after else None
         if ActionOperation(action.operation).is_file:
@@ -963,6 +1062,10 @@ class ActionLog:
     def _simulate(self, actions: list[Action]) -> None:
         entries = self._snapshot()
         for action in actions:
+            if action.operation == ActionOperation.QUARANTINE_TREE:
+                raise ActionLogError(
+                    "managed quarantine undo requires its explicit external target"
+                )
             if ActionOperation(action.operation).is_file:
                 assert action.before and action.after and action.identity
                 if entries.get(action.before) != "file":
@@ -1018,6 +1121,10 @@ class ActionLog:
     @contextmanager
     def transaction(self, tool: str) -> Iterator[ActionTransaction]:
         tool = _tool_value(tool)
+        if tool == ToolId.MANAGED_QUARANTINE:
+            raise ActionLogError(
+                "managed quarantine requires its dedicated external-target boundary"
+            )
         with self._locked(create=True) as handle:
             runs = self._runs(self._read(handle))
             unresolved = [

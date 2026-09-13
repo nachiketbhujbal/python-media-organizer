@@ -86,6 +86,38 @@ def verification_outcome() -> dict[str, object]:
     )
 
 
+def test_managed_quarantine_outcome_is_strict_and_path_private() -> None:
+    value = outcome_record(
+        "quarantine-dups",
+        "quarantine",
+        "preview",
+        0,
+        {
+            "status": 0,
+            "files": 2,
+            "directories": 3,
+            "bytes": 12,
+            "manifest_sha256": "a" * 64,
+            "destination_sha256": "b" * 64,
+            "destination_parent_device": 1,
+            "destination_parent_inode": 2,
+            "decision_digest": "migration-decision-v1:" + "c" * 64,
+        },
+    )
+
+    assert value["data"]["files"] == 2  # type: ignore[index]
+    assert "/private/retained" not in json.dumps(value)
+    malformed = json.loads(json.dumps(value))
+    malformed["data"]["destination_sha256"] = "short"
+    with pytest.raises(MigrationOutcomeError):
+        validate_outcome(malformed)
+
+    malformed = json.loads(json.dumps(value))
+    malformed["result_kind"] = "simulated"
+    with pytest.raises(MigrationOutcomeError, match="result kind is unsupported"):
+        validate_outcome(malformed)
+
+
 def test_private_outcome_round_trip_is_path_private_and_no_replace(
     tmp_path: Path,
 ) -> None:
