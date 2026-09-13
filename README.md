@@ -429,9 +429,9 @@ console and per-stage log thresholds without changing visibility. Version
 0.6.7 adds explicit full, private, and quiet visibility profiles while keeping
 the path-private default and opt-in diagnostic persistence. Version 0.6.8 adds
 the explicit retained-in-place duplicate disposition while preserving the
-existing external-quarantine choice. The version 0.6.9 release candidate adds
-reversible same-filesystem managed quarantine and is planned to close the
-version 0.6 line. Version 0.7.0 begins the
+existing external-quarantine choice. Version 0.6.9 adds reversible
+same-filesystem managed quarantine and closes the version 0.6 line. Version
+0.7.0 begins the
 distinct cross-filesystem copy-and-verify boundary; a sequential
 manifest-backed queue and benchmark-proven scheduling follow as separate
 version 0.7 releases under

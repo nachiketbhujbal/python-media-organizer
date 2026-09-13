@@ -70,7 +70,7 @@ established external-quarantine alternative. It advances private restart state
 to schema 4, private unattended policy to schema 2, and the path-private
 migration report to schema 2. Pymo performs no move or deletion and reclaims no
 storage on the retained path; final ordinary verification remains fresh.
-The version 0.6.9 release candidate adds dry-run-first, reversible
+Version 0.6.9 adds dry-run-first, reversible
 same-filesystem managed quarantine for the complete reviewed `dups` tree. It binds a descriptor-pinned tree
 manifest and explicit destination, uses one atomic no-replace directory rename,
 appends strict action history, fully verifies the retained tree, and supports
@@ -78,7 +78,8 @@ exact-target undo plus interrupted-run recovery. The coordinator preserves
 separate preview/apply authority and advances restart state, private outcomes,
 unattended policy, and path-private reports to schemas 5, 3, 3, and 3. It never
 copies, deletes, or claims physical storage reclamation for a same-filesystem
-move.
+move. It is released under ADR 0106, with post-tag release truth recorded by
+ADR 0107.
 ADR 0105 makes version 0.6.9 the final version 0.6 release. Version 0.7.0
 through 0.7.7 retain the former plan's order: cross-filesystem managed
 quarantine, queue planning and execution, recovery and reporting, scheduler
@@ -1624,6 +1625,45 @@ The tagged artifacts carry version 0.6.8, safe relative members, and the exact
 Apache-2.0 license. Isolated and uv-managed installations report `pymo 0.6.8`.
 ADR 0104 records the separate post-tag release-truth reconciliation without
 moving or recreating the immutable tag.
+
+Version 0.6.9 is released under ADR 0106. It adds dry-run-first standalone and
+coordinator-managed retention of the complete reviewed `dups` tree at one
+explicit same-filesystem destination. The operation binds a complete
+descriptor-pinned no-follow manifest, revalidates the exact plan before apply,
+uses one atomic no-replace directory rename, appends strict collection action
+history, and freshly verifies the retained tree. Exact-target undo and
+interrupted-run recovery retain the same fail-closed content and endpoint
+boundaries. Restart state, private outcomes, unattended policy, and the public
+path-private report advance to schemas 5, 3, 3, and 3. The report distinguishes
+bytes removed from the working namespace from physical storage reclamation,
+which remains false on the shared filesystem. The release copies and deletes
+nothing.
+
+Independent Terra-medium review accepted exact final implementation head
+`2388d5811cb8ae1708bfd4023fd6227fa7012b33` without findings after separate
+design and working-tree audits. The complete owner gate passed all 655
+synthetic and real-FFmpeg tests at 87 percent subprocess-aware coverage plus
+the locked static, pre-commit, build, artifact, and installed-candidate checks.
+
+PR #65 full-platform run `34781201431` passed before the protected merge
+produced `2d24cc4afb631ab154e293605caee9b5ec867e4f`. Exact-main run
+`34781522839` passed the same platform set and unconditional gate. Annotated
+tag `v0.6.9` has object `a4571f5acff7fe7eb75a711556b55e589f9c0f11`,
+peels to that merge, and release run `34781773024` passed. A detached tagged
+build produced wheel SHA-256
+`a6d82305f17df9b58cf4617d7f65181daf7d3713efd5480470b2123b6ca47d76`
+and source-distribution SHA-256
+`a5dc3e2fae4712cacce725455ee5786c4ec09aec3fee3bc2a668f326bad36c46`.
+The tagged wheel passed isolated preview, apply, verification, undo-preview,
+and exact restoration of a synthetic retained tree. The iMac's uv-managed
+command reports `pymo 0.6.9`. ADR 0107 records the separate post-tag
+release-truth reconciliation without moving or recreating the immutable tag.
+
+Version 0.6 is now closed. Version 0.7.0 is the next bounded release and owns
+the distinct capacity-checked cross-filesystem copy, verify, and no-replace
+publication protocol. It must not enter as a fallback inside the
+same-filesystem rename contract. Queueing and scheduling remain later separate
+version 0.7 units.
 
 ## Media validation
 

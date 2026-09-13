@@ -665,6 +665,17 @@ privacy, recovery, undo, policy, report, or test defect.
 | QUAR-R02 | P1 | Schema-1 parsing accepted shallow malformed managed-tree actions and did not enforce the operation/tool association. | Resolved by exact `dups` source, identity-key/type/digest, destination-token, and bidirectional tool/operation validation during strict lifecycle parsing, with adversarial malformed-journal tests. |
 | QUAR-R03 | P1 | Exact owner candidate `1f0f287` dated the v0.6.9 changelog and marked the roadmap release as shipped before protected publication evidence existed. | Resolved by restoring `Unreleased`, `Release candidate`, and planned-final-release wording. Per ADR 0090 and the tagged v0.6.8 precedent, only the separate post-tag release-truth change may promote those claims after the protected merge, exact-main gate, annotated tag, and tag workflow are observed. |
 
+Renewed independent Terra-medium review accepted exact final owner head
+`2388d5811cb8ae1708bfd4023fd6227fa7012b33` without findings. It rechecked the
+complete managed-tree journal grammar, descriptor-pinned planning and apply
+boundary, atomic no-replace move, interruption reconciliation, exact undo,
+coordinator recovery, unattended-policy binding, report semantics, and
+candidate release truth from a separate detached worktree. PR #65 run
+`34781201431`, exact-main run `34781522839`, and tag release run `34781773024`
+then passed their applicable gates. ADR 0107 owns the separate post-tag status
+reconciliation; no implementation review finding is reopened by that
+documentation-only change.
+
 - Independent review rejected v0.6.0 candidate `6e700f0` with GUIDE-R04 and
   GUIDE-R05 after reproducing a warning-only validation that the loop crossed
   and a schema-valid same-binding lifecycle substitution that skipped six

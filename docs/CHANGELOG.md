@@ -2,7 +2,7 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
-## 0.6.9 - Unreleased
+## 0.6.9 - 2026-09-13
 
 - Add dry-run-first `pymo quarantine-dups COLLECTION DESTINATION` for one
   complete reviewed `dups` tree. Revalidate a descriptor-pinned manifest,
