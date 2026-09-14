@@ -15,6 +15,8 @@ needed by coding agents. Durable engineering documentation lives here:
   baseline, transformation, verification, quarantine, and sign-off sequence.
 - [Stable migration report](MIGRATION_REPORT.md) — schema 3 invocation,
   compatibility, privacy, and authority boundaries for `migrate --json`.
+- [Pre-authorized unattended policy](MIGRATION_POLICY.md) — schema 3 private
+  authority, file-safety, checkpoint, and resume boundaries.
 - [Architecture](ARCHITECTURE.md) — package boundaries and allowed dependency
   direction.
 - [Architecture decisions](adrs/README.md) — one durable decision per record.
@@ -43,13 +45,16 @@ The resulting operational evidence promotes an operator-first version 0.6
 sequence; ADR 0087 records its original fine-grained progression, and ADR 0105
 ends version 0.6 at same-filesystem operation before continuing
 cross-filesystem movement, queue execution, and measured concurrency in version
-0.7. Version 0.6.0 adds only the foreground safe operator loop; ADR
-0088 records its automatic-success and explicit-checkpoint boundaries. Version
-0.6.1 adds the explicit terminal-only interactive selector; ADR 0089 records
-its conservative per-question consent and private resume-state boundaries.
+0.7. ADR 0108 inserts reviewed unattended-policy authoring at version 0.7.1
+before queue execution. Version 0.6.0 adds only the foreground safe operator
+loop; ADR 0088 records its automatic-success and explicit-checkpoint
+boundaries. Version 0.6.1 adds the explicit terminal-only interactive selector;
+ADR 0089 records its conservative per-question consent and private resume-state
+boundaries.
 Version 0.6.8 adds retained-in-place duplicate disposition; ADR 0103 records
 its no-move, no-delete, no-storage-reclamation, and fresh-final-evidence
 boundaries. Version 0.6.9 adds reversible same-filesystem managed quarantine;
 ADR 0106 records its atomic no-replace, journal, undo, and fresh-verification
 boundaries, and ADR 0107 records its post-tag release truth. ADR 0105 records
-the current version 0.6 and 0.7 roadmap boundary.
+the version 0.6 and 0.7 boundary; ADR 0108 records the current version 0.7
+sequence through version 0.7.8.

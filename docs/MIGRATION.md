@@ -71,7 +71,9 @@ context, logging and visibility policy, duplicate disposition, queues, and
 benchmark-gated scheduling as separate later releases; [ADR
 0105](adrs/0105-end-v0.6-at-single-filesystem-operation.md) ends version 0.6 at
 same-filesystem operation and continues the broader orchestration in version
-0.7;
+0.7; [ADR
+0108](adrs/0108-author-reviewed-unattended-policies-before-queues.md) inserts
+reviewed unattended-policy authoring before queue execution;
 [ADR 0088](adrs/0088-safe-migration-operator-loop.md) records the first loop
 boundary, and
 [ADR 0089](adrs/0089-interactive-migration-checkpoints.md) records interactive

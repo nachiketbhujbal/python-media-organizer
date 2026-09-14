@@ -431,11 +431,11 @@ the path-private default and opt-in diagnostic persistence. Version 0.6.8 adds
 the explicit retained-in-place duplicate disposition while preserving the
 existing external-quarantine choice. Version 0.6.9 adds reversible
 same-filesystem managed quarantine and closes the version 0.6 line. Version
-0.7.0 begins the
-distinct cross-filesystem copy-and-verify boundary; a sequential
-manifest-backed queue and benchmark-proven scheduling follow as separate
-version 0.7 releases under
-[ADR 0105](docs/adrs/0105-end-v0.6-at-single-filesystem-operation.md).
+0.7.0 begins the distinct cross-filesystem copy-and-verify boundary. Version
+0.7.1 then adds reviewed authoring for the strict unattended policy that the
+one-command executor already consumes; a sequential manifest-backed queue and
+benchmark-proven scheduling follow as separate version 0.7 releases under
+[ADR 0108](docs/adrs/0108-author-reviewed-unattended-policies-before-queues.md).
 
 ### Verify a migration by exact bytes and media content
 
@@ -1167,7 +1167,8 @@ preservation engine and made operator supervision, outcome reporting, and
 single-filesystem duplicate disposition the version 0.6 theme under
 [ADR 0087](docs/adrs/0087-operator-first-migration-roadmap.md). ADR 0105 ends
 that line at version 0.6.9 and begins multi-filesystem and multi-collection
-orchestration at version 0.7.0. Version 0.6.0
+orchestration at version 0.7.0; ADR 0108 inserts reviewed unattended-policy
+authoring at version 0.7.1 before queue work. Version 0.6.0
 adds the foreground safe operator loop under
 [ADR 0088](docs/adrs/0088-safe-migration-operator-loop.md); version 0.6.1 adds
 terminal-only checkpoint consent under
