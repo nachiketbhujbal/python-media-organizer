@@ -472,17 +472,19 @@ aliased, nested, unstable, or unresolvable migration roots through the shared
 filesystem-identity boundary. Version 0.5.13 reconciles the authoritative
 release documentation and begins privacy-preserving workflow trials on existing
 real collections without changing product behavior. ADR 0087 originally
-promotes a fine-grained operator-experience sequence, and ADR 0105 ends version
-0.6 at the single-filesystem boundary before continuing broader orchestration
-in version 0.7. Versions 0.6.0 through 0.6.5 build
+promotes a fine-grained operator-experience sequence, ADR 0105 ends version
+0.6 at the single-filesystem boundary, and ADR 0108 inserts reviewed
+unattended-policy authoring before queue orchestration in version 0.7. Versions
+0.6.0 through 0.6.5 build
 safe automatic advancement, interactive checkpoints, human and machine
 reports, concise resume, and separately pre-authorized unattended execution;
 0.6.6 and 0.6.7 separate logging from visibility policy; and 0.6.8 and 0.6.9
 separate retained-in-place from same-filesystem duplicate disposition. Version
-0.7.0 adds cross-filesystem managed quarantine; 0.7.1 through 0.7.4 build a
-sequential queue in manifest, execution, recovery, and reporting steps; and
-0.7.5 through 0.7.7 measure before enabling bounded intra-collection and
-cross-collection scheduling.
+0.7.0 adds cross-filesystem managed quarantine; 0.7.1 adds reviewed
+unattended-policy authoring; 0.7.2 through 0.7.5 build a sequential queue in
+manifest, execution, recovery, and reporting steps; and 0.7.6 through 0.7.8
+measure before enabling bounded intra-collection and cross-collection
+scheduling.
 Version 0.6.0 layers safe automatic advancement over the unchanged one-stage
 engine and stops at every existing decision boundary. Version 0.6.1 adds
 terminal-only, conservative questions at those existing checkpoints, records

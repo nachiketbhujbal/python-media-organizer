@@ -793,10 +793,26 @@ Operational trials confirmed that a human should not have to re-enter the same
 coordinator shape for every stage or remain present merely to advance routine
 success. [ADR 0088](adrs/0088-safe-migration-operator-loop.md) implements that
 bounded foreground loop in 0.6.0 without crossing a decision and conservative
-terminal-only checkpoint questions in 0.6.1. ADR 0087 promotes manifest
-planning through queue reporting and measurement before bounded scheduling;
-ADR 0105 assigns those units to versions 0.7.1 through 0.7.4 and 0.7.5 through
-0.7.7 respectively. Rescue copying remains separate research.
+terminal-only checkpoint questions in 0.6.1. Version 0.6.5 implements exact
+pre-authorized unattended execution, but operational acceptance still required
+manual construction of its private policy from a separately reviewed run. [ADR
+0108](adrs/0108-author-reviewed-unattended-policies-before-queues.md) promotes
+reviewed policy authoring into version 0.7.1 before a queue can depend on those
+policies. ADR 0087 promotes manifest planning through queue reporting and
+measurement before bounded scheduling; ADR 0108 now assigns those units to
+versions 0.7.2 through 0.7.5 and 0.7.6 through 0.7.8 respectively. Rescue
+copying remains separate research.
+
+The policy-authoring implementation must plan against the exact target that
+will later run unattended. It needs a zero-media-mutation representation of
+every deterministic namespace transition so later validation, duplicate,
+disposition, and final-verification expectations are derived from the same
+descriptor-pinned bytes rather than borrowed from another root or guessed from
+aggregates. A generated candidate is not consent: every root, version, option,
+checkpoint decision, expected outcome, mutation-plan digest, and quarantine
+binding must remain reviewable, and a distinct explicit acceptance step must
+precede unattended use. A stage that cannot be modeled safely makes the plan
+incomplete and cannot receive authority.
 
 The planned queue and the still-unplanned copy workflow must cover:
 

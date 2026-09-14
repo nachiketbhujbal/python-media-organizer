@@ -6,6 +6,14 @@ It is intentionally stricter than a general “yes to all” option: every
 validation review, apply, duplicate disposition, and final sign-off must be
 named separately with the exact preceding result it may cross.
 
+Version 0.6.9 consumes and verifies this policy but does not author it. The
+current operator must prepare the private JSON from separately reviewed
+coordinator evidence. [ADR
+0108](adrs/0108-author-reviewed-unattended-policies-before-queues.md) promotes a
+target-local, zero-media-mutation full plan plus separate review and acceptance
+workflow for version 0.7.1; planning status does not change the released
+command below.
+
 For a new run:
 
 ```bash

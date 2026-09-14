@@ -80,10 +80,11 @@ unattended policy, and path-private reports to schemas 5, 3, 3, and 3. It never
 copies, deletes, or claims physical storage reclamation for a same-filesystem
 move. It is released under ADR 0106, with post-tag release truth recorded by
 ADR 0107.
-ADR 0105 makes version 0.6.9 the final version 0.6 release. Version 0.7.0
-through 0.7.7 retain the former plan's order: cross-filesystem managed
-quarantine, queue planning and execution, recovery and reporting, scheduler
-measurement, and bounded scheduling.
+ADR 0105 makes version 0.6.9 the final version 0.6 release. ADR 0108 inserts
+reviewed unattended-policy authoring at version 0.7.1: version 0.7.0 remains
+cross-filesystem managed quarantine, and queue planning, execution, recovery,
+reporting, scheduler measurement, and bounded scheduling continue in order
+through version 0.7.8.
 Version 0.5.7 pluralizes the
 architecture-decision directory as
 `docs/adrs/` without changing runtime or package behavior. Version 0.5.8
@@ -487,9 +488,10 @@ use, but the stage-by-stage operator experience is the dominant shortcoming.
 Version 0.6 is therefore planned as small, independently accepted releases
 covering the operator loop, interactive consent, human and machine reports,
 resume and unattended policy, logging and visibility, and single-filesystem
-duplicate disposition. ADR 0105 makes version 0.6.9 its endpoint and continues
-cross-filesystem movement, sequential queue operation, and storage-aware
-bounded scheduling as version 0.7. The plan changes no current runtime behavior.
+duplicate disposition. ADR 0105 makes version 0.6.9 its endpoint, and ADR 0108
+places reviewed unattended-policy authoring after cross-filesystem movement and
+before sequential queue operation and storage-aware bounded scheduling in
+version 0.7. The plan changes no current runtime behavior.
 Private collection identities, paths, statistics, and detailed timing evidence
 remain outside this public repository.
 
@@ -1662,8 +1664,9 @@ release-truth reconciliation without moving or recreating the immutable tag.
 Version 0.6 is now closed. Version 0.7.0 is the next bounded release and owns
 the distinct capacity-checked cross-filesystem copy, verify, and no-replace
 publication protocol. It must not enter as a fallback inside the
-same-filesystem rename contract. Queueing and scheduling remain later separate
-version 0.7 units.
+same-filesystem rename contract. Version 0.7.1 then owns reviewed authoring of
+the exact private policy already consumed by unattended execution; queueing and
+scheduling remain later separate version 0.7 units through version 0.7.8.
 
 ## Media validation
 
@@ -1936,7 +1939,7 @@ patch through the version 0.1 foundation, version 0.2 inspection and hardening,
 version 0.3 stabilization, version 0.4 preservation and cache foundation, and
 version 0.5 migration-verification and production-readiness sequence, the
 version 0.6 operator-experience sequence promoted by ADR 0087, and the version
-0.7 orchestration continuation allocated by ADR 0105.
+0.7 orchestration continuation allocated by ADR 0105 and refined by ADR 0108.
 `docs/CHANGELOG.md` is the shipped-behavior record. Keep these roles separate
 instead of maintaining duplicate feature inventories.
 

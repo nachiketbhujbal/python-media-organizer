@@ -220,7 +220,9 @@ too repetitive for long unattended work.
 operator experience—not another media transformation—the version 0.6 theme.
 [ADR 0105](adrs/0105-end-v0.6-at-single-filesystem-operation.md) ends that line
 at the single-filesystem boundary in version 0.6.9 and continues
-multi-filesystem and multi-collection orchestration in version 0.7.
+multi-filesystem and multi-collection orchestration in version 0.7. [ADR
+0108](adrs/0108-author-reviewed-unattended-policies-before-queues.md) inserts
+reviewed unattended-policy authoring before queue orchestration.
 
 | Version | Primary purpose | Acceptance boundary | Status |
 | --- | --- | --- | --- |
@@ -235,21 +237,22 @@ multi-filesystem and multi-collection orchestration in version 0.7.
 | 0.6.8 | Retained-in-place duplicate disposition | Integrate the existing without-`dups` simulation into the operator flow so a reviewed tree may remain in place with an honest simulated preservation disposition and an explicit statement that no storage was reclaimed. Do not silently change ordinary physical verification. | Released |
 | 0.6.9 | Same-filesystem managed quarantine | Add dry-run-first, descriptor-relative, atomic no-replace movement of a reviewed duplicate tree to a retained quarantine on the same filesystem, with journal, undo, interruption, and fresh post-move verification boundaries. | Released |
 | 0.7.0 | Cross-filesystem managed quarantine | Add an explicit capacity-checked copy, verify, and no-replace publication protocol for retained quarantine across filesystems, with restart and failure semantics distinct from same-filesystem movement. Never treat it as an implicit move fallback. | Planned |
-| 0.7.1 | Queue manifest and planning | Define and validate a declarative local manifest binding each baseline, working collection, private state, quarantine destination, policy, and desired disposition; report a complete execution plan without running it. | Planned |
-| 0.7.2 | Sequential queue execution | Execute validated manifest entries sequentially by default, isolate every collection's state, and stop safely on the first unhandled outcome. | Planned |
-| 0.7.3 | Queue recovery | Resume individual collection jobs without rerunning completed work, define retry and skip policy, and preserve every fresh-evidence boundary. | Planned |
-| 0.7.4 | Queue synopsis | Aggregate stable per-collection outcomes into a path-private queue report without allowing one collection's success to mask another's failure or uncertainty. | Planned |
-| 0.7.5 | Storage-aware scheduler measurements | Model stage dependencies and storage topology and collect representative CPU, memory, thermal, cache-lock, and device-contention evidence without enabling new concurrency. | Planned |
-| 0.7.6 | Bounded intra-collection scheduling | Enable only benchmark-proven independent work within one collection, with explicit limits, current cache-publication safety, and a sequential fallback. | Planned |
-| 0.7.7 | Bounded cross-collection scheduling | Add storage-aware cross-collection execution and later-collection cache warming only where measured topology and workload evidence show a material benefit; remain sequential by default. | Planned |
+| 0.7.1 | Reviewable full migration plan and unattended-policy authoring | Build a complete target-local plan by composing every deterministic namespace transition without mutating media, derive the exact checkpoint evidence and decision bindings needed by unattended execution, expose the result for review, and require a separate explicit acceptance step before it becomes authority. Stop when any later-stage result cannot be derived safely. | Planned |
+| 0.7.2 | Queue manifest and planning | Define and validate a declarative local manifest binding each baseline, working collection, private state, quarantine destination, policy, and desired disposition; report a complete execution plan without running it. | Planned |
+| 0.7.3 | Sequential queue execution | Execute validated manifest entries sequentially by default, isolate every collection's state, and stop safely on the first unhandled outcome. | Planned |
+| 0.7.4 | Queue recovery | Resume individual collection jobs without rerunning completed work, define retry and skip policy, and preserve every fresh-evidence boundary. | Planned |
+| 0.7.5 | Queue synopsis | Aggregate stable per-collection outcomes into a path-private queue report without allowing one collection's success to mask another's failure or uncertainty. | Planned |
+| 0.7.6 | Storage-aware scheduler measurements | Model stage dependencies and storage topology and collect representative CPU, memory, thermal, cache-lock, and device-contention evidence without enabling new concurrency. | Planned |
+| 0.7.7 | Bounded intra-collection scheduling | Enable only benchmark-proven independent work within one collection, with explicit limits, current cache-publication safety, and a sequential fallback. | Planned |
+| 0.7.8 | Bounded cross-collection scheduling | Add storage-aware cross-collection execution and later-collection cache warming only where measured topology and workload evidence show a material benefit; remain sequential by default. | Planned |
 
 The sequence deliberately gives each patch one primary acceptance purpose. It
 separates the operator loop from checkpoint consent, human output from a stable
 report schema, saved context from unattended authority, logging from visibility
-policy, logical duplicate disposition from physical movement, queue declaration
-from execution and recovery, and measurement from concurrency. Each release
-requires its own implementation evidence and independent review; planning
-status is not shipped behavior.
+policy, logical duplicate disposition from physical movement, policy execution
+from reviewed policy authoring, queue declaration from execution and recovery,
+and measurement from concurrency. Each release requires its own implementation
+evidence and independent review; planning status is not shipped behavior.
 
 ## Later promoted work
 
