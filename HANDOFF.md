@@ -54,7 +54,10 @@ part of a new-job declaration. See `docs/QUEUE_PLANNING.md`.
 
 A passing plan does not check media, capacity, authored namespace freshness or
 future destination availability. These remain mandatory execution boundaries.
-Independent exact-SHA review and release gates are pending. No production
+Independent Terra-medium review accepted implementation `dee1f44` after
+QUEUE-R01 and QUEUE-R02 were resolved; 133 focused owner and reviewer tests
+passed. Complete coverage and hosted release gates remain pending at this
+candidate checkpoint. No production
 collection, baseline, workbook, cleanup or PyPI operation belongs to this work.
 
 ## Version 0.7.1 release

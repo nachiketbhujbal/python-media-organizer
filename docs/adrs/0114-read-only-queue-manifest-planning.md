@@ -1,6 +1,6 @@
 # ADR 0114: Read-only queue manifest planning
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-07
 - Builds on: ADR 0108, ADR 0112
 
@@ -46,7 +46,10 @@ remain outside queue scope.
 
 ## Acceptance evidence
 
-The final contract, synthetic safety tests, complete local gates and independent
-review evidence will be recorded before this decision is accepted. No production
-collection, cleanup operation, workbook or external publication is part of
-manifest planning.
+Independent Terra-medium review accepted corrected implementation `dee1f44`
+after QUEUE-R01 and QUEUE-R02 were resolved. The owner and reviewer each passed
+133 focused queue/policy tests. Static checks, all-file hooks, builds and an
+isolated installed-package plan/refusal check passed. Complete coverage and
+protected hosted gates are separate release prerequisites. No production
+collection, cleanup operation, workbook or external publication is performed
+by manifest planning.

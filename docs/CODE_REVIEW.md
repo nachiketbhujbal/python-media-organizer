@@ -957,3 +957,13 @@ inode is opened. Relative policy locators containing `..` retain compatibility
 through lexical normalization before no-follow traversal. Renewed review and
 the final complete gate are required for this correction; earlier results are
 not its release proof.
+
+Independent Terra-medium review accepted exact corrected implementation
+`dee1f44c7acbf3cbd3b53e15da1d10ef7bcaa49d`, closed QUEUE-R01 and QUEUE-R02,
+and found no further actionable issues. The reviewer independently ran all 133
+queue-planning and policy-authoring tests and checked the complete diff. The
+owner also passed those 133 tests, Ruff, Black, mypy, all-file hooks, source/wheel
+builds and an isolated installed two-job planning/refusal check. Every packaged
+source/config byte matched that exact candidate. The final complete coverage
+suite and protected hosted gates remain separate publication prerequisites;
+this record does not claim a release or production sign-off.
