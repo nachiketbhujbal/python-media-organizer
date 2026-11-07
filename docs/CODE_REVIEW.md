@@ -826,3 +826,18 @@ The owner also ran both actual-device engine/coordinator tests successfully.
 These are implementation and artifact acceptance facts; merge, release tag,
 installed production version, hosted gates and production readiness remain
 separate evidence.
+
+## Version 0.7.0 publication evidence
+
+The independently accepted final candidate `fe28e12` passed PR #69 run
+`42334776314`, merged as `2af3cb4`, and passed exact-main run `42335212722`.
+After explicit maintainer approval, annotated tag `v0.7.0` was published at that
+merge and tagged run `42335973647` passed. The installed command reports
+`pymo 0.7.0`. ADR 0111 records artifact identities and the separate release-truth
+reconciliation; no acceptance claim relies on a skipped platform gate.
+
+Independent review of release-truth head `3c90715` found RELEASE-TRUTH-R01:
+the authoritative `migrate --json` instruction still named report schema 3.
+The owner corrected it to the implemented schema 4 while preserving read-only,
+privacy and compatibility requirements. The other release claims and safety
+boundaries were accepted; renewed exact-head documentation review is required.

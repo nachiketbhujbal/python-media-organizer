@@ -32,7 +32,7 @@ still necessary to prove cross-filesystem copying and interruption recovery.
 Keep existing baseline, active-run, and quarantine paths stable: archiving an
 old trial changes the locations that saved resume and undo expect.
 
-The unreleased v0.7.0 [retained-copy candidate](QUARANTINE_COPY.md) adds explicit
+The v0.7.0 [retained-copy command](QUARANTINE_COPY.md) adds explicit
 cross-filesystem copying with originals retained. It does not automate initial
 copying, source retirement, or metadata consolidation. Its report schema 4 is
 historical bookkeeping; later execution and sign-off recheck the copy freshly.

@@ -757,7 +757,7 @@ quarantine into 0.7.0 under the revised boundary in [ADR
 0105](adrs/0105-end-v0.6-at-single-filesystem-operation.md). ADR 0103 defines
 the retained-in-place contract, and ADR 0106 delivers the same-filesystem
 movement contract with an exact tree manifest, atomic no-replace rename,
-append-only journal, recovery, and undo. ADR 0110 defines the separate candidate copy, publication, capacity, and
+append-only journal, recovery, and undo. ADR 0110 delivers the separate copy, publication, capacity, and
 recovery protocol while retaining source duplicates. It does not implement
 source deletion or claim filesystem metadata preservation.
 Permanent deletion remains research and is not implied by any quarantine
@@ -775,13 +775,13 @@ a simulated complete result still requires retained quarantine plus ordinary
 fresh post-move verification. Version 0.6.8 integrates the simulation into an
 honest retained-in-place outcome without weakening ordinary verification.
 Version 0.6.9 adds the separate same-filesystem managed move and immediate exact
-retained-tree proof; version 0.7.0 retains the unresolved cross-filesystem
-boundary.
+retained-tree proof; version 0.7.0 adds explicit cross-filesystem retained
+copying with verified publication and strict artifact accounting.
 
 [ADR 0109](adrs/0109-migration-readiness-and-manual-retirement.md) clarifies
 that cross-filesystem retention must preserve source media and report copying
-separately from source retirement and reclaimed space. Its implementation ADR
-must make that retained-source state explicit. Metadata inspection/export and
+separately from source retirement and reclaimed space. ADR 0110
+makes that retained-source state explicit. Metadata inspection/export and
 rescue-copy automation remain separate capabilities; until implemented, manual
 review and a separately verified copying procedure must satisfy the readiness
 requirements or production must wait. Queue reporting cannot close those gaps
