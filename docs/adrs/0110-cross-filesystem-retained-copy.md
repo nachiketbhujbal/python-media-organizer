@@ -39,8 +39,11 @@ Append a dedicated strict copy operation to the collection action journal
 before staging. Bind an exclusive staging name and destination parent; record
 staging identity before copying any media. Scratch has its own separately journal-bound sibling directory outside the
 publishable stage. Partial file writes use exclusive UUID scratch names. Each exclusive empty
-file is synced and its token and device/inode are durably recorded before any
-media bytes are written. Artifact completion records allocation, not copied
+file is synced and its token, device/inode, destination-relative path, size
+and expected SHA-256 are durably recorded before any media bytes are written.
+Account for every recorded artifact at either its exact scratch leaf or its
+exact staged/published destination; verify destination identity and bytes.
+Reject missing artifacts and staged files without a recorded allocation. Artifact completion records allocation, not copied
 content; full tree verification establishes the latter. Unknown names and
 replacement leaf identities are refused. A crash before the leaf identity
 record leaves an unadoptable orphan requiring operator review. A complete file

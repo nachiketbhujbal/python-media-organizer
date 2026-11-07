@@ -349,7 +349,10 @@ def test_retained_target_change_during_final_source_check_prevents_commit(
         return result
 
     monkeypatch.setattr(copying, "_manifest_at", change_after_target_verification)
-    with pytest.raises(ManagedQuarantineError, match="changed before journal commit"):
+    with pytest.raises(
+        ManagedQuarantineError,
+        match=r"changed before journal commit|changed after publication",
+    ):
         copying.apply_copy(copying.plan_copy(root, target, 0))
     events = [
         json.loads(line) for line in action_log_path(root).read_text().splitlines()
@@ -568,3 +571,76 @@ def test_interrupted_scratch_leaf_record_requires_exact_recorded_identity(
         with pytest.raises(ManagedQuarantineError, match="unrecorded"):
             copying.recover_copy(root, target, 0)
         assert not target.exists()
+
+
+def test_missing_recorded_partial_prevents_recovery_commit(
+    tmp_path: Path, simulated_devices: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, target = collection(tmp_path)
+    original = copying._write_bytes
+
+    def partial(source, destination):
+        os.write(destination, b"partial")
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(copying, "_write_bytes", partial)
+    with pytest.raises(KeyboardInterrupt):
+        copying.apply_copy(copying.plan_copy(root, target, 0))
+    scratch = next(target.parent.glob("*-partial"))
+    artifact = next(scratch.iterdir())
+    saved = target.parent / "externally-retained-partial"
+    artifact.rename(saved)
+    before = action_log_path(root).read_bytes()
+    monkeypatch.setattr(copying, "_write_bytes", original)
+    with pytest.raises(ManagedQuarantineError, match="missing"):
+        copying.recover_copy(root, target, 0)
+    assert not target.exists()
+    assert saved.read_bytes() == b"partial"
+    assert action_log_path(root).read_bytes() == before
+
+
+def test_file_publication_interruption_accounts_for_the_exact_staged_artifact(
+    tmp_path: Path, simulated_devices: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, target = collection(tmp_path)
+    original = copying._atomic_rename_without_replace
+    staged_inode = None
+
+    def interrupted(source_parent, source_name, destination_parent, destination_name):
+        nonlocal staged_inode
+        original(source_parent, source_name, destination_parent, destination_name)
+        if destination_name == "first.bin":
+            staged_inode = os.stat(destination_name, dir_fd=destination_parent).st_ino
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(copying, "_atomic_rename_without_replace", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        copying.apply_copy(copying.plan_copy(root, target, 0))
+    monkeypatch.setattr(copying, "_atomic_rename_without_replace", original)
+    copying.recover_copy(root, target, 0)
+    assert (target / "pics" / "first.bin").stat().st_ino == staged_inode
+    assert media(target) == media(root / "dups")
+
+
+def test_equal_bytes_in_unrecorded_staged_file_do_not_inherit_copy_authority(
+    tmp_path: Path, simulated_devices: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, target = collection(tmp_path)
+    original = copying._write_bytes
+    monkeypatch.setattr(
+        copying, "_write_bytes", lambda *_: (_ for _ in ()).throw(KeyboardInterrupt())
+    )
+    with pytest.raises(KeyboardInterrupt):
+        copying.apply_copy(copying.plan_copy(root, target, 0))
+    stage = next(
+        path
+        for path in target.parent.glob(".pymo-copy-*")
+        if not path.name.endswith("-partial")
+    )
+    (stage / "pics" / "first.bin").write_bytes(
+        (root / "dups" / "pics" / "first.bin").read_bytes()
+    )
+    monkeypatch.setattr(copying, "_write_bytes", original)
+    with pytest.raises(ManagedQuarantineError, match="unrecorded copied file"):
+        copying.recover_copy(root, target, 0)
+    assert not target.exists()

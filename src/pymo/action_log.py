@@ -245,8 +245,21 @@ class Action:
             if (copy_binding.artifact_name is not None) != artifact:
                 raise ActionLogError("invalid retained-copy artifact binding")
             identity = self.identity or {}
+            source_parts = PurePosixPath(self.before or "").parts
+            valid_source = (
+                (
+                    bool(self.before)
+                    and len(source_parts) > 1
+                    and source_parts[0] == "dups"
+                    and ".." not in source_parts
+                    and "\0" not in (self.before or "")
+                    and PurePosixPath(self.before or "").as_posix() == self.before
+                )
+                if artifact
+                else self.before == "dups"
+            )
             if (
-                self.before != "dups"
+                not valid_source
                 or self.entry_type != ("file" if artifact else "directory")
                 or set(identity) != {"size", "sha256", "device", "inode"}
                 or any(
@@ -783,11 +796,15 @@ class ActionLog:
                         assert action.identity is not None
                         first_identity = current_run.actions[0][1].identity
                         assert first_identity is not None
-                        expected_size = first_identity["size"] if position < 3 else 0
+                        expected_size = (
+                            first_identity["size"]
+                            if position < 3
+                            else action.identity["size"]
+                        )
                         expected_hash = (
                             first_identity["sha256"]
                             if position < 3
-                            else hashlib.sha256(b"").hexdigest()
+                            else action.identity["sha256"]
                         )
                         if (
                             action.identity["device"] != binding.parent_device

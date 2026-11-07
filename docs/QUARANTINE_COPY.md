@@ -35,8 +35,11 @@ pymo quarantine-dups "/path/to/collection" "/other-filesystem/retained-tree" --c
 Recovery accepts only the exact journal-bound source, destination parent,
 stage, and scratch identities. It freshly rehashes completed staged files before
 reusing them. Incomplete scratch files remain in a separate private sibling
-area. Each has a journal-bound UUID and file identity recorded before copying;
-unrecorded or substituted leaves require operator review. On retry, a new exclusive file receives the retry. Scratch never enters the final
+area. Each has a journal-bound UUID, file identity, destination-relative path
+and expected bytes recorded before copying. Recovery accounts for every
+recorded artifact at its exact scratch or staged/published location; missing,
+unrecorded or substituted files require operator review. Retried copying uses
+a new exclusive file. Scratch never enters the final
 published tree. A fully published tree awaiting journal completion must be the
 recorded staging directory itself, not merely an equal-looking replacement.
 

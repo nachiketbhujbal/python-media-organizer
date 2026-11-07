@@ -795,3 +795,18 @@ The initial candidate passed 687 tests with two distinct-filesystem fixtures
 skipped in the ordinary macOS run; those fixtures were independently exercised
 on a disposable APFS volume. That earlier passing gate did not detect these
 review findings and is not acceptance of the corrected candidate.
+
+### Renewed candidate review at 88f2b09
+
+Independent Terra-medium review traced COPY-R01 and the injected/replaced-leaf
+portion of COPY-R02 as corrected, but reproduced **COPY-R03 (P2)** on synthetic
+data: removing a recorded partial from scratch still allowed recovery to
+commit. **Resolved in candidate, renewed review pending:** each artifact now
+binds its destination-relative path and expected bytes as well as its identity.
+Recovery accounts for every artifact in scratch or at that exact copied path,
+rejects missing artifacts, and rejects even equal-byte staged files without
+recorded allocation. Dedicated regressions cover removed partials, interruption
+after an atomic per-file publication, and unrecorded staged files. The owner
+also repeated actual distinct-filesystem and installed-artifact acceptance for
+88f2b09; its complete suite passed 693 tests with the same two ordinary-run
+filesystem skips. Those results precede the COPY-R03 correction.

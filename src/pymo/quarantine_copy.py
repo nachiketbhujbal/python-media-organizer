@@ -11,9 +11,9 @@ import os
 import stat
 import uuid
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TextIO
 
 from pymo.action_log import Action, ActionLog, ActionTransaction, RunRecord, ToolId
@@ -329,21 +329,38 @@ def _require_identity(parent: int, name: str, identity: tuple[int, int]) -> None
 
 
 def _scratch_evidence(
-    descriptor: int, artifacts: dict[str, tuple[int, int]]
+    descriptor: int, tree: int, artifacts: dict[str, Action]
 ) -> tuple[int, int]:
     total = 0
     initial = _namespace_snapshot(descriptor)
-    names = os.listdir(descriptor)
-    for name in names:
-        try:
-            if str(uuid.UUID(name)) != name:
-                _error("unexpected retained scratch entry")
-        except ValueError as error:
-            raise ManagedQuarantineError("unexpected retained scratch entry") from error
-        with _file(descriptor, name) as fd:
-            if artifacts.get(name) != _identity(os.fstat(fd)):
-                _error("unrecorded or replaced retained scratch artifact")
-            total += os.fstat(fd).st_size
+    names = set(os.listdir(descriptor))
+    if not names.issubset(artifacts):
+        _error("unrecorded or replaced retained scratch artifact")
+    published: set[bytes] = set()
+    for name, action in artifacts.items():
+        assert action.identity is not None and action.before is not None
+        if name in names:
+            with _file(descriptor, name) as fd:
+                if _record_identity(action) != _identity(os.fstat(fd)):
+                    _error("unrecorded or replaced retained scratch artifact")
+                total += os.fstat(fd).st_size
+        else:
+            parts = PurePosixPath(action.before).parts[1:]
+            with ExitStack() as stack:
+                parent = tree
+                for part in parts[:-1]:
+                    parent = stack.enter_context(_child_directory(parent, part))
+                fd = stack.enter_context(_file(parent, parts[-1]))
+                if (
+                    _record_identity(action) != _identity(os.fstat(fd))
+                    or os.fstat(fd).st_size != action.identity["size"]
+                    or _hash_file(fd) != action.identity["sha256"]
+                ):
+                    _error("recorded artifact is missing or changed after publication")
+            published.add(b"/".join(os.fsencode(part) for part in parts))
+    present = {path for path, kind, _ in _namespace_snapshot(tree) if kind == "file"}
+    if present != published:
+        _error("staging contains an unrecorded copied file")
     if initial != _namespace_snapshot(descriptor):
         _error("retained scratch changed")
     return len(names), total
@@ -368,7 +385,7 @@ def _populate(
     evidence: CopyEvidence,
     parent: int,
     reserve: int,
-    record_artifact: Callable[[str, int], None],
+    record_artifact: Callable[[str, int, CopyEntry], None],
 ) -> None:
     expected = {entry.parts: entry for entry in evidence.entries}
 
@@ -413,7 +430,7 @@ def _populate(
                 try:
                     os.fsync(output)
                     os.fsync(scratch)
-                    record_artifact(temporary, output)
+                    record_artifact(temporary, output, entry)
                     _write_bytes(input_fd, output)
                     os.fsync(output)
                 finally:
@@ -500,15 +517,39 @@ def _run_copy(
         stage_identity = _record_identity(actions[1][1])
         scratch_identity = _record_identity(actions[2][1])
         _require_identity(parent.descriptor, binding.scratch_name, scratch_identity)
-        artifacts: dict[str, tuple[int, int]] = {}
+        artifacts: dict[str, Action] = {}
         for _, artifact in actions[3:]:
             artifact_binding = CopyBinding.decode(artifact.after or "")
             assert artifact_binding.artifact_name is not None
-            artifacts[artifact_binding.artifact_name] = _record_identity(artifact)
+            parts = PurePosixPath(artifact.before or "").parts[1:]
+            source_entry = next(
+                (entry for entry in plan.evidence.entries if entry.parts == parts), None
+            )
+            if (
+                source_entry is None
+                or source_entry.directory
+                or artifact.identity is None
+                or (artifact.identity["size"], artifact.identity["sha256"])
+                != (source_entry.size, source_entry.sha256)
+            ):
+                _error("artifact intent does not match its bound source entry")
+            artifacts[artifact_binding.artifact_name] = artifact
         with _child_directory(
             parent.descriptor, binding.scratch_name, scratch_identity
         ) as scratch:
-            _scratch_evidence(scratch, artifacts)
+
+            def account_artifacts() -> tuple[int, int]:
+                location = (
+                    binding.stage_name
+                    if _leaf_state(parent.descriptor, binding.stage_name) is not None
+                    else target_name
+                )
+                with _child_directory(
+                    parent.descriptor, location, stage_identity
+                ) as tree:
+                    return _scratch_evidence(scratch, tree, artifacts)
+
+            account_artifacts()
             for artifact_id, artifact in actions[3:]:
                 if artifact_id not in completed:
                     pending_name = CopyBinding.decode(
@@ -516,21 +557,23 @@ def _run_copy(
                     ).artifact_name
                     assert pending_name is not None
                     with _file(scratch, pending_name) as fd:
-                        if _identity(os.fstat(fd)) != artifacts[pending_name]:
+                        if _identity(os.fstat(fd)) != _record_identity(
+                            artifacts[pending_name]
+                        ):
                             _error("pending retained scratch artifact changed")
                     _complete(log, handle, run.run_id, artifact_id)
                     completed.add(artifact_id)
 
-            def record_artifact(name: str, descriptor: int) -> None:
+            def record_artifact(name: str, descriptor: int, entry: CopyEntry) -> None:
                 state = os.fstat(descriptor)
                 artifact = Action(
                     copy_operations()[3],
-                    "dups",
+                    "/".join(("dups", *entry.parts)),
                     replace(binding, artifact_name=name).encode(),
                     "file",
                     {
-                        "size": 0,
-                        "sha256": hashlib.sha256(b"").hexdigest(),
+                        "size": entry.size,
+                        "sha256": entry.sha256,
                         "device": state.st_dev,
                         "inode": state.st_ino,
                     },
@@ -548,7 +591,7 @@ def _run_copy(
                 actions.append((artifact_id, artifact))
                 _complete(log, handle, run.run_id, artifact_id)
                 completed.add(artifact_id)
-                artifacts[name] = _identity(state)
+                artifacts[name] = artifact
 
             stage_present = (
                 _leaf_state(parent.descriptor, binding.stage_name) is not None
@@ -607,7 +650,7 @@ def _run_copy(
                 _manifest_at(collection.descriptor, "dups"), plan.source
             ):
                 _error("source changed after copy publication")
-            files, byte_count = _scratch_evidence(scratch, artifacts)
+            files, byte_count = account_artifacts()
         _require_directory_path_identity(collection.path, collection.identity)
         _require_directory_path_identity(parent.path, parent.identity)
         _require_identity(parent.descriptor, target_name, stage_identity)
