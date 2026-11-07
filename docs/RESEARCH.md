@@ -815,8 +815,9 @@ copying remains separate research.
 
 ADR 0112 implements the retained-in-place authoring path released in v0.7.1;
 ADR 0113 records its verified release boundary. ADR 0114 implements the v0.7.2
-candidate's queue declaration checks without execution, media/capacity evidence,
-or authority creation. Queue execution, recovery and synopsis remain separately
+released queue declaration checks without execution, media/capacity evidence,
+or authority creation; ADR 0115 records the verified release boundary.
+Queue execution, recovery and synopsis remain separately
 promoted work; general rescue copying remains research.
 Future managed-quarantine identities cannot be predicted without mutation;
 a compatible authoring contract for that topology remains an explicit open

@@ -967,3 +967,17 @@ builds and an isolated installed two-job planning/refusal check. Every packaged
 source/config byte matched that exact candidate. The final complete coverage
 suite and protected hosted gates remain separate publication prerequisites;
 this record does not claim a release or production sign-off.
+
+
+## Version 0.7.2 publication evidence
+
+Final independently accepted candidate `2c807f8` passed PR #73 run
+`42391958578` and merged as `481e16de0504c2cd09a365710d73ed8ec7100902`. The complete
+owner gate passed 830 tests with two existing distinct-filesystem skips at
+88 percent subprocess-aware coverage; all static, hook, build, archive and
+installed-package checks passed. Exact-main run `42392567482` passed
+every required platform and quality gate before immutable tag `v0.7.2` was
+published. Tagged run `42393170285` passed. ADR 0115 records exact
+artifact identities and the installed `pymo 0.7.2` command. The maintainer
+requested a pause before further evaluation or engineering. No production
+collection, workbook, cleanup or PyPI publication was involved.

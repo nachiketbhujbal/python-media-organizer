@@ -120,3 +120,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0112](0112-target-local-policy-authoring.md) | Target-local policy authoring |
 | [0113](0113-v0.7.1-release-truth.md) | Version 0.7.1 release truth after publication |
 | [0114](0114-read-only-queue-manifest-planning.md) | Read-only queue manifest planning |
+| [0115](0115-v0.7.2-release-truth.md) | Version 0.7.2 release truth after publication |
