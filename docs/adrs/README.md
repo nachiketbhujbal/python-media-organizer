@@ -114,3 +114,5 @@ old one rather than rewriting why the earlier choice was made.
 | [0106](0106-same-filesystem-managed-quarantine.md) | Same-filesystem managed quarantine |
 | [0107](0107-v0.6.9-release-truth.md) | V0.6.9 post-tag release truth |
 | [0108](0108-author-reviewed-unattended-policies-before-queues.md) | Author reviewed unattended policies before queues |
+
+- [0109: Migration readiness and manual retirement](0109-migration-readiness-and-manual-retirement.md)

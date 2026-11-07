@@ -25,6 +25,18 @@ points and define their verdict relative to the declared media-collection
 scope. They must not silently turn system-managed or ignored trees into proven
 absence, and they must not claim whole-device recovery.
 
+## Current engineering direction
+
+ADR 0109 retains the promoted sequence through v0.7.5 and makes its completion
+a production-readiness reassessment point. The migration runbook now names peak
+capacity, byte versus media-content preservation, protected baselines, separate
+initial copying, fresh final evidence, and operator-managed retirement as
+explicit requirements. Required engineering gates remain; repeated routine
+pilots do not. Targeted real acceptance uses disposable baseline copies and
+must answer an unresolved question. Ordinary development needs no production
+source access. No collection cleanup, baseline mutation, or release is implied
+by this documentation change.
+
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the

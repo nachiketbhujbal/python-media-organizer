@@ -6,6 +6,32 @@ transform, and sign off that collection. It is intentionally explicit. A
 successful pymo report proves only its named, namespace-visible evidence
 contract; it does not prove whole-device recovery.
 
+## Production readiness checklist
+
+Complete the planned engineering sequence through 0.7.5 before reassessing a
+broad migration. A version number or completed queue alone does not establish
+readiness. Apply [ADR 0109](adrs/0109-migration-readiness-and-manual-retirement.md):
+
+- Protect unrelated destination content and unchanged baselines. Audit obsolete
+  trials read-only and retain journals before proposing retirement.
+- Review the peak space needed by each batch, including staging, retained
+  duplicates, working copies, and a reserve. Moving folders into a holding area
+  does not reclaim storage; apparent clone sizes do not predict freed space.
+- Review byte-distinct metadata/container variants separately from byte-identical
+  duplicates. Pixel/playback equivalence does not prove those bytes survived.
+- Select an explicit initial-copy procedure; the planned queue operates on
+  existing baseline/working pairs and does not perform rescue copying.
+- Prove fresh validation and complete preservation under the named contract,
+  review excluded or uncertain content, and obtain human sign-off before source
+  retirement. Any deletion, Trash cleanup, or formatting is operator-managed.
+
+Development uses synthetic fixtures and only targeted tests on disposable
+copies of preserved baselines. It does not require repeated production pilots
+or repeated access to production source storage. Distinct-filesystem tests are
+still necessary to prove cross-filesystem copying and interruption recovery.
+Keep existing baseline, active-run, and quarantine paths stable: archiving an
+old trial changes the locations that saved resume and undo expect.
+
 ## Availability
 
 - Versions through 0.5.6 provide scan, validation, organization, deterministic

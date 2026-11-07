@@ -254,12 +254,28 @@ from reviewed policy authoring, queue declaration from execution and recovery,
 and measurement from concurrency. Each release requires its own implementation
 evidence and independent review; planning status is not shipped behavior.
 
+## Production readiness after the queue sequence
+
+[ADR 0109](adrs/0109-migration-readiness-and-manual-retirement.md) makes the
+completion of 0.7.0 through 0.7.5 the planned reassessment point, not automatic
+production approval. The readiness checklist is in
+[MIGRATION.md](MIGRATION.md#production-readiness-checklist).
+Capacity must cover peak staged and retained data, and byte-distinct variants
+need explicit review even when displayed pixels or playback match. Initial
+copying/rescue and eventual operator cleanup remain separate from queueing.
+Concurrency is not required before production use.
+
+Required engineering gates continue. Repeated operational pilots are not a
+release ritual: use a targeted isolated working copy only for a specific
+unresolved acceptance question, preserving its baseline and avoiding production
+source access during ordinary development.
+
 ## Later promoted work
 
 The post-v0.5.13 trials are complete enough to promote the version 0.6 and 0.7
 sequence above. Collection names, paths, media, statistics, and identifying
-metadata remain outside the repository. Further trials may refine acceptance
-criteria, but do not silently change a planned release.
+metadata remain outside the repository. Targeted acceptance evidence may refine criteria under ADR 0109, but does not
+silently change a planned release.
 
 These have an accepted product direction but no release number yet:
 
