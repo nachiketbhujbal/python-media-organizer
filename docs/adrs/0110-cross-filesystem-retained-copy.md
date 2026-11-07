@@ -1,6 +1,6 @@
 # ADR 0110: Copy retained quarantine across filesystems
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-06
 - Applies: ADR 0106, ADR 0109
 
@@ -115,4 +115,5 @@ verified completed-file reuse; no deletion or truncation during recovery;
 copy-specific reporting; exact policy binding; and unchanged rename/undo.
 Use synthetic distinct-filesystem fixtures for actual cross-device proof and
 controlled failures for boundary attacks. Repeated real-collection pilots are
-not required. This proposed ADR is a design reservation, not shipped behavior.
+not required. Independent implementation review accepted `57e0fdf`; release publication and
+production readiness remain separate evidence.
