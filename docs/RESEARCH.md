@@ -813,6 +813,11 @@ measurement before bounded scheduling; ADR 0108 now assigns those units to
 versions 0.7.2 through 0.7.5 and 0.7.6 through 0.7.8 respectively. Rescue
 copying remains separate research.
 
+ADR 0112 implements the retained-in-place authoring path as a v0.7.1 candidate.
+Future managed-quarantine identities cannot be predicted without mutation;
+a compatible authoring contract for that topology remains an explicit open
+question. Existing exact schema-4 quarantine checks are not weakened.
+
 The policy-authoring implementation must plan against the exact target that
 will later run unattended. It needs a zero-media-mutation representation of
 every deterministic namespace transition so later validation, duplicate,

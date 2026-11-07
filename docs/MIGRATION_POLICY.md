@@ -6,12 +6,13 @@ It is intentionally stricter than a general “yes to all” option: every
 validation review, apply, duplicate disposition, and final sign-off must be
 named separately with the exact preceding result it may cross.
 
-This document describes the released v0.7.0 schema-4 policy. Version
-0.6.9 consumes schema 3. Neither version authors policies. The operator must prepare the private JSON from separately reviewed
-coordinator evidence. [ADR
-0108](adrs/0108-author-reviewed-unattended-policies-before-queues.md) promotes a
-target-local, zero-media-mutation full plan plus separate review and acceptance
-workflow for version 0.7.1; policy authoring remains separate from this release.
+Version 0.7.0 introduced schema 4. The v0.7.1 candidate continues accepting
+schema 4 and adds schema 5 for policies created by the separate
+[plan, review, and accept workflow](POLICY_AUTHORING.md). The new schema binds
+initial source identity and each planned namespace in addition to the exact
+checkpoint expectations documented here. Authoring supports retained-in-place,
+no-cache execution and refuses future managed-quarantine identities; manually
+reviewed schema-4 managed workflows retain their existing checks.
 
 For a new run:
 

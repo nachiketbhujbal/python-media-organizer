@@ -117,3 +117,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0109](0109-migration-readiness-and-manual-retirement.md) | Migration readiness and manual retirement |
 | [0110](0110-cross-filesystem-retained-copy.md) | Cross-filesystem retained copy |
 | [0111](0111-v0.7.0-release-truth.md) | Version 0.7.0 release truth after publication |
+| [0112](0112-target-local-policy-authoring.md) | Target-local policy authoring |

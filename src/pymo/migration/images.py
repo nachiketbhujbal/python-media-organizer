@@ -87,7 +87,7 @@ def _inspect_group(
         try:
             with open_stable_file(
                 root,
-                entry.path,
+                entry.read_path,
                 entry.state,
                 "migration image inspection",
             ) as descriptor:

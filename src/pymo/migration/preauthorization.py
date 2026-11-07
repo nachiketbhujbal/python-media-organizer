@@ -17,9 +17,9 @@ from pymo.migration.coordinator_state import (
 )
 
 # This identifies the public pre-authorization policy compatibility contract.
-# Version 4 binds the explicit quarantine method and reserve through saved
-# options and requires an exact reviewed tree-move plan before unattended apply.
-MIGRATION_PREAUTHORIZATION_SCHEMA_VERSION = 4
+# Version 5 adds authored initial/stage namespace bindings. Version 4 remains
+# accepted for explicitly hand-authored policies, including managed quarantine.
+MIGRATION_PREAUTHORIZATION_SCHEMA_VERSION = 5
 
 
 class MigrationPreauthorizationError(RuntimeError):
@@ -581,6 +581,13 @@ class MigrationPreauthorization:
     working: Path
     options: dict[str, bool | int | str | None]
     authorizations: dict[str, tuple[str, dict[str, Any]]]
+    plan_binding: dict[str, Any] | None = None
+
+    def require_target(self, state: MigrationState) -> None:
+        if self.plan_binding is not None:
+            from pymo.migration.policy_binding import require_plan_binding
+
+            require_plan_binding(self.plan_binding, state)
 
     def require_current(self) -> None:
         payload, identity = _read_private_policy(self.path)
@@ -686,6 +693,11 @@ def load_preauthorization(
         raise MigrationPreauthorizationError(
             "pre-authorization policy is not valid JSON"
         ) from error
+    authored = (
+        isinstance(value, dict)
+        and type(value.get("schema_version")) is int
+        and value["schema_version"] == 5
+    )
     policy = _require_exact_fields(
         value,
         {
@@ -695,10 +707,14 @@ def load_preauthorization(
             "working",
             "options",
             "authorizations",
-        },
+        }
+        | ({"plan_binding"} if authored else set()),
         "record",
     )
-    if policy["schema_version"] != MIGRATION_PREAUTHORIZATION_SCHEMA_VERSION:
+    if type(policy["schema_version"]) is not int or policy["schema_version"] not in {
+        4,
+        MIGRATION_PREAUTHORIZATION_SCHEMA_VERSION,
+    }:
         raise MigrationPreauthorizationError(
             "pre-authorization policy schema is unsupported"
         )
@@ -745,6 +761,19 @@ def load_preauthorization(
         raise MigrationPreauthorizationError(
             "managed quarantine requires an explicit saved destination"
         )
+    plan_binding = None
+    if authored:
+        from pymo.migration.policy_binding import validate_plan_binding
+
+        plan_binding = validate_plan_binding(policy["plan_binding"])
+        if set(checkpoints) != set(_CHECKPOINT_ORDER) or managed_quarantine is not None:
+            raise MigrationPreauthorizationError(
+                "authored policy must authorize the complete retained workflow"
+            )
+        if dict(parsed)["duplicate-disposition"][0] != "retain-dups":
+            raise MigrationPreauthorizationError(
+                "authored policy requires retained duplicates"
+            )
     return MigrationPreauthorization(
         path=path,
         payload_sha256=hashlib.sha256(payload).hexdigest(),
@@ -754,6 +783,7 @@ def load_preauthorization(
         working=working,
         options=options,
         authorizations=dict(parsed),
+        plan_binding=plan_binding,
     )
 
 

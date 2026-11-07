@@ -16,7 +16,7 @@ import os
 import re
 import sys
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -781,6 +781,7 @@ def plan_video_moves(
     apply: bool,
     *,
     summary: bool = False,
+    exists: Callable[[Path], bool] = os.path.lexists,
 ) -> list[VideoMove]:
     move_plan: list[VideoMove] = []
     reserved_targets: set[str] = set()
@@ -797,6 +798,7 @@ def plan_video_moves(
                 duplicate.path,
                 next_number,
                 reserved_targets,
+                exists=exists,
             )
             next_number = used_number + 1
             move_plan.append((kept, duplicate, target))

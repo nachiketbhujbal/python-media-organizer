@@ -87,6 +87,11 @@ class MediaCandidate:
     kind: MediaKind
     extension_kind: MediaKind | None
     detected_kind: str
+    source_path: Path | None = None
+
+    @property
+    def read_path(self) -> Path:
+        return self.path if self.source_path is None else self.source_path
 
 
 @dataclass(frozen=True)
@@ -359,7 +364,7 @@ def validate_image(
     byte_sha256: str | None = None
     try:
         with open_stable_file(
-            candidate.root, candidate.path, candidate.state, "image validation"
+            candidate.root, candidate.read_path, candidate.state, "image validation"
         ) as descriptor:
             if hash_content:
                 byte_sha256 = sha256_descriptor(descriptor)
@@ -418,7 +423,7 @@ def validate_image(
         ValueError,
     ):
         try:
-            candidate.state.require_unchanged(candidate.path, "image validation")
+            candidate.state.require_unchanged(candidate.read_path, "image validation")
         except FileChangedError:
             findings = [_changed_finding(candidate)]
             byte_sha256 = None
@@ -684,7 +689,7 @@ def validate_video(
         raise VideoInspectionError("ffprobe is required for non-empty video")
     try:
         with open_stable_file(
-            candidate.root, candidate.path, candidate.state, "video validation"
+            candidate.root, candidate.read_path, candidate.state, "video validation"
         ) as descriptor:
             if hash_content:
                 byte_sha256 = sha256_descriptor(descriptor)
@@ -706,7 +711,7 @@ def validate_video(
         byte_sha256 = None
     except (OSError, VideoInspectionError):
         try:
-            candidate.state.require_unchanged(candidate.path, "video validation")
+            candidate.state.require_unchanged(candidate.read_path, "video validation")
         except FileChangedError:
             findings = [_changed_finding(candidate)]
             byte_sha256 = None

@@ -51,6 +51,7 @@ from pymo.migration.outcome import (
     write_outcome,
 )
 from pymo.organize import discover_files, path_key
+from pymo.planning import PlanningView
 from pymo.progress import ProgressMeter
 
 
@@ -203,9 +204,16 @@ def canonical_match(name: str, collection: str) -> re.Match[str] | None:
 
 
 def build_rename_plan(
-    root: Path, classifier: Classifier, config: PymoConfig
+    root: Path,
+    classifier: Classifier,
+    config: PymoConfig,
+    *,
+    view: PlanningView | None = None,
+    show_progress: bool = True,
 ) -> tuple[list[RenameRecord], int, list[Path], list[Path]]:
-    paths, skipped_links, ignored = discover_files(root, config)
+    paths, skipped_links, ignored = (
+        discover_files(root, config) if view is None else (view.paths(), [], [])
+    )
     collection = collection_slug(root.name)
     candidates: dict[str, list[tuple[Path, str | None, str | None]]] = {
         "image": [],
@@ -217,9 +225,14 @@ def build_rename_plan(
         len(paths), None, config.performance.progress_interval_seconds
     )
 
-    print(f"Classifying {len(paths)} file(s) in {root}")
+    if show_progress:
+        print(f"Classifying {len(paths)} file(s) in {root}")
     for path in paths:
-        kind, _ = classifier.classify(path)
+        kind, _ = (
+            classifier.classify(path)
+            if view is None
+            else view.classify(path, classifier)
+        )
         if kind in {"picture", "video"}:
             output_kind = "image" if kind == "picture" else "video"
             existing = canonical_match(path.stem, collection)
@@ -230,14 +243,20 @@ def build_rename_plan(
                 already_named += 1
             else:
                 timestamp = (
-                    embedded_image_timestamp(path) if output_kind == "image" else None
+                    (
+                        embedded_image_timestamp(path)
+                        if view is None
+                        else view.timestamp(path)
+                    )
+                    if output_kind == "image"
+                    else None
                 ) or timestamp_from_name(path.name)
                 descriptor = clean_descriptor(
                     path.stem, collection, config.rename.noise_tokens
                 )
                 candidates[output_kind].append((path, timestamp, descriptor))
         progress_message = progress.advance("classified")
-        if progress_message:
+        if progress_message and show_progress:
             print(f"  {progress_message}")
 
     occupied = {path_key(path) for path in paths}
@@ -261,7 +280,9 @@ def build_rename_plan(
                 if descriptor:
                     parts.append(descriptor)
                 target = source.with_name("__".join(parts) + source.suffix)
-                if path_key(target) not in occupied and not os.path.lexists(target):
+                if path_key(target) not in occupied and not (
+                    os.path.lexists(target) if view is None else view.exists(target)
+                ):
                     occupied.add(path_key(target))
                     break
                 sequence += 1

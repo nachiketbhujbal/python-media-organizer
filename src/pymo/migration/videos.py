@@ -140,7 +140,10 @@ def _probe_group(
     for entry in entries:
         try:
             with open_stable_file(
-                root, entry.path, entry.state, "migration video structure inspection"
+                root,
+                entry.read_path,
+                entry.state,
+                "migration video structure inspection",
             ) as descriptor:
                 probe = probe_video(descriptor, ffprobe)
         except (FileChangedError, OSError, VideoInspectionError) as error:
@@ -209,7 +212,7 @@ def _fingerprint_groups(
         try:
             with open_stable_file(
                 inventory.root,
-                value.entry.path,
+                value.entry.read_path,
                 value.entry.state,
                 "migration video playback inspection",
             ) as descriptor:

@@ -37,6 +37,25 @@ must answer an unresolved question. Ordinary development needs no production
 source access. No collection cleanup, baseline mutation, or release is implied
 by this documentation change.
 
+## Version 0.7.1 candidate
+
+ADR 0112 implements target-local virtual planning with separate digest-bound
+review and acceptance. `policy.py` coordinates private candidate schema 1;
+`migration/policy_plan.py`, `plan_analysis.py`, and `virtual.py` compose the
+existing deterministic transformation and exact-media policies over unchanged
+source descriptors. `policy_files.py` owns exclusive private artifact I/O and
+`policy_binding.py` adds fresh per-stage namespace checks to authored policy
+schema 5. Existing schema-4 manually authored policies remain supported.
+
+The authoring path is complete for retained-in-place, no-cache execution.
+It refuses future managed-quarantine identities, existing working action
+history, unsafe/ambiguous namespaces, and uninspectable media. It never writes
+media or collection state during planning/acceptance, creates no scratch media,
+and stops on unexpected execution evidence. Partially applied children still
+require reviewed journal recovery; automatic queue recovery remains later work.
+See `docs/POLICY_AUTHORING.md`. Release gates and independent exact-SHA review
+are pending; version 0.7.1 is not yet released.
+
 ## Version 0.7.0 release
 
 ADR 0110 accepts explicit cross-filesystem retained copying. The new

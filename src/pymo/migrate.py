@@ -969,6 +969,7 @@ def _bind_unattended_policy(
     policy: MigrationPreauthorization,
 ) -> MigrationState:
     policy.require_run_binding(state)
+    policy.require_target(state)
     binding_path = unattended_policy_binding_path(log_dir)
     if not os.path.lexists(binding_path):
         if state.unattended_policy_sha256 is not None:
@@ -1009,6 +1010,7 @@ def _run_unattended(
             _require_collection_identities(state, identities)
             policy.require_current()
             policy.require_binding(state)
+            policy.require_target(state)
             require_unattended_policy_binding(log_dir, state, policy)
 
             successful_review = _successful_validation_review(state)
@@ -1867,6 +1869,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 assert policy is not None
                 policy.require_binding(state)
+                policy.require_target(state)
                 policy.require_current()
                 if os.path.lexists(binding_path):
                     require_unattended_policy_binding(log_dir, state, policy)

@@ -92,6 +92,8 @@ def analyze_corrections(
     root: Path,
     config: PymoConfig,
     ffprobe_path: Path | None = None,
+    *,
+    show_progress: bool = True,
 ) -> CorrectionAnalysis:
     """Discover and inspect a complete collection without mutating it."""
 
@@ -107,7 +109,8 @@ def analyze_corrections(
         len(paths), None, config.performance.progress_interval_seconds
     )
 
-    print(f"Inspecting extension truth for {len(paths)} file(s) in {root}")
+    if show_progress:
+        print(f"Inspecting extension truth for {len(paths)} file(s) in {root}")
     for path in paths:
         try:
             state = FileState.capture(path)
@@ -165,7 +168,7 @@ def analyze_corrections(
                 "a file changed while extension truth was inspected"
             ) from error
         progress_message = progress.advance("inspected")
-        if progress_message:
+        if progress_message and show_progress:
             print(f"  {progress_message}")
 
     return CorrectionAnalysis(

@@ -455,6 +455,17 @@ one-command executor already consumes; a sequential manifest-backed queue and
 benchmark-proven scheduling follow as separate version 0.7 releases under
 [ADR 0108](docs/adrs/0108-author-reviewed-unattended-policies-before-queues.md).
 
+### Author a reviewed unattended policy
+
+The v0.7.1 candidate adds a complete target-local preview through
+`pymo policy plan BASELINE WORKING`. `policy review` shows its checkpoint
+expectations; separate `policy accept --sha256 ... --apply` publishes authority
+without starting migration. This authoring path retains duplicates in place and
+uses fresh reads with `--no-cache`. Future managed-quarantine identities and
+other unprovable transitions are refused, never guessed. See the
+[authoring guide](docs/POLICY_AUTHORING.md) for the private output and acceptance
+commands, supported scope, and interruption limits.
+
 ### Verify a migration by exact bytes and media content
 
 ```bash
