@@ -2,6 +2,14 @@
 
 All notable changes to `python-media-organizer` will be recorded here.
 
+## Unreleased
+
+- Clarify production-readiness requirements for the planned sequence through
+  v0.7.5: peak capacity, protected baselines, byte-distinct variant review,
+  separately verified initial copying, fresh preservation evidence, and
+  operator-managed cleanup. Require targeted acceptance tests rather than
+  repetitive operational pilots. No runtime or release behavior changes.
+
 ## 0.6.9 - 2026-09-13
 
 - Add dry-run-first `pymo quarantine-dups COLLECTION DESTINATION` for one

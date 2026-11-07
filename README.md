@@ -93,6 +93,16 @@ The two duplicate finders have strict ownership. The image finder reads only
 folders. The video finder reads only `vids` and writes only `dups/vids`; it does
 not require or touch the picture folders.
 
+## Migration readiness
+
+The planned sequence through v0.7.5 adds cross-filesystem retention, reviewed
+policy authoring, and sequential queue planning, execution, recovery, and
+reporting. It is a production-readiness reassessment point, not permission to
+clear source storage. Follow the [readiness checklist](docs/MIGRATION.md#production-readiness-checklist)
+for peak space, byte-distinct metadata variants, protected baselines, initial
+copying, fresh preservation checks, and operator-managed cleanup. Further
+routine pilots and later concurrency features are not prerequisites.
+
 ## Configuration and ignored metadata
 
 Every forward command uses the same local-only TOML configuration system.

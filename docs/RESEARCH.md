@@ -777,6 +777,15 @@ Version 0.6.9 adds the separate same-filesystem managed move and immediate exact
 retained-tree proof; version 0.7.0 retains the unresolved cross-filesystem
 boundary.
 
+[ADR 0109](adrs/0109-migration-readiness-and-manual-retirement.md) clarifies
+that cross-filesystem retention must preserve source media and report copying
+separately from source retirement and reclaimed space. Its implementation ADR
+must make that retained-source state explicit. Metadata inspection/export and
+rescue-copy automation remain separate capabilities; until implemented, manual
+review and a separately verified copying procedure must satisfy the readiness
+requirements or production must wait. Queue reporting cannot close those gaps
+by itself, and repeated pilots are not a substitute for resolving them.
+
 ## Migration orchestration and queues
 
 Version 0.5.11 implements the promoted single-collection coordination boundary.
