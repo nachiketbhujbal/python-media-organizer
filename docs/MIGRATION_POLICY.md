@@ -6,12 +6,12 @@ It is intentionally stricter than a general “yes to all” option: every
 validation review, apply, duplicate disposition, and final sign-off must be
 named separately with the exact preceding result it may cross.
 
-This document describes the unreleased v0.7.0 schema-4 candidate. Released
-v0.6.9 consumes schema 3. Neither version authors policies. The operator must prepare the private JSON from separately reviewed
+This document describes the released v0.7.0 schema-4 policy. Version
+0.6.9 consumes schema 3. Neither version authors policies. The operator must prepare the private JSON from separately reviewed
 coordinator evidence. [ADR
 0108](adrs/0108-author-reviewed-unattended-policies-before-queues.md) promotes a
 target-local, zero-media-mutation full plan plus separate review and acceptance
-workflow for version 0.7.1; policy authoring remains separate from this candidate.
+workflow for version 0.7.1; policy authoring remains separate from this release.
 
 For a new run:
 
@@ -69,7 +69,7 @@ the same command with the same byte-identical policy recovers the creation time
 from that binding and publishes the missing initial state without replacing the
 record. Any disagreement still fails closed.
 
-## Candidate schema 4
+## Schema 4
 
 The top-level object has exactly these fields:
 
@@ -286,7 +286,7 @@ collection, use `--run`, `--interactive`, the human synopsis, and `--json` to
 review the evidence first; authoring broad guesses is expected to stop safely,
 not to make the coordinator permissive.
 
-The unreleased v0.7.0 candidate consumes schema 4; released v0.6.9 consumes
+Version 0.7.0 consumes schema 4; version 0.6.9 consumes
 schema 3. Copy mode requires an explicit nonnegative
 `options.quarantine_copy_reserve_bytes`, `quarantine_plan.method` equal to
 `copy`, the identical reserve, and exact aggregate metadata observations plus

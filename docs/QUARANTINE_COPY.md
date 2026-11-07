@@ -1,8 +1,8 @@
 # Cross-filesystem retained copying
 
-This is the unreleased v0.7.0 contract. The installed v0.6.9 command supports
-same-filesystem movement only. Copy mode is explicit and never an automatic
-fallback from that movement.
+Version 0.7.0 supports explicit cross-filesystem retained copying. Version
+0.6.9 supports same-filesystem movement only. Copy mode is explicit and never
+an automatic fallback from that movement.
 
 ```bash
 pymo quarantine-dups "/path/to/collection" "/other-filesystem/retained-tree" --copy --copy-reserve-bytes 1073741824

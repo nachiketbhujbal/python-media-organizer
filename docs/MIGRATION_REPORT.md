@@ -1,6 +1,6 @@
 # Stable migration report
 
-The unreleased v0.7.0 candidate `pymo migrate --json` emits schema 4 of the public, path-private migration
+Version 0.7.0 `pymo migrate --json` emits schema 4 of the public, path-private migration
 report. It projects the coordinator's already-recorded strict stage outcomes;
 it does not scan either collection, create new evidence, advance the workflow,
 or authorize a mutation or deletion.

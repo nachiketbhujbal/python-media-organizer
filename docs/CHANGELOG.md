@@ -4,7 +4,11 @@ All notable changes to `python-media-organizer` will be recorded here.
 
 ## Unreleased
 
-- Add a v0.7.0 candidate explicit cross-filesystem retained-copy mode with a
+No unreleased changes.
+
+## 0.7.0 - 2026-11-07
+
+- Add explicit cross-filesystem retained-copy mode with a
   required reserve, descriptor-pinned byte evidence, journal-bound staging and
   separate scratch, verified no-replace publication, and strict recovery.
   Retain all originals and interrupted scratch; never delete, overwrite, or

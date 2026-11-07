@@ -37,7 +37,7 @@ must answer an unresolved question. Ordinary development needs no production
 source access. No collection cleanup, baseline mutation, or release is implied
 by this documentation change.
 
-## Version 0.7.0 candidate
+## Version 0.7.0 release
 
 ADR 0110 accepts explicit cross-filesystem retained copying. The new
 `quarantine_copy.py` owns source evidence, staged copying, publication and
@@ -48,12 +48,15 @@ Coordinator state is schema 6, with outcome, policy, and report schemas 4.
 Copy authority binds its exact source scope, destination, reserve and evidence.
 Later execution/sign-off revalidates source and retained copy. JSON reporting
 remains a read-only historical projection. See `docs/QUARANTINE_COPY.md` for
-metadata limits and manual orphan review. This is an unreleased candidate;
-version 0.6.9 remains the installed release. Independent review accepted
-implementation `57e0fdf` after COPY-R01 through COPY-R03 were resolved. Packaged
-actual-filesystem acceptance passed using disposable fixtures. PR #69 carries
-the candidate; hosted checks, protected integration and release publication
-remain separate gates. No production collection or workbook was changed.
+metadata limits and manual orphan review. Version 0.7.0 is released and installed.
+Independent review accepted implementation `57e0fdf` and final candidate
+`fe28e12` after COPY-R01 through COPY-R03 were resolved. The 697-test owner gate,
+disposable actual-filesystem acceptance, PR #69 run `42334776314`, exact-main
+run `42335212722`, and tagged run `42335973647` passed. Annotated tag `v0.7.0`
+peels to protected merge `2af3cb4c32f5ef575dcddce4f4699176c65a2b0a`.
+ADR 0111 records the exact artifact and installation evidence. Version 0.7.1
+reviewed policy authoring is next. No production collection or workbook changed.
+
 
 ## Product decisions
 
@@ -1691,10 +1694,10 @@ and exact restoration of a synthetic retained tree. The iMac's uv-managed
 command reports `pymo 0.6.9`. ADR 0107 records the separate post-tag
 release-truth reconciliation without moving or recreating the immutable tag.
 
-Version 0.6 is now closed. Version 0.7.0 is the next bounded release and owns
-the distinct capacity-checked cross-filesystem copy, verify, and no-replace
-publication protocol. It must not enter as a fallback inside the
-same-filesystem rename contract. Version 0.7.1 then owns reviewed authoring of
+Version 0.6 is now closed. Version 0.7.0 delivers the distinct capacity-checked
+cross-filesystem copy, verify, and no-replace publication protocol under ADR
+0110, with release truth in ADR 0111. It never becomes a fallback inside the
+same-filesystem rename contract. Version 0.7.1 is next and owns reviewed authoring of
 the exact private policy already consumed by unattended execution; queueing and
 scheduling remain later separate version 0.7 units through version 0.7.8.
 
