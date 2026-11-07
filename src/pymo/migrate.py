@@ -15,6 +15,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from pymo import __version__
+from pymo.action_log import ActionLogError
 from pymo.logging_config import configure_logging, log_level_choices
 from pymo.logging_config import emit as print
 from pymo.migration.coordinator_state import (
@@ -62,6 +63,7 @@ from pymo.migration.workflow import (
     _stages,
     child_command,
 )
+from pymo.quarantine_copy import verify_copy
 
 
 def _disjoint(first: Path, second: Path) -> bool:
@@ -143,6 +145,7 @@ def _option_overrides(args: argparse.Namespace) -> dict[str, object]:
         "workers",
         "no_cache",
         "quarantine_destination",
+        "quarantine_copy_reserve_bytes",
     )
     overrides: dict[str, object] = {}
     for name in names:
@@ -170,8 +173,18 @@ def _initial_options(overrides: dict[str, object]) -> CoordinatorOptions:
         "workers": None,
         "no_cache": False,
         "quarantine_destination": None,
+        "quarantine_copy_reserve_bytes": None,
     }
     values.update(overrides)
+    reserve = values["quarantine_copy_reserve_bytes"]
+    if reserve is not None and (
+        type(reserve) is not int
+        or reserve < 0
+        or values["quarantine_destination"] is None
+    ):
+        raise MigrationCoordinatorError(
+            "retained copying requires a destination and nonnegative reserve"
+        )
     return CoordinatorOptions(**values)  # type: ignore[arg-type]
 
 
@@ -286,6 +299,7 @@ def _run_next(
     log_dir: Path, state_path: Path, state: MigrationState, apply: bool
 ) -> int:
     validate_synopsis_history(log_dir, state)
+    _require_current_retained_copy(state)
     if state.next_stage == len(_stages()):
         print("Migration sequence is already complete.")
         return 0
@@ -725,10 +739,14 @@ def _run_managed_quarantine(
             )
             return 2
         latest = state.attempts[-1] if state.attempts else None
-        recover = _dups_metadata(state) is None or (
-            latest is not None
-            and latest.action == "quarantine-apply"
-            and latest.exit_status != 0
+        recover = (
+            state.options.quarantine_copy_reserve_bytes is not None
+            or _dups_metadata(state) is None
+            or (
+                latest is not None
+                and latest.action == "quarantine-apply"
+                and latest.exit_status != 0
+            )
         )
 
     log_file = _new_log_file(log_dir, state, stage)
@@ -753,6 +771,14 @@ def _run_managed_quarantine(
             str(outcome_file),
         )
     )
+    if state.options.quarantine_copy_reserve_bytes is not None:
+        command.extend(
+            (
+                "--copy",
+                "--copy-reserve-bytes",
+                str(state.options.quarantine_copy_reserve_bytes),
+            )
+        )
     if apply:
         assert preview is not None
         decision = preview["data"]["decision_digest"]  # type: ignore[index]
@@ -769,9 +795,9 @@ def _run_managed_quarantine(
             command.extend(("--migration-decision-digest", str(decision), "--apply"))
 
     print(
-        "Applying reviewed managed same-filesystem quarantine."
+        "Applying reviewed managed quarantine with the saved method."
         if apply
-        else "Previewing managed same-filesystem quarantine."
+        else "Previewing managed quarantine with the saved method."
     )
     print(f"Private stage log: {log_file}")
     started_at = time.monotonic()
@@ -874,6 +900,7 @@ def _acknowledge_review(state_path: Path, state: MigrationState, stage: Stage) -
 
 
 def _record_signoff(state_path: Path, state: MigrationState) -> None:
+    _require_current_retained_copy(state)
     stage = _stages()[-1]
     attempt = Attempt(stage.identifier, "signoff", 0, _now(), None, False)
     _write_state(state_path, _updated_state(state, attempt, advance=False))
@@ -1401,6 +1428,23 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
             return status
 
 
+def _require_current_retained_copy(state: MigrationState) -> None:
+    reserve = state.options.quarantine_copy_reserve_bytes
+    if reserve is None or not any(
+        item.action == "quarantine-apply" and item.exit_status == 0
+        for item in state.attempts
+    ):
+        return
+    destination = state.options.quarantine_destination
+    assert destination is not None
+    try:
+        verify_copy(state.working, Path(destination), reserve)
+    except (ActionLogError, OSError) as error:
+        raise MigrationCoordinatorError(
+            "retained-copy evidence changed; continuation requires review"
+        ) from error
+
+
 def _dispatch_existing_state(
     args: argparse.Namespace,
     log_dir: Path,
@@ -1408,6 +1452,8 @@ def _dispatch_existing_state(
     state: MigrationState,
 ) -> int:
     validate_synopsis_history(log_dir, state)
+    if args.run_next or args.run or args.interactive or args.unattended is not None:
+        _require_current_retained_copy(state)
     if args.json:
         identities = _collection_identities(state)
         report = build_report(log_dir, state)
@@ -1576,11 +1622,30 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="save the explicit retained destination for managed dups quarantine",
     )
     parser.add_argument(
+        "--quarantine-copy-reserve-bytes",
+        type=int,
+        help="select explicit cross-filesystem retained copying with this free-space reserve",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="emit the stable path-private migration report and exit",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if (
+        args.quarantine_copy_reserve_bytes is not None
+        and args.quarantine_copy_reserve_bytes < 0
+    ):
+        parser.error("--quarantine-copy-reserve-bytes must be nonnegative")
+    if (
+        args.quarantine_copy_reserve_bytes is not None
+        and args.quarantine_destination is None
+        and args.resume is None
+    ):
+        parser.error(
+            "--quarantine-copy-reserve-bytes requires --quarantine-destination"
+        )
+    return args
 
 
 def main(argv: Sequence[str] | None = None) -> int:

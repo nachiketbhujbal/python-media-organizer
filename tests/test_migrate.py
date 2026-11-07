@@ -259,6 +259,7 @@ def _zero_unattended_policy(
         "workers": None,
         "no_cache": False,
         "quarantine_destination": None,
+        "quarantine_copy_reserve_bytes": None,
     }
     if options is not None:
         expected_options.update(options)
@@ -360,7 +361,7 @@ def _zero_unattended_policy(
             }
         )
     policy = {
-        "schema_version": 3,
+        "schema_version": 4,
         "tool_version": __version__,
         "baseline": str(baseline.resolve()),
         "working": str(working.resolve()),
@@ -593,7 +594,7 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
     assert "Migration synopsis" in started.stdout
     assert "Workflow: not started" in started.stdout
     payload = json.loads(state_file(log_dir).read_text(encoding="utf-8"))
-    assert payload["schema_version"] == 5
+    assert payload["schema_version"] == 6
     assert payload["tool_version"] == __version__
     assert payload["baseline"] == str(baseline.resolve())
     assert payload["working"] == str(working.resolve())
@@ -607,6 +608,7 @@ def test_start_records_private_options_and_refuses_mismatched_reuse(
         "no_cache": True,
         "quiet": False,
         "quarantine_destination": None,
+        "quarantine_copy_reserve_bytes": None,
         "show_ignored": True,
         "show_files": False,
         "timestamps": True,
@@ -1159,6 +1161,7 @@ def _state_at(
         "confirm-quarantine"
     ),
     quarantine_destination: Path | None = None,
+    quarantine_copy_reserve_bytes: int | None = None,
 ) -> None:
     log_dir.chmod(0o700)
     now = "2026-08-29T12:00:00-04:00"
@@ -1181,6 +1184,7 @@ def _state_at(
             if quarantine_destination is not None
             else None
         ),
+        quarantine_copy_reserve_bytes,
     )
     attempts: list[migrate.Attempt] = []
     for index, stage in enumerate(migrate._stages()[:next_stage], start=1):
@@ -1318,7 +1322,7 @@ def test_stable_report_is_deterministic_path_private_and_read_only(
     assert first.stderr == second.stderr == ""
     assert first.stdout == second.stdout
     report = json.loads(first.stdout)
-    assert report["schema_version"] == 3
+    assert report["schema_version"] == 4
     assert report["report_type"] == "pymo-migration-report"
     assert report["tool_version"] == __version__
     assert report["workflow"] == {
@@ -3822,7 +3826,7 @@ def test_complete_media_sequence_retains_duplicate_review_bytes_in_place(
     report = run_pymo("migrate", "--resume", log_dir, "--json")
     assert report.returncode == 0, report.stdout + report.stderr
     payload = json.loads(report.stdout)
-    assert payload["schema_version"] == 3
+    assert payload["schema_version"] == 4
     assert payload["workflow"]["duplicate_disposition"] == "retained-in-place"
     assert payload["workflow"]["external_quarantine_confirmed"] is False
     assert payload["exact_duplicates"]["review_storage"] == {
@@ -3933,3 +3937,158 @@ def test_resume_validates_prior_outcomes_before_dispatch(
     assert (
         json.loads(state_file(log_dir).read_text(encoding="utf-8"))["next_stage"] == 1
     )
+
+
+def test_cross_filesystem_coordinator_preserves_source_and_reports_no_reclamation(
+    tmp_path: Path,
+) -> None:
+    import tempfile
+
+    baseline, working = collections(tmp_path)
+    parent = Path(os.environ.get("PYMO_TEST_CROSS_DEVICE_ROOT", "/dev/shm"))
+    if not parent.is_dir() or parent.stat().st_dev == working.stat().st_dev:
+        pytest.skip("a distinct writable filesystem is required")
+    log_dir = tmp_path / "private-logs"
+    log_dir.mkdir()
+    with tempfile.TemporaryDirectory(
+        prefix="pymo-coordinator-", dir=parent
+    ) as temporary:
+        destination = Path(temporary) / "retained"
+        _state_at(
+            log_dir,
+            baseline,
+            working,
+            21,
+            quarantine_destination=destination,
+            quarantine_copy_reserve_bytes=0,
+        )
+        _set_simulation_review(log_dir, review_files=1, review_bytes=7)
+        review = working / "dups"
+        review.mkdir()
+        (review / "copy.bin").write_bytes(b"content")
+        preview = run_pymo("migrate", "--resume", log_dir, "--quarantine-dups")
+        assert preview.returncode == 0, preview.stdout + preview.stderr
+        applied = run_pymo(
+            "migrate", "--resume", log_dir, "--quarantine-dups", "--apply"
+        )
+        assert applied.returncode == 0, applied.stdout + applied.stderr
+        assert (review / "copy.bin").read_bytes() == b"content"
+        assert (destination / "copy.bin").read_bytes() == b"content"
+        state = migrate._load_state(state_file(log_dir))
+        assert state.next_stage == 22
+        report = build_report(log_dir, state)
+        assert report["workflow"]["duplicate_disposition"] == "copied-source-retained"
+        storage = report["exact_duplicates"]["review_storage"]
+        assert storage["working_collection_bytes_released"] == 0
+        assert storage["physical_storage_reclaimed"] is False
+        evidence = report["exact_duplicates"]["managed_quarantine"]
+        assert evidence["copy_verified"] is True
+        assert evidence["move_verified"] is False
+        assert evidence["source_retained"] is True
+        assert str(destination) not in json.dumps(report)
+        before = state_file(log_dir).read_bytes()
+        (review / "copy.bin").write_bytes(b"changed")
+        resumed = run_pymo("migrate", "--resume", log_dir, "--run")
+        assert resumed.returncode == 2
+        assert "Traceback" not in resumed.stderr
+        assert state_file(log_dir).read_bytes() == before
+
+
+def test_copy_reserve_is_explicitly_saved_and_conflicting_resume_is_rejected(
+    tmp_path: Path,
+) -> None:
+    baseline, working = collections(tmp_path)
+    logs = tmp_path / "logs"
+    target = tmp_path / "retained"
+    assert (
+        migrate.main(
+            [
+                str(baseline),
+                str(working),
+                "--log-dir",
+                str(logs),
+                "--quarantine-destination",
+                str(target),
+                "--quarantine-copy-reserve-bytes",
+                "123",
+                "--start",
+            ]
+        )
+        == 0
+    )
+    state = migrate._load_state(state_file(logs))
+    assert state.options.quarantine_copy_reserve_bytes == 123
+    before = state_file(logs).read_bytes()
+    assert (
+        migrate.main(["--resume", str(logs), "--quarantine-copy-reserve-bytes", "124"])
+        == 2
+    )
+    assert state_file(logs).read_bytes() == before
+
+
+@pytest.mark.parametrize("replace_target", [False, True])
+def test_copy_child_commit_survives_missing_coordinator_apply_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replace_target: bool
+) -> None:
+    from pymo import quarantine, quarantine_copy
+
+    baseline, working = collections(tmp_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    parent = tmp_path / "retained"
+    parent.mkdir()
+    destination = parent / "target"
+    _state_at(
+        logs,
+        baseline,
+        working,
+        21,
+        quarantine_destination=destination,
+        quarantine_copy_reserve_bytes=0,
+    )
+    _set_simulation_review(logs, review_files=1, review_bytes=7)
+    review = working / "dups"
+    review.mkdir()
+    (review / "copy.bin").write_bytes(b"content")
+    monkeypatch.setattr(quarantine_copy, "_require_distinct_devices", lambda *_: None)
+
+    def child(command, *, check):
+        index = command.index("quarantine-dups")
+        return subprocess.CompletedProcess(
+            command, quarantine.main(command[index + 1 :])
+        )
+
+    monkeypatch.setattr(migrate.subprocess, "run", child)
+    common = ["--resume", str(logs), "--quarantine-dups"]
+    assert migrate.main(common) == 0
+    before = state_file(logs).read_bytes()
+    original = migrate._write_state
+
+    def stop(path, state):
+        if state.attempts[-1].action == "quarantine-apply":
+            raise KeyboardInterrupt
+        original(path, state)
+
+    monkeypatch.setattr(migrate, "_write_state", stop)
+    with pytest.raises(KeyboardInterrupt):
+        migrate.main([*common, "--apply"])
+    assert state_file(logs).read_bytes() == before
+    inode = destination.stat().st_ino
+    if replace_target:
+        destination.rename(parent / "saved")
+        shutil.copytree(parent / "saved", destination)
+    monkeypatch.setattr(migrate, "_write_state", original)
+    monkeypatch.setattr(
+        quarantine_copy,
+        "_write_bytes",
+        lambda *_: pytest.fail("committed copy must not be copied again"),
+    )
+    status = migrate.main([*common, "--apply"])
+    assert (review / "copy.bin").read_bytes() == b"content"
+    if replace_target:
+        assert status == 1
+        assert migrate._load_state(state_file(logs)).next_stage == 21
+    else:
+        assert status == 0
+        assert destination.stat().st_ino == inode
+        assert migrate._load_state(state_file(logs)).next_stage == 22

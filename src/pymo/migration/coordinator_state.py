@@ -9,17 +9,17 @@ import stat
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
 from pymo.migration.workflow import CoordinatorOptions, _stages
 
-# This identifies the private restart-state compatibility contract. Version 5
-# binds an optional same-filesystem quarantine destination and records its
+# This identifies the private restart-state compatibility contract. Version 6
+# binds an explicit quarantine method, reserve and destination, and records its
 # preview/apply attempts without treating restart bookkeeping as move evidence.
-MIGRATION_STATE_SCHEMA_VERSION = 5
+MIGRATION_STATE_SCHEMA_VERSION = 6
 
 
 class MigrationCoordinatorError(RuntimeError):
@@ -282,6 +282,7 @@ def _options_from_json(value: object) -> CoordinatorOptions:
         "workers",
         "no_cache",
         "quarantine_destination",
+        "quarantine_copy_reserve_bytes",
     }
     if not isinstance(value, dict) or set(value) != expected:
         raise MigrationCoordinatorError("migration restart options are malformed")
@@ -305,6 +306,14 @@ def _options_from_json(value: object) -> CoordinatorOptions:
             value["quarantine_destination"], "quarantine destination"
         ),
     )
+    reserve = value["quarantine_copy_reserve_bytes"]
+    if reserve is not None and (
+        type(reserve) is not int
+        or reserve < 0
+        or options.quarantine_destination is None
+    ):
+        raise MigrationCoordinatorError("invalid retained-copy options")
+    options = replace(options, quarantine_copy_reserve_bytes=reserve)
     if options.verbose and options.quiet:
         raise MigrationCoordinatorError("migration restart output options conflict")
     allowed_log_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}

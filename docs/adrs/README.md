@@ -115,3 +115,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0107](0107-v0.6.9-release-truth.md) | V0.6.9 post-tag release truth |
 | [0108](0108-author-reviewed-unattended-policies-before-queues.md) | Author reviewed unattended policies before queues |
 | [0109](0109-migration-readiness-and-manual-retirement.md) | Migration readiness and manual retirement |
+| [0110](0110-cross-filesystem-retained-copy.md) | Cross-filesystem retained copy |

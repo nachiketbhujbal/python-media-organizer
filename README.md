@@ -93,6 +93,14 @@ The two duplicate finders have strict ownership. The image finder reads only
 folders. The video finder reads only `vids` and writes only `dups/vids`; it does
 not require or touch the picture folders.
 
+## Unreleased cross-filesystem copying
+
+The v0.7.0 candidate adds explicit retained copying with source duplicates left
+in place, a declared free-space reserve, verified no-replace publication, and
+strict interruption recovery. It does not reclaim space or preserve every
+filesystem metadata layer. See [the copy contract](docs/QUARANTINE_COPY.md).
+The installed v0.6.9 release remains unchanged until release verification.
+
 ## Migration readiness
 
 The planned sequence through v0.7.5 adds cross-filesystem retention, reviewed

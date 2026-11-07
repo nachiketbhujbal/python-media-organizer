@@ -755,3 +755,74 @@ claims, leaves copying and cleanup explicit, and retains required engineering
 gates without demanding repetitive operational pilots. The reviewer inspected
 a separate clean detached checkout and did not author the change or run the
 owner's gates. Hosted checks and publication remain separate evidence.
+
+## Version 0.7.0 retained-copy candidate
+
+Independent Terra-medium design review of `cf06e24` identified four requirements:
+separate retained scratch from the publishable stage; durably bind staging
+identity through publication; protect copy dependencies and freshly revalidate
+later workflow execution; and advance state, outcome, policy and report
+contracts while disclosing filesystem-metadata limitations. The owner has
+implemented those requirements in the candidate. The implementation review
+sequence and its acceptance are recorded below; final release gates remain
+separate.
+
+Owner verification uses synthetic collections, injected partial writes and
+publication interruptions, directory-replacement attacks, strict malformed
+journal cases, and unchanged same-filesystem regression coverage. A disposable
+APFS filesystem separately proved actual distinct-device copying and guided
+coordinator reporting. No private collection or retained user evidence was
+used. These checks establish candidate behavior, not release or production
+readiness.
+
+### Candidate review at 122d6c2
+
+Independent Terra-medium review rejected this exact candidate with two findings:
+
+- **COPY-R01 (P1): resolved; independently closed at `57e0fdf`.** A committed
+  copy followed by interruption before coordinator state publication retried as
+  a fresh apply and stalled on its occupied destination. Every copy apply now
+  uses the strict recovery-or-fresh boundary with the original reviewed digest.
+  Synthetic regressions interrupt that exact boundary, prove successful
+  reconciliation without recopying, and reject an equal-content impostor.
+- **COPY-R02 (P2): resolved; independently closed at `57e0fdf`.** A UUID-shaped
+  unrecorded scratch file was accepted as an interrupted artifact. Each exclusive
+  scratch leaf now records its token and device/inode in the strict append-only
+  lifecycle before any media bytes are written. Recovery rejects unknown or
+  replaced leaves, reconciles a recorded allocation interrupted before its
+  completion record, and refuses an orphan created before that binding.
+
+The initial candidate passed 687 tests with two distinct-filesystem fixtures
+skipped in the ordinary macOS run; those fixtures were independently exercised
+on a disposable APFS volume. That earlier passing gate did not detect these
+review findings and is not acceptance of the corrected candidate.
+
+### Renewed candidate review at 88f2b09
+
+Independent Terra-medium review traced COPY-R01 and the injected/replaced-leaf
+portion of COPY-R02 as corrected, but reproduced **COPY-R03 (P2)** on synthetic
+data: removing a recorded partial from scratch still allowed recovery to
+commit. **Resolved; independently closed at `57e0fdf`:** each artifact now
+binds its destination-relative path and expected bytes as well as its identity.
+Recovery accounts for every artifact in scratch or at that exact copied path,
+rejects missing artifacts, and rejects even equal-byte staged files without
+recorded allocation. Dedicated regressions cover removed partials, interruption
+after an atomic per-file publication, and unrecorded staged files. The owner
+also repeated actual distinct-filesystem and installed-artifact acceptance for
+88f2b09; its complete suite passed 693 tests with the same two ordinary-run
+filesystem skips. Those results precede the COPY-R03 correction.
+
+### Accepted implementation at 57e0fdf
+
+Renewed independent Terra-medium review found no actionable findings at exact
+`57e0fdff5e605c052401dfb875f98cc4f5b6226e` and closed COPY-R01 through COPY-R03.
+The reviewer independently ran the retained-copy tests: 39 passed, with the
+actual-filesystem fixture skipped in that ordinary run, and verified a clean
+detached checkout. The owner separately built source and wheel artifacts,
+inspected safe archive members and exact license bytes, installed the wheel in
+an isolated environment, and proved zero-write preview, actual distinct-device
+copying, source retention and idempotent recovery on a disposable APFS volume.
+The owner also ran both actual-device engine/coordinator tests successfully.
+These are implementation and artifact acceptance facts; merge, release tag,
+installed production version, hosted gates and production readiness remain
+separate evidence.

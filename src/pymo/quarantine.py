@@ -1,4 +1,4 @@
-"""CLI for reversible same-filesystem duplicate-review quarantine."""
+"""CLI for retained duplicate-review movement or explicit copying."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from pymo.action_log import ActionLogError
+from pymo.action_log import ActionLogError, NoUndoableRun
 from pymo.logging_config import emit as print
 from pymo.managed_quarantine import (
     ManagedQuarantineError,
@@ -28,6 +28,14 @@ from pymo.migration.outcome import (
     decision_digest_matches,
     outcome_record,
     write_outcome,
+)
+from pymo.quarantine_copy import (
+    CopyPlan,
+    NoRetainedCopy,
+    apply_copy,
+    inspect_copy_source,
+    plan_copy,
+    recover_copy,
 )
 
 
@@ -59,6 +67,10 @@ def _plan_data(
         ],
     )
     return {
+        "method": "rename",
+        "copy_reserve_bytes": 0,
+        "metadata_entries": 0,
+        "metadata_unknown": 0,
         "status": status,
         "files": manifest.file_count,
         "directories": manifest.directory_count,
@@ -89,7 +101,7 @@ def _write_outcome(
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Atomically retain one complete dups tree elsewhere on the same filesystem."
+        description="Retain one complete dups tree by same-filesystem move or explicit cross-filesystem copy."
     )
     parser.add_argument("collection", type=Path)
     parser.add_argument("destination", type=Path)
@@ -97,8 +109,100 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     action.add_argument("--undo", action="store_true")
     action.add_argument("--recover", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument(
+        "--copy",
+        action="store_true",
+        help="Copy across filesystems; retain all originals.",
+    )
+    parser.add_argument(
+        "--copy-reserve-bytes",
+        type=int,
+        help="Explicit free-space reserve required after staged copying.",
+    )
     add_outcome_argument(parser)
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.copy != (args.copy_reserve_bytes is not None):
+        parser.error("--copy requires an explicit --copy-reserve-bytes value")
+    if args.copy_reserve_bytes is not None and args.copy_reserve_bytes < 0:
+        parser.error("--copy-reserve-bytes must be nonnegative")
+    if args.copy and args.undo:
+        parser.error(
+            "retained copying has no destructive undo; both copies remain retained"
+        )
+    return args
+
+
+def _copy_data(plan: CopyPlan) -> dict[str, int | str]:
+    data: dict[str, int | str] = {
+        "method": "copy",
+        "copy_reserve_bytes": plan.reserve_bytes,
+        "metadata_entries": plan.evidence.metadata_entries,
+        "metadata_unknown": plan.evidence.metadata_unknown,
+        "status": 0,
+        "files": plan.evidence.files,
+        "directories": plan.evidence.directories,
+        "bytes": plan.evidence.total_bytes,
+        "manifest_sha256": plan.source.sha256,
+        "destination_sha256": destination_binding_sha256(plan.target),
+        "destination_parent_device": plan.target_parent_identity[0],
+        "destination_parent_inode": plan.target_parent_identity[1],
+    }
+    data["decision_digest"] = decision_digest(
+        "copy-quarantine",
+        [
+            {
+                **data,
+                "content_sha256": plan.evidence.sha256,
+                "collection_device": plan.collection_identity[0],
+                "collection_inode": plan.collection_identity[1],
+            }
+        ],
+    )
+    return data
+
+
+def _copy_main(args: argparse.Namespace) -> int:
+    if args.recover:
+        plan = inspect_copy_source(
+            args.collection, args.destination, args.copy_reserve_bytes
+        )
+    else:
+        plan = plan_copy(args.collection, args.destination, args.copy_reserve_bytes)
+    data = _copy_data(plan)
+    if args.apply and not decision_digest_matches(
+        args.migration_decision_digest, str(data["decision_digest"])
+    ):
+        raise ManagedQuarantineError("retained-copy plan changed after review")
+    if args.apply:
+        if args.recover:
+            try:
+                recover_copy(args.collection, args.destination, args.copy_reserve_bytes)
+            except (NoUndoableRun, NoRetainedCopy):
+                # The prior child may have failed before recording any intent.
+                # Only absent or fully committed copy-free history permits a
+                # fresh, fully revalidated apply; malformed/partial history does not.
+                apply_copy(plan)
+        else:
+            apply_copy(plan)
+    print(
+        f"{'Verified retained copy of' if args.apply else 'Would copy'} "
+        f"{plan.evidence.files} file(s), {plan.evidence.total_bytes} byte(s). "
+        "Source duplicates remain in place; no storage was reclaimed."
+    )
+    print(
+        "Copy evidence covers file byte streams only; filesystem metadata is not "
+        f"claimed preserved ({plan.evidence.metadata_entries} entry/entries with extended attributes, "
+        f"{plan.evidence.metadata_unknown} uninspectable)."
+    )
+    if not args.apply:
+        print("Dry run only. Add --apply after reviewing this exact plan.")
+    _write_outcome(
+        args.migration_outcome,
+        data,
+        result_kind="observed" if args.apply else "preview",
+        collection=plan.collection_root,
+    )
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -107,6 +211,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("--recover requires --apply.", file=sys.stderr)
         return 2
     try:
+        if args.copy:
+            return _copy_main(args)
         if args.recover:
             try:
                 result = reconcile_managed_quarantine(args.collection, args.destination)

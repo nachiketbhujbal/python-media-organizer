@@ -24,6 +24,7 @@ class CoordinatorOptions:
     workers: int | None
     no_cache: bool
     quarantine_destination: str | None = None
+    quarantine_copy_reserve_bytes: int | None = None
 
     def as_json(self) -> dict[str, bool | int | str | None]:
         return {
@@ -41,6 +42,7 @@ class CoordinatorOptions:
             "workers": self.workers,
             "no_cache": self.no_cache,
             "quarantine_destination": self.quarantine_destination,
+            "quarantine_copy_reserve_bytes": self.quarantine_copy_reserve_bytes,
         }
 
 

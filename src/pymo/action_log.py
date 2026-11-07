@@ -23,6 +23,7 @@ from typing import TextIO, cast
 from pymo.collection import CollectionLayout
 from pymo.discovery import walk_complete, walk_entry_kind_complete
 from pymo.file_safety import FileChangedError, FileState
+from pymo.quarantine_copy_record import CopyBinding, copy_operations
 
 # This constant identifies the current on-disk journal schema and must remain
 # stable while collection-named action histories use it.
@@ -37,6 +38,10 @@ class ActionOperation(StrEnum):
     CREATE_DIRECTORY = "CREATE_DIR"
     REMOVE_DIRECTORY = "REMOVE_DIR"
     QUARANTINE_TREE = "QUARANTINE_TREE"
+    COPY_QUARANTINE_TREE = "COPY_QUARANTINE_TREE"
+    COPY_QUARANTINE_STAGE = "COPY_QUARANTINE_STAGE"
+    COPY_QUARANTINE_SCRATCH = "COPY_QUARANTINE_SCRATCH"
+    COPY_QUARANTINE_ARTIFACT = "COPY_QUARANTINE_ARTIFACT"
 
     @property
     def is_file(self) -> bool:
@@ -52,6 +57,7 @@ class ToolId(StrEnum):
     VIDEO_DUPLICATES = "find_video_duplicates"
     CORRECT_EXTENSIONS = "correct_extensions"
     MANAGED_QUARANTINE = "managed_quarantine"
+    COPY_QUARANTINE = "copy_quarantine"
 
 
 def _tool_value(tool: str) -> str:
@@ -230,6 +236,42 @@ class Action:
                     "QUARANTINE_TREE requires a source tree, external binding, and manifest identity"
                 )
 
+        elif operation in copy_operations():
+            try:
+                copy_binding = CopyBinding.decode(self.after or "")
+            except (ValueError, TypeError) as error:
+                raise ActionLogError("invalid retained-copy binding") from error
+            artifact = operation == ActionOperation.COPY_QUARANTINE_ARTIFACT
+            if (copy_binding.artifact_name is not None) != artifact:
+                raise ActionLogError("invalid retained-copy artifact binding")
+            identity = self.identity or {}
+            source_parts = PurePosixPath(self.before or "").parts
+            valid_source = (
+                (
+                    bool(self.before)
+                    and len(source_parts) > 1
+                    and source_parts[0] == "dups"
+                    and ".." not in source_parts
+                    and "\0" not in (self.before or "")
+                    and PurePosixPath(self.before or "").as_posix() == self.before
+                )
+                if artifact
+                else self.before == "dups"
+            )
+            if (
+                not valid_source
+                or self.entry_type != ("file" if artifact else "directory")
+                or set(identity) != {"size", "sha256", "device", "inode"}
+                or any(
+                    type(identity.get(key)) is not int or int(identity[key]) < 0
+                    for key in ("size", "device", "inode")
+                )
+                or not isinstance(identity.get("sha256"), str)
+                or len(str(identity["sha256"])) != 64
+                or any(c not in "0123456789abcdef" for c in str(identity["sha256"]))
+            ):
+                raise ActionLogError("invalid retained-copy identity")
+
     @classmethod
     def for_file(
         cls,
@@ -312,7 +354,10 @@ class Action:
         )
 
     def reversed(self) -> Action:
-        if self.operation == ActionOperation.QUARANTINE_TREE:
+        if (
+            self.operation == ActionOperation.QUARANTINE_TREE
+            or self.operation in copy_operations()
+        ):
             raise ActionLogError(
                 "managed quarantine undo requires its explicit external target"
             )
@@ -433,6 +478,17 @@ class ActionTransaction:
         mode: str = "APPLY",
         target_run_id: str | None = None,
     ) -> None:
+        runs = log._runs(log._read(handle))
+        self._copy_protected = any(
+            run.tool == ToolId.COPY_QUARANTINE
+            for run in log._active_and_unresolved_runs(runs)
+        )
+        if self._copy_protected and tool in {
+            ToolId.IMAGE_DUPLICATES,
+            ToolId.VIDEO_DUPLICATES,
+            ToolId.MANAGED_QUARANTINE,
+        }:
+            raise ActionConflict("a retained copy protects this review tree")
         self.log = log
         self.handle = handle
         self.tool = tool
@@ -457,6 +513,16 @@ class ActionTransaction:
     def plan(self, action: Action) -> str:
         """Durably record one action before a caller-owned atomic operation."""
 
+        if (
+            self.tool != ToolId.COPY_QUARANTINE
+            and self._copy_protected
+            and any(
+                path == "dups" or path.startswith("dups/")
+                for path in (action.before, action.after)
+                if path is not None
+            )
+        ):
+            raise ActionConflict("a retained copy protects this review tree")
         action_id = str(uuid.uuid4())
         self.log._append(
             self.handle,
@@ -533,20 +599,35 @@ class ActionLog:
         self.path = self.canonical_path
 
     @contextmanager
-    def _locked(self, create: bool) -> Iterator[TextIO]:
+    def _locked(
+        self,
+        create: bool,
+        *,
+        write_existing: bool = False,
+        root_descriptor: int | None = None,
+    ) -> Iterator[TextIO]:
         if not create and not self.path.exists():
             raise NoUndoableRun(f"no action log found in {self.root}")
-        flags = os.O_RDWR | os.O_APPEND | os.O_CREAT if create else os.O_RDONLY
+        flags = (
+            os.O_RDWR | os.O_APPEND | os.O_CREAT
+            if create
+            else (os.O_RDWR | os.O_APPEND if write_existing else os.O_RDONLY)
+        )
         flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
         try:
-            descriptor = os.open(self.path, flags, 0o600)
+            descriptor = os.open(
+                self.path if root_descriptor is None else self.path.name,
+                flags,
+                0o600,
+                dir_fd=root_descriptor,
+            )
         except FileNotFoundError as error:
             raise NoUndoableRun(f"no action log found in {self.root}") from error
         except OSError as error:
             raise ActionConflict(
                 f"cannot open action log safely: {self.path}"
             ) from error
-        mode = "a+" if create else "r"
+        mode = "a+" if create or write_existing else "r"
         with os.fdopen(descriptor, mode, encoding="utf-8", newline="") as handle:
             file_stat = os.fstat(handle.fileno())
             if not stat.S_ISREG(file_stat.st_mode) or file_stat.st_nlink != 1:
@@ -681,6 +762,71 @@ class ActionLog:
                     raise ActionLogError(
                         "managed quarantine journal action has an invalid tool binding"
                     )
+                if (action.operation in copy_operations()) != (
+                    current_run.tool == ToolId.COPY_QUARANTINE
+                ):
+                    raise ActionLogError(
+                        "retained-copy action has an invalid tool binding"
+                    )
+                if current_run.tool == ToolId.COPY_QUARANTINE:
+                    position = len(current_run.actions)
+                    if (
+                        current_run.mode != "APPLY"
+                        or action.operation != copy_operations()[min(position, 3)]
+                        or (
+                            position
+                            and current_run.actions[0][0]
+                            in current_run.completed_action_ids
+                        )
+                    ):
+                        raise ActionLogError("retained-copy actions are out of order")
+                    if position >= 2 and any(
+                        previous_id not in current_run.completed_action_ids
+                        for previous_id, _ in current_run.actions[1:]
+                    ):
+                        raise ActionLogError(
+                            "retained-copy identity completion is out of order"
+                        )
+                    binding = CopyBinding.decode(action.after or "")
+                    if position and binding.tree_binding() != CopyBinding.decode(
+                        current_run.actions[0][1].after or ""
+                    ):
+                        raise ActionLogError("retained-copy bindings disagree")
+                    if position:
+                        assert action.identity is not None
+                        first_identity = current_run.actions[0][1].identity
+                        assert first_identity is not None
+                        expected_size = (
+                            first_identity["size"]
+                            if position < 3
+                            else action.identity["size"]
+                        )
+                        expected_hash = (
+                            first_identity["sha256"]
+                            if position < 3
+                            else action.identity["sha256"]
+                        )
+                        if (
+                            action.identity["device"] != binding.parent_device
+                            or action.identity["size"] != expected_size
+                            or action.identity["sha256"] != expected_hash
+                        ):
+                            raise ActionLogError(
+                                "retained-copy identity is inconsistent"
+                            )
+                        if any(
+                            self._identity_key(action) == self._identity_key(previous)
+                            for _, previous in current_run.actions[1:]
+                        ):
+                            raise ActionLogError("retained-copy identities are aliased")
+                        if position >= 3 and any(
+                            CopyBinding.decode(previous.after or "").artifact_name
+                            == binding.artifact_name
+                            for _, previous in current_run.actions[3:]
+                        ):
+                            raise ActionLogError(
+                                "retained-copy artifact token is repeated"
+                            )
                 current_run.actions.append((action_id, action))
             elif name == "ACTION_COMPLETED":
                 self._require_event_fields(event, {"action_id"}, index)
@@ -696,6 +842,14 @@ class ActionLog:
                     raise ActionLogError(
                         f"action completed more than once in run {run_id}: {action_id}"
                     )
+                if current_run.tool == ToolId.COPY_QUARANTINE:
+                    first = current_run.actions[0][0]
+                    if action_id == first and (
+                        len(current_run.actions) < 3
+                        or len(current_run.completed_action_ids)
+                        != len(current_run.actions) - 1
+                    ):
+                        raise ActionLogError("retained copy completed before staging")
                 current_run.completed_action_ids.add(action_id)
             elif name == "RUN_COMMITTED":
                 self._require_event_fields(
@@ -715,6 +869,11 @@ class ActionLog:
                     raise ActionLogError(
                         f"commit target is inconsistent for run {run_id}"
                     )
+                if (
+                    current_run.tool == ToolId.COPY_QUARANTINE
+                    and len(current_run.actions) < 3
+                ):
+                    raise ActionLogError("retained-copy commit is incomplete")
                 current_run.committed = True
             elif name == "RUN_INCOMPLETE":
                 self._require_event_fields(event, {"reason"}, index)
@@ -945,7 +1104,10 @@ class ActionLog:
             raise ActionConflict("moved file failed identity verification")
 
     def _execute_action(self, action: Action) -> None:
-        if action.operation == ActionOperation.QUARANTINE_TREE:
+        if (
+            action.operation == ActionOperation.QUARANTINE_TREE
+            or action.operation in copy_operations()
+        ):
             raise ActionLogError(
                 "managed quarantine requires its dedicated external-target boundary"
             )
@@ -988,7 +1150,10 @@ class ActionLog:
             raise ActionConflict(f"directory is not empty: {action.before}") from error
 
     def _forward_state(self, action: Action) -> str:
-        if action.operation == ActionOperation.QUARANTINE_TREE:
+        if (
+            action.operation == ActionOperation.QUARANTINE_TREE
+            or action.operation in copy_operations()
+        ):
             raise ActionLogError(
                 "managed quarantine recovery requires its explicit external target"
             )
@@ -1062,7 +1227,10 @@ class ActionLog:
     def _simulate(self, actions: list[Action]) -> None:
         entries = self._snapshot()
         for action in actions:
-            if action.operation == ActionOperation.QUARANTINE_TREE:
+            if (
+                action.operation == ActionOperation.QUARANTINE_TREE
+                or action.operation in copy_operations()
+            ):
                 raise ActionLogError(
                     "managed quarantine undo requires its explicit external target"
                 )
@@ -1121,7 +1289,7 @@ class ActionLog:
     @contextmanager
     def transaction(self, tool: str) -> Iterator[ActionTransaction]:
         tool = _tool_value(tool)
-        if tool == ToolId.MANAGED_QUARANTINE:
+        if tool in {ToolId.MANAGED_QUARANTINE, ToolId.COPY_QUARANTINE}:
             raise ActionLogError(
                 "managed quarantine requires its dedicated external-target boundary"
             )
