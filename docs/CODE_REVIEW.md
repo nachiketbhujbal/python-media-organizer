@@ -852,13 +852,13 @@ inodes or weakened manifests. ADR 0112 records the retained-in-place scope.
 
 Independent exact-SHA review rejected `089b683fbf7818e9c8683906866aa0c111d09f19`:
 
-- **AUTH-R01 (P1): owner corrected; renewed review pending.** The candidate's
+- **AUTH-R01 (P1): resolved; independently closed at `1bae676`.** The candidate's
   inner proposed schema-5 policy could be extracted and executed without the
   separate acceptance step. Authored execution now requires a strict acceptance
   declaration and a separate create-once receipt binding the reviewed candidate,
   exact accepted policy bytes, exact path and version. Tests use real acceptance
   and explicitly refuse extracted proposals before run-state creation.
-- **AUTH-R02 (P1/P2): owner corrected; renewed review pending.** A scratch leaf
+- **AUTH-R02 (P1/P2): resolved; independently closed at `1bae676`.** A scratch leaf
   substituted just before atomic rename could appear at the requested output
   before the post-publication identity check failed. Presence alone now grants
   no authority: the exact policy is verified before a separate receipt can be
@@ -883,3 +883,21 @@ compares both with pinned current objects. Additional regressions cover exact-
 byte receipt substitution and late identical-byte policy replacement. Renewed
 exact-SHA review remains required. The preceding owner gate passed 748 tests
 with two ordinary-run filesystem skips; that result predates this correction.
+
+
+Independent Terra-medium review accepted exact implementation
+`1bae6760fe66bdaf49d8dc3ccc6bc63e96964006` without further actionable findings
+and closed AUTH-R01 and AUTH-R02. The reviewer independently repeated the
+same-byte receipt scratch substitution and confirmed both acceptance failure
+and subsequent loading refusal. Twelve focused extraction/substitution/receipt
+tests passed, with 41 other focused-suite tests deselected, and the detached
+checkout and complete diff were clean. Full owner, artifact and hosted gates
+remain separate evidence; this acceptance does not authorize real-media cleanup.
+
+
+The final owner implementation gate passed 750 tests with two existing
+ordinary-run distinct-filesystem skips, at 88 percent subprocess-aware coverage.
+Ruff, Black, mypy, all pre-commit hooks, source/wheel builds and isolated
+installed-package plan/review/accept/execute acceptance passed. The synthetic
+installed workflow preserved every source byte and retained duplicate files.
+No production collection, planner, cleanup or PyPI publication was involved.

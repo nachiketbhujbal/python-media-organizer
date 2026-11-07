@@ -54,8 +54,10 @@ history, unsafe/ambiguous namespaces, and uninspectable media. It never writes
 media or collection state during planning/acceptance, creates no scratch media,
 and stops on unexpected execution evidence. Partially applied children still
 require reviewed journal recovery; automatic queue recovery remains later work.
-See `docs/POLICY_AUTHORING.md`. Release gates and independent exact-SHA review
-are pending; version 0.7.1 is not yet released.
+See `docs/POLICY_AUTHORING.md`. Independent Terra-medium review accepted
+implementation `1bae676` after AUTH-R01 and AUTH-R02 were resolved. The
+750-test owner gate passed with two ordinary-run filesystem skips. Hosted
+publication gates remain pending; version 0.7.1 is not yet released.
 
 ## Version 0.7.0 release
 
