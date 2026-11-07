@@ -945,3 +945,15 @@ the outside file is never opened, and reject regular-parent substitution before
 the read. A controlled distinct-device topology test covers the retained-copy
 planning projection without accessing external media. Renewed exact-SHA review
 and the corrected complete gate remain pending.
+
+Renewed review at `9972354` closed QUEUE-R01 and identified **QUEUE-R02 (P2)**:
+nested acceptance parsing reopened the policy and receipt without the queue's
+initial parent binding. Replacing that parent with another real private
+directory could expose unrelated receipt bytes before later refusal. The owner
+now carries the initial full ancestry through the initial policy read, shared
+parser, receipt loading, subsequent receipt bookkeeping read and acceptance
+rechecks. Five end-to-end queue substitutions assert that no unrelated file
+inode is opened. Relative policy locators containing `..` retain compatibility
+through lexical normalization before no-follow traversal. Renewed review and
+the final complete gate are required for this correction; earlier results are
+not its release proof.

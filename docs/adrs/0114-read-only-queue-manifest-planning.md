@@ -36,6 +36,8 @@ could follow a transient intermediate link. Shared private artifact I/O now
 retains a component-by-component no-follow descriptor chain through leaf access,
 checks its permissions and identities, and compares queue reads with the
 initially observed ancestry. Publication uses the same anchored boundary.
+The original ancestry is also passed through nested receipt parsing and every
+later acceptance recheck; observing a replacement parent cannot reset it.
 
 Planning checks declaration consistency, not fresh media, free capacity or the
 future namespace. A manifest grants no authority, creates no reservation and

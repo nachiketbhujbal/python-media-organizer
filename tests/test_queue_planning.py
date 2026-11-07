@@ -12,7 +12,7 @@ import pytest
 
 from pymo import __version__, migrate, queue
 from pymo.managed_quarantine import destination_binding_sha256
-from pymo.migration import queue_manifest, queue_plan
+from pymo.migration import policy_acceptance, policy_files, queue_manifest, queue_plan
 from pymo.migration.policy_acceptance import publish_accepted, receipt_path
 from pymo.migration.policy_plan import build_candidate
 from pymo.migration.queue_manifest import PrivateArtifact
@@ -640,3 +640,95 @@ def test_retained_copy_plan_with_controlled_distinct_device_topology(
     assert result["jobs"][0]["disposition"] == "retained-copy"
     assert len(result["jobs"][0]["steps"]) == 27
     assert snapshot(tmp_path) == before
+
+
+@pytest.mark.parametrize(
+    "phase",
+    [
+        "initial-policy",
+        "parse-policy",
+        "parse-receipt",
+        "receipt-bookkeeping",
+        "current-receipt",
+    ],
+)
+def test_queue_never_rebinds_nested_artifacts_to_a_replaced_parent(
+    tmp_path: Path, monkeypatch, capsys, phase: str
+) -> None:
+    entry = job(tmp_path, 1, authored=True)
+    manifest = save_manifest(tmp_path, [entry])
+    parent = manifest.parent
+    other = tmp_path / "other-private"
+    other.mkdir(mode=0o700)
+    for item in parent.iterdir():
+        (other / item.name).write_bytes(item.read_bytes())
+        (other / item.name).chmod(0o600)
+    unrelated = {tuple(identity(p)) for p in other.iterdir()}
+    outside_opened = False
+    swapped = False
+    original_open = os.open
+    original_read = policy_acceptance.read_private_identity
+    original_artifact = PrivateArtifact.read.__func__
+    policy_path = Path(entry["policy"]["path"])
+    receipt = receipt_path(policy_path)
+    receipt_reads = 0
+
+    def observed_open(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal outside_opened
+        fd = original_open(path, flags, mode, dir_fd=dir_fd)
+        value = os.fstat(fd)
+        outside_opened |= (value.st_dev, value.st_ino) in unrelated
+        return fd
+
+    def substitute(callback):
+        nonlocal swapped
+        assert not swapped
+        swapped = True
+        parent.rename(tmp_path / "saved-private")
+        other.rename(parent)
+        try:
+            return callback()
+        finally:
+            parent.rename(other)
+            (tmp_path / "saved-private").rename(parent)
+
+    def nested_read(path, **kwargs):
+        nonlocal receipt_reads
+        if path == receipt:
+            receipt_reads += 1
+        trigger = (
+            (phase == "parse-policy" and path == policy_path)
+            or (phase == "parse-receipt" and path == receipt)
+            or (phase == "current-receipt" and path == receipt and receipt_reads == 2)
+        )
+        if trigger and not swapped:
+            return substitute(lambda: original_read(path, **kwargs))
+        return original_read(path, **kwargs)
+
+    def artifact_read(cls, path, **kwargs):
+        trigger = (phase == "initial-policy" and path == policy_path) or (
+            phase == "receipt-bookkeeping" and path == receipt
+        )
+        if trigger and not swapped:
+            return substitute(lambda: original_artifact(cls, path, **kwargs))
+        return original_artifact(cls, path, **kwargs)
+
+    monkeypatch.setattr(os, "open", observed_open)
+    monkeypatch.setattr(policy_acceptance, "read_private_identity", nested_read)
+    monkeypatch.setattr(PrivateArtifact, "read", classmethod(artifact_read))
+    assert queue.main(["plan", str(manifest), "--json"]) == 2
+    assert capsys.readouterr().out == ""
+    assert swapped and not outside_opened
+
+
+def test_private_reader_preserves_relative_parent_locator(
+    tmp_path: Path, monkeypatch
+) -> None:
+    private = tmp_path / "private"
+    private.mkdir(mode=0o700)
+    nested = private / "nested"
+    nested.mkdir(mode=0o700)
+    artifact = private / "candidate.json"
+    write(artifact, {"synthetic": True})
+    monkeypatch.chdir(nested)
+    assert policy_files.read_private(Path("../candidate.json")) == artifact.read_bytes()

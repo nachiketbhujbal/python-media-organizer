@@ -88,7 +88,7 @@ def read_private_identity(
     *,
     expected_ancestry: tuple[tuple[int, int], ...] | None = None,
 ) -> tuple[bytes, tuple[int, ...]]:
-    path = path.expanduser().absolute()
+    path = Path(os.path.abspath(path.expanduser()))
     with _pinned_private_parent(path, expected_ancestry) as (parent_fd, name, _):
         fd = os.open(
             name,

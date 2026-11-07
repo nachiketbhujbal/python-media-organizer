@@ -45,7 +45,9 @@ observations, and `migration/queue_plan.py` validates cross-job separation and
 complete policy bindings before projecting a deterministic path-private plan.
 The existing policy parser is shared, and private policy artifact I/O now keeps
 component-relative no-follow directory descriptors through leaf access to close
-the independently reproduced QUEUE-R01 ancestry-substitution gap.
+the independently reproduced QUEUE-R01 ancestry-substitution gap. The queue's
+original parent binding also persists through nested receipt parsing and later
+rechecks, addressing QUEUE-R02 without silently re-binding to a replacement.
 No child runs or persistent state is created. Manifest and plan schemas are 1;
 private policies remain schemas 4/5. Existing-state recovery is deliberately not
 part of a new-job declaration. See `docs/QUEUE_PLANNING.md`.

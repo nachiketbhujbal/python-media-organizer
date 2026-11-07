@@ -109,8 +109,12 @@ class PrivateArtifact:
     parent: Endpoint
 
     @classmethod
-    def read(cls, path: Path) -> PrivateArtifact:
-        parent = observe_endpoint(path.parent)
+    def read(cls, path: Path, *, parent: Endpoint | None = None) -> PrivateArtifact:
+        if parent is None:
+            parent = observe_endpoint(path.parent)
+        elif parent.path != path.parent:
+            raise QueuePlanningError("private artifact parent binding differs")
+        parent.require_current()
         payload, identity = read_private_identity(
             path, expected_ancestry=parent.ancestry
         )

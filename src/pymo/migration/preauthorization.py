@@ -697,7 +697,11 @@ def load_preauthorization(
 
 
 def parse_preauthorization(
-    path: Path, payload: bytes, identity: tuple[int, ...]
+    path: Path,
+    payload: bytes,
+    identity: tuple[int, ...],
+    *,
+    expected_ancestry: tuple[tuple[int, int], ...] | None = None,
 ) -> MigrationPreauthorization:
     """Parse an already safely read policy; callers own path and read safety."""
 
@@ -782,7 +786,9 @@ def parse_preauthorization(
         from pymo.migration.policy_binding import validate_plan_binding
 
         try:
-            acceptance = load_acceptance(path, payload, policy["acceptance"])
+            acceptance = load_acceptance(
+                path, payload, policy["acceptance"], expected_ancestry=expected_ancestry
+            )
         except (OSError, ValueError, RuntimeError) as error:
             raise MigrationPreauthorizationError(
                 "authored policy acceptance cannot be verified"

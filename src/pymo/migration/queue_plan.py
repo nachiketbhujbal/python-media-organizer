@@ -56,14 +56,21 @@ def _declared_endpoints(job: QueueJob) -> tuple[Endpoint, ...]:
     return endpoints
 
 
-def _bind_job(job: QueueJob, endpoints: tuple[Endpoint, ...]) -> BoundJob:
+def _bind_job(
+    job: QueueJob, endpoints: tuple[Endpoint, ...], policy_parent: Endpoint
+) -> BoundJob:
     working = endpoints[1]
-    artifact = PrivateArtifact.read(job.policy)
+    artifact = PrivateArtifact.read(job.policy, parent=policy_parent)
     if len(artifact.payload) > 1024 * 1024:
         raise QueuePlanningError("policy exceeds its supported size")
     if hashlib.sha256(artifact.payload).hexdigest() != job.policy_sha256:
         raise QueuePlanningError("policy bytes differ from the declared digest")
-    policy = parse_preauthorization(job.policy, artifact.payload, artifact.identity)
+    policy = parse_preauthorization(
+        job.policy,
+        artifact.payload,
+        artifact.identity,
+        expected_ancestry=artifact.parent.ancestry,
+    )
     if (
         policy.tool_version != __version__
         or policy.baseline != job.baseline
@@ -73,7 +80,9 @@ def _bind_job(job: QueueJob, endpoints: tuple[Endpoint, ...]) -> BoundJob:
         raise QueuePlanningError("policy does not bind this complete workflow")
     artifacts = [artifact]
     if policy.acceptance is not None:
-        artifacts.append(PrivateArtifact.read(receipt_path(job.policy)))
+        artifacts.append(
+            PrivateArtifact.read(receipt_path(job.policy), parent=artifact.parent)
+        )
     controls: list[Endpoint] = []
     for key in ("config", "ffmpeg", "ffprobe"):
         value = policy.options[key]
@@ -193,15 +202,15 @@ def build_queue_plan(path: Path) -> dict[str, Any]:
     declarations = parse_manifest(manifest)
     endpoint_groups = tuple(_declared_endpoints(job) for job in declarations)
     endpoints = [endpoint for group in endpoint_groups for endpoint in group]
-    parents = [
-        manifest.parent,
-        *(observe_endpoint(job.policy.parent) for job in declarations),
-    ]
+    policy_parents = tuple(observe_endpoint(job.policy.parent) for job in declarations)
+    parents = [manifest.parent, *policy_parents]
     # Refuse cross-job artifact placement before opening any policy/receipt.
     _require_separation(endpoints, parents)
     jobs = tuple(
-        _bind_job(job, group)
-        for job, group in zip(declarations, endpoint_groups, strict=True)
+        _bind_job(job, group, parent)
+        for job, group, parent in zip(
+            declarations, endpoint_groups, policy_parents, strict=True
+        )
     )
     for job in jobs:
         for key in ("config", "ffmpeg", "ffprobe"):
