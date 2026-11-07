@@ -234,6 +234,13 @@ never duplicate the version in source or static project metadata.
   at every stage, alongside the existing fresh child/checkpoint checks. Keep
   schema-4 manually authored policies compatible; never relax quarantine
   bindings to make virtual planning succeed.
+- `queue plan` reads only explicit private control artifacts and filesystem
+  metadata. It must never run a child or create media, cache, locks, logs,
+  action history, state or authority. Bind complete exact policies and root
+  identities, reject cross-job overlap and occupied new-job destinations, and
+  recheck every declaration before emitting a whole path-private plan. Keep
+  media evidence, capacity and future destination availability explicitly
+  unchecked; execution and recovery are separate roadmap units.
 - `migrate --json` is an explicit read-only projection of one existing strict
   coordinator run. Require its existing private state and lock, validate the
   complete lifecycle and typed outcome history, recheck state, outcomes, and

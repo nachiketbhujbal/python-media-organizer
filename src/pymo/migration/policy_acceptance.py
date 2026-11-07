@@ -82,13 +82,21 @@ class PolicyAcceptance:
     path: Path
     payload: bytes
     identity: tuple[int, ...]
+    expected_ancestry: tuple[tuple[int, int], ...] | None = None
 
     def require_current(self) -> None:
         try:
-            if read_private_identity(self.policy_path) != (
+            if read_private_identity(
+                self.policy_path, expected_ancestry=self.expected_ancestry
+            ) != (
                 self.policy_payload,
                 self.policy_identity,
-            ) or read_private_identity(self.path) != (self.payload, self.identity):
+            ) or read_private_identity(
+                self.path, expected_ancestry=self.expected_ancestry
+            ) != (
+                self.payload,
+                self.identity,
+            ):
                 raise MigrationPreauthorizationError(
                     "policy acceptance evidence changed"
                 )
@@ -98,7 +106,13 @@ class PolicyAcceptance:
             ) from error
 
 
-def load_acceptance(path: Path, payload: bytes, value: object) -> PolicyAcceptance:
+def load_acceptance(
+    path: Path,
+    payload: bytes,
+    value: object,
+    *,
+    expected_ancestry: tuple[tuple[int, int], ...] | None = None,
+) -> PolicyAcceptance:
     declaration = _require_exact_fields(
         value, {"candidate_sha256", "record"}, "acceptance declaration"
     )
@@ -106,10 +120,14 @@ def load_acceptance(path: Path, payload: bytes, value: object) -> PolicyAcceptan
     expected_path = receipt_path(path)
     if declaration["record"] != str(expected_path):
         raise MigrationPreauthorizationError("acceptance path does not match policy")
-    current, policy_identity = read_private_identity(path)
+    current, policy_identity = read_private_identity(
+        path, expected_ancestry=expected_ancestry
+    )
     if current != payload:
         raise MigrationPreauthorizationError("policy changed before acceptance check")
-    recorded, identity = read_private_identity(expected_path)
+    recorded, identity = read_private_identity(
+        expected_path, expected_ancestry=expected_ancestry
+    )
     record = json.loads(recorded, object_pairs_hook=_object_without_duplicate_keys)
     expected = {
         "schema_version": POLICY_ACCEPTANCE_SCHEMA_VERSION,
@@ -130,5 +148,11 @@ def load_acceptance(path: Path, payload: bytes, value: object) -> PolicyAcceptan
             "policy acceptance evidence does not match"
         )
     return PolicyAcceptance(
-        path, payload, policy_identity, expected_path, recorded, identity
+        path,
+        payload,
+        policy_identity,
+        expected_path,
+        recorded,
+        identity,
+        expected_ancestry,
     )

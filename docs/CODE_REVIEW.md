@@ -912,3 +912,58 @@ approved immutable tag `v0.7.1` was published. Tagged run `42342058037`
 passed, and the installed command reports `pymo 0.7.1`. ADR 0113 records the
 separate post-tag reconciliation and exact tagged artifact identities. No
 production collection, planner, cleanup or PyPI publication was involved.
+
+## Version 0.7.2 queue planning candidate
+
+The owner implements ADR 0114's declaration-only queue boundary. An independent
+Terra-medium design review required whole-queue endpoint separation, private
+artifact and receipt rechecks, complete ordered policies, buffered successful
+output and an explicit distinction between declaration checks and media evidence.
+The owner incorporated those requirements without delegating implementation.
+
+The first 66 focused synthetic tests pass, including cross-job overlaps,
+case/Unicode absent-target aliases, policy/receipt substitution, late root and
+state changes, schema refusals, path privacy and zero-write snapshots. Static
+checks, all pre-commit hooks, source/wheel builds and an isolated installed
+two-job planning/refusal check pass. The complete coverage suite is running;
+independent exact-SHA implementation review and hosted gates remain pending.
+No production media or migration planner was accessed.
+
+Independent Terra-medium review rejected `a629d88` with **QUEUE-R01 (P2)**:
+the shared private artifact reader reopened a full parent pathname after an
+ancestry check. A transient intermediate symbolic-link substitution could read
+an unrelated private file before a later check detected the change. The reviewer
+reproduced the outside read; the original 66 focused tests and 816-test owner
+gate (two existing distinct-filesystem skips) did not detect it.
+
+The owner correction retains component-relative no-follow descriptors for the
+entire private ancestry through leaf access, verifies trusted permissions and
+links, and binds queue reads to their initially observed ancestry. Private
+artifact publication uses that same anchored parent. New regressions inject
+ancestor swaps before directory opening and after parent pinning, assert that
+the outside file is never opened, and reject regular-parent substitution before
+the read. A controlled distinct-device topology test covers the retained-copy
+planning projection without accessing external media. Renewed exact-SHA review
+and the corrected complete gate remain pending.
+
+Renewed review at `9972354` closed QUEUE-R01 and identified **QUEUE-R02 (P2)**:
+nested acceptance parsing reopened the policy and receipt without the queue's
+initial parent binding. Replacing that parent with another real private
+directory could expose unrelated receipt bytes before later refusal. The owner
+now carries the initial full ancestry through the initial policy read, shared
+parser, receipt loading, subsequent receipt bookkeeping read and acceptance
+rechecks. Five end-to-end queue substitutions assert that no unrelated file
+inode is opened. Relative policy locators containing `..` retain compatibility
+through lexical normalization before no-follow traversal. Renewed review and
+the final complete gate are required for this correction; earlier results are
+not its release proof.
+
+Independent Terra-medium review accepted exact corrected implementation
+`dee1f44c7acbf3cbd3b53e15da1d10ef7bcaa49d`, closed QUEUE-R01 and QUEUE-R02,
+and found no further actionable issues. The reviewer independently ran all 133
+queue-planning and policy-authoring tests and checked the complete diff. The
+owner also passed those 133 tests, Ruff, Black, mypy, all-file hooks, source/wheel
+builds and an isolated installed two-job planning/refusal check. Every packaged
+source/config byte matched that exact candidate. The final complete coverage
+suite and protected hosted gates remain separate publication prerequisites;
+this record does not claim a release or production sign-off.
