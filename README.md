@@ -325,7 +325,7 @@ supported.
 
 `--json` is a report-only action over an existing private coordinator run. It
 preflights the exact restart lifecycle and every typed outcome, rechecks state,
-outcomes, and both collection identities, and emits one compact schema-3 object
+outcomes, and both collection identities, and emits one compact schema-4 object
 without timestamps or other console text. It never scans media, advances a
 stage, creates state, writes either collection or action history, or grants
 quarantine, deletion, verification, or sign-off authority. It cannot be
@@ -343,7 +343,8 @@ routine work with `--run` after that single reviewed apply. The original
 desired.
 
 `--unattended PRIVATE_POLICY_JSON` uses the same one-stage engine without
-terminal questions. The private schema-3 policy binds the exact pymo version,
+terminal questions. The private policy (manual schema 4 or authored schema 5) binds the exact pymo
+version,
 canonical roots, saved options, separately enumerated checkpoint decisions,
 and exact aggregate typed results expected at each boundary. Different
 transformation plans with the same counts remain distinct through a
@@ -421,7 +422,7 @@ between stages, preserves the initial restart-state binding, requires every
 reload to add exactly the one expected successful attempt, and stops with status
 2 if any of those invariants changes.
 
-The schema-5 restart file records canonical roots, the installed pymo version,
+The schema-6 restart file records canonical roots, the installed pymo version,
 fixed common options, attempts, statuses, measured child durations, and private
 log and outcome names. Collection and log-directory separation is checked by
 filesystem identity, so aliases on a case-insensitive or normalizing filesystem
@@ -454,6 +455,17 @@ same-filesystem managed quarantine and closes the version 0.6 line. Version
 one-command executor already consumes; a sequential manifest-backed queue and
 benchmark-proven scheduling follow as separate version 0.7 releases under
 [ADR 0108](docs/adrs/0108-author-reviewed-unattended-policies-before-queues.md).
+
+### Author a reviewed unattended policy
+
+The v0.7.1 candidate adds a complete target-local preview through
+`pymo policy plan BASELINE WORKING`. `policy review` shows its checkpoint
+expectations; separate `policy accept --sha256 ... --apply` publishes a policy
+and its required acceptance receipt without starting migration. This authoring path retains duplicates in place and
+uses fresh reads with `--no-cache`. Future managed-quarantine identities and
+other unprovable transitions are refused, never guessed. See the
+[authoring guide](docs/POLICY_AUTHORING.md) for the private output and acceptance
+commands, supported scope, and interruption limits.
 
 ### Verify a migration by exact bytes and media content
 

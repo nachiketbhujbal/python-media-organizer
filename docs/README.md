@@ -59,3 +59,6 @@ ADR 0106 records its atomic no-replace, journal, undo, and fresh-verification
 boundaries, and ADR 0107 records its post-tag release truth. ADR 0105 records
 the version 0.6 and 0.7 boundary; ADR 0108 records the current version 0.7
 sequence through version 0.7.8.
+
+[POLICY_AUTHORING.md](POLICY_AUTHORING.md) describes the v0.7.1 candidate
+planning, review, acceptance and authored authority contracts.

@@ -218,6 +218,22 @@ never duplicate the version in source or static project metadata.
   planned source bytes, recompute before apply, and carry organization and
   rename evidence through the journaled move boundary. Never let a replacement
   at the same path or a substituted valid policy inherit prior authority.
+- `policy plan` composes target-local namespace transitions over unchanged,
+  descriptor-pinned bytes and never writes collection state or scratch media.
+  Only explicit external private artifacts may be written, with `--apply` and
+  no replacement. Candidates are not authority. `policy accept` requires the
+  exact reviewed digest, full fresh rederivation, unchanged roots/configuration,
+  and separate `--apply` before publishing an owner-private policy and a
+  separate create-once acceptance receipt. Schema 5 requires that receipt to
+  bind exact candidate and policy bytes, path, version, the verified policy
+  inode and its own exclusively allocated inode; extracted drafts or
+  incomplete/substituted publications grant no authority. Author only
+  complete retained-in-place, no-cache plans; refuse underivable managed
+  quarantine identities and incomplete or unsafe evidence. Schema-5 authored
+  execution must revalidate initial baseline and planned working namespaces
+  at every stage, alongside the existing fresh child/checkpoint checks. Keep
+  schema-4 manually authored policies compatible; never relax quarantine
+  bindings to make virtual planning succeed.
 - `migrate --json` is an explicit read-only projection of one existing strict
   coordinator run. Require its existing private state and lock, validate the
   complete lifecycle and typed outcome history, recheck state, outcomes, and

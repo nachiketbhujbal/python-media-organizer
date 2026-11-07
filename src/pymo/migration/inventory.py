@@ -52,6 +52,11 @@ class HashedEntry:
     size: int
     sha256: str
     state: FileState
+    source_path: Path | None = None
+
+    @property
+    def read_path(self) -> Path:
+        return self.path if self.source_path is None else self.source_path
 
     @property
     def identity(self) -> tuple[int, str]:

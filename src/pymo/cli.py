@@ -13,6 +13,7 @@ from pymo import (
     correct_extensions,
     migrate,
     organize,
+    policy,
     quarantine,
     rename,
     scan,
@@ -39,6 +40,7 @@ def _commands() -> dict[str, Callable[[Sequence[str] | None], int]]:
         "verify-migration": verify_migration.main,
         "correct-extensions": correct_extensions.main,
         "migrate": migrate.main,
+        "policy": policy.main,
         "quarantine-dups": quarantine.main,
         "organize": organize.main,
         "rename": rename.main,
@@ -68,7 +70,7 @@ def _supports_show_files(command: str, cache_action: str | None) -> bool:
 
 
 def _supports_show_ignored(command: str, cache_action: str | None) -> bool:
-    return command not in {"cache", "quarantine-dups"} or (
+    return command not in {"cache", "quarantine-dups", "policy"} or (
         command == "cache" and cache_action in {"warm", "refresh"}
     )
 
@@ -190,6 +192,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         and args.command != "migrate"
     ):
         parser.error("--file-log-level requires --log-file")
+    if args.command == "policy" and (
+        args.log_file is not None or args.config is not None or args.show_ignored
+    ):
+        parser.error(
+            "policy owns explicit private artifacts; use policy plan --config for configuration"
+        )
     started_at = time.monotonic()
     structured_json = (
         args.command in {"scan", "validate", "cache", "verify-migration", "migrate"}

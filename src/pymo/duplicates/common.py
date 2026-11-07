@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -105,6 +106,8 @@ def copy_target(
     duplicate_path: Path,
     starting_number: int,
     reserved: set[str],
+    *,
+    exists: Callable[[Path], bool] = os.path.lexists,
 ) -> tuple[Path, int]:
     """Choose a flat, readable, collision-safe duplicate filename."""
     number = starting_number
@@ -112,7 +115,7 @@ def copy_target(
     while True:
         target = destination / f"{kept_path.stem}_copy({number}){suffix}"
         key = str(target).casefold()
-        if key not in reserved and not os.path.lexists(target):
+        if key not in reserved and not exists(target):
             reserved.add(key)
             return target, number
         number += 1

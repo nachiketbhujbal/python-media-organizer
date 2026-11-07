@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -52,6 +52,7 @@ from pymo.migration.outcome import (
     outcome_record,
     write_outcome,
 )
+from pymo.planning import PlanningView
 from pymo.progress import ProgressMeter
 
 
@@ -91,7 +92,11 @@ def is_in_dups(path: Path, root: Path) -> bool:
 
 
 def available_target(
-    desired: Path, occupied: set[str], starting_number: int = 0
+    desired: Path,
+    occupied: set[str],
+    starting_number: int = 0,
+    *,
+    exists: Callable[[Path], bool] = path_exists,
 ) -> Path:
     """Choose a Finder-friendly target name without overwriting anything."""
     number = starting_number
@@ -101,7 +106,7 @@ def available_target(
             if number == 0
             else desired.with_name(f"{desired.stem} ({number}){desired.suffix}")
         )
-        if path_key(candidate) not in occupied and not path_exists(candidate):
+        if path_key(candidate) not in occupied and not exists(candidate):
             occupied.add(path_key(candidate))
             return candidate
         number += 1
@@ -150,8 +155,13 @@ def build_plan(
     vids: Path,
     classifier: Classifier,
     config: PymoConfig,
+    *,
+    view: PlanningView | None = None,
+    show_progress: bool = True,
 ) -> tuple[list[MoveRecord], list[FileRecord], list[Path], list[Path]]:
-    paths, skipped_links, ignored = discover_files(root, config)
+    paths, skipped_links, ignored = (
+        discover_files(root, config) if view is None else (view.paths(), [], [])
+    )
     occupied = {path_key(path) for path in paths}
     plan: list[MoveRecord] = []
     already_correct: list[FileRecord] = []
@@ -159,15 +169,24 @@ def build_plan(
         len(paths), None, config.performance.progress_interval_seconds
     )
 
-    print(f"Classifying {len(paths)} file(s) in {root}")
+    if show_progress:
+        print(f"Classifying {len(paths)} file(s) in {root}")
     for path in paths:
-        kind, mime_type = classifier.classify(path)
+        kind, mime_type = (
+            classifier.classify(path)
+            if view is None
+            else view.classify(path, classifier)
+        )
         record = FileRecord(path=path, kind=kind, mime_type=mime_type)
         destination = desired_directory(kind, root, pics, vids)
         if path.parent == destination:
             already_correct.append(record)
         else:
-            target = available_target(destination / path.name, occupied)
+            target = available_target(
+                destination / path.name,
+                occupied,
+                exists=path_exists if view is None else view.exists,
+            )
             plan.append(
                 MoveRecord(
                     source=path,
@@ -177,7 +196,7 @@ def build_plan(
                 )
             )
         progress_message = progress.advance("classified")
-        if progress_message:
+        if progress_message and show_progress:
             print(f"  {progress_message}")
 
     return plan, already_correct, skipped_links, ignored

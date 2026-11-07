@@ -841,3 +841,63 @@ the authoritative `migrate --json` instruction still named report schema 3.
 The owner corrected it to the implemented schema 4 while preserving read-only,
 privacy and compatibility requirements. The other release claims and safety
 boundaries were accepted; renewed exact-head documentation review is required.
+
+
+## Version 0.7.1 policy-authoring review
+
+The separate Terra-medium design review required physical descriptor reads to
+remain distinct from virtual names, shared deterministic mutation planners,
+and refusal of future managed-quarantine identities rather than invented
+inodes or weakened manifests. ADR 0112 records the retained-in-place scope.
+
+Independent exact-SHA review rejected `089b683fbf7818e9c8683906866aa0c111d09f19`:
+
+- **AUTH-R01 (P1): resolved; independently closed at `1bae676`.** The candidate's
+  inner proposed schema-5 policy could be extracted and executed without the
+  separate acceptance step. Authored execution now requires a strict acceptance
+  declaration and a separate create-once receipt binding the reviewed candidate,
+  exact accepted policy bytes, exact path and version. Tests use real acceptance
+  and explicitly refuse extracted proposals before run-state creation.
+- **AUTH-R02 (P1/P2): resolved; independently closed at `1bae676`.** A scratch leaf
+  substituted just before atomic rename could appear at the requested output
+  before the post-publication identity check failed. Presence alone now grants
+  no authority: the exact policy is verified before a separate receipt can be
+  published, and execution checks both artifacts independently. Adversarial
+  tests substitute a different valid policy or receipt at each rename boundary,
+  retain all failed artifacts, and prove no run or mutation can start.
+
+The initial owner suite passed 737 tests with two ordinary-run distinct-device
+skips; the independent focused suite passed 40. Those passes did not detect the
+review findings. The initial Fedora CI run also exposed a test fixture's
+unavailable optional H.264 encoder. The remux fixture now uses the portable
+native MPEG-4 encoder, preserving the real decode/remux test without a new skip.
+
+
+Renewed independent review at `83b2a9c946c016d48a1e4c3c759fa442a91cf5a1`
+closed AUTH-R01's extraction bypass but kept AUTH-R02 open: replacing receipt
+scratch with identical bytes left a loadable receipt after acceptance failed.
+The earlier regression used different-policy bytes and missed this identity
+case. The owner now binds the verified policy device/inode and the receipt's
+own exclusive scratch device/inode inside the receipt payload; fresh loading
+compares both with pinned current objects. Additional regressions cover exact-
+byte receipt substitution and late identical-byte policy replacement. Renewed
+exact-SHA review remains required. The preceding owner gate passed 748 tests
+with two ordinary-run filesystem skips; that result predates this correction.
+
+
+Independent Terra-medium review accepted exact implementation
+`1bae6760fe66bdaf49d8dc3ccc6bc63e96964006` without further actionable findings
+and closed AUTH-R01 and AUTH-R02. The reviewer independently repeated the
+same-byte receipt scratch substitution and confirmed both acceptance failure
+and subsequent loading refusal. Twelve focused extraction/substitution/receipt
+tests passed, with 41 other focused-suite tests deselected, and the detached
+checkout and complete diff were clean. Full owner, artifact and hosted gates
+remain separate evidence; this acceptance does not authorize real-media cleanup.
+
+
+The final owner implementation gate passed 750 tests with two existing
+ordinary-run distinct-filesystem skips, at 88 percent subprocess-aware coverage.
+Ruff, Black, mypy, all pre-commit hooks, source/wheel builds and isolated
+installed-package plan/review/accept/execute acceptance passed. The synthetic
+installed workflow preserved every source byte and retained duplicate files.
+No production collection, planner, cleanup or PyPI publication was involved.
