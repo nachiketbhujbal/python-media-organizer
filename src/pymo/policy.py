@@ -20,6 +20,7 @@ from pymo.migration.coordinator_state import (
     _options_from_json,
 )
 from pymo.migration.outcome import MigrationOutcomeError
+from pymo.migration.policy_acceptance import publish_accepted
 from pymo.migration.policy_files import publish_private, read_private
 from pymo.migration.policy_plan import POLICY_CANDIDATE_SCHEMA_VERSION, build_candidate
 from pymo.migration.preauthorization import (
@@ -191,7 +192,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "candidate or target changed; generate and review a new plan"
             )
         if args.apply:
-            publish_private(args.output, canonical_bytes(policy), roots)
+            publish_accepted(args.output, policy, sha256, roots)
             print("Accepted private policy saved. Migration has not started.")
         else:
             print(

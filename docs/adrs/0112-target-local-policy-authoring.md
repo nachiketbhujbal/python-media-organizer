@@ -57,3 +57,10 @@ synthetic differential tests compare the whole planned workflow with actual
 execution, including metadata-varied images, corrected extensions, collision
 names, retained ignored entries, and real FFmpeg remux duplicates. Production
 collections are not required to prove these authoring boundaries.
+
+Acceptance publishes and verifies the policy before publishing a separate
+create-once receipt bound to its exact bytes, path, version and reviewed
+candidate SHA-256. Schema 5 requires both files; extraction of the unaccepted
+inner proposal supplies no authority. Scratch substitution or interruption
+cannot turn mere file presence into accepted authority. Failed artifacts remain
+for manual review; publication never overwrites or deletes them.

@@ -43,7 +43,8 @@ ADR 0112 implements target-local virtual planning with separate digest-bound
 review and acceptance. `policy.py` coordinates private candidate schema 1;
 `migration/policy_plan.py`, `plan_analysis.py`, and `virtual.py` compose the
 existing deterministic transformation and exact-media policies over unchanged
-source descriptors. `policy_files.py` owns exclusive private artifact I/O and
+source descriptors. `policy_files.py` owns exclusive private artifact I/O,
+`policy_acceptance.py` binds separate create-once acceptance receipts, and
 `policy_binding.py` adds fresh per-stage namespace checks to authored policy
 schema 5. Existing schema-4 manually authored policies remain supported.
 
@@ -1266,7 +1267,7 @@ from an ordinary observed result eligible for final sign-off.
 
 `src/pymo/migrate.py` coordinates `pymo migrate BASELINE WORKING` while
 `migration/workflow.py` owns the fixed ordered stages and child arguments and
-`migration/coordinator_state.py` owns private schema-5 restart state. The
+`migration/coordinator_state.py` owns private schema-6 restart state. The
 command with no `--log-dir` prints a zero-write plan. `--start` creates one
 explicit external private directory, binds canonical roots, exact pymo version,
 and common options, and publishes mode-0600 state atomically under a dedicated

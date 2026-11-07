@@ -223,7 +223,10 @@ never duplicate the version in source or static project metadata.
   Only explicit external private artifacts may be written, with `--apply` and
   no replacement. Candidates are not authority. `policy accept` requires the
   exact reviewed digest, full fresh rederivation, unchanged roots/configuration,
-  and separate `--apply` before publishing an owner-private policy. Author only
+  and separate `--apply` before publishing an owner-private policy and a
+  separate create-once acceptance receipt. Schema 5 requires that receipt to
+  bind exact candidate and policy bytes, path and version; extracted drafts or
+  incomplete/substituted publications grant no authority. Author only
   complete retained-in-place, no-cache plans; refuse underivable managed
   quarantine identities and incomplete or unsafe evidence. Schema-5 authored
   execution must revalidate initial baseline and planned working namespaces

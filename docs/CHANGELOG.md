@@ -7,7 +7,8 @@ All notable changes to `python-media-organizer` will be recorded here.
 - Add target-local `policy plan`, `review`, and separate digest-bound `accept`
   for complete retained-in-place migrations without trial copies or media writes.
 - Publish private candidate schema 1 and authored policy schema 5 with initial
-  root/content bindings and fresh per-stage namespace checks. Retain schema-4
+  root/content bindings, separate acceptance receipts, and fresh per-stage
+  namespace checks. Retain schema-4
   policy compatibility and every existing fresh checkpoint/apply check.
 - Fail closed on unprovable transitions, including future managed-quarantine
   identities, existing working action history, unsafe or uninspectable input.

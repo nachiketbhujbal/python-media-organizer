@@ -8,13 +8,16 @@ import os
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pymo.migration.coordinator_state import (
     MigrationCoordinatorError,
     MigrationState,
     _options_from_json,
 )
+
+if TYPE_CHECKING:
+    from pymo.migration.policy_acceptance import PolicyAcceptance
 
 # This identifies the public pre-authorization policy compatibility contract.
 # Version 5 adds authored initial/stage namespace bindings. Version 4 remains
@@ -582,6 +585,7 @@ class MigrationPreauthorization:
     options: dict[str, bool | int | str | None]
     authorizations: dict[str, tuple[str, dict[str, Any]]]
     plan_binding: dict[str, Any] | None = None
+    acceptance: PolicyAcceptance | None = None
 
     def require_target(self, state: MigrationState) -> None:
         if self.plan_binding is not None:
@@ -590,6 +594,8 @@ class MigrationPreauthorization:
             require_plan_binding(self.plan_binding, state)
 
     def require_current(self) -> None:
+        if self.acceptance is not None:
+            self.acceptance.require_current()
         payload, identity = _read_private_policy(self.path)
         if (
             identity != self.file_identity
@@ -708,7 +714,7 @@ def load_preauthorization(
             "options",
             "authorizations",
         }
-        | ({"plan_binding"} if authored else set()),
+        | ({"plan_binding", "acceptance"} if authored else set()),
         "record",
     )
     if type(policy["schema_version"]) is not int or policy["schema_version"] not in {
@@ -762,9 +768,17 @@ def load_preauthorization(
             "managed quarantine requires an explicit saved destination"
         )
     plan_binding = None
+    acceptance = None
     if authored:
+        from pymo.migration.policy_acceptance import load_acceptance
         from pymo.migration.policy_binding import validate_plan_binding
 
+        try:
+            acceptance = load_acceptance(path, payload, policy["acceptance"])
+        except (OSError, ValueError, RuntimeError) as error:
+            raise MigrationPreauthorizationError(
+                "authored policy acceptance cannot be verified"
+            ) from error
         plan_binding = validate_plan_binding(policy["plan_binding"])
         if set(checkpoints) != set(_CHECKPOINT_ORDER) or managed_quarantine is not None:
             raise MigrationPreauthorizationError(
@@ -784,6 +798,7 @@ def load_preauthorization(
         options=options,
         authorizations=dict(parsed),
         plan_binding=plan_binding,
+        acceptance=acceptance,
     )
 
 

@@ -32,8 +32,10 @@ The private candidate also lists each proposed source/target move and created or
 removed directory. Candidate generation is not consent. `accept` defaults to a
 preview; its separate `--apply` authorizes all listed decisions only if the exact
 reviewed SHA-256, current version, target roots, source identities, content,
-configuration, and recomputed complete plan still agree. It writes only the
-accepted policy, never starts migration, and grants no deletion authority.
+configuration, and recomputed complete plan still agree. It writes the
+accepted policy and its separate acceptance receipt, never starts migration,
+and grants no deletion authority. Keep both at their original paths; the receipt
+is named by appending `.acceptance.json` to the policy filename.
 
 Then use the existing executor, repeating the candidate's selected options:
 
@@ -53,9 +55,16 @@ Normal console output hides collection paths and filenames, including with
 full visibility. Global persistent logging and disclosure selectors are refused;
 explicit candidate and policy artifacts are the private output surfaces.
 Artifact files are mode `0600`, owner-private, single-link regular files.
-Candidates are bounded at 64 MiB; accepted policies retain the one-MiB limit. Writes use verified private scratch and atomic no-replace publication. An
-interrupted scratch artifact is retained for manual review, is never adopted
-automatically, and never appears at the requested policy destination.
+Candidates are bounded at 64 MiB; accepted policies retain the one-MiB limit.
+Writes use verified private scratch and atomic no-replace publication. A policy
+file alone is never authored execution authority: only after its exact published
+bytes are verified is a separate receipt published, binding those bytes, the
+reviewed candidate SHA-256, the exact policy path and tool version. The executor
+requires both files and rechecks their bytes and identities during execution.
+Interrupted or substituted artifacts are retained for manual review and are
+never automatically adopted. A failed publication can leave a policy file
+without a valid receipt, which cannot run. Use fresh output names after failure;
+pymo does not remove or replace either file.
 
 ## Supported planning boundary
 
@@ -94,8 +103,9 @@ work. Production cleanup and migration readiness remain separate decisions.
 
 The UTF-8 JSON object has exactly `schema_version: 1`,
 `kind: "unaccepted-migration-plan"`, `policy`, and `transitions`. `policy` is the
-complete proposed schema-5 unattended policy. `transitions` contains the five
-preview stages, each with `stage`, `moves`, `create_directories`, and
+proposed schema-5 fields without an acceptance declaration or receipt.
+Extracting the proposed inner object does not produce executable authority.
+`transitions` contains the five preview stages, each with `stage`, `moves`, `create_directories`, and
 `remove_directories`. Each move has collection-relative `source`, `target`,
 whole-file `sha256`, and `bytes`. This is sensitive local review material.
 The wrapper is rejected by the unattended executor.
@@ -106,7 +116,16 @@ changing either the artifact or declared target requires another review.
 
 ## Authored policy schema 5
 
-Schema 5 retains every schema-4 field and adds exactly `plan_binding`:
+Schema 5 retains every schema-4 field and adds `acceptance` and `plan_binding`.
+`acceptance` has exactly `candidate_sha256` and the absolute `record` path. The
+separate receipt has schema version 1, kind `accepted-migration-policy`,
+`tool_version`, `candidate_sha256`, `policy_path`, and `policy_sha256`. Its strict
+contents must match the exact accepted policy; a missing or mismatched receipt
+is refused before any run state is created. This is explicit local acceptance
+evidence, not cryptographic proof against an owner who deliberately constructs
+authority; manually authored schema 4 remains an independent supported path.
+
+`plan_binding` contains:
 
 - `baseline_initial`: SHA-256 over the initial baseline root identity, scoped
   paths, file identities, bytes, times, directory identities, and ignored entry

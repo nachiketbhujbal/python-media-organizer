@@ -70,6 +70,23 @@ def save_candidate(tmp_path: Path, baseline: Path, working: Path) -> tuple[Path,
     return path, value
 
 
+def accept_candidate(candidate: Path, accepted: Path) -> None:
+    assert (
+        policy.main(
+            [
+                "accept",
+                str(candidate),
+                "--sha256",
+                hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                "--output",
+                str(accepted),
+                "--apply",
+            ]
+        )
+        == 0
+    )
+
+
 @pytest.mark.parametrize("with_media", [False, True])
 def test_plan_accept_and_actual_workflow_agree(
     tmp_path: Path, with_media: bool
@@ -250,10 +267,9 @@ def test_accepted_policy_refuses_changed_execution_target(
 ) -> None:
     baseline, working = collection_pair(tmp_path)
     media(baseline, working)
-    _candidate, value = save_candidate(tmp_path, baseline, working)
+    _candidate, _ = save_candidate(tmp_path, baseline, working)
     accepted = tmp_path / "private" / "accepted.json"
-    accepted.write_bytes(canonical_bytes(value["policy"]))
-    accepted.chmod(0o600)
+    accept_candidate(_candidate, accepted)
     source = working / "nested" / "note.txt"
     if attack == "bytes":
         source.write_text("different media-independent evidence")
@@ -289,10 +305,9 @@ def test_virtual_collisions_and_ignored_directories_match_real_execution(
     Image.new("RGB", (5, 5), "green").save(baseline / "pics" / "same.png")
     (baseline / "protected" / ".DS_Store").write_bytes(b"synthetic ignored")
     shutil.copytree(baseline, working, dirs_exist_ok=True)
-    _candidate, value = save_candidate(tmp_path, baseline, working)
+    _candidate, _ = save_candidate(tmp_path, baseline, working)
     accepted = tmp_path / "private" / "accepted.json"
-    accepted.write_bytes(canonical_bytes(value["policy"]))
-    accepted.chmod(0o600)
+    accept_candidate(_candidate, accepted)
     result = run(
         "migrate",
         baseline,
@@ -354,7 +369,7 @@ def test_real_video_plan_matches_remux_execution(tmp_path: Path) -> None:
             "-i",
             "color=c=red:s=16x16:r=5:d=0.4",
             "-c:v",
-            "libx264",
+            "mpeg4",
             "-pix_fmt",
             "yuv420p",
             str(first),
@@ -381,8 +396,7 @@ def test_real_video_plan_matches_remux_execution(tmp_path: Path) -> None:
     }
     assert expected["video-duplicates-apply"]["extra_copies"] == 1
     accepted = tmp_path / "private" / "accepted.json"
-    accepted.write_bytes(canonical_bytes(value["policy"]))
-    accepted.chmod(0o600)
+    accept_candidate(_candidate, accepted)
     result = run(
         "migrate",
         baseline,
@@ -503,10 +517,9 @@ def test_changed_namespace_between_children_stops_before_apply(
 ) -> None:
     baseline, working = collection_pair(tmp_path)
     media(baseline, working)
-    _candidate, value = save_candidate(tmp_path, baseline, working)
+    _candidate, _ = save_candidate(tmp_path, baseline, working)
     accepted = tmp_path / "private" / "accepted.json"
-    accepted.write_bytes(canonical_bytes(value["policy"]))
-    accepted.chmod(0o600)
+    accept_candidate(_candidate, accepted)
     original = migrate._run_next
 
     def alter(*args, **kwargs):
@@ -543,10 +556,9 @@ def test_collection_configuration_and_existing_review_tree_are_modeled(
         (root / "retained-note.txt").write_text("protected synthetic note")
     (working / "dups" / "pics").mkdir(parents=True)
     Image.new("RGB", (8, 8), "blue").save(working / "dups" / "pics" / "existing.png")
-    _candidate, value = save_candidate(tmp_path, baseline, working)
+    _candidate, _ = save_candidate(tmp_path, baseline, working)
     accepted = tmp_path / "private" / "accepted.json"
-    accepted.write_bytes(canonical_bytes(value["policy"]))
-    accepted.chmod(0o600)
+    accept_candidate(_candidate, accepted)
     result = run(
         "migrate",
         baseline,
@@ -599,10 +611,9 @@ def test_authored_run_resumes_after_completed_child_interruption(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     baseline, working = collection_pair(tmp_path)
-    _candidate, value = save_candidate(tmp_path, baseline, working)
+    _candidate, _ = save_candidate(tmp_path, baseline, working)
     accepted = tmp_path / "private" / "accepted.json"
-    accepted.write_bytes(canonical_bytes(value["policy"]))
-    accepted.chmod(0o600)
+    accept_candidate(_candidate, accepted)
     original = migrate._run_next
 
     def interrupt(*args, **kwargs):
@@ -663,3 +674,194 @@ def test_underivable_duplicate_layout_is_rejected_before_candidate(
         (working / "pics" / "nested" / ".DS_Store").write_text("ignored")
     with pytest.raises(PolicyPlanningError):
         build_candidate(baseline, working, migrate._initial_options({"no_cache": True}))
+
+
+def test_extracted_candidate_policy_is_not_authority(tmp_path: Path) -> None:
+    baseline, working = collection_pair(tmp_path)
+    candidate, value = save_candidate(tmp_path, baseline, working)
+    extracted = candidate.with_name("extracted.json")
+    extracted.write_bytes(canonical_bytes(value["policy"]))
+    extracted.chmod(0o600)
+    result = run(
+        "migrate",
+        baseline,
+        working,
+        "--no-cache",
+        "--log-dir",
+        tmp_path / "logs",
+        "--unattended",
+        extracted,
+    )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert not (tmp_path / "logs").exists()
+    assert snapshot(baseline) == snapshot(working) == {}
+
+
+@pytest.mark.parametrize("boundary", ["policy", "receipt"])
+def test_scratch_substitution_never_publishes_usable_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, boundary: str
+) -> None:
+    from pymo.migration import policy_files
+    from pymo.migration.policy_acceptance import receipt_path
+    from pymo.migration.preauthorization import MigrationPreauthorizationError
+
+    baseline, working = collection_pair(tmp_path)
+    candidate, _ = save_candidate(tmp_path, baseline, working)
+    other = candidate.with_name("other.json")
+    accept_candidate(candidate, other)
+    output = candidate.with_name("accepted.json")
+    target_path = output if boundary == "policy" else receipt_path(output)
+    substituted = (other if boundary == "policy" else receipt_path(other)).read_bytes()
+    atomic = policy_files._atomic_rename_without_replace
+
+    def swap(source_fd, source, target_fd, target):
+        if target == target_path.name:
+            os.rename(
+                source, source + ".held", src_dir_fd=source_fd, dst_dir_fd=source_fd
+            )
+            fd = os.open(
+                source, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=source_fd
+            )
+            try:
+                os.write(fd, substituted)
+            finally:
+                os.close(fd)
+        atomic(source_fd, source, target_fd, target)
+
+    monkeypatch.setattr(policy_files, "_atomic_rename_without_replace", swap)
+    assert (
+        policy.main(
+            [
+                "accept",
+                str(candidate),
+                "--sha256",
+                hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                "--output",
+                str(output),
+                "--apply",
+            ]
+        )
+        == 2
+    )
+    assert target_path.read_bytes() == substituted
+    assert list(output.parent.glob(".pymo-policy-*.held"))
+    with pytest.raises(MigrationPreauthorizationError):
+        load_preauthorization(output, roots=(baseline, working))
+    result = run(
+        "migrate",
+        baseline,
+        working,
+        "--no-cache",
+        "--log-dir",
+        tmp_path / "logs",
+        "--unattended",
+        output,
+    )
+    assert result.returncode == 2
+    assert not (tmp_path / "logs").exists()
+    assert snapshot(baseline) == snapshot(working) == {}
+
+
+def test_interruption_after_policy_publication_grants_no_authority(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pymo.migration import policy_acceptance
+    from pymo.migration.preauthorization import MigrationPreauthorizationError
+
+    baseline, working = collection_pair(tmp_path)
+    candidate, _ = save_candidate(tmp_path, baseline, working)
+    output = candidate.with_name("accepted.json")
+    publish = policy_acceptance.publish_private
+
+    def interrupt(path, payload, roots):
+        if path == policy_acceptance.receipt_path(output):
+            raise OSError("synthetic interruption before receipt")
+        publish(path, payload, roots)
+
+    monkeypatch.setattr(policy_acceptance, "publish_private", interrupt)
+    assert (
+        policy.main(
+            [
+                "accept",
+                str(candidate),
+                "--sha256",
+                hashlib.sha256(candidate.read_bytes()).hexdigest(),
+                "--output",
+                str(output),
+                "--apply",
+            ]
+        )
+        == 2
+    )
+    assert output.exists()
+    assert not policy_acceptance.receipt_path(output).exists()
+    with pytest.raises(MigrationPreauthorizationError):
+        load_preauthorization(output, roots=(baseline, working))
+
+
+@pytest.mark.parametrize(
+    "attack",
+    ["missing", "wrong-hash", "duplicate-key", "symlink", "hardlink", "public"],
+)
+def test_acceptance_receipt_is_required_and_strict(tmp_path: Path, attack: str) -> None:
+    import json
+
+    from pymo.migration.policy_acceptance import receipt_path
+    from pymo.migration.preauthorization import MigrationPreauthorizationError
+
+    baseline, working = collection_pair(tmp_path)
+    candidate, _ = save_candidate(tmp_path, baseline, working)
+    output = candidate.with_name("accepted.json")
+    accept_candidate(candidate, output)
+    receipt = receipt_path(output)
+    saved = receipt.with_suffix(".saved")
+    receipt.rename(saved)
+    if attack == "wrong-hash":
+        value = json.loads(saved.read_bytes())
+        value["policy_sha256"] = "0" * 64
+        receipt.write_bytes(canonical_bytes(value))
+        receipt.chmod(0o600)
+    elif attack == "duplicate-key":
+        receipt.write_bytes(
+            saved.read_bytes().replace(b"{", b'{"kind":"accepted-migration-policy",', 1)
+        )
+        receipt.chmod(0o600)
+    elif attack == "symlink":
+        receipt.symlink_to(saved)
+    elif attack == "hardlink":
+        os.link(saved, receipt)
+    elif attack == "public":
+        receipt.write_bytes(saved.read_bytes())
+        receipt.chmod(0o644)
+    with pytest.raises(MigrationPreauthorizationError):
+        load_preauthorization(output, roots=(baseline, working))
+    result = run(
+        "migrate",
+        baseline,
+        working,
+        "--no-cache",
+        "--log-dir",
+        tmp_path / "logs",
+        "--unattended",
+        output,
+    )
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert not (tmp_path / "logs").exists()
+
+
+def test_receipt_replacement_during_execution_is_rejected(tmp_path: Path) -> None:
+    from pymo.migration.policy_acceptance import receipt_path
+    from pymo.migration.preauthorization import MigrationPreauthorizationError
+
+    baseline, working = collection_pair(tmp_path)
+    candidate, _ = save_candidate(tmp_path, baseline, working)
+    output = candidate.with_name("accepted.json")
+    accept_candidate(candidate, output)
+    authorized = load_preauthorization(output, roots=(baseline, working))
+    receipt = receipt_path(output)
+    replacement = receipt.with_suffix(".replacement")
+    replacement.write_bytes(receipt.read_bytes())
+    replacement.chmod(0o600)
+    os.replace(replacement, receipt)
+    with pytest.raises(MigrationPreauthorizationError):
+        authorized.require_current()

@@ -841,3 +841,33 @@ the authoritative `migrate --json` instruction still named report schema 3.
 The owner corrected it to the implemented schema 4 while preserving read-only,
 privacy and compatibility requirements. The other release claims and safety
 boundaries were accepted; renewed exact-head documentation review is required.
+
+
+## Version 0.7.1 policy-authoring review
+
+The separate Terra-medium design review required physical descriptor reads to
+remain distinct from virtual names, shared deterministic mutation planners,
+and refusal of future managed-quarantine identities rather than invented
+inodes or weakened manifests. ADR 0112 records the retained-in-place scope.
+
+Independent exact-SHA review rejected `089b683fbf7818e9c8683906866aa0c111d09f19`:
+
+- **AUTH-R01 (P1): owner corrected; renewed review pending.** The candidate's
+  inner proposed schema-5 policy could be extracted and executed without the
+  separate acceptance step. Authored execution now requires a strict acceptance
+  declaration and a separate create-once receipt binding the reviewed candidate,
+  exact accepted policy bytes, exact path and version. Tests use real acceptance
+  and explicitly refuse extracted proposals before run-state creation.
+- **AUTH-R02 (P1/P2): owner corrected; renewed review pending.** A scratch leaf
+  substituted just before atomic rename could appear at the requested output
+  before the post-publication identity check failed. Presence alone now grants
+  no authority: the exact policy is verified before a separate receipt can be
+  published, and execution checks both artifacts independently. Adversarial
+  tests substitute a different valid policy or receipt at each rename boundary,
+  retain all failed artifacts, and prove no run or mutation can start.
+
+The initial owner suite passed 737 tests with two ordinary-run distinct-device
+skips; the independent focused suite passed 40. Those passes did not detect the
+review findings. The initial Fedora CI run also exposed a test fixture's
+unavailable optional H.264 encoder. The remux fixture now uses the portable
+native MPEG-4 encoder, preserving the real decode/remux test without a new skip.

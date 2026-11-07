@@ -19,6 +19,10 @@ from pymo.migration.virtual import PolicyPlanningError
 
 
 def read_private(path: Path) -> bytes:
+    return read_private_identity(path)[0]
+
+
+def read_private_identity(path: Path) -> tuple[bytes, tuple[int, ...]]:
     path = path.expanduser().absolute()
     require_private_unattended_log_directory(path.parent)
     with _pinned_outcome_parent(path) as (parent_fd, name, _):
@@ -52,7 +56,7 @@ def read_private(path: Path) -> bytes:
                 raise PolicyPlanningError("candidate changed during access")
         finally:
             os.close(fd)
-    return payload
+    return payload, _file_identity_from_stat(initial)
 
 
 def publish_private(path: Path, payload: bytes, roots: tuple[Path, Path]) -> None:
