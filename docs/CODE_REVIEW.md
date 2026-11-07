@@ -928,3 +928,20 @@ checks, all pre-commit hooks, source/wheel builds and an isolated installed
 two-job planning/refusal check pass. The complete coverage suite is running;
 independent exact-SHA implementation review and hosted gates remain pending.
 No production media or migration planner was accessed.
+
+Independent Terra-medium review rejected `a629d88` with **QUEUE-R01 (P2)**:
+the shared private artifact reader reopened a full parent pathname after an
+ancestry check. A transient intermediate symbolic-link substitution could read
+an unrelated private file before a later check detected the change. The reviewer
+reproduced the outside read; the original 66 focused tests and 816-test owner
+gate (two existing distinct-filesystem skips) did not detect it.
+
+The owner correction retains component-relative no-follow descriptors for the
+entire private ancestry through leaf access, verifies trusted permissions and
+links, and binds queue reads to their initially observed ancestry. Private
+artifact publication uses that same anchored parent. New regressions inject
+ancestor swaps before directory opening and after parent pinning, assert that
+the outside file is never opened, and reject regular-parent substitution before
+the read. A controlled distinct-device topology test covers the retained-copy
+planning projection without accessing external media. Renewed exact-SHA review
+and the corrected complete gate remain pending.

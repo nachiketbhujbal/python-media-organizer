@@ -11,6 +11,9 @@ All notable changes to `python-media-organizer` will be recorded here.
   ancestry, occupied destinations, changed declarations and invalid receipts.
 - Keep declaration validity separate from media evidence, capacity, destination
   reservation, policy acceptance and final sign-off. Execution remains later work.
+- Anchor shared private policy artifact reads and publications through every
+  no-follow directory component, preventing transient ancestry links from
+  redirecting control-file access.
 
 ## 0.7.1 - 2026-11-07
 

@@ -111,13 +111,18 @@ class PrivateArtifact:
     @classmethod
     def read(cls, path: Path) -> PrivateArtifact:
         parent = observe_endpoint(path.parent)
-        payload, identity = read_private_identity(path)
+        payload, identity = read_private_identity(
+            path, expected_ancestry=parent.ancestry
+        )
         parent.require_current()
         return cls(path, payload, identity, parent)
 
     def require_current(self) -> None:
         self.parent.require_current()
-        if read_private_identity(self.path) != (self.payload, self.identity):
+        if read_private_identity(self.path, expected_ancestry=self.parent.ancestry) != (
+            self.payload,
+            self.identity,
+        ):
             raise QueuePlanningError("a private declaration changed during planning")
 
 

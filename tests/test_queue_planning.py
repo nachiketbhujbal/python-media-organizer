@@ -5,13 +5,14 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from pymo import __version__, migrate, queue
 from pymo.managed_quarantine import destination_binding_sha256
-from pymo.migration import queue_plan
+from pymo.migration import queue_manifest, queue_plan
 from pymo.migration.policy_acceptance import publish_accepted, receipt_path
 from pymo.migration.policy_plan import build_candidate
 from pymo.migration.queue_manifest import PrivateArtifact
@@ -517,3 +518,125 @@ def test_human_plan_and_shared_private_parent(tmp_path: Path) -> None:
     assert "2 jobs in declared sequential order" in result.stdout
     assert "Media evidence and capacity were not checked" in result.stdout
     assert str(tmp_path) not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "leaf", ["manifest.json", "policy.json", "policy.json.acceptance.json"]
+)
+@pytest.mark.parametrize("when", ["ancestor-open", "leaf-open"])
+def test_transient_ancestor_link_never_opens_outside_artifact(
+    tmp_path: Path, monkeypatch, leaf: str, when: str
+) -> None:
+    anchor = tmp_path / "anchor"
+    parent = anchor / "private"
+    outside = tmp_path / "outside"
+    for root in (anchor, outside):
+        root.mkdir(mode=0o700)
+        (root / "private").mkdir(mode=0o700)
+        write(root / "private" / leaf, {"origin": root.name})
+    expected_outside = identity(outside / "private" / leaf)
+    original_open = os.open
+    outside_opened = False
+    swapped = False
+    parent_opens = 0
+    saved = tmp_path / "saved"
+
+    def guarded_open(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal outside_opened, swapped, parent_opens
+        spelling = os.fspath(path)
+        if spelling == str(parent):
+            parent_opens += 1
+        # Exercise both the previous full-path reopen and the corrected
+        # component-relative traversal with the same adversarial substitution.
+        trigger = (
+            spelling == leaf
+            if when == "leaf-open"
+            else spelling == "anchor" or (spelling == str(parent) and parent_opens == 2)
+        )
+        if trigger and not swapped:
+            anchor.rename(saved)
+            anchor.symlink_to(outside, target_is_directory=True)
+            swapped = True
+        descriptor = original_open(path, flags, mode, dir_fd=dir_fd)
+        value = os.fstat(descriptor)
+        if [value.st_dev, value.st_ino] == expected_outside:
+            outside_opened = True
+        return descriptor
+
+    monkeypatch.setattr(os, "open", guarded_open)
+    try:
+        with pytest.raises((OSError, RuntimeError)):
+            PrivateArtifact.read(parent / leaf)
+    finally:
+        if swapped:
+            anchor.unlink()  # synthetic attack link only
+            saved.rename(anchor)
+    assert swapped
+    assert not outside_opened
+
+
+def test_replaced_parent_cannot_inherit_observed_queue_binding(
+    tmp_path: Path, monkeypatch
+) -> None:
+    parent = tmp_path / "private"
+    other = tmp_path / "other"
+    for path in (parent, other):
+        path.mkdir(mode=0o700)
+        write(path / "manifest.json", {"origin": path.name})
+    original = queue_manifest.read_private_identity
+    original_open = os.open
+    outside_identity = identity(other / "manifest.json")
+    outside_opened = False
+
+    def observed_open(path, flags, mode=0o777, *, dir_fd=None):
+        nonlocal outside_opened
+        fd = original_open(path, flags, mode, dir_fd=dir_fd)
+        value = os.fstat(fd)
+        outside_opened |= [value.st_dev, value.st_ino] == outside_identity
+        return fd
+
+    def swap(path, **kwargs):
+        parent.rename(tmp_path / "saved")
+        other.rename(parent)
+        try:
+            return original(path, **kwargs)
+        finally:
+            parent.rename(other)
+            (tmp_path / "saved").rename(parent)
+
+    monkeypatch.setattr(os, "open", observed_open)
+    monkeypatch.setattr(queue_manifest, "read_private_identity", swap)
+    with pytest.raises(RuntimeError):
+        PrivateArtifact.read(parent / "manifest.json")
+    assert not outside_opened
+
+
+def test_retained_copy_plan_with_controlled_distinct_device_topology(
+    tmp_path: Path, monkeypatch
+) -> None:
+    entry = job(tmp_path, 1)
+    managed(entry, tmp_path / "quarantine", copy_mode=True)
+    working = Path(entry["working"]["path"])
+    original = queue_manifest.observe_endpoint
+    entry["working"]["identity"][0] += 1
+
+    def distinct(path, *, missing=False):
+        observed = original(path, missing=missing)
+        if path == working and not missing:
+            return replace(
+                observed,
+                ancestry=(
+                    (observed.identity[0] + 1, observed.identity[1]),
+                    *observed.ancestry[1:],
+                ),
+            )
+        return observed
+
+    monkeypatch.setattr(queue_manifest, "observe_endpoint", distinct)
+    monkeypatch.setattr(queue_plan, "observe_endpoint", distinct)
+    manifest = save_manifest(tmp_path, [entry])
+    before = snapshot(tmp_path)
+    result = queue_plan.build_queue_plan(manifest)
+    assert result["jobs"][0]["disposition"] == "retained-copy"
+    assert len(result["jobs"][0]["steps"]) == 27
+    assert snapshot(tmp_path) == before

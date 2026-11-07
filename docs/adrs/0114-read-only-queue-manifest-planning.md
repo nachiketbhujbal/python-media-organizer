@@ -31,6 +31,12 @@ bindings are rechecked before emitting any plan. Control files stay outside all
 collections. The existing policy parser is factored for pinned artifact reads;
 ordinary unattended behavior is unchanged.
 
+Independent review found that re-opening a private parent by its full pathname
+could follow a transient intermediate link. Shared private artifact I/O now
+retains a component-by-component no-follow descriptor chain through leaf access,
+checks its permissions and identities, and compares queue reads with the
+initially observed ancestry. Publication uses the same anchored boundary.
+
 Planning checks declaration consistency, not fresh media, free capacity or the
 future namespace. A manifest grants no authority, creates no reservation and
 cannot bypass later checkpoint evidence. Initial copying and manual cleanup
