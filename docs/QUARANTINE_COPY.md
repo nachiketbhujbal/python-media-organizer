@@ -35,7 +35,8 @@ pymo quarantine-dups "/path/to/collection" "/other-filesystem/retained-tree" --c
 Recovery accepts only the exact journal-bound source, destination parent,
 stage, and scratch identities. It freshly rehashes completed staged files before
 reusing them. Incomplete scratch files remain in a separate private sibling
-area; a new exclusive file receives the retry. Scratch never enters the final
+area. Each has a journal-bound UUID and file identity recorded before copying;
+unrecorded or substituted leaves require operator review. On retry, a new exclusive file receives the retry. Scratch never enters the final
 published tree. A fully published tree awaiting journal completion must be the
 recorded staging directory itself, not merely an equal-looking replacement.
 
@@ -64,7 +65,9 @@ pymo migrate "/path/to/baseline" "/path/to/working" --log-dir "/path/to/private-
 At duplicate disposition, `--quarantine-dups` previews the saved operation and
 `--quarantine-dups --apply` applies the exact reviewed plan. The result is
 `copied-source-retained`; it never becomes an absent-`dups` confirmation.
-Subsequent execution and sign-off require fresh verification of both source
+If a child commits before the coordinator saves its result, repeat the same
+apply to reconcile that exact journaled copy. Subsequent execution and sign-off
+require fresh verification of both source
 and retained copy. Final ordinary migration verification still includes `dups`.
 The report is historical bookkeeping, not fresh evidence or cleanup authority.
 A future manual retirement requires separate fresh preservation evidence under

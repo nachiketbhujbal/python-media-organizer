@@ -739,10 +739,14 @@ def _run_managed_quarantine(
             )
             return 2
         latest = state.attempts[-1] if state.attempts else None
-        recover = _dups_metadata(state) is None or (
-            latest is not None
-            and latest.action == "quarantine-apply"
-            and latest.exit_status != 0
+        recover = (
+            state.options.quarantine_copy_reserve_bytes is not None
+            or _dups_metadata(state) is None
+            or (
+                latest is not None
+                and latest.action == "quarantine-apply"
+                and latest.exit_status != 0
+            )
         )
 
     log_file = _new_log_file(log_dir, state, stage)

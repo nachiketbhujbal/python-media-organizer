@@ -41,6 +41,7 @@ class ActionOperation(StrEnum):
     COPY_QUARANTINE_TREE = "COPY_QUARANTINE_TREE"
     COPY_QUARANTINE_STAGE = "COPY_QUARANTINE_STAGE"
     COPY_QUARANTINE_SCRATCH = "COPY_QUARANTINE_SCRATCH"
+    COPY_QUARANTINE_ARTIFACT = "COPY_QUARANTINE_ARTIFACT"
 
     @property
     def is_file(self) -> bool:
@@ -237,13 +238,16 @@ class Action:
 
         elif operation in copy_operations():
             try:
-                CopyBinding.decode(self.after or "")
+                copy_binding = CopyBinding.decode(self.after or "")
             except (ValueError, TypeError) as error:
                 raise ActionLogError("invalid retained-copy binding") from error
+            artifact = operation == ActionOperation.COPY_QUARANTINE_ARTIFACT
+            if (copy_binding.artifact_name is not None) != artifact:
+                raise ActionLogError("invalid retained-copy artifact binding")
             identity = self.identity or {}
             if (
                 self.before != "dups"
-                or self.entry_type != "directory"
+                or self.entry_type != ("file" if artifact else "directory")
                 or set(identity) != {"size", "sha256", "device", "inode"}
                 or any(
                     type(identity.get(key)) is not int or int(identity[key]) < 0
@@ -755,37 +759,56 @@ class ActionLog:
                     position = len(current_run.actions)
                     if (
                         current_run.mode != "APPLY"
-                        or position >= 3
-                        or action.operation != copy_operations()[position]
+                        or action.operation != copy_operations()[min(position, 3)]
+                        or (
+                            position
+                            and current_run.actions[0][0]
+                            in current_run.completed_action_ids
+                        )
                     ):
                         raise ActionLogError("retained-copy actions are out of order")
-                    if position == 2 and (
-                        current_run.actions[1][0]
-                        not in current_run.completed_action_ids
+                    if position >= 2 and any(
+                        previous_id not in current_run.completed_action_ids
+                        for previous_id, _ in current_run.actions[1:]
                     ):
                         raise ActionLogError(
-                            "retained-copy scratch preceded stage identity completion"
+                            "retained-copy identity completion is out of order"
                         )
-                    if position and action.after != current_run.actions[0][1].after:
+                    binding = CopyBinding.decode(action.after or "")
+                    if position and binding.tree_binding() != CopyBinding.decode(
+                        current_run.actions[0][1].after or ""
+                    ):
                         raise ActionLogError("retained-copy bindings disagree")
                     if position:
                         assert action.identity is not None
                         first_identity = current_run.actions[0][1].identity
                         assert first_identity is not None
-                        binding = CopyBinding.decode(action.after or "")
+                        expected_size = first_identity["size"] if position < 3 else 0
+                        expected_hash = (
+                            first_identity["sha256"]
+                            if position < 3
+                            else hashlib.sha256(b"").hexdigest()
+                        )
                         if (
                             action.identity["device"] != binding.parent_device
-                            or action.identity["size"] != first_identity["size"]
-                            or action.identity["sha256"] != first_identity["sha256"]
+                            or action.identity["size"] != expected_size
+                            or action.identity["sha256"] != expected_hash
                         ):
                             raise ActionLogError(
-                                "retained-copy staging identity is inconsistent"
+                                "retained-copy identity is inconsistent"
                             )
-                        if position == 2 and self._identity_key(
-                            action
-                        ) == self._identity_key(current_run.actions[1][1]):
+                        if any(
+                            self._identity_key(action) == self._identity_key(previous)
+                            for _, previous in current_run.actions[1:]
+                        ):
+                            raise ActionLogError("retained-copy identities are aliased")
+                        if position >= 3 and any(
+                            CopyBinding.decode(previous.after or "").artifact_name
+                            == binding.artifact_name
+                            for _, previous in current_run.actions[3:]
+                        ):
                             raise ActionLogError(
-                                "retained-copy stage and scratch are aliased"
+                                "retained-copy artifact token is repeated"
                             )
                 current_run.actions.append((action_id, action))
             elif name == "ACTION_COMPLETED":
@@ -805,8 +828,9 @@ class ActionLog:
                 if current_run.tool == ToolId.COPY_QUARANTINE:
                     first = current_run.actions[0][0]
                     if action_id == first and (
-                        len(current_run.actions) != 3
-                        or len(current_run.completed_action_ids) != 2
+                        len(current_run.actions) < 3
+                        or len(current_run.completed_action_ids)
+                        != len(current_run.actions) - 1
                     ):
                         raise ActionLogError("retained copy completed before staging")
                 current_run.completed_action_ids.add(action_id)
@@ -830,7 +854,7 @@ class ActionLog:
                     )
                 if (
                     current_run.tool == ToolId.COPY_QUARANTINE
-                    and len(current_run.actions) != 3
+                    and len(current_run.actions) < 3
                 ):
                     raise ActionLogError("retained-copy commit is incomplete")
                 current_run.committed = True

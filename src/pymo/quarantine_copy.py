@@ -10,9 +10,9 @@ import hashlib
 import os
 import stat
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TextIO
 
@@ -305,13 +305,13 @@ def _complete(log: ActionLog, handle: TextIO, run_id: str, action_id: str) -> No
     )
 
 
-def _commit(log: ActionLog, handle: TextIO, run_id: str) -> None:
+def _commit(log: ActionLog, handle: TextIO, run_id: str, action_count: int) -> None:
     log._append(
         handle,
         {
             "event": "RUN_COMMITTED",
             "run_id": run_id,
-            "action_count": 3,
+            "action_count": action_count,
             "target_run_id": None,
         },
     )
@@ -328,7 +328,9 @@ def _require_identity(parent: int, name: str, identity: tuple[int, int]) -> None
         _error("journal-bound copy directory changed or disappeared")
 
 
-def _scratch_evidence(descriptor: int) -> tuple[int, int]:
+def _scratch_evidence(
+    descriptor: int, artifacts: dict[str, tuple[int, int]]
+) -> tuple[int, int]:
     total = 0
     initial = _namespace_snapshot(descriptor)
     names = os.listdir(descriptor)
@@ -339,6 +341,8 @@ def _scratch_evidence(descriptor: int) -> tuple[int, int]:
         except ValueError as error:
             raise ManagedQuarantineError("unexpected retained scratch entry") from error
         with _file(descriptor, name) as fd:
+            if artifacts.get(name) != _identity(os.fstat(fd)):
+                _error("unrecorded or replaced retained scratch artifact")
             total += os.fstat(fd).st_size
     if initial != _namespace_snapshot(descriptor):
         _error("retained scratch changed")
@@ -364,6 +368,7 @@ def _populate(
     evidence: CopyEvidence,
     parent: int,
     reserve: int,
+    record_artifact: Callable[[str, int], None],
 ) -> None:
     expected = {entry.parts: entry for entry in evidence.entries}
 
@@ -406,6 +411,9 @@ def _populate(
                     dir_fd=scratch,
                 )
                 try:
+                    os.fsync(output)
+                    os.fsync(scratch)
+                    record_artifact(temporary, output)
                     _write_bytes(input_fd, output)
                     os.fsync(output)
                 finally:
@@ -492,14 +500,60 @@ def _run_copy(
         stage_identity = _record_identity(actions[1][1])
         scratch_identity = _record_identity(actions[2][1])
         _require_identity(parent.descriptor, binding.scratch_name, scratch_identity)
+        artifacts: dict[str, tuple[int, int]] = {}
+        for _, artifact in actions[3:]:
+            artifact_binding = CopyBinding.decode(artifact.after or "")
+            assert artifact_binding.artifact_name is not None
+            artifacts[artifact_binding.artifact_name] = _record_identity(artifact)
         with _child_directory(
             parent.descriptor, binding.scratch_name, scratch_identity
         ) as scratch:
-            _scratch_evidence(scratch)
+            _scratch_evidence(scratch, artifacts)
+            for artifact_id, artifact in actions[3:]:
+                if artifact_id not in completed:
+                    pending_name = CopyBinding.decode(
+                        artifact.after or ""
+                    ).artifact_name
+                    assert pending_name is not None
+                    with _file(scratch, pending_name) as fd:
+                        if _identity(os.fstat(fd)) != artifacts[pending_name]:
+                            _error("pending retained scratch artifact changed")
+                    _complete(log, handle, run.run_id, artifact_id)
+                    completed.add(artifact_id)
+
+            def record_artifact(name: str, descriptor: int) -> None:
+                state = os.fstat(descriptor)
+                artifact = Action(
+                    copy_operations()[3],
+                    "dups",
+                    replace(binding, artifact_name=name).encode(),
+                    "file",
+                    {
+                        "size": 0,
+                        "sha256": hashlib.sha256(b"").hexdigest(),
+                        "device": state.st_dev,
+                        "inode": state.st_ino,
+                    },
+                )
+                artifact_id = str(uuid.uuid4())
+                log._append(
+                    handle,
+                    {
+                        "event": "ACTION_PLANNED",
+                        "run_id": run.run_id,
+                        "action_id": artifact_id,
+                        "action": artifact.as_dict(),
+                    },
+                )
+                actions.append((artifact_id, artifact))
+                _complete(log, handle, run.run_id, artifact_id)
+                completed.add(artifact_id)
+                artifacts[name] = _identity(state)
+
             stage_present = (
                 _leaf_state(parent.descriptor, binding.stage_name) is not None
             )
-            if run.committed and stage_present:
+            if (run.committed or intent_id in completed) and stage_present:
                 _error("committed copy unexpectedly has an unpublished stage")
             if stage_present:
                 _require_target_absent(parent.descriptor, target_name)
@@ -521,6 +575,7 @@ def _run_copy(
                         plan.evidence,
                         parent.descriptor,
                         plan.reserve_bytes,
+                        record_artifact,
                     )
                     if _evidence(stage).sha256 != plan.evidence.sha256:
                         _error("staged retained tree failed complete byte verification")
@@ -552,7 +607,7 @@ def _run_copy(
                 _manifest_at(collection.descriptor, "dups"), plan.source
             ):
                 _error("source changed after copy publication")
-            files, byte_count = _scratch_evidence(scratch)
+            files, byte_count = _scratch_evidence(scratch, artifacts)
         _require_directory_path_identity(collection.path, collection.identity)
         _require_directory_path_identity(parent.path, parent.identity)
         _require_identity(parent.descriptor, target_name, stage_identity)
@@ -564,7 +619,7 @@ def _run_copy(
         if not run.committed:
             if intent_id not in completed:
                 _complete(log, handle, run.run_id, intent_id)
-            _commit(log, handle, run.run_id)
+            _commit(log, handle, run.run_id, len(actions))
     return CopyResult(plan, run.run_id, True, files, byte_count)
 
 

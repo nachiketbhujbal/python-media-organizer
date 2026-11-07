@@ -38,7 +38,13 @@ available capacity from source duplicate estimates or apparent clone savings.
 Append a dedicated strict copy operation to the collection action journal
 before staging. Bind an exclusive staging name and destination parent; record
 staging identity before copying any media. Scratch has its own separately journal-bound sibling directory outside the
-publishable stage. Partial file writes use exclusive UUID scratch names. A complete file is synced, freshly verified, and published
+publishable stage. Partial file writes use exclusive UUID scratch names. Each exclusive empty
+file is synced and its token and device/inode are durably recorded before any
+media bytes are written. Artifact completion records allocation, not copied
+content; full tree verification establishes the latter. Unknown names and
+replacement leaf identities are refused. A crash before the leaf identity
+record leaves an unadoptable orphan requiring operator review. A complete file
+is synced, freshly verified, and published
 inside the staged tree with an atomic no-replace rename. Failed scratch files
 remain retained and cannot satisfy the copied manifest.
 
@@ -65,7 +71,10 @@ requires explicit operator review; do not adopt it merely from its name.
 
 ## Workflow and undo
 
-The coordinator preserves distinct preview and apply checkpoints. Its saved
+The coordinator preserves distinct preview and apply checkpoints. Every copy
+apply retries through strict recovery-or-fresh inspection, including a child
+commit that precedes a lost coordinator result. This never adopts an occupied
+target without its matching committed copy journal. Its saved
 mode and exact copied plan become part of private state and policy bindings.
 Successful copying advances only to an explicitly named source-retained
 disposition. Final fresh validation and ordinary verification include the

@@ -773,3 +773,25 @@ APFS filesystem separately proved actual distinct-device copying and guided
 coordinator reporting. No private collection or retained user evidence was
 used. These checks establish candidate behavior, not release or production
 readiness.
+
+### Candidate review at 122d6c2
+
+Independent Terra-medium review rejected this exact candidate with two findings:
+
+- **COPY-R01 (P1): resolved in candidate, renewed review pending.** A committed
+  copy followed by interruption before coordinator state publication retried as
+  a fresh apply and stalled on its occupied destination. Every copy apply now
+  uses the strict recovery-or-fresh boundary with the original reviewed digest.
+  Synthetic regressions interrupt that exact boundary, prove successful
+  reconciliation without recopying, and reject an equal-content impostor.
+- **COPY-R02 (P2): resolved in candidate, renewed review pending.** A UUID-shaped
+  unrecorded scratch file was accepted as an interrupted artifact. Each exclusive
+  scratch leaf now records its token and device/inode in the strict append-only
+  lifecycle before any media bytes are written. Recovery rejects unknown or
+  replaced leaves, reconciles a recorded allocation interrupted before its
+  completion record, and refuses an orphan created before that binding.
+
+The initial candidate passed 687 tests with two distinct-filesystem fixtures
+skipped in the ordinary macOS run; those fixtures were independently exercised
+on a disposable APFS volume. That earlier passing gate did not detect these
+review findings and is not acceptance of the corrected candidate.

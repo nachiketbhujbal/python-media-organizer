@@ -66,7 +66,7 @@ def test_copy_is_explicit_zero_write_preview_and_retains_originals(
     assert os.fsencode(target) not in journal
     events = [json.loads(line) for line in journal.splitlines()]
     assert events[-1]["event"] == "RUN_COMMITTED"
-    assert len([event for event in events if event["event"] == "ACTION_PLANNED"]) == 3
+    assert len([event for event in events if event["event"] == "ACTION_PLANNED"]) == 5
     copying.recover_copy(root, target, 0)
     assert action_log_path(root).read_bytes() == journal
 
@@ -503,3 +503,68 @@ def test_bound_copy_refuses_duplicate_owner_transactions_before_new_journal_run(
                 ActionTransaction(log, handle, tool=tool.value)
         assert log.path.read_bytes() == before
     copying.verify_copy(root, target, 0)
+
+
+@pytest.mark.parametrize("attack", ["injected", "replacement"])
+def test_unbound_or_replaced_scratch_leaf_is_never_adopted(
+    tmp_path: Path,
+    simulated_devices: None,
+    monkeypatch: pytest.MonkeyPatch,
+    attack: str,
+) -> None:
+    import uuid
+
+    root, target = collection(tmp_path)
+    original = copying._write_bytes
+    monkeypatch.setattr(
+        copying, "_write_bytes", lambda *_: (_ for _ in ()).throw(KeyboardInterrupt())
+    )
+    with pytest.raises(KeyboardInterrupt):
+        copying.apply_copy(copying.plan_copy(root, target, 0))
+    scratch = next(target.parent.glob("*-partial"))
+    if attack == "injected":
+        unexpected = scratch / str(uuid.uuid4())
+    else:
+        unexpected = next(scratch.iterdir())
+        unexpected.rename(target.parent / "saved-partial")
+    unexpected.write_bytes(b"unrelated")
+    before = action_log_path(root).read_bytes()
+    monkeypatch.setattr(copying, "_write_bytes", original)
+    with pytest.raises(ManagedQuarantineError, match="unrecorded or replaced"):
+        copying.recover_copy(root, target, 0)
+    assert action_log_path(root).read_bytes() == before
+    assert unexpected.read_bytes() == b"unrelated"
+    assert not target.exists()
+
+
+@pytest.mark.parametrize("recorded", [False, True])
+def test_interrupted_scratch_leaf_record_requires_exact_recorded_identity(
+    tmp_path: Path,
+    simulated_devices: None,
+    monkeypatch: pytest.MonkeyPatch,
+    recorded: bool,
+) -> None:
+    root, target = collection(tmp_path)
+    original = ActionLog._append
+
+    def stop(log, handle, event):
+        if (
+            event["event"] == "ACTION_PLANNED"
+            and event["action"]["operation"] == "COPY_QUARANTINE_ARTIFACT"
+        ):
+            if recorded:
+                original(log, handle, event)
+            raise KeyboardInterrupt
+        original(log, handle, event)
+
+    monkeypatch.setattr(ActionLog, "_append", stop)
+    with pytest.raises(KeyboardInterrupt):
+        copying.apply_copy(copying.plan_copy(root, target, 0))
+    monkeypatch.setattr(ActionLog, "_append", original)
+    if recorded:
+        copying.recover_copy(root, target, 0)
+        assert media(target) == media(root / "dups")
+    else:
+        with pytest.raises(ManagedQuarantineError, match="unrecorded"):
+            copying.recover_copy(root, target, 0)
+        assert not target.exists()

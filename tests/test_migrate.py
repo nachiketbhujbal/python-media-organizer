@@ -4024,3 +4024,71 @@ def test_copy_reserve_is_explicitly_saved_and_conflicting_resume_is_rejected(
         == 2
     )
     assert state_file(logs).read_bytes() == before
+
+
+@pytest.mark.parametrize("replace_target", [False, True])
+def test_copy_child_commit_survives_missing_coordinator_apply_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, replace_target: bool
+) -> None:
+    from pymo import quarantine, quarantine_copy
+
+    baseline, working = collections(tmp_path)
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    parent = tmp_path / "retained"
+    parent.mkdir()
+    destination = parent / "target"
+    _state_at(
+        logs,
+        baseline,
+        working,
+        21,
+        quarantine_destination=destination,
+        quarantine_copy_reserve_bytes=0,
+    )
+    _set_simulation_review(logs, review_files=1, review_bytes=7)
+    review = working / "dups"
+    review.mkdir()
+    (review / "copy.bin").write_bytes(b"content")
+    monkeypatch.setattr(quarantine_copy, "_require_distinct_devices", lambda *_: None)
+
+    def child(command, *, check):
+        index = command.index("quarantine-dups")
+        return subprocess.CompletedProcess(
+            command, quarantine.main(command[index + 1 :])
+        )
+
+    monkeypatch.setattr(migrate.subprocess, "run", child)
+    common = ["--resume", str(logs), "--quarantine-dups"]
+    assert migrate.main(common) == 0
+    before = state_file(logs).read_bytes()
+    original = migrate._write_state
+
+    def stop(path, state):
+        if state.attempts[-1].action == "quarantine-apply":
+            raise KeyboardInterrupt
+        original(path, state)
+
+    monkeypatch.setattr(migrate, "_write_state", stop)
+    with pytest.raises(KeyboardInterrupt):
+        migrate.main([*common, "--apply"])
+    assert state_file(logs).read_bytes() == before
+    inode = destination.stat().st_ino
+    if replace_target:
+        destination.rename(parent / "saved")
+        shutil.copytree(parent / "saved", destination)
+    monkeypatch.setattr(migrate, "_write_state", original)
+    monkeypatch.setattr(
+        quarantine_copy,
+        "_write_bytes",
+        lambda *_: pytest.fail("committed copy must not be copied again"),
+    )
+    status = migrate.main([*common, "--apply"])
+    assert (review / "copy.bin").read_bytes() == b"content"
+    if replace_target:
+        assert status == 1
+        assert migrate._load_state(state_file(logs)).next_stage == 21
+    else:
+        assert status == 0
+        assert destination.stat().st_ino == inode
+        assert migrate._load_state(state_file(logs)).next_stage == 22
