@@ -757,8 +757,9 @@ quarantine into 0.7.0 under the revised boundary in [ADR
 0105](adrs/0105-end-v0.6-at-single-filesystem-operation.md). ADR 0103 defines
 the retained-in-place contract, and ADR 0106 delivers the same-filesystem
 movement contract with an exact tree manifest, atomic no-replace rename,
-append-only journal, recovery, and undo. Cross-filesystem movement still
-requires its distinct copy, publication, capacity, and recovery decisions.
+append-only journal, recovery, and undo. ADR 0110 defines the separate candidate copy, publication, capacity, and
+recovery protocol while retaining source duplicates. It does not implement
+source deletion or claim filesystem metadata preservation.
 Permanent deletion remains research and is not implied by any quarantine
 workflow.
 

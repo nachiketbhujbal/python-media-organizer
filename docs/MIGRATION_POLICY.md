@@ -6,13 +6,12 @@ It is intentionally stricter than a general “yes to all” option: every
 validation review, apply, duplicate disposition, and final sign-off must be
 named separately with the exact preceding result it may cross.
 
-Version 0.6.9 consumes and verifies this policy but does not author it. The
-current operator must prepare the private JSON from separately reviewed
+This document describes the unreleased v0.7.0 schema-4 candidate. Released
+v0.6.9 consumes schema 3. Neither version authors policies. The operator must prepare the private JSON from separately reviewed
 coordinator evidence. [ADR
 0108](adrs/0108-author-reviewed-unattended-policies-before-queues.md) promotes a
 target-local, zero-media-mutation full plan plus separate review and acceptance
-workflow for version 0.7.1; planning status does not change the released
-command below.
+workflow for version 0.7.1; policy authoring remains separate from this candidate.
 
 For a new run:
 
@@ -70,14 +69,14 @@ the same command with the same byte-identical policy recovers the creation time
 from that binding and publishes the missing initial state without replacing the
 record. Any disagreement still fails closed.
 
-## Schema 3
+## Candidate schema 4
 
 The top-level object has exactly these fields:
 
 ```json
 {
-  "schema_version": 3,
-  "tool_version": "0.6.9",
+  "schema_version": 4,
+  "tool_version": "0.7.0",
   "baseline": "/canonical/path/to/baseline",
   "working": "/canonical/path/to/working-collection",
   "options": {
@@ -94,7 +93,8 @@ The top-level object has exactly these fields:
     "decode_timeout": null,
     "workers": null,
     "no_cache": false,
-    "quarantine_destination": null
+    "quarantine_destination": null,
+    "quarantine_copy_reserve_bytes": null
   },
   "authorizations": []
 }
@@ -114,7 +114,7 @@ Reaching an omitted checkpoint stops with status 1.
 | `rename-apply` | `apply` | Rename preview |
 | `image-duplicates-apply` | `apply` | Exact-image duplicate preview |
 | `video-duplicates-apply` | `apply` | Exact-video duplicate preview |
-| `duplicate-disposition` | `retain-dups`, `quarantine-dups`, or `confirm-quarantine` | Complete without-`dups` simulation; managed quarantine also binds its exact move preview |
+| `duplicate-disposition` | `retain-dups`, `quarantine-dups`, or `confirm-quarantine` | Complete without-`dups` simulation; managed quarantine also binds its exact move or copy preview |
 | `final-working-validation` | `accept-validation` | Final working full validation |
 | `final-signoff` | `signoff` | Complete ordinary final verification |
 
@@ -212,6 +212,10 @@ one exact `quarantine_plan`:
   "verdict": "complete",
   "disposition": "eligible-for-human-quarantine-review",
   "quarantine_plan": {
+    "method": "rename",
+    "copy_reserve_bytes": 0,
+    "metadata_entries": 0,
+    "metadata_unknown": 0,
     "status": 0,
     "files": 2,
     "directories": 3,
@@ -228,10 +232,11 @@ one exact `quarantine_plan`:
 The path-private plan is obtained from the private successful managed preview.
 It binds the complete descriptor-pinned tree manifest, exact destination,
 destination-parent identity, and aggregate counts. Unattended apply rechecks
-that plan before the journaled atomic move and stops if any field differs.
+that plan before the selected journaled operation and stops if any field differs.
 `confirm-quarantine` preserves the existing contract: the path must be absent
-after a separately managed external move. Managed quarantine authorizes only
-the reviewed same-filesystem move; no decision authorizes copying or deletion.
+after a separately managed external move. Managed quarantine authorizes only the reviewed method. Copying requires the
+saved explicit reserve and a copy preview; rename authority cannot authorize
+copying. Neither method authorizes deletion.
 A zero-file result may use `retain-dups` to record that disposition is not
 applicable.
 
@@ -270,13 +275,20 @@ Final sign-off repeats every aggregate from the ordinary final verification:
 - Any other child status, including 130 for interruption, is returned unchanged.
 
 An evidence mismatch never writes an acknowledgement or dispatches its pending
-apply. After a child failure, resolve the cause before resuming. At duplicate
-disposition, pymo still does not move or delete anything: retain the complete
-tree in place, or move it separately and confirm the working `dups` path is
-absent, then resume with the same unchanged policy.
+apply. After a child failure, resolve the cause before resuming. At duplicate disposition, the exact policy may retain the tree in place,
+authorize the reviewed managed move or retained copy, or confirm absence after
+a separately managed external move. Resume with the same unchanged policy.
+No decision authorizes deletion.
 
 Policies are most suitable for repeated or previously reviewed collection
 shapes whose exact aggregate evidence is already known. For an unfamiliar
 collection, use `--run`, `--interactive`, the human synopsis, and `--json` to
 review the evidence first; authoring broad guesses is expected to stop safely,
 not to make the coordinator permissive.
+
+The unreleased v0.7.0 candidate consumes schema 4; released v0.6.9 consumes
+schema 3. Copy mode requires an explicit nonnegative
+`options.quarantine_copy_reserve_bytes`, `quarantine_plan.method` equal to
+`copy`, the identical reserve, and exact aggregate metadata observations plus
+its reviewed copy decision digest. A rename or external-confirmation policy
+cannot authorize copy mode. See [retained copying](QUARANTINE_COPY.md).

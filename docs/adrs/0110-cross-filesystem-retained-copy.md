@@ -37,8 +37,8 @@ available capacity from source duplicate estimates or apparent clone savings.
 
 Append a dedicated strict copy operation to the collection action journal
 before staging. Bind an exclusive staging name and destination parent; record
-staging identity before copying any media. Partial file writes use exclusive
-scratch names. A complete file is synced, freshly verified, and published
+staging identity before copying any media. Scratch has its own separately journal-bound sibling directory outside the
+publishable stage. Partial file writes use exclusive UUID scratch names. A complete file is synced, freshly verified, and published
 inside the staged tree with an atomic no-replace rename. Failed scratch files
 remain retained and cannot satisfy the copied manifest.
 
@@ -52,7 +52,11 @@ Recovery requires the same explicit source, destination, and copy selector.
 Strictly validate the journal and bound directory identities before reading
 or writing staging. Distinguish: no stage yet; incomplete stage; complete stage
 not published; published target awaiting journal commit; and completed copy.
-Recognize only the exact recorded stage or target, never adopt unrelated data.
+The published target must be the exact directory inode recorded for staging;
+its pathname and content digest alone cannot authorize an impostor. Sync each
+new staging directory and its parent before recording its identity, and sync
+that journal record before writing media. Recognize only the exact recorded
+stage or target, never adopt unrelated data.
 Rehash completed staged files before reuse. Retain interrupted scratch files;
 never truncate one to resume. An occupied conflicting target, substituted
 parent, altered source, malformed history, or unexplained namespace stops.
@@ -73,8 +77,22 @@ There is no destructive undo for a retained copy. Reject ordinary `--undo`
 for copy mode rather than deleting its destination or pretending the copy was
 removed. Source changes, target retirement, restoration after human cleanup,
 and any new destructive action require separate reviewed contracts. Existing
-same-filesystem undo is unchanged. Copied-retention journal entries must not
+same-filesystem undo is unchanged. A committed copy continues to protect the
+source review namespace: overlapping forward actions and dependency-aware undo
+are refused. There is no automatic release of that dependency in this version.
+Before later coordinator execution or sign-off, rehash both the retained copy
+and source and require their exact recorded identities. Structured reports
+remain projections of historical outcomes and do not perform media reads.
+Copied-retention journal entries must not
 silently turn into generic rename/undo operations.
+
+Private restart state advances to schema 6; private outcomes, unattended policy,
+and public migration reports advance to schema 4. Copy selection and the
+explicit reserve are saved options, distinct from move authority. The required
+`--copy-reserve-bytes` has no guessed default. Public reports disclose only
+aggregate extended-attribute observations and unknowns, and never claim ACL,
+resource-fork, or other filesystem metadata preservation. No metadata is
+silently counted as preserved merely because an API could not inspect it.
 
 ## Acceptance
 

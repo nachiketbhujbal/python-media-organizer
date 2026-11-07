@@ -20,7 +20,7 @@ from pymo.migration.roots import (
 # This identifies private version-bound coordinator outcome records. Stable
 # Migration reports select aggregates from them; they do not expose
 # this internal record contract.
-MIGRATION_OUTCOME_SCHEMA_VERSION = 3
+MIGRATION_OUTCOME_SCHEMA_VERSION = 4
 
 # This identifies the deterministic private mutation-decision digest contract.
 MIGRATION_DECISION_DIGEST_ALGORITHM = "migration-decision-v1"
@@ -324,6 +324,10 @@ def _validate_quarantine(data: dict[str, Any]) -> None:
     value = _require_exact_fields(
         data,
         {
+            "method",
+            "copy_reserve_bytes",
+            "metadata_entries",
+            "metadata_unknown",
             "status",
             "files",
             "directories",
@@ -336,7 +340,15 @@ def _validate_quarantine(data: dict[str, Any]) -> None:
         },
         "managed quarantine data",
     )
+    if not isinstance(value["method"], str) or value["method"] not in {
+        "copy",
+        "rename",
+    }:
+        raise MigrationOutcomeError("invalid quarantine method")
     for field in (
+        "copy_reserve_bytes",
+        "metadata_entries",
+        "metadata_unknown",
         "status",
         "files",
         "directories",

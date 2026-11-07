@@ -755,3 +755,21 @@ claims, leaves copying and cleanup explicit, and retains required engineering
 gates without demanding repetitive operational pilots. The reviewer inspected
 a separate clean detached checkout and did not author the change or run the
 owner's gates. Hosted checks and publication remain separate evidence.
+
+## Version 0.7.0 retained-copy candidate
+
+Independent Terra-medium design review of `cf06e24` identified four requirements:
+separate retained scratch from the publishable stage; durably bind staging
+identity through publication; protect copy dependencies and freshly revalidate
+later workflow execution; and advance state, outcome, policy and report
+contracts while disclosing filesystem-metadata limitations. The owner has
+implemented those requirements in the candidate. Independent implementation
+review and final release gates remain pending.
+
+Owner verification uses synthetic collections, injected partial writes and
+publication interruptions, directory-replacement attacks, strict malformed
+journal cases, and unchanged same-filesystem regression coverage. A disposable
+APFS filesystem separately proved actual distinct-device copying and guided
+coordinator reporting. No private collection or retained user evidence was
+used. These checks establish candidate behavior, not release or production
+readiness.

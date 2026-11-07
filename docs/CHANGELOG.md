@@ -4,6 +4,16 @@ All notable changes to `python-media-organizer` will be recorded here.
 
 ## Unreleased
 
+- Add a v0.7.0 candidate explicit cross-filesystem retained-copy mode with a
+  required reserve, descriptor-pinned byte evidence, journal-bound staging and
+  separate scratch, verified no-replace publication, and strict recovery.
+  Retain all originals and interrupted scratch; never delete, overwrite, or
+  claim reclaimed storage or complete filesystem metadata preservation.
+- Bind copy selection in coordinator state schema 6 and outcome/policy/report
+  schemas 4. Report `copied-source-retained` separately from a verified move,
+  and freshly revalidate source and copy before later execution or sign-off.
+  Default same-filesystem quarantine and undo remain available unchanged.
+
 - Clarify production-readiness requirements for the planned sequence through
   v0.7.5: peak capacity, protected baselines, byte-distinct variant review,
   separately verified initial copying, fresh preservation evidence, and

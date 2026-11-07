@@ -14,8 +14,8 @@ from pymo.progress import format_bytes, format_duration
 
 # This identifies the public machine-readable migration-report contract. A
 # schema change is required before any field, type, or meaning may change.
-# Version 3 reports verified managed same-filesystem retained quarantine.
-MIGRATION_REPORT_SCHEMA_VERSION = 3
+# Version 4 distinguishes source-retaining copies from same-filesystem moves.
+MIGRATION_REPORT_SCHEMA_VERSION = 4
 
 
 class MigrationSynopsisError(RuntimeError):
@@ -77,6 +77,18 @@ def _outcomes(
             raise MigrationSynopsisError(
                 "migration synopsis cannot trust a private stage outcome"
             ) from error
+        if managed_quarantine:
+            method = (
+                "copy"
+                if state.options.quarantine_copy_reserve_bytes is not None
+                else "rename"
+            )
+            if outcome["data"]["method"] != method or outcome["data"][
+                "copy_reserve_bytes"
+            ] != (state.options.quarantine_copy_reserve_bytes or 0):
+                raise MigrationSynopsisError(
+                    "managed quarantine method does not match saved authority"
+                )
         values.append((attempt, outcome))
     return values
 
@@ -439,8 +451,15 @@ def build_report(log_dir: Path, state: MigrationState) -> dict[str, Any]:
             )
         review_files = managed_quarantine["data"]["files"]
         review_bytes = managed_quarantine["data"]["bytes"]
+    copied_retained = (
+        managed_applied and state.options.quarantine_copy_reserve_bytes is not None
+    )
     duplicate_disposition = (
-        "managed-same-filesystem-quarantine"
+        (
+            "copied-source-retained"
+            if copied_retained
+            else "managed-same-filesystem-quarantine"
+        )
         if managed_applied
         else (
             "retained-in-place"
@@ -469,6 +488,8 @@ def build_report(log_dir: Path, state: MigrationState) -> dict[str, Any]:
             )
         )
     )
+    if copied_retained:
+        review_state = "copied-source-retained"
     cache_results = [outcome["cache"] for outcome in duplicates]
 
     final_verification = _latest(values, "final-verification", successful=False)
@@ -535,7 +556,7 @@ def build_report(log_dir: Path, state: MigrationState) -> dict[str, Any]:
                 "state": review_state,
                 "physical_storage_reclaimed": False,
                 "working_collection_bytes_released": (
-                    review_bytes if managed_applied else 0
+                    review_bytes if managed_applied and not copied_retained else 0
                 ),
             },
             "managed_quarantine": (
@@ -547,7 +568,15 @@ def build_report(log_dir: Path, state: MigrationState) -> dict[str, Any]:
                     "files": managed_quarantine["data"]["files"],
                     "directories": managed_quarantine["data"]["directories"],
                     "bytes": managed_quarantine["data"]["bytes"],
-                    "move_verified": managed_applied,
+                    "move_verified": managed_applied and not copied_retained,
+                    "copy_verified": copied_retained,
+                    "source_retained": copied_retained,
+                    "metadata_entries_not_claimed": managed_quarantine["data"][
+                        "metadata_entries"
+                    ],
+                    "metadata_entries_unknown": managed_quarantine["data"][
+                        "metadata_unknown"
+                    ],
                 }
             ),
             "cache": {
@@ -629,6 +658,10 @@ def print_synopsis(log_dir: Path, state: MigrationState) -> None:
                 f"{format_bytes(review['bytes'])})."
             )
             print("  Physical storage reclaimed by pymo: none.")
+        elif review["state"] == "copied-source-retained":
+            print(
+                "Duplicate disposition: copied retention recorded; originals remain in place and no storage was reclaimed."
+            )
         elif review["state"] == "managed-same-filesystem-quarantine":
             print(
                 "  Duplicate disposition selected: verified managed same-filesystem "

@@ -13,9 +13,10 @@ needed by coding agents. Durable engineering documentation lives here:
   release procedure.
 - [Production migration runbook](MIGRATION.md) — the collection-by-collection
   baseline, transformation, verification, quarantine, and sign-off sequence.
-- [Stable migration report](MIGRATION_REPORT.md) — schema 3 invocation,
+- [Cross-filesystem retained copying](QUARANTINE_COPY.md) — candidate copy and recovery contract.
+- [Stable migration report](MIGRATION_REPORT.md) — schema 4 candidate invocation,
   compatibility, privacy, and authority boundaries for `migrate --json`.
-- [Pre-authorized unattended policy](MIGRATION_POLICY.md) — schema 3 private
+- [Pre-authorized unattended policy](MIGRATION_POLICY.md) — schema 4 candidate private
   authority, file-safety, checkpoint, and resume boundaries.
 - [Architecture](ARCHITECTURE.md) — package boundaries and allowed dependency
   direction.

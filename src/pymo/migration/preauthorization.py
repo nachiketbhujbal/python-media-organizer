@@ -17,9 +17,9 @@ from pymo.migration.coordinator_state import (
 )
 
 # This identifies the public pre-authorization policy compatibility contract.
-# Version 3 binds the optional managed-quarantine destination through saved
+# Version 4 binds the explicit quarantine method and reserve through saved
 # options and requires an exact reviewed tree-move plan before unattended apply.
-MIGRATION_PREAUTHORIZATION_SCHEMA_VERSION = 3
+MIGRATION_PREAUTHORIZATION_SCHEMA_VERSION = 4
 
 
 class MigrationPreauthorizationError(RuntimeError):
@@ -273,6 +273,10 @@ def _validate_quarantine_expected(value: object) -> dict[str, Any]:
     expected = _require_exact_fields(
         value,
         {
+            "method",
+            "copy_reserve_bytes",
+            "metadata_entries",
+            "metadata_unknown",
             "status",
             "files",
             "directories",
@@ -289,7 +293,15 @@ def _validate_quarantine_expected(value: object) -> dict[str, Any]:
         raise MigrationPreauthorizationError(
             "pre-authorization policy can apply only a successful quarantine preview"
         )
+    if not isinstance(expected["method"], str) or expected["method"] not in {
+        "copy",
+        "rename",
+    }:
+        raise MigrationPreauthorizationError("invalid quarantine method")
     for field in (
+        "copy_reserve_bytes",
+        "metadata_entries",
+        "metadata_unknown",
         "files",
         "directories",
         "bytes",

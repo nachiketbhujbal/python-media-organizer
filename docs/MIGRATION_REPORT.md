@@ -1,6 +1,6 @@
 # Stable migration report
 
-`pymo migrate --json` emits schema 3 of the public, path-private migration
+The unreleased v0.7.0 candidate `pymo migrate --json` emits schema 4 of the public, path-private migration
 report. It projects the coordinator's already-recorded strict stage outcomes;
 it does not scan either collection, create new evidence, advance the workflow,
 or authorize a mutation or deletion.
@@ -39,17 +39,17 @@ report or creating coordinator state.
 
 `--json` cannot be combined with `--start`, `--run-next`, `--run`,
 `--interactive`, `--accept-status`, `--confirm-quarantine`, `--retain-dups`, or
-`--quarantine-dups`. It is a report action only. Because schema 3 is always path-private, it also rejects
+`--quarantine-dups`. It is a report action only. Because schema 4 is always path-private, it also rejects
 `--show-files` and `--show-ignored` rather than changing the report shape or
 disclosing paths.
 
-## Schema 3 compatibility
+## Schema 4 compatibility
 
 The top-level object has exactly these fields:
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `schema_version` | integer | Always `3` for this contract. |
+| `schema_version` | integer | Always `4` for this contract. |
 | `report_type` | string | Always `pymo-migration-report`. |
 | `tool_version` | string | Exact pymo version bound to the restart state. |
 | `workflow` | object | Coordinator progress, reviews, duplicate disposition, and sign-off bookkeeping. |
@@ -81,9 +81,9 @@ stage identifier or `null` at completion. `stopped_stage` and
 `latest_exit_status` are populated only for `stopped`. Separate counters record
 all successful-validation and status-one acknowledgements.
 `duplicate_disposition` is `null`, `not-applicable`, `retained-in-place`,
-`managed-same-filesystem-quarantine`, or `external-quarantine`.
-`managed_quarantine_verified` is true only after the journaled move and its
-fresh retained-tree verification succeed. `external_quarantine_confirmed` remains a compatibility
+`managed-same-filesystem-quarantine`, `copied-source-retained`, or `external-quarantine`.
+`managed_quarantine_verified` records that the selected journaled move or copy
+and its retained-tree verification succeeded at execution time. `external_quarantine_confirmed` remains a compatibility
 boolean and is true only for the latter; it does not prove the external
 destination. `human_signoff_recorded` records only explicit operator sign-off
 and does not alter preservation evidence.
@@ -99,7 +99,11 @@ codes.
 
 `exact_duplicates.managed_quarantine` is `null` before a managed preview.
 Afterward it contains only result kind, status, aggregate file, directory, and
-byte counts, plus `move_verified`. It intentionally omits the destination and
+byte counts, plus `move_verified`, `copy_verified`, `source_retained`,
+`metadata_entries_not_claimed`, and `metadata_entries_unknown`. The latter two
+are nonnegative aggregate counts for copy mode, zero for rename; booleans
+distinguish the successful selected operation. They do not assert current
+report-time media verification. It intentionally omits the destination and
 all binding or manifest digests.
 
 The duplicate `review_storage.state` is one of:
@@ -116,20 +120,23 @@ The duplicate `review_storage.state` is one of:
   move and freshly verified the retained tree at the explicitly bound
   same-filesystem destination; the file and byte counts come from that fresh
   retained-tree observation rather than the earlier simulation;
+- `copied-source-retained`: a verified cross-filesystem copy was recorded,
+  with all original review files retained; copied file bytes do not establish
+  filesystem metadata preservation;
 - `external-retention-confirmed-unverified`: the operator confirmed the
   working `dups` path was absent, but pymo did not inspect an external
   destination or prove physical capacity was reclaimed.
 
-`physical_storage_reclaimed` is therefore `false` in schema 3.
+`physical_storage_reclaimed` is therefore `false` in schema 4.
 `working_collection_bytes_released` reports the freshly verified retained-tree
 byte count removed from the working namespace only for verified managed
-quarantine. It is not a free-space claim. In particular,
+same-filesystem movement. Copied retention reports zero. It is not a free-space claim. In particular,
 retained-in-place means pymo performed no move or deletion and reclaimed no
 physical storage; it is not a deletion estimate or cleanup claim.
 
 ### Privacy and authority
 
-Schema 3 never includes collection roots, filenames, ignored path names,
+Schema 4 never includes collection roots, filenames, ignored path names,
 private directory paths, state or outcome filenames, attempt identifiers,
 timestamps, destination or manifest digests, or action-journal entries. It deliberately omits free-form private
 cache issue text and includes only cache booleans and counts.
@@ -141,5 +148,5 @@ The report does not replace the baseline, retained quarantine, child logs,
 action journal, or ordinary fresh final verification.
 
 The schema version is the compatibility boundary. A future release must use a
-new schema version before changing any schema 3 field name, type, allowed value,
+new schema version before changing any schema 4 field name, type, allowed value,
 or meaning. Human synopsis wording is not part of this machine contract.

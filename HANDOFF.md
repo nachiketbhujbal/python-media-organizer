@@ -37,6 +37,21 @@ must answer an unresolved question. Ordinary development needs no production
 source access. No collection cleanup, baseline mutation, or release is implied
 by this documentation change.
 
+## Version 0.7.0 candidate
+
+ADR 0110 reserves explicit cross-filesystem retained copying. The new
+`quarantine_copy.py` owns source evidence, staged copying, publication and
+recovery; `quarantine_copy_record.py` owns strict journal bindings. Default
+same-filesystem quarantine remains unchanged. Copy mode retains originals and
+scratch, offers no destructive undo, and reports zero reclaimed space.
+Coordinator state is schema 6, with outcome, policy, and report schemas 4.
+Copy authority binds its exact source scope, destination, reserve and evidence.
+Later execution/sign-off revalidates source and retained copy. JSON reporting
+remains a read-only historical projection. See `docs/QUARANTINE_COPY.md` for
+metadata limits and manual orphan review. This is an unreleased candidate;
+version 0.6.9 remains the installed release. Required final gates and independent
+implementation review are pending.
+
 ## Product decisions
 
 The package is named `python-media-organizer`, imports as `pymo`, exposes the

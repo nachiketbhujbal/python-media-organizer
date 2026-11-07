@@ -225,7 +225,7 @@ never duplicate the version in source or static project metadata.
   and never combine it with a workflow action or create state. Keep the human
   synopsis on the same projection. Change the schema version before changing
   any public field, type, allowed value, or meaning.
-- `quarantine-dups` may move only the complete working `dups` directory to one
+- Default `quarantine-dups` may move only the complete working `dups` directory to one
   explicit same-filesystem retained destination. Preview by default, require
   `--apply`, bind the exact destination and descriptor-pinned tree manifest,
   use one atomic descriptor-relative no-replace directory rename, append the
@@ -233,6 +233,17 @@ never duplicate the version in source or static project metadata.
   interruption recovery require the same explicit destination. Never copy,
   delete, follow links, accept unsafe or changing tree entries, or claim that
   a same-filesystem move reclaimed physical storage.
+- Explicit `quarantine-dups --copy --copy-reserve-bytes N` is a separate
+  cross-filesystem retained-copy protocol. Never fall back from rename to copy.
+  Preserve every source and failed scratch file, bind stage and scratch identities
+  in strict action history before media writes, publish without replacement, and
+  require fresh source and target verification before commit. Recovery requires
+  the same exact roots, recorded identities, reserve, and copy mode. Never adopt
+  orphan staging, truncate, overwrite, delete, or offer destructive copy undo.
+  Keep committed copy dependencies active over `dups`. Before later coordinator
+  execution or sign-off, revalidate the retained source and copy; reports remain
+  historical projections. Report filesystem-metadata limitations and zero
+  reclaimed space explicitly.
 
 ## Package layout and tools
 
@@ -271,9 +282,9 @@ never duplicate the version in source or static project metadata.
   mutation policy.
 - `src/pymo/migration/workflow.py` and
   `src/pymo/migration/coordinator_state.py`: ordered guided-runbook arguments
-  and private fail-closed schema-5 restart state respectively.
+  and private fail-closed schema-6 restart state respectively.
 - `src/pymo/migration/synopsis.py`: the selected aggregate projection shared by
-  stable migration-report schema 3 and its human synopsis rendering; it owns no
+  stable migration-report schema 4 and its human synopsis rendering; it owns no
   media analysis, workflow authority, or persistent output path.
 - `src/pymo/migration/preauthorization.py`: strict private unattended-policy
   schema, file safety, binding, and aggregate checkpoint matching; it owns no
