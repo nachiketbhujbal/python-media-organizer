@@ -225,7 +225,8 @@ never duplicate the version in source or static project metadata.
   exact reviewed digest, full fresh rederivation, unchanged roots/configuration,
   and separate `--apply` before publishing an owner-private policy and a
   separate create-once acceptance receipt. Schema 5 requires that receipt to
-  bind exact candidate and policy bytes, path and version; extracted drafts or
+  bind exact candidate and policy bytes, path, version, the verified policy
+  inode and its own exclusively allocated inode; extracted drafts or
   incomplete/substituted publications grant no authority. Author only
   complete retained-in-place, no-cache plans; refuse underivable managed
   quarantine identities and incomplete or unsafe evidence. Schema-5 authored

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import stat
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 from pymo.managed_quarantine import _atomic_rename_without_replace
@@ -59,8 +60,12 @@ def read_private_identity(path: Path) -> tuple[bytes, tuple[int, ...]]:
     return payload, _file_identity_from_stat(initial)
 
 
-def publish_private(path: Path, payload: bytes, roots: tuple[Path, Path]) -> None:
-    if len(payload) > 64 * 1024 * 1024:
+def publish_private(
+    path: Path,
+    payload: bytes | Callable[[tuple[int, int]], bytes],
+    roots: tuple[Path, Path],
+) -> None:
+    if not callable(payload) and len(payload) > 64 * 1024 * 1024:
         raise PolicyPlanningError("private artifact exceeds the supported size")
     path = _require_external_private_parent(path, roots)
     require_private_unattended_log_directory(path.parent)
@@ -76,6 +81,11 @@ def publish_private(path: Path, payload: bytes, roots: tuple[Path, Path]) -> Non
             dir_fd=parent_fd,
         )
         try:
+            if callable(payload):
+                allocated = os.fstat(fd)
+                payload = payload((allocated.st_dev, allocated.st_ino))
+            if len(payload) > 64 * 1024 * 1024:
+                raise PolicyPlanningError("private artifact exceeds the supported size")
             with os.fdopen(os.dup(fd), "wb") as handle:
                 handle.write(payload)
                 handle.flush()

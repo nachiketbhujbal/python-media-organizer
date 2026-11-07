@@ -59,7 +59,9 @@ Candidates are bounded at 64 MiB; accepted policies retain the one-MiB limit.
 Writes use verified private scratch and atomic no-replace publication. A policy
 file alone is never authored execution authority: only after its exact published
 bytes are verified is a separate receipt published, binding those bytes, the
-reviewed candidate SHA-256, the exact policy path and tool version. The executor
+reviewed candidate SHA-256, the exact policy path and tool version. The receipt
+also binds the verified policy inode and its own exclusively allocated inode;
+an identical-byte replacement does not inherit acceptance. The executor
 requires both files and rechecks their bytes and identities during execution.
 Interrupted or substituted artifacts are retained for manual review and are
 never automatically adopted. A failed publication can leave a policy file
@@ -119,7 +121,11 @@ changing either the artifact or declared target requires another review.
 Schema 5 retains every schema-4 field and adds `acceptance` and `plan_binding`.
 `acceptance` has exactly `candidate_sha256` and the absolute `record` path. The
 separate receipt has schema version 1, kind `accepted-migration-policy`,
-`tool_version`, `candidate_sha256`, `policy_path`, and `policy_sha256`. Its strict
+`tool_version`, `candidate_sha256`, `policy_path`, `policy_sha256`,
+`policy_identity`, and `record_identity`. The identity fields are ordered
+`[device, inode]` integer pairs. The record identity comes from the pinned
+exclusive scratch descriptor before writing, not from a later pathname lookup.
+Its strict
 contents must match the exact accepted policy; a missing or mismatched receipt
 is refused before any run state is created. This is explicit local acceptance
 evidence, not cryptographic proof against an owner who deliberately constructs

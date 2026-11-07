@@ -60,7 +60,9 @@ collections are not required to prove these authoring boundaries.
 
 Acceptance publishes and verifies the policy before publishing a separate
 create-once receipt bound to its exact bytes, path, version and reviewed
-candidate SHA-256. Schema 5 requires both files; extraction of the unaccepted
+candidate SHA-256. The receipt binds the verified policy device/inode and its
+own device/inode captured from its exclusive scratch descriptor before writing.
+An identical-byte replacement cannot inherit either identity. Schema 5 requires both files; extraction of the unaccepted
 inner proposal supplies no authority. Scratch substitution or interruption
 cannot turn mere file presence into accepted authority. Failed artifacts remain
 for manual review; publication never overwrites or deletes them.

@@ -697,7 +697,9 @@ def test_extracted_candidate_policy_is_not_authority(tmp_path: Path) -> None:
     assert snapshot(baseline) == snapshot(working) == {}
 
 
-@pytest.mark.parametrize("boundary", ["policy", "receipt"])
+@pytest.mark.parametrize(
+    "boundary", ["policy", "receipt", "receipt-identical", "policy-after-verification"]
+)
 def test_scratch_substitution_never_publishes_usable_authority(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, boundary: str
 ) -> None:
@@ -716,6 +718,20 @@ def test_scratch_substitution_never_publishes_usable_authority(
 
     def swap(source_fd, source, target_fd, target):
         if target == target_path.name:
+            nonlocal substituted
+            if boundary == "policy-after-verification":
+                held = output.with_suffix(".held")
+                output.rename(held)
+                output.write_bytes(held.read_bytes())
+                output.chmod(0o600)
+                atomic(source_fd, source, target_fd, target)
+                return
+            if boundary == "receipt-identical":
+                fd = os.open(source, os.O_RDONLY, dir_fd=source_fd)
+                try:
+                    substituted = os.read(fd, 65536)
+                finally:
+                    os.close(fd)
             os.rename(
                 source, source + ".held", src_dir_fd=source_fd, dst_dir_fd=source_fd
             )
@@ -743,8 +759,11 @@ def test_scratch_substitution_never_publishes_usable_authority(
         )
         == 2
     )
-    assert target_path.read_bytes() == substituted
-    assert list(output.parent.glob(".pymo-policy-*.held"))
+    if boundary != "policy-after-verification":
+        assert target_path.read_bytes() == substituted
+        assert list(output.parent.glob(".pymo-policy-*.held"))
+    else:
+        assert output.with_suffix(".held").exists()
     with pytest.raises(MigrationPreauthorizationError):
         load_preauthorization(output, roots=(baseline, working))
     result = run(

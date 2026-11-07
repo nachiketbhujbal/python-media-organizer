@@ -55,8 +55,17 @@ def publish_accepted(
         "candidate_sha256": candidate_sha256,
         "policy_path": str(path),
         "policy_sha256": hashlib.sha256(payload).hexdigest(),
+        "policy_identity": list(identity[:2]),
     }
-    publish_private(record, canonical_bytes(receipt), roots)
+    # The receipt binds its own exclusively allocated inode before publication.
+    # A same-byte replacement cannot inherit that identity after a failed rename.
+    publish_private(
+        record,
+        lambda allocated: canonical_bytes(
+            {**receipt, "record_identity": list(allocated)}
+        ),
+        roots,
+    )
     accepted = load_acceptance(path, payload, policy["acceptance"])
     accepted.require_current()
     if read_private_identity(path) != (payload, identity):
@@ -109,11 +118,13 @@ def load_acceptance(path: Path, payload: bytes, value: object) -> PolicyAcceptan
         "candidate_sha256": declaration["candidate_sha256"],
         "policy_path": str(path),
         "policy_sha256": hashlib.sha256(payload).hexdigest(),
+        "policy_identity": list(policy_identity[:2]),
+        "record_identity": list(identity[:2]),
     }
     if (
         not isinstance(record, dict)
         or type(record.get("schema_version")) is not int
-        or record != expected
+        or canonical_bytes(record) != canonical_bytes(expected)
     ):
         raise MigrationPreauthorizationError(
             "policy acceptance evidence does not match"

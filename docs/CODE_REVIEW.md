@@ -871,3 +871,15 @@ skips; the independent focused suite passed 40. Those passes did not detect the
 review findings. The initial Fedora CI run also exposed a test fixture's
 unavailable optional H.264 encoder. The remux fixture now uses the portable
 native MPEG-4 encoder, preserving the real decode/remux test without a new skip.
+
+
+Renewed independent review at `83b2a9c946c016d48a1e4c3c759fa442a91cf5a1`
+closed AUTH-R01's extraction bypass but kept AUTH-R02 open: replacing receipt
+scratch with identical bytes left a loadable receipt after acceptance failed.
+The earlier regression used different-policy bytes and missed this identity
+case. The owner now binds the verified policy device/inode and the receipt's
+own exclusive scratch device/inode inside the receipt payload; fresh loading
+compares both with pinned current objects. Additional regressions cover exact-
+byte receipt substitution and late identical-byte policy replacement. Renewed
+exact-SHA review remains required. The preceding owner gate passed 748 tests
+with two ordinary-run filesystem skips; that result predates this correction.
