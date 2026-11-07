@@ -1,6 +1,6 @@
 # Review a migration before authorizing it
 
-The v0.7.1 candidate adds `pymo policy plan`, `review`, and `accept` for a
+Version 0.7.1 adds `pymo policy plan`, `review`, and `accept` for a
 complete retained-in-place migration. Planning and acceptance change no media,
 collection layout, cache, lock or action history in either collection. They
 read current files, including native full decoding when needed. They can be

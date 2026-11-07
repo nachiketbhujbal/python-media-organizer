@@ -60,5 +60,8 @@ boundaries, and ADR 0107 records its post-tag release truth. ADR 0105 records
 the version 0.6 and 0.7 boundary; ADR 0108 records the current version 0.7
 sequence through version 0.7.8.
 
-[POLICY_AUTHORING.md](POLICY_AUTHORING.md) describes the v0.7.1 candidate
+[POLICY_AUTHORING.md](POLICY_AUTHORING.md) describes the released v0.7.1
 planning, review, acceptance and authored authority contracts.
+
+[ADR 0113](adrs/0113-v0.7.1-release-truth.md) records v0.7.1 publication and
+installation evidence; version 0.7.2 queue manifest/planning is next.

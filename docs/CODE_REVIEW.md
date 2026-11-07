@@ -901,3 +901,14 @@ Ruff, Black, mypy, all pre-commit hooks, source/wheel builds and isolated
 installed-package plan/review/accept/execute acceptance passed. The synthetic
 installed workflow preserved every source byte and retained duplicate files.
 No production collection, planner, cleanup or PyPI publication was involved.
+
+
+## Version 0.7.1 publication evidence
+
+Final independently accepted candidate `213cc6b` passed PR #71 run
+`42341103475` and merged as `b81e5cbe8971d948ed0f789dca3e6f42d72a5f88`. Exact-main run
+`42341600102` passed every required platform and quality gate before the
+approved immutable tag `v0.7.1` was published. Tagged run `42342058037`
+passed, and the installed command reports `pymo 0.7.1`. ADR 0113 records the
+separate post-tag reconciliation and exact tagged artifact identities. No
+production collection, planner, cleanup or PyPI publication was involved.

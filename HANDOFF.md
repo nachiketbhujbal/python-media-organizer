@@ -37,7 +37,7 @@ must answer an unresolved question. Ordinary development needs no production
 source access. No collection cleanup, baseline mutation, or release is implied
 by this documentation change.
 
-## Version 0.7.1 candidate
+## Version 0.7.1 release
 
 ADR 0112 implements target-local virtual planning with separate digest-bound
 review and acceptance. `policy.py` coordinates private candidate schema 1;
@@ -56,8 +56,15 @@ and stops on unexpected execution evidence. Partially applied children still
 require reviewed journal recovery; automatic queue recovery remains later work.
 See `docs/POLICY_AUTHORING.md`. Independent Terra-medium review accepted
 implementation `1bae676` after AUTH-R01 and AUTH-R02 were resolved. The
-750-test owner gate passed with two ordinary-run filesystem skips. Hosted
-publication gates remain pending; version 0.7.1 is not yet released.
+750-test owner gate passed with two ordinary-run filesystem skips. Final
+candidate `213cc6b` passed independent review and PR #71 run `42341103475`.
+Its protected merge passed exact-main run `42341600102` and tagged run
+`42342058037`.
+Version 0.7.1 is released and installed; its immutable tag peels to
+`b81e5cbe8971d948ed0f789dca3e6f42d72a5f88`. ADR 0113 records exact artifact
+and installation proof. Version 0.7.2 queue manifest/planning is next. No
+production collection, baseline or planner changed; no cleanup or PyPI
+publication occurred.
 
 ## Version 0.7.0 release
 
@@ -70,14 +77,15 @@ Coordinator state is schema 6, with outcome, policy, and report schemas 4.
 Copy authority binds its exact source scope, destination, reserve and evidence.
 Later execution/sign-off revalidates source and retained copy. JSON reporting
 remains a read-only historical projection. See `docs/QUARANTINE_COPY.md` for
-metadata limits and manual orphan review. Version 0.7.0 is released and installed.
+metadata limits and manual orphan review. Version 0.7.0 was released and
+installed at that publication boundary.
 Independent review accepted implementation `57e0fdf` and final candidate
 `fe28e12` after COPY-R01 through COPY-R03 were resolved. The 697-test owner gate,
 disposable actual-filesystem acceptance, PR #69 run `42334776314`, exact-main
 run `42335212722`, and tagged run `42335973647` passed. Annotated tag `v0.7.0`
 peels to protected merge `2af3cb4c32f5ef575dcddce4f4699176c65a2b0a`.
-ADR 0111 records the exact artifact and installation evidence. Version 0.7.1
-reviewed policy authoring is next. No production collection or workbook changed.
+ADR 0111 records the exact artifact and installation evidence. Reviewed policy
+authoring followed in version 0.7.1. No production collection or workbook changed.
 
 
 ## Product decisions
@@ -1719,7 +1727,7 @@ release-truth reconciliation without moving or recreating the immutable tag.
 Version 0.6 is now closed. Version 0.7.0 delivers the distinct capacity-checked
 cross-filesystem copy, verify, and no-replace publication protocol under ADR
 0110, with release truth in ADR 0111. It never becomes a fallback inside the
-same-filesystem rename contract. Version 0.7.1 is next and owns reviewed authoring of
+same-filesystem rename contract. Version 0.7.1 delivers reviewed authoring of
 the exact private policy already consumed by unattended execution; queueing and
 scheduling remain later separate version 0.7 units through version 0.7.8.
 

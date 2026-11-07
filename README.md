@@ -103,10 +103,10 @@ The release and installation evidence is recorded in [ADR 0111](docs/adrs/0111-v
 
 ## Migration readiness
 
-The planned sequence through v0.7.5 adds cross-filesystem retention, reviewed
-policy authoring, and sequential queue planning, execution, recovery, and
-reporting. It is a production-readiness reassessment point, not permission to
-clear source storage. Follow the [readiness checklist](docs/MIGRATION.md#production-readiness-checklist)
+The sequence through v0.7.5 has delivered cross-filesystem retention and
+reviewed policy authoring. Sequential queue planning, execution, recovery, and
+reporting remain planned. Completing the sequence is a production-readiness
+reassessment point, not permission to clear source storage. Follow the [readiness checklist](docs/MIGRATION.md#production-readiness-checklist)
 for peak space, byte-distinct metadata variants, protected baselines, initial
 copying, fresh preservation checks, and operator-managed cleanup. Further
 routine pilots and later concurrency features are not prerequisites.
@@ -458,7 +458,7 @@ benchmark-proven scheduling follow as separate version 0.7 releases under
 
 ### Author a reviewed unattended policy
 
-The v0.7.1 candidate adds a complete target-local preview through
+Version 0.7.1 adds a complete target-local preview through
 `pymo policy plan BASELINE WORKING`. `policy review` shows its checkpoint
 expectations; separate `policy accept --sha256 ... --apply` publishes a policy
 and its required acceptance receipt without starting migration. This authoring path retains duplicates in place and
@@ -466,6 +466,8 @@ uses fresh reads with `--no-cache`. Future managed-quarantine identities and
 other unprovable transitions are refused, never guessed. See the
 [authoring guide](docs/POLICY_AUTHORING.md) for the private output and acceptance
 commands, supported scope, and interruption limits.
+[ADR 0113](docs/adrs/0113-v0.7.1-release-truth.md) records the verified v0.7.1
+release and installation evidence.
 
 ### Verify a migration by exact bytes and media content
 

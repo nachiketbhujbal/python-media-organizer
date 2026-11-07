@@ -4,6 +4,10 @@ All notable changes to `python-media-organizer` will be recorded here.
 
 ## Unreleased
 
+No unreleased changes.
+
+## 0.7.1 - 2026-11-07
+
 - Add target-local `policy plan`, `review`, and separate digest-bound `accept`
   for complete retained-in-place migrations without trial copies or media writes.
 - Publish private candidate schema 1 and authored policy schema 5 with initial
