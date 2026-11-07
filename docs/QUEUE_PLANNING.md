@@ -1,6 +1,6 @@
 # Queue declarations and planning
 
-The v0.7.2 candidate adds `pymo queue plan MANIFEST [--json]`. It checks an
+Version 0.7.2 adds `pymo queue plan MANIFEST [--json]`. It checks an
 entire ordered declaration and prints the stages that each job would follow.
 It starts no job and writes no media, logs, cache, lock, action history, private
 state or output artifact. There is no `--apply` or execution selector.

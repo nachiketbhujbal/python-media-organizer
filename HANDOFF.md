@@ -37,7 +37,7 @@ must answer an unresolved question. Ordinary development needs no production
 source access. No collection cleanup, baseline mutation, or release is implied
 by this documentation change.
 
-## Version 0.7.2 candidate
+## Version 0.7.2 release
 
 ADR 0114 adds read-only queue manifest planning. `queue.py` coordinates the CLI,
 `migration/queue_manifest.py` owns strict private declarations and endpoint
@@ -56,9 +56,15 @@ A passing plan does not check media, capacity, authored namespace freshness or
 future destination availability. These remain mandatory execution boundaries.
 Independent Terra-medium review accepted implementation `dee1f44` after
 QUEUE-R01 and QUEUE-R02 were resolved; 133 focused owner and reviewer tests
-passed. Complete coverage and hosted release gates remain pending at this
-candidate checkpoint. No production
-collection, baseline, workbook, cleanup or PyPI operation belongs to this work.
+passed. The complete owner gate passed 830 tests with two existing filesystem
+skips, at 88 percent subprocess-aware coverage. Final candidate `2c807f8`
+passed independent review and PR #73 run `42391958578`. The protected
+merge passed exact-main run `42392567482` and tagged run `42393170285`.
+The immutable v0.7.2 tag peels to `481e16de0504c2cd09a365710d73ed8ec7100902`;
+the installed command reports `pymo 0.7.2`. ADR 0115 records exact artifacts
+and installation proof. The maintainer requested a pause after this release,
+before further evaluation or version 0.7.3 engineering. No production collection,
+baseline, workbook, cleanup or PyPI operation occurred.
 
 ## Version 0.7.1 release
 
@@ -85,7 +91,7 @@ Its protected merge passed exact-main run `42341600102` and tagged run
 `42342058037`.
 Version 0.7.1 is released and installed; its immutable tag peels to
 `b81e5cbe8971d948ed0f789dca3e6f42d72a5f88`. ADR 0113 records exact artifact
-and installation proof. Version 0.7.2 queue manifest/planning is next. No
+and installation proof. Version 0.7.2 subsequently delivers queue manifest/planning. No
 production collection, baseline or planner changed; no cleanup or PyPI
 publication occurred.
 
