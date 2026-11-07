@@ -814,7 +814,10 @@ versions 0.7.2 through 0.7.5 and 0.7.6 through 0.7.8 respectively. Rescue
 copying remains separate research.
 
 ADR 0112 implements the retained-in-place authoring path released in v0.7.1;
-ADR 0113 records its verified release boundary.
+ADR 0113 records its verified release boundary. ADR 0114 implements the v0.7.2
+candidate's queue declaration checks without execution, media/capacity evidence,
+or authority creation. Queue execution, recovery and synopsis remain separately
+promoted work; general rescue copying remains research.
 Future managed-quarantine identities cannot be predicted without mutation;
 a compatible authoring contract for that topology remains an explicit open
 question. Existing exact schema-4 quarantine checks are not weakened.

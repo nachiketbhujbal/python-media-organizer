@@ -64,4 +64,6 @@ sequence through version 0.7.8.
 planning, review, acceptance and authored authority contracts.
 
 [ADR 0113](adrs/0113-v0.7.1-release-truth.md) records v0.7.1 publication and
-installation evidence; version 0.7.2 queue manifest/planning is next.
+installation evidence. The v0.7.2 candidate implements
+[read-only queue planning](QUEUE_PLANNING.md) under
+[ADR 0114](adrs/0114-read-only-queue-manifest-planning.md).

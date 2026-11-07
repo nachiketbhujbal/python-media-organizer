@@ -15,6 +15,7 @@ from pymo import (
     organize,
     policy,
     quarantine,
+    queue,
     rename,
     scan,
     validate,
@@ -41,6 +42,7 @@ def _commands() -> dict[str, Callable[[Sequence[str] | None], int]]:
         "correct-extensions": correct_extensions.main,
         "migrate": migrate.main,
         "policy": policy.main,
+        "queue": queue.main,
         "quarantine-dups": quarantine.main,
         "organize": organize.main,
         "rename": rename.main,
@@ -70,7 +72,7 @@ def _supports_show_files(command: str, cache_action: str | None) -> bool:
 
 
 def _supports_show_ignored(command: str, cache_action: str | None) -> bool:
-    return command not in {"cache", "quarantine-dups", "policy"} or (
+    return command not in {"cache", "quarantine-dups", "policy", "queue"} or (
         command == "cache" and cache_action in {"warm", "refresh"}
     )
 
@@ -198,9 +200,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(
             "policy owns explicit private artifacts; use policy plan --config for configuration"
         )
+    if args.command == "queue" and (
+        args.log_file is not None or args.config is not None or args.show_ignored
+    ):
+        parser.error(
+            "queue planning is zero-write and uses only manifest-bound options"
+        )
     started_at = time.monotonic()
     structured_json = (
-        args.command in {"scan", "validate", "cache", "verify-migration", "migrate"}
+        args.command
+        in {"scan", "validate", "cache", "verify-migration", "migrate", "queue"}
         and "--json" in args.arguments
     )
     if args.command == "migrate" and structured_json and args.visibility == "full":

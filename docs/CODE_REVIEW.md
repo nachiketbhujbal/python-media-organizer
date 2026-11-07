@@ -912,3 +912,19 @@ approved immutable tag `v0.7.1` was published. Tagged run `42342058037`
 passed, and the installed command reports `pymo 0.7.1`. ADR 0113 records the
 separate post-tag reconciliation and exact tagged artifact identities. No
 production collection, planner, cleanup or PyPI publication was involved.
+
+## Version 0.7.2 queue planning candidate
+
+The owner implements ADR 0114's declaration-only queue boundary. An independent
+Terra-medium design review required whole-queue endpoint separation, private
+artifact and receipt rechecks, complete ordered policies, buffered successful
+output and an explicit distinction between declaration checks and media evidence.
+The owner incorporated those requirements without delegating implementation.
+
+The first 66 focused synthetic tests pass, including cross-job overlaps,
+case/Unicode absent-target aliases, policy/receipt substitution, late root and
+state changes, schema refusals, path privacy and zero-write snapshots. Static
+checks, all pre-commit hooks, source/wheel builds and an isolated installed
+two-job planning/refusal check pass. The complete coverage suite is running;
+independent exact-SHA implementation review and hosted gates remain pending.
+No production media or migration planner was accessed.

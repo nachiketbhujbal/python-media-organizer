@@ -37,6 +37,22 @@ must answer an unresolved question. Ordinary development needs no production
 source access. No collection cleanup, baseline mutation, or release is implied
 by this documentation change.
 
+## Version 0.7.2 candidate
+
+ADR 0114 adds read-only queue manifest planning. `queue.py` coordinates the CLI,
+`migration/queue_manifest.py` owns strict private declarations and endpoint
+observations, and `migration/queue_plan.py` validates cross-job separation and
+complete policy bindings before projecting a deterministic path-private plan.
+The existing policy parser is shared without changing ordinary migration reads.
+No child runs or persistent state is created. Manifest and plan schemas are 1;
+private policies remain schemas 4/5. Existing-state recovery is deliberately not
+part of a new-job declaration. See `docs/QUEUE_PLANNING.md`.
+
+A passing plan does not check media, capacity, authored namespace freshness or
+future destination availability. These remain mandatory execution boundaries.
+Independent exact-SHA review and release gates are pending. No production
+collection, baseline, workbook, cleanup or PyPI operation belongs to this work.
+
 ## Version 0.7.1 release
 
 ADR 0112 implements target-local virtual planning with separate digest-bound

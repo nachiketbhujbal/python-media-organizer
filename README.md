@@ -104,8 +104,8 @@ The release and installation evidence is recorded in [ADR 0111](docs/adrs/0111-v
 ## Migration readiness
 
 The sequence through v0.7.5 has delivered cross-filesystem retention and
-reviewed policy authoring. Sequential queue planning, execution, recovery, and
-reporting remain planned. Completing the sequence is a production-readiness
+reviewed policy authoring. The v0.7.2 candidate adds read-only queue planning;
+execution, recovery, and reporting remain planned. Completing the sequence is a production-readiness
 reassessment point, not permission to clear source storage. Follow the [readiness checklist](docs/MIGRATION.md#production-readiness-checklist)
 for peak space, byte-distinct metadata variants, protected baselines, initial
 copying, fresh preservation checks, and operator-managed cleanup. Further
@@ -468,6 +468,15 @@ other unprovable transitions are refused, never guessed. See the
 commands, supported scope, and interruption limits.
 [ADR 0113](docs/adrs/0113-v0.7.1-release-truth.md) records the verified v0.7.1
 release and installation evidence.
+
+### Plan a queue without running it
+
+The v0.7.2 candidate adds `pymo queue plan MANIFEST [--json]`. It checks the
+complete private declaration, root identities, exact accepted policies, separate
+state destinations and explicit duplicate dispositions before reporting ordered
+stages. It writes nothing and starts no migration. Media evidence and capacity
+remain unchecked; a valid declaration is not production sign-off. See the
+[queue manifest contract](docs/QUEUE_PLANNING.md) for schema 1 and its limits.
 
 ### Verify a migration by exact bytes and media content
 

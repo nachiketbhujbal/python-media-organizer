@@ -4,7 +4,13 @@ All notable changes to `python-media-organizer` will be recorded here.
 
 ## Unreleased
 
-No unreleased changes.
+- Add `queue plan MANIFEST [--json]` for strict private schema-1 queue declarations
+  and complete ordered, path-private plans with no execution or persistent writes.
+- Bind root identities, exact complete policies, new private state destinations
+  and explicit duplicate disposition across all jobs; refuse overlap, unsafe
+  ancestry, occupied destinations, changed declarations and invalid receipts.
+- Keep declaration validity separate from media evidence, capacity, destination
+  reservation, policy acceptance and final sign-off. Execution remains later work.
 
 ## 0.7.1 - 2026-11-07
 
