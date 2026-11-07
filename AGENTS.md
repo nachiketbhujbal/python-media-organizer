@@ -221,7 +221,7 @@ never duplicate the version in source or static project metadata.
 - `migrate --json` is an explicit read-only projection of one existing strict
   coordinator run. Require its existing private state and lock, validate the
   complete lifecycle and typed outcome history, recheck state, outcomes, and
-  collection identities before emitting deterministic path-private schema 3,
+  collection identities before emitting deterministic path-private schema 4,
   and never combine it with a workflow action or create state. Keep the human
   synopsis on the same projection. Change the schema version before changing
   any public field, type, allowed value, or meaning.

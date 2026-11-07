@@ -835,3 +835,9 @@ After explicit maintainer approval, annotated tag `v0.7.0` was published at that
 merge and tagged run `42335973647` passed. The installed command reports
 `pymo 0.7.0`. ADR 0111 records artifact identities and the separate release-truth
 reconciliation; no acceptance claim relies on a skipped platform gate.
+
+Independent review of release-truth head `3c90715` found RELEASE-TRUTH-R01:
+the authoritative `migrate --json` instruction still named report schema 3.
+The owner corrected it to the implemented schema 4 while preserving read-only,
+privacy and compatibility requirements. The other release claims and safety
+boundaries were accepted; renewed exact-head documentation review is required.
