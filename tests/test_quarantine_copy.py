@@ -644,3 +644,24 @@ def test_equal_bytes_in_unrecorded_staged_file_do_not_inherit_copy_authority(
     with pytest.raises(ManagedQuarantineError, match="unrecorded copied file"):
         copying.recover_copy(root, target, 0)
     assert not target.exists()
+
+
+def test_source_change_during_final_artifact_accounting_refuses_commit(
+    tmp_path: Path, simulated_devices: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, target = collection(tmp_path)
+    original = copying._scratch_evidence
+
+    def changed(descriptor, tree, artifacts):
+        result = original(descriptor, tree, artifacts)
+        if target.exists():
+            (root / "dups" / "second.bin").write_bytes(b"external change")
+        return result
+
+    monkeypatch.setattr(copying, "_scratch_evidence", changed)
+    with pytest.raises(ManagedQuarantineError, match="source changed"):
+        copying.apply_copy(copying.plan_copy(root, target, 0))
+    events = [
+        json.loads(line) for line in action_log_path(root).read_text().splitlines()
+    ]
+    assert not any(event["event"] == "RUN_COMMITTED" for event in events)

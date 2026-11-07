@@ -646,11 +646,15 @@ def _run_copy(
                     _error("published retained tree failed byte verification")
                 if published_state != _namespace_snapshot(published):
                     _error("published retained tree changed during verification")
+            files, byte_count = account_artifacts()
+            with _child_directory(
+                collection.descriptor, "dups", (plan.source.device, plan.source.inode)
+            ) as source:
+                final_source_state = _namespace_snapshot(source)
             if not _same_manifest(
                 _manifest_at(collection.descriptor, "dups"), plan.source
             ):
                 _error("source changed after copy publication")
-            files, byte_count = account_artifacts()
         _require_directory_path_identity(collection.path, collection.identity)
         _require_directory_path_identity(parent.path, parent.identity)
         _require_identity(parent.descriptor, target_name, stage_identity)
@@ -659,6 +663,11 @@ def _run_copy(
         ) as published:
             if published_state != _namespace_snapshot(published):
                 _error("published retained tree changed before journal commit")
+        with _child_directory(
+            collection.descriptor, "dups", (plan.source.device, plan.source.inode)
+        ) as source:
+            if final_source_state != _namespace_snapshot(source):
+                _error("source changed before copy journal commit")
         if not run.committed:
             if intent_id not in completed:
                 _complete(log, handle, run.run_id, intent_id)
