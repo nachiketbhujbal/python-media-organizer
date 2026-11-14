@@ -4,7 +4,9 @@ All notable changes to `python-media-organizer` will be recorded here.
 
 ## Unreleased
 
-### 0.7.3 candidate
+No unreleased changes.
+
+## 0.7.3 - 2026-11-14
 
 - Add `queue run MANIFEST`, preview-only unless `--apply` is supplied, to run
   complete approved policies sequentially through the existing migration engine.

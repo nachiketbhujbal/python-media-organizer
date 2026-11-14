@@ -37,9 +37,9 @@ must answer an unresolved question. Ordinary development needs no production
 source access. No collection cleanup, baseline mutation, or release is implied
 by this documentation change.
 
-## Version 0.7.3 candidate
+## Version 0.7.3 release
 
-The maintainer lifted the post-v0.7.2 pause. ADR 0116 reserves sequential queue
+The maintainer lifted the post-v0.7.2 pause. ADR 0116 implements sequential queue
 execution. `queue run MANIFEST` is a zero-write preview; `--apply` runs new
 jobs using the exact bound policies through the existing unattended engine.
 `migration/queue_run.py` owns exclusive private directory publication, per-job
@@ -52,12 +52,19 @@ setup. It is not persisted authority and changes no on-disk schema.
 
 Every started job retains separate state, logs and outcomes. Failure or
 interruption stops the queue; existing state is never adopted. Queue recovery
-and synopsis remain versions 0.7.4 and 0.7.5. Independent Terra-medium review accepts implementation `c0409fd` after closing
+and synopsis remain versions 0.7.4 and 0.7.5. Independent Terra-medium review
+accepts implementation `c0409fd` after closing
 four reproduced findings. The complete owner gate passed 862 tests with two
 existing filesystem skips at 88 percent subprocess-aware coverage; static,
-hook, build and isolated installed-package checks passed. This candidate is not
-yet released; protected hosted gates and publication evidence remain required. See
-`docs/QUEUE_EXECUTION.md`. Real collections and the workbook remain untouched.
+hook, build and isolated installed-package checks passed. Final candidate
+`496ee47` passed independent review and PR #75 run `43543803058`. Protected
+merge `c97380701c6b78424be516b14d3bfbe744304602` passed exact-main run
+`43544525462`; immutable tag `v0.7.3` peels to that merge and passed release
+run `43545313746`. The installed command reports `pymo 0.7.3`. ADR 0117 records
+exact artifacts and installation proof. See `docs/QUEUE_EXECUTION.md`.
+Queue recovery in v0.7.4 is next, followed by the v0.7.5 synopsis and a separate
+production-readiness reassessment. Real collections and the workbook remain
+untouched.
 
 ## Version 0.7.2 release
 
@@ -83,10 +90,11 @@ skips, at 88 percent subprocess-aware coverage. Final candidate `2c807f8`
 passed independent review and PR #73 run `42391958578`. The protected
 merge passed exact-main run `42392567482` and tagged run `42393170285`.
 The immutable v0.7.2 tag peels to `481e16de0504c2cd09a365710d73ed8ec7100902`;
-the installed command reports `pymo 0.7.2`. ADR 0115 records exact artifacts
-and installation proof. The maintainer requested a pause after this release,
-before further evaluation or version 0.7.3 engineering. No production collection,
-baseline, workbook, cleanup or PyPI operation occurred.
+the command installed at that boundary reported `pymo 0.7.2`. ADR 0115 records
+exact artifacts and installation proof. The maintainer requested a pause after this release,
+before further evaluation or version 0.7.3 engineering; the maintainer later
+lifted that pause. No production collection, baseline, workbook, cleanup or PyPI
+operation occurred.
 
 ## Version 0.7.1 release
 

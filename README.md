@@ -105,7 +105,8 @@ The release and installation evidence is recorded in [ADR 0111](docs/adrs/0111-v
 
 The sequence through v0.7.5 has delivered cross-filesystem retention and
 reviewed policy authoring. Version 0.7.2 adds read-only queue planning;
-execution, recovery, and reporting remain planned. Completing the sequence is a production-readiness
+version 0.7.3 adds sequential execution. Recovery and reporting remain planned.
+Completing the sequence is a production-readiness
 reassessment point, not permission to clear source storage. Follow the [readiness checklist](docs/MIGRATION.md#production-readiness-checklist)
 for peak space, byte-distinct metadata variants, protected baselines, initial
 copying, fresh preservation checks, and operator-managed cleanup. Further
@@ -482,7 +483,7 @@ and installation evidence.
 
 ### Execute approved queue jobs
 
-The v0.7.3 candidate adds sequential execution over complete reviewed policies:
+Version 0.7.3 adds sequential execution over complete reviewed policies:
 
 ```bash
 pymo queue run "/private-plans/queue.json"          # zero-write preview

@@ -1,6 +1,6 @@
 # Sequential queue execution
 
-The v0.7.3 candidate adds `pymo queue run MANIFEST`. Without `--apply`, it
+Version 0.7.3 adds `pymo queue run MANIFEST`. Without `--apply`, it
 prints the same zero-write declaration preview as `queue plan`. Planning
 schema 1 and manifest schema 1 remain unchanged. Execution has no JSON outcome
 surface yet; queue recovery and aggregate synopsis are separate releases.

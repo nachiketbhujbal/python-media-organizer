@@ -10,7 +10,7 @@ metadata. It does not scan or decode media, rederive authored namespace
 evidence, check free capacity, reserve destinations or prove preservation.
 Even a stale media plan can pass this declaration check. Fresh target, policy,
 receipt, configuration and checkpoint checks remain mandatory during execution.
-The v0.7.3 candidate adds separate [sequential execution](QUEUE_EXECUTION.md).
+Version 0.7.3 adds separate [sequential execution](QUEUE_EXECUTION.md).
 Queue recovery and outcome aggregation remain later roadmap units.
 
 ## Private manifest schema 1
