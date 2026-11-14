@@ -956,10 +956,12 @@ satisfying coverage and clearly reports a simulated post-finalization verdict.
 Version 0.5.9 promotes reversible extension correction, and version 0.5.11
 promotes guided orchestration over explicit baseline and working-copy state.
 Actionable damaged-media guidance and quarantine remain later work.
-Multi-collection queues, rescue copying, automatic final naming, and cleanup
-remain research until capacity, case-collision, resumability,
-storage-contention, and evidence-checkpoint policies are designed. Existing
-organizer collisions are already resolved to Finder-style numbered names
+Multi-collection queue planning and sequential execution are released through
+version 0.7.3. Queue recovery, aggregate reporting and measured scheduling are
+separately promoted roadmap units. General rescue copying, automatic final
+naming and permanent cleanup remain research requiring their own capacity,
+collision, recovery and evidence policies. Existing organizer collisions are
+already resolved to Finder-style numbered names
 during planning and still protected by atomic no-replace moves during apply.
 
 Version 0.2.0 removed CSV organizer undo and `--manifest`, grouped image-output
