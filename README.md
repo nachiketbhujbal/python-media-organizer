@@ -105,7 +105,8 @@ The release and installation evidence is recorded in [ADR 0111](docs/adrs/0111-v
 
 The sequence through v0.7.5 has delivered cross-filesystem retention and
 reviewed policy authoring. Version 0.7.2 adds read-only queue planning;
-version 0.7.3 adds sequential execution. The v0.7.4 candidate adds explicit recovery; aggregate reporting remains planned.
+version 0.7.3 adds sequential execution. Version 0.7.4 adds explicit recovery;
+aggregate reporting remains planned.
 Completing the sequence is a production-readiness
 reassessment point, not permission to clear source storage. Follow the [readiness checklist](docs/MIGRATION.md#production-readiness-checklist)
 for peak space, byte-distinct metadata variants, protected baselines, initial
@@ -492,12 +493,12 @@ pymo queue run "/private-plans/queue.json" --apply  # execute new jobs
 
 Each job receives separate private state. The queue stops at the first unhandled
 outcome and preserves partial work. Existing state is refused by `queue run`;
-the separate v0.7.4 recovery candidate is described below. Aggregate outcomes
+the separate v0.7.4 recovery command is described below. Aggregate outcomes
 remain later work. See [execution boundaries](docs/QUEUE_EXECUTION.md).
 
 ### Recover interrupted queue work
 
-The v0.7.4 candidate adds explicit recovery over the same manifest:
+Version 0.7.4 adds explicit recovery over the same manifest:
 
 ```bash
 pymo queue resume "/private-plans/queue.json"                 # zero-write preview

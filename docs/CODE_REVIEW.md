@@ -1079,3 +1079,13 @@ from historical outcome data. Recovery now refuses unsigned terminal manual
 state until fresh verification and human review; authored recovery retains fresh
 namespace rederivation. Regressions cover unchanged/manual and changed-source
 manual/authored cases. Completed historical records create no new sign-off.
+
+## v0.7.4 publication evidence
+
+Independent review accepted final documentation-only candidate
+`5e69048b7abeadcd1d323a6973a92b04b1b390fe` with unchanged source after acceptance
+of implementation `bf96be78b11c6e1057b3cb8d303ee04aaec8d039`. RECOVERY-R01
+and R02 remain resolved; no review waiver was used. PR #77, exact-main and
+immutable tagged release gates passed. ADR 0119 records exact run, tag,
+artifact and installed recovery proof. Release records do not change runtime
+behavior or turn historical completion into fresh preservation evidence.

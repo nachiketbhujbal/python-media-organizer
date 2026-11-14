@@ -77,6 +77,8 @@ isolated new job state and first-unhandled-outcome stopping.
 [ADR 0117](adrs/0117-v0.7.3-release-truth.md) records its verified publication
 and installation.
 
-The v0.7.4 candidate adds [explicit queue recovery](QUEUE_RECOVERY.md) under
+Version 0.7.4 adds [explicit queue recovery](QUEUE_RECOVERY.md) under
 [ADR 0118](adrs/0118-explicit-queue-recovery.md), preserving completed jobs and
 refusing unresolved partial work.
+[ADR 0119](adrs/0119-v0.7.4-release-truth.md) records its verified publication,
+tagged artifacts and installation. Aggregate synopsis remains v0.7.5.

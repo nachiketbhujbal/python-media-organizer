@@ -817,9 +817,9 @@ ADR 0112 implements the retained-in-place authoring path released in v0.7.1;
 ADR 0113 records its verified release boundary. ADR 0114 implements the v0.7.2
 released queue declaration checks without execution, media/capacity evidence,
 or authority creation; ADR 0115 records the verified release boundary.
-ADR 0116 implements released sequential execution. ADR 0118 defines candidate
-explicit recovery; aggregate outcomes remain separately promoted work. General
-rescue copying remains research.
+ADR 0116 implements released sequential execution. ADR 0118 implements released
+explicit recovery; ADR 0119 records its release boundary. Aggregate outcomes
+remain separately promoted work. General rescue copying remains research.
 Future managed-quarantine identities cannot be predicted without mutation;
 a compatible authoring contract for that topology remains an explicit open
 question. Existing exact schema-4 quarantine checks are not weakened.

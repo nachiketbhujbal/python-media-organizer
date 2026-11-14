@@ -37,7 +37,7 @@ must answer an unresolved question. Ordinary development needs no production
 source access. No collection cleanup, baseline mutation, or release is implied
 by this documentation change.
 
-## Version 0.7.4 candidate
+## Version 0.7.4 release
 
 ADR 0118 defines explicit `queue resume MANIFEST`, with zero-write recovery
 preview and separate `--apply`. `migration/queue_recovery.py` validates the whole
@@ -61,8 +61,15 @@ v0.7.5. Independent Terra-medium review accepts corrected implementation
 The complete owner gate passed 900 tests with two existing distinct-filesystem
 skips at 88 percent subprocess-aware coverage. Ruff, Black, mypy, all-file hooks,
 source/wheel inspection and installed synthetic interrupted two-job recovery
-passed. The reviewer independently passed all 38 recovery tests. Hosted gates,
-tag publication and tagged installation remain pending.
+passed. The reviewer independently passed all 38 recovery tests. Final
+documentation-only candidate `5e69048` also passed independent review.
+PR #77 run `43639082570` passed all platform gates. Protected merge
+`66d4736a140156e117879212c90b9ee60ab0c0df` passed exact-main run `43639823123`.
+Immutable tag `v0.7.4` peels to that merge; tagged run `43640619871` and
+local tagged source/wheel plus installed recovery checks passed. The installed
+command reports `pymo 0.7.4`. ADR 0119 records exact artifacts and publication.
+Version 0.7.5 aggregate synopsis is next, followed by a separate readiness review.
+No real collection, retained evidence, protected work or workbook changed.
 
 ## Version 0.7.3 release
 
@@ -89,9 +96,9 @@ merge `c97380701c6b78424be516b14d3bfbe744304602` passed exact-main run
 `43544525462`; immutable tag `v0.7.3` peels to that merge and passed release
 run `43545313746`. The installed command reports `pymo 0.7.3`. ADR 0117 records
 exact artifacts and installation proof. See `docs/QUEUE_EXECUTION.md`.
-Queue recovery in v0.7.4 is next, followed by the v0.7.5 synopsis and a separate
-production-readiness reassessment. Real collections and the workbook remain
-untouched.
+Queue recovery is now released in v0.7.4; the v0.7.5 synopsis and a separate
+production-readiness reassessment remain next. Real collections and the workbook
+remain untouched.
 
 ## Version 0.7.2 release
 
@@ -983,8 +990,8 @@ satisfying coverage and clearly reports a simulated post-finalization verdict.
 Version 0.5.9 promotes reversible extension correction, and version 0.5.11
 promotes guided orchestration over explicit baseline and working-copy state.
 Actionable damaged-media guidance and quarantine remain later work.
-Multi-collection queue planning and sequential execution are released through
-version 0.7.3. Queue recovery, aggregate reporting and measured scheduling are
+Multi-collection queue planning, sequential execution and explicit recovery are
+released through version 0.7.4. Aggregate reporting and measured scheduling are
 separately promoted roadmap units. General rescue copying, automatic final
 naming and permanent cleanup remain research requiring their own capacity,
 collision, recovery and evidence policies. Existing organizer collisions are

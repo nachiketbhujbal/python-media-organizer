@@ -4,7 +4,9 @@ All notable changes to `python-media-organizer` will be recorded here.
 
 ## Unreleased
 
-### 0.7.4 candidate
+No unreleased changes.
+
+## 0.7.4 - 2026-11-14
 
 - Add zero-write `queue resume MANIFEST` recovery preview and explicit `--apply`
   continuation over strict per-job state; validate completed jobs without reruns.

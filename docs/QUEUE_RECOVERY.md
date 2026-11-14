@@ -1,6 +1,6 @@
 # Explicit queue recovery
 
-The v0.7.4 candidate adds a separate recovery command. `queue run` continues to
+Version 0.7.4 adds a separate recovery command. `queue run` continues to
 refuse occupied job state, and `queue plan` remains a new-job declaration check.
 
 ```bash

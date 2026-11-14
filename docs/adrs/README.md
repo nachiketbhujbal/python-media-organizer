@@ -124,3 +124,4 @@ old one rather than rewriting why the earlier choice was made.
 | [0116](0116-sequential-queue-execution.md) | Sequential queue execution |
 | [0117](0117-v0.7.3-release-truth.md) | Version 0.7.3 release truth after publication |
 | [0118](0118-explicit-queue-recovery.md) | Explicit queue recovery |
+| [0119](0119-v0.7.4-release-truth.md) | Version 0.7.4 release truth after publication |
