@@ -52,8 +52,11 @@ setup. It is not persisted authority and changes no on-disk schema.
 
 Every started job retains separate state, logs and outcomes. Failure or
 interruption stops the queue; existing state is never adopted. Queue recovery
-and synopsis remain versions 0.7.4 and 0.7.5. This candidate is not yet released;
-review, complete gates and publication evidence remain required. See
+and synopsis remain versions 0.7.4 and 0.7.5. Independent Terra-medium review accepts implementation `c0409fd` after closing
+four reproduced findings. The complete owner gate passed 862 tests with two
+existing filesystem skips at 88 percent subprocess-aware coverage; static,
+hook, build and isolated installed-package checks passed. This candidate is not
+yet released; protected hosted gates and publication evidence remain required. See
 `docs/QUEUE_EXECUTION.md`. Real collections and the workbook remain untouched.
 
 ## Version 0.7.2 release

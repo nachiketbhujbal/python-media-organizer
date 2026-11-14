@@ -990,7 +990,7 @@ The owner and reviewer each passed 853 tests with two existing filesystem
 skips and 88 percent subprocess coverage on that candidate. Passing tests did
 not discharge the findings. The reviewer also passed 103 focused queue tests
 and static checks; its isolated hook setup lacked DNS, while the owner hook
-gate passed. Corrected implementation requires renewed exact-SHA review.
+gate passed. The subsequent review rounds and final acceptance are recorded below.
 
 | ID | Severity | Finding | Resolution target | Status |
 | --- | --- | --- | --- | --- |
@@ -1012,5 +1012,17 @@ The run was not treated as a passing gate.
 
 | ID | Severity | Finding | Resolution target | Status |
 | --- | --- | --- | --- | --- |
-| QUEUE-EXEC-R03 | Medium | A changed private output binding could escape the child outcome error boundary with a traceback. | 0.7.3 | Owner correction: translate binding failures to the existing path-private outcome error; real child lock/directory substitution tests added; independent re-review pending. |
-| QUEUE-EXEC-R04 | Medium | A replacement owner-private regular file could receive appended stage logs after the original log was allocated. | 0.7.3 | Owner correction: carry the originally allocated log inode into child startup and verify it again after child execution; replacement sentinels remain unchanged; independent re-review pending. |
+| QUEUE-EXEC-R03 | Medium | A changed private output binding could escape the child outcome error boundary with a traceback. | 0.7.3 | Resolved and independently closed at c0409fd: binding failures use the existing path-private outcome error; real child lock/directory substitution tests passed. |
+| QUEUE-EXEC-R04 | Medium | A replacement owner-private regular file could receive appended stage logs after the original log was allocated. | 0.7.3 | Resolved and independently closed at c0409fd: original log identity reaches child startup and post-child checks; replacement sentinels remain unchanged. |
+
+Independent Terra-medium review accepts implementation
+`c0409fd85e31a9672c9538930bf05620904f5dbc` without new findings and closes
+QUEUE-EXEC-R01 through R04. The reviewer independently replayed all four
+attacks, passed 131 queue/outcome tests and the three updated lifecycle attack
+tests. The owner passed 140 focused tests and the static/all-file hook gates.
+A rebuilt isolated installed wheel completed a two-job synthetic workflow,
+preserved baseline bytes, kept preview zero-write and refused existing state;
+wheel and source archive members, packaged source bytes and license were checked.
+The complete owner gate passed 862 tests with two existing distinct-filesystem
+skips at 88 percent subprocess-aware coverage. Protected hosted gates remain
+separate release evidence.
