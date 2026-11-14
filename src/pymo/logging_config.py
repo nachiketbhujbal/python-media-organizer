@@ -8,7 +8,10 @@ import stat
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import TextIO, cast
+from typing import TYPE_CHECKING, TextIO, cast
+
+if TYPE_CHECKING:
+    from pymo.migration.private_io import PrivateIO
 
 
 class LoggingConfigurationError(RuntimeError):
@@ -73,9 +76,10 @@ class _IsoLineFormatter(logging.Formatter):
 class _PrivateAppendHandler(logging.StreamHandler[TextIO]):
     """Append to one explicit regular file without following its leaf."""
 
-    def __init__(self, destination: Path) -> None:
+    def __init__(self, destination: Path, private_io: PrivateIO | None = None) -> None:
         try:
-            destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            if private_io is None:
+                destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             flags = (
                 os.O_WRONLY
                 | os.O_APPEND
@@ -83,8 +87,12 @@ class _PrivateAppendHandler(logging.StreamHandler[TextIO]):
                 | getattr(os, "O_NOFOLLOW", 0)
                 | getattr(os, "O_NONBLOCK", 0)
             )
-            descriptor = os.open(destination, flags, 0o600)
-        except OSError as error:
+            descriptor = (
+                private_io.open_log(destination, create=False)
+                if private_io
+                else os.open(destination, flags, 0o600)
+            )
+        except (OSError, RuntimeError) as error:
             raise LoggingConfigurationError(
                 "explicit diagnostic log could not be opened safely"
             ) from error
@@ -117,6 +125,7 @@ def configure_logging(
     timestamps: bool = False,
     console_level: str | None = None,
     file_level: str | None = None,
+    private_io: PrivateIO | None = None,
 ) -> None:
     """Configure console logging and an optional explicitly requested file."""
     if verbose and quiet:
@@ -174,7 +183,7 @@ def configure_logging(
             raise LoggingConfigurationError(
                 "explicit diagnostic log path could not be resolved safely"
             ) from error
-        file_handler = _PrivateAppendHandler(destination)
+        file_handler = _PrivateAppendHandler(destination, private_io)
         file_handler.setLevel(file_threshold)
         file_handler.setFormatter(_IsoLineFormatter(include_context=True))
         logger.addHandler(file_handler)

@@ -50,6 +50,7 @@ from pymo.migration.outcome import (
     outcome_record,
     write_outcome,
 )
+from pymo.migration.private_io import PrivateIO
 from pymo.organize import discover_files, path_key
 from pymo.planning import PlanningView
 from pymo.progress import ProgressMeter
@@ -408,6 +409,7 @@ def _write_migration_outcome(
     decision_digest_value: str | None,
     files: int,
     status: int,
+    private_io: PrivateIO | None = None,
 ) -> int:
     if path is None:
         return status
@@ -431,6 +433,7 @@ def _write_migration_outcome(
                 },
             ),
             root,
+            private_io=private_io,
         )
     except MigrationOutcomeError:
         print("Migration outcome could not be recorded safely.", file=sys.stderr)
@@ -537,6 +540,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             decision_digest_value=decision_digest_value,
             files=len(plan),
             status=0,
+            private_io=args.migration_private_binding,
         )
 
     if not decision_digest_matches(
@@ -558,6 +562,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             decision_digest_value=decision_digest_value,
             files=0,
             status=0,
+            private_io=args.migration_private_binding,
         )
 
     try:
@@ -585,6 +590,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             decision_digest_value=decision_digest_value,
             files=len(plan),
             status=1,
+            private_io=args.migration_private_binding,
         )
     print("Verification passed: every planned media rename was completed.")
     return _write_migration_outcome(
@@ -594,6 +600,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         decision_digest_value=decision_digest_value,
         files=len(plan),
         status=0,
+        private_io=args.migration_private_binding,
     )
 
 

@@ -61,6 +61,9 @@ class BoundQueue:
                     endpoint.require_current()
                 private_state_destination(job.declaration.state_directory)
             else:
+                for control in job.controls:
+                    if control.path != job.declaration.working / "dups":
+                        control.require_current()
                 # Started jobs may create their own state/quarantine leaves, but
                 # may never replace the originally declared parent ancestry.
                 for endpoint in job.endpoints[2:]:

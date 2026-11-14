@@ -66,6 +66,7 @@ from pymo.migration.outcome import (
     outcome_record,
     write_outcome,
 )
+from pymo.migration.private_io import PrivateIO
 from pymo.progress import ProgressMeter, StageTimer, format_bytes
 from pymo.video import ProbeInfo
 from pymo.video_content import (
@@ -335,6 +336,7 @@ def _write_migration_outcome(
     cache_computed: int,
     cache_persisted: int,
     status: int,
+    private_io: PrivateIO | None = None,
 ) -> int:
     if path is None:
         return status
@@ -365,6 +367,7 @@ def _write_migration_outcome(
                 },
             ),
             root,
+            private_io=private_io,
         )
     except MigrationOutcomeError:
         print("Migration outcome could not be recorded safely.", file=sys.stderr)
@@ -1016,6 +1019,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             cache_computed=0,
             cache_persisted=0,
             status=0,
+            private_io=args.migration_private_binding,
         )
 
     try:
@@ -1169,6 +1173,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         cache_computed=inspection_computed + fingerprint_cache.computed,
         cache_persisted=inspection_persisted + fingerprint_cache.persisted,
         status=0,
+        private_io=args.migration_private_binding,
     )
 
 

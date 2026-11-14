@@ -8,6 +8,7 @@ import sys
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
 
 from pymo import __version__, migrate
@@ -20,6 +21,7 @@ from pymo.migration.coordinator_state import (
     _state_path,
 )
 from pymo.migration.policy_files import _pinned_private_parent, publish_private
+from pymo.migration.private_io import PrivateIO
 from pymo.migration.queue_manifest import Endpoint, QueuePlanningError, observe_endpoint
 from pymo.migration.queue_plan import BoundJob, bind_queue
 from pymo.migration.synopsis import validate_synopsis_history
@@ -67,7 +69,7 @@ def _new_state_directory(destination: Endpoint) -> Iterator[Endpoint]:
 
 
 @contextmanager
-def _new_job_lock(directory: Endpoint) -> Iterator[None]:
+def _new_job_lock(directory: Endpoint) -> Iterator[PrivateIO]:
     path = directory.path / "pymo-migration-state.lock"
     with _pinned_private_parent(path, directory.ancestry) as (parent_fd, name, _):
         descriptor = os.open(
@@ -79,7 +81,10 @@ def _new_job_lock(directory: Endpoint) -> Iterator[None]:
         try:
             fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
             initial = os.fstat(descriptor)
-            yield
+            binding = PrivateIO(
+                directory.path, directory.ancestry, (initial.st_dev, initial.st_ino)
+            )
+            yield binding
             current = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
             if (current.st_dev, current.st_ino) != (initial.st_dev, initial.st_ino):
                 raise QueuePlanningError("new job lock was replaced")
@@ -110,7 +115,7 @@ def _require_completed(
     job: BoundJob, directory: Endpoint, initial: MigrationState
 ) -> None:
     directory.require_current()
-    state = _load_state(_state_path(directory.path))
+    state = _load_state(_state_path(directory.path), private_io=initial.private_io)
     migrate._require_operator_binding(state, initial)
     migrate._require_collection_identities(
         state, (job.declaration.baseline_identity, job.declaration.working_identity)
@@ -133,7 +138,7 @@ def _require_completed(
         migrate._recorded_outcome(directory.path, state, _stages()[-1].identifier),
     )
     migrate._require_current_retained_copy(state)
-    if _load_state(_state_path(directory.path)) != state:
+    if _load_state(_state_path(directory.path), private_io=initial.private_io) != state:
         raise QueuePlanningError("completed job state changed during verification")
     directory.require_current()
 
@@ -144,7 +149,14 @@ def _execute_job(
     initial: MigrationState,
     check: Callable[[], None],
 ) -> int:
-    with _new_job_lock(directory):
+    with _new_job_lock(directory) as private_io:
+        initial = replace(initial, private_io=private_io)
+        queue_check = check
+
+        def check() -> None:
+            queue_check()
+            private_io.require_current()
+
         check()
         job.policy.require_target(initial)
         publish_private(

@@ -781,6 +781,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.migration_outcome,
             outcome_record("scan", "scan", "observed", 0, scan_data(report)),
             root,
+            private_io=args.migration_private_binding,
         )
     except MigrationOutcomeError:
         print("Migration outcome could not be recorded safely.", file=sys.stderr)

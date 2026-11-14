@@ -41,7 +41,9 @@ the queue never moves it on that disposition's behalf or proves external retenti
 Every manifest entry names an absent private state directory under an existing
 owner-private parent. Execution allocates a private staging directory, publishes
 it with one descriptor-relative atomic no-replace rename, and holds a dedicated
-job lock. It creates separate ordinary migration state, policy binding, logs
+job lock. Its original ancestry and lock inode are carried into descriptor-
+relative state/log/outcome I/O and child setup; replacing either cannot redirect
+stage output to a new directory. It creates separate ordinary migration state, policy binding, logs
 and typed outcomes there. An occupied destination is never overwritten or
 adopted, even if empty. Staging and partial job state are retained on failure.
 

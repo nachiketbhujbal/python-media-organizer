@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
 
+from pymo.migration.private_io import PrivateIO, parse_private_io
 from pymo.migration.roots import (
     DirectoryIdentityError,
     existing_directories_are_disjoint,
@@ -43,6 +44,9 @@ class MigrationOutcomeError(RuntimeError):
 def add_outcome_argument(parser: argparse.ArgumentParser) -> None:
     """Add the private coordinator result path without publishing a CLI contract."""
 
+    parser.add_argument(
+        "--migration-private-binding", type=parse_private_io, help=argparse.SUPPRESS
+    )
     parser.add_argument(
         "--migration-outcome",
         type=Path,
@@ -706,7 +710,13 @@ def _require_pinned_parent_current(
 
 
 @contextmanager
-def _pinned_outcome_parent(path: Path) -> Iterator[tuple[int, str, Path]]:
+def _pinned_outcome_parent(
+    path: Path, private_io: PrivateIO | None = None
+) -> Iterator[tuple[int, str, Path]]:
+    if private_io is not None:
+        with private_io.pinned(path) as bound_parent:
+            yield bound_parent
+        return
     if path.name in {"", ".", ".."}:
         raise MigrationOutcomeError("migration outcome destination is unsafe")
     parent = path.parent
@@ -758,7 +768,12 @@ def _require_parent_outside_roots(
     _require_pinned_parent_current(parent, descriptor, expected)
 
 
-def write_outcome(path: Path | None, value: dict[str, Any], *roots: Path) -> None:
+def write_outcome(
+    path: Path | None,
+    value: dict[str, Any],
+    *roots: Path,
+    private_io: PrivateIO | None = None,
+) -> None:
     if path is None:
         return
     validated = validate_outcome(value)
@@ -770,7 +785,7 @@ def write_outcome(path: Path | None, value: dict[str, Any], *roots: Path) -> Non
     if len(payload) > 1024 * 1024:
         raise MigrationOutcomeError("migration outcome is too large")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-    with _pinned_outcome_parent(destination) as (
+    with _pinned_outcome_parent(destination, private_io) as (
         parent_descriptor,
         name,
         parent,
@@ -813,9 +828,10 @@ def read_outcome(
     expected_command: str,
     expected_status: int,
     expected_result_kind: ResultKind | None = None,
+    private_io: PrivateIO | None = None,
 ) -> dict[str, Any]:
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
-    with _pinned_outcome_parent(path) as (parent_descriptor, name, _):
+    with _pinned_outcome_parent(path, private_io) as (parent_descriptor, name, _):
         try:
             descriptor = os.open(name, flags, dir_fd=parent_descriptor)
         except OSError as error:

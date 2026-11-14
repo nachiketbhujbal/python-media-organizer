@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -284,3 +285,106 @@ def test_unmatched_validation_authority_never_starts_later_job(tmp_path: Path) -
     state = json.loads(_state_path(Path(entries[0]["state_directory"])).read_bytes())
     assert state["next_stage"] == 3
     assert not Path(entries[1]["state_directory"]).exists()
+
+
+def test_replaced_lock_is_refused_before_the_next_stage(
+    tmp_path: Path, monkeypatch
+) -> None:
+    entries = [job(tmp_path, 1), job(tmp_path, 2)]
+    manifest = save_manifest(tmp_path, entries)
+    refused = False
+
+    def replace_lock(log_dir, *args, **kwargs):
+        nonlocal refused
+        lock = log_dir / "pymo-migration-state.lock"
+        lock.rename(log_dir / "retained-lock")
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with pytest.raises(RuntimeError):
+                kwargs["boundary_check"]()
+            refused = True
+            return 2
+        finally:
+            os.close(fd)
+
+    monkeypatch.setattr(migrate, "_run_unattended", replace_lock)
+    assert queue.main(["run", str(manifest), "--apply"]) == 2
+    assert refused and not Path(entries[1]["state_directory"]).exists()
+
+
+@pytest.mark.parametrize(
+    "phase", ["log-allocation", "child-launch", "state-publication"]
+)
+def test_replaced_state_directory_receives_no_stage_writes(
+    tmp_path: Path, monkeypatch, phase: str
+) -> None:
+    entries = [job(tmp_path, 1), job(tmp_path, 2)]
+    manifest = save_manifest(tmp_path, entries)
+    target = Path(entries[0]["state_directory"])
+    saved = tmp_path / "saved-state"
+    changed = False
+    children = 0
+    original_log = migrate._new_log_file
+    original_run = migrate.subprocess.run
+    original_replace = os.replace
+
+    def substitute():
+        nonlocal changed
+        assert not changed
+        changed = True
+        target.rename(saved)
+        target.mkdir(mode=0o700)
+
+    def log(*args, **kwargs):
+        if phase == "log-allocation":
+            substitute()
+        return original_log(*args, **kwargs)
+
+    def run_child(*args, **kwargs):
+        nonlocal children
+        children += 1
+        if phase == "child-launch":
+            substitute()
+        return original_run(*args, **kwargs)
+
+    def replace_state(*args, **kwargs):
+        if phase == "state-publication" and kwargs.get("dst_dir_fd") is not None:
+            substitute()
+        return original_replace(*args, **kwargs)
+
+    monkeypatch.setattr(migrate, "_new_log_file", log)
+    monkeypatch.setattr(migrate.subprocess, "run", run_child)
+    monkeypatch.setattr(os, "replace", replace_state)
+    assert queue.main(["run", str(manifest), "--apply"]) == 2
+    assert changed and list(target.iterdir()) == []
+    assert children == (0 if phase == "log-allocation" else 1)
+    assert not Path(entries[1]["state_directory"]).exists()
+    if phase == "child-launch":
+        assert not list(saved.glob("*.outcome.json"))
+
+
+def test_external_quarantine_does_not_advance_with_present_dups(tmp_path: Path) -> None:
+    entry = job(tmp_path, 1)
+    for key in ("baseline", "working"):
+        root = Path(entry[key]["path"])
+        Image.new("RGB", (7, 9), "red").save(root / "image.png")
+        (root / "copy.png").write_bytes((root / "image.png").read_bytes())
+    candidate = build_candidate(
+        Path(entry["baseline"]["path"]),
+        Path(entry["working"]["path"]),
+        migrate._initial_options({"no_cache": True}),
+    )
+    policy = candidate["policy"]
+    policy.pop("plan_binding")
+    policy["schema_version"] = 4
+    policy["authorizations"][7]["decision"] = "confirm-quarantine"
+    path = Path(entry["policy"]["path"])
+    path.write_bytes(canonical_bytes(policy))
+    entry["policy"]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    entry["disposition"] = "external-quarantine"
+    second = job(tmp_path, 2)
+    result = run("queue", "run", save_manifest(tmp_path, [entry, second]), "--apply")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert (Path(entry["working"]["path"]) / "dups").is_dir()
+    assert not Path(second["state_directory"]).exists()

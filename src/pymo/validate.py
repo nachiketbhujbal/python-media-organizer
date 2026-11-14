@@ -1337,6 +1337,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "validate", "validation", "observed", status, validation_data(report)
             ),
             root,
+            private_io=args.migration_private_binding,
         )
     except MigrationOutcomeError:
         print("Migration outcome could not be recorded safely.", file=sys.stderr)

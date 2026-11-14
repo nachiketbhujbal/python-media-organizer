@@ -981,3 +981,24 @@ published. Tagged run `42393170285` passed. ADR 0115 records exact
 artifact identities and the installed `pymo 0.7.2` command. The maintainer
 requested a pause before further evaluation or engineering. No production
 collection, workbook, cleanup or PyPI publication was involved.
+
+## Version 0.7.3 sequential queue execution
+
+Independent GPT-6.1 Terra Medium review rejected initial implementation
+`54262276aad786c006056f46b730d9d7c70f9565` with two reproduced findings.
+The owner and reviewer each passed 853 tests with two existing filesystem
+skips and 88 percent subprocess coverage on that candidate. Passing tests did
+not discharge the findings. The reviewer also passed 103 focused queue tests
+and static checks; its isolated hook setup lacked DNS, while the owner hook
+gate passed. Corrected implementation requires renewed exact-SHA review.
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| QUEUE-EXEC-R01 | High | A replaced lock could admit another coordinator while the first queue noticed replacement only after the job finished. | 0.7.3 | Owner correction: check the original lock at engine transitions and every bound private I/O operation; independent re-review pending. |
+| QUEUE-EXEC-R02 | High | A replaced private state directory could receive stage logs, outcomes and state after exclusive queue allocation. | 0.7.3 | Owner correction: propagate an ephemeral directory/lock binding into descriptor-relative state, log and outcome I/O and child setup; independent re-review pending. |
+
+Synthetic regressions replace and acquire the lock, replace the state directory
+before log allocation, at actual child launch and during state replacement,
+and assert refusal without writes into the replacement or later-job starts.
+Existing state/outcome/policy schemas and the single-collection default remain
+unchanged; private child binding is a constraint, never media authority.

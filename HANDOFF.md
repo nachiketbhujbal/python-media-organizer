@@ -46,6 +46,9 @@ jobs using the exact bound policies through the existing unattended engine.
 initialization, sequential dispatch and strict completion checks. `queue_plan`
 now retains a typed `BoundQueue` shared by planning and execution. The engine
 accepts a boundary callback to recheck original queue bindings between stages.
+`migration/private_io.py` propagates an ephemeral directory/lock constraint
+through descriptor-relative stage state, logs and outcomes, including child
+setup. It is not persisted authority and changes no on-disk schema.
 
 Every started job retains separate state, logs and outcomes. Failure or
 interruption stops the queue; existing state is never adopted. Queue recovery

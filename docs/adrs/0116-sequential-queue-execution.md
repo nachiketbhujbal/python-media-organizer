@@ -34,3 +34,14 @@ Require synthetic multi-job execution, dry-run immutability, policy and root
 substitution refusal, late destination occupation, interruption and exact
 status propagation, first-failure stopping, independent exact-SHA review and
 the complete release gates. No production collections are required.
+
+## Review-led hardening
+
+Independent review reproduced a replaced-lock window and a replaced-directory
+write path in the initial candidate. The queue now carries an ephemeral private
+I/O binding through the existing engine and children. It binds full no-follow
+ancestry and the allocated lock inode, constrains log/outcome creation and
+restart reads/replacement to the original directory, and rechecks the lock at
+engine transitions. Private child arguments carry only that constraint, never
+checkpoint authority. No persistent schema or standalone migration default
+changes. Partial state and staging artifacts remain retained for inspection.

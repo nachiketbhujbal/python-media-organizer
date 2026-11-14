@@ -303,6 +303,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             ),
             source,
             destination,
+            private_io=args.migration_private_binding,
         )
     except MigrationOutcomeError:
         print("Migration outcome could not be recorded safely.", file=sys.stderr)
