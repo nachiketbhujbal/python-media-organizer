@@ -1,0 +1,36 @@
+# ADR 0116: Sequential queue execution
+
+- Status: Accepted
+- Date: 2026-11-13
+- Builds on: ADR 0114, ADR 0112, ADR 0097
+
+## Context
+
+Queue declarations are validated without execution in version 0.7.2. Running
+several approved collection workflows must preserve independent state, exact
+policy bindings, fresh checkpoint evidence and first-failure stopping.
+
+## Decision
+
+Reserve version 0.7.3 for `pymo queue run MANIFEST`. Without `--apply` it
+performs the existing zero-write declaration plan. Explicit `--apply` starts
+new jobs in declared order through the existing unattended migration engine.
+The manifest itself supplies no checkpoint authority; each complete reviewed
+policy remains authoritative only for its exact roots, version and evidence.
+
+Validate the complete queue before creating state. Revalidate bindings before
+each job, exclusively create its declared private state directory, and never
+adopt an occupied destination. Preserve every started job's state and logs on
+failure or interruption. Advance only after exact successful completion and
+strict outcome/lifecycle verification; return the first unhandled status.
+
+Retry, resume, skip, aggregate queue reporting and concurrency remain separate
+roadmap units. This command performs no initial copying or permanent cleanup
+and does not turn queue completion into source-removal authority.
+
+## Acceptance
+
+Require synthetic multi-job execution, dry-run immutability, policy and root
+substitution refusal, late destination occupation, interruption and exact
+status propagation, first-failure stopping, independent exact-SHA review and
+the complete release gates. No production collections are required.
