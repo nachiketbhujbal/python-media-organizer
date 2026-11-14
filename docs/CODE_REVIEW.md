@@ -1026,3 +1026,20 @@ wheel and source archive members, packaged source bytes and license were checked
 The complete owner gate passed 862 tests with two existing distinct-filesystem
 skips at 88 percent subprocess-aware coverage. Protected hosted gates remain
 separate release evidence.
+
+## v0.7.3 publication evidence
+
+Final documentation-only candidate `496ee4700dc4e66b2f36de8b252a529f0b0f2610`
+was independently accepted with unchanged source after implementation acceptance
+at `c0409fd85e31a9672c9538930bf05620904f5dbc`. PR #75, exact-main and tagged
+release gates passed. ADR 0117 records exact tag, artifact and installed-wheel
+proof. QUEUE-EXEC-R01 through R04 remain resolved; no review waiver was used.
+
+### RELEASE-073-R01 — stale current queue guidance — resolved
+
+Independent review of post-tag documentation head `3ab52b8` found an
+unqualified current handoff paragraph still classifying multi-collection queues
+as research. It now distinguishes released planning/execution, promoted
+recovery/reporting/scheduling, and remaining rescue/naming/cleanup research.
+Historical release and ADR narratives remain unchanged. This correction changes
+no runtime behavior or immutable release artifact.
