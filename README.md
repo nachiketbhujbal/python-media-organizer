@@ -105,7 +105,7 @@ The release and installation evidence is recorded in [ADR 0111](docs/adrs/0111-v
 
 The sequence through v0.7.5 has delivered cross-filesystem retention and
 reviewed policy authoring. Version 0.7.2 adds read-only queue planning;
-version 0.7.3 adds sequential execution. Recovery and reporting remain planned.
+version 0.7.3 adds sequential execution. The v0.7.4 candidate adds explicit recovery; aggregate reporting remains planned.
 Completing the sequence is a production-readiness
 reassessment point, not permission to clear source storage. Follow the [readiness checklist](docs/MIGRATION.md#production-readiness-checklist)
 for peak space, byte-distinct metadata variants, protected baselines, initial
@@ -491,8 +491,26 @@ pymo queue run "/private-plans/queue.json" --apply  # execute new jobs
 ```
 
 Each job receives separate private state. The queue stops at the first unhandled
-outcome and preserves partial work. Existing state is refused; queue recovery
-and aggregate outcomes remain later work. See [execution boundaries](docs/QUEUE_EXECUTION.md).
+outcome and preserves partial work. Existing state is refused by `queue run`;
+the separate v0.7.4 recovery candidate is described below. Aggregate outcomes
+remain later work. See [execution boundaries](docs/QUEUE_EXECUTION.md).
+
+### Recover interrupted queue work
+
+The v0.7.4 candidate adds explicit recovery over the same manifest:
+
+```bash
+pymo queue resume "/private-plans/queue.json"                 # zero-write preview
+pymo queue resume "/private-plans/queue.json" --apply
+pymo queue resume "/private-plans/queue.json" --job 2 --apply
+pymo queue resume "/private-plans/queue.json" --retry-job 2 --apply
+```
+
+Completed jobs are checked without rerunning children. A failed read/preview
+needs explicit retry selection; partial mutations, orphan output and unsafe
+state stop for review. Individual selection does not claim the whole queue
+completed. Existing runs require the exact original pymo version and policies.
+See [queue recovery](docs/QUEUE_RECOVERY.md) for the recovery and skip limits.
 
 ### Verify a migration by exact bytes and media content
 
@@ -994,6 +1012,7 @@ rows, and per-file skip details. It works for forward scans, explicit applies,
 and undo previews, but cannot be combined with `--show-ignored`. Summary mode
 changes reporting only; every analysis, collision, action-log, and verification
 check still runs.
+
 
 ## Recommended workflow
 

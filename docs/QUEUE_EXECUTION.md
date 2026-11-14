@@ -61,7 +61,8 @@ created state instead of retrying anything. Preserve it for inspection. Existing
 single-collection `migrate --resume` remains available with the exact version,
 policy and saved paths; a partially applied child needs reviewed journal recovery
 first. Do not edit policies/state or choose replacement paths to evade that
-boundary. Queue resume/retry/skip semantics belong to v0.7.4.
+boundary. The v0.7.4 candidate defines explicit [recovery](QUEUE_RECOVERY.md), safe-read
+retry and individual selection; it never silently adopts partial child output.
 
 ## Output and scope
 

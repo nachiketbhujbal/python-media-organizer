@@ -37,6 +37,27 @@ must answer an unresolved question. Ordinary development needs no production
 source access. No collection cleanup, baseline mutation, or release is implied
 by this documentation change.
 
+## Version 0.7.4 candidate
+
+ADR 0118 defines explicit `queue resume MANIFEST`, with zero-write recovery
+preview and separate `--apply`. `migration/queue_recovery.py` validates the whole
+queue and holds all existing private job locks before reading strict lifecycles
+and typed outcomes. It preserves completed jobs, continues bound unfinished
+jobs through the existing engine, and exclusively allocates unstarted jobs.
+`--job N` selects one job without claiming whole-queue completion;
+`--retry-job N` explicitly permits a failed read/preview retry. There is no
+automatic failed-job skip or retry of a failed mutation.
+
+Exhaustive private namespace inspection refuses incomplete initialization,
+unreferenced child output and scratch artifacts. Each allocated child log is
+synced with its parent before launch so an interrupted unrecorded child retains
+a durable marker. Original directory/lock bindings and state/outcome snapshots
+are rechecked throughout recovery. Unresolved journals stop recovery; occupied
+managed destinations require committed journal/tree and approved-preview proof.
+State/version/policy compatibility remains exact, so upgrading does not adopt
+an older-version run. No persistent schema changes. Queue synopsis remains
+v0.7.5; publication and independent acceptance are still pending.
+
 ## Version 0.7.3 release
 
 The maintainer lifted the post-v0.7.2 pause. ADR 0116 implements sequential queue

@@ -76,3 +76,7 @@ under [ADR 0116](adrs/0116-sequential-queue-execution.md), with explicit apply,
 isolated new job state and first-unhandled-outcome stopping.
 [ADR 0117](adrs/0117-v0.7.3-release-truth.md) records its verified publication
 and installation.
+
+The v0.7.4 candidate adds [explicit queue recovery](QUEUE_RECOVERY.md) under
+[ADR 0118](adrs/0118-explicit-queue-recovery.md), preserving completed jobs and
+refusing unresolved partial work.

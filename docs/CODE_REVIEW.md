@@ -1043,3 +1043,12 @@ as research. It now distinguishes released planning/execution, promoted
 recovery/reporting/scheduling, and remaining rescue/naming/cleanup research.
 Historical release and ADR narratives remain unchanged. This correction changes
 no runtime behavior or immutable release artifact.
+
+## v0.7.4 queue recovery candidate
+
+Codex owns ADR 0118 and the implementation branch; independent GPT-6.1 Terra
+Medium review owns no implementation files. Early design review required holding
+all existing locks before lifecycle inspection and retaining them through
+execution, plus exhaustive orphan-marker refusal and committed managed-tree
+proof. These requirements are implemented with focused adversarial coverage.
+Exact implementation review and complete release gates remain pending.

@@ -248,6 +248,14 @@ never duplicate the version in source or static project metadata.
   state, and verify terminal lifecycle/outcomes before advancing. Stop on the
   first unhandled status or interruption and retain partial state. Queue
   bookkeeping grants no checkpoint authority, retry, cleanup or concurrency.
+- `queue resume` is an explicit existing-state recovery surface, preview-only
+  without `--apply`. Hold every existing job lock across whole-queue preflight
+  and execution, retain descriptor-relative private I/O, and refuse incomplete
+  initialization, unreferenced artifacts, failed mutations or unresolved action
+  journals. Validate completed jobs without rerunning them; require explicit
+  ordinal selection for failed read/preview retries. Individual selection must
+  not imply whole-queue completion or waive another job's unsafe state. Never
+  infer lost child completion or treat recovery as fresh preservation sign-off.
 - `migrate --json` is an explicit read-only projection of one existing strict
   coordinator run. Require its existing private state and lock, validate the
   complete lifecycle and typed outcome history, recheck state, outcomes, and

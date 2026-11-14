@@ -4,7 +4,18 @@ All notable changes to `python-media-organizer` will be recorded here.
 
 ## Unreleased
 
-No unreleased changes.
+### 0.7.4 candidate
+
+- Add zero-write `queue resume MANIFEST` recovery preview and explicit `--apply`
+  continuation over strict per-job state; validate completed jobs without reruns.
+- Add individual `--job N` selection and explicit `--retry-job N` for failed
+  reads/previews. Retain exact policies, versions, checkpoint evidence and real
+  child statuses; no automatic failed-job skipping or failed-mutation replay.
+- Hold all existing locks through recovery, recheck private artifacts, and
+  refuse incomplete initialization, orphan child/scratch files, unresolved
+  journals and changed retained trees. Sync child-start log markers before launch.
+- Preserve new-job `queue run`, declaration planning and existing public/private
+  schemas. Recovery grants no cleanup or fresh preservation sign-off.
 
 ## 0.7.3 - 2026-11-14
 
