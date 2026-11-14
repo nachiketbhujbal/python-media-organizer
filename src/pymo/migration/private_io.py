@@ -98,6 +98,10 @@ class PrivateIO:
                     )
                 ):
                     raise RuntimeError("private migration log is unsafe")
+                if create:
+                    # The log is the durable marker for an unrecorded child.
+                    os.fsync(descriptor)
+                    os.fsync(parent)
             return descriptor
         except BaseException:
             if descriptor is not None:

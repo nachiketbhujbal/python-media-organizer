@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pymo.logging_config import emit as print
 from pymo.migration.queue_plan import build_queue_plan
+from pymo.migration.queue_recovery import resume_queue
 from pymo.migration.queue_run import run_queue
 
 
@@ -28,7 +29,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     run.add_argument(
         "--apply", action="store_true", help="execute approved jobs in order"
     )
+    resume = actions.add_parser(
+        "resume", help="preview recovery, or continue with --apply"
+    )
+    resume.add_argument("manifest", type=Path)
+    resume.add_argument("--apply", action="store_true")
+    resume.add_argument(
+        "--job", type=int, help="select only this one-based job ordinal"
+    )
+    resume.add_argument(
+        "--retry-job",
+        type=int,
+        action="append",
+        default=[],
+        help="explicitly retry this job's failed read or preview",
+    )
     args = parser.parse_args(argv)
+    if args.action == "resume":
+        return resume_queue(
+            args.manifest,
+            apply=args.apply,
+            selected=args.job,
+            retries=tuple(args.retry_job),
+        )
     if args.action == "run" and args.apply:
         return run_queue(args.manifest)
 

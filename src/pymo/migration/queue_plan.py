@@ -26,6 +26,7 @@ from pymo.migration.queue_manifest import (
     parse_manifest,
     private_state_destination,
 )
+from pymo.migration.unattended_binding import require_private_unattended_log_directory
 from pymo.migration.workflow import _stages
 
 # Public planning projection, separate from future queue execution/outcome reports.
@@ -46,7 +47,9 @@ class BoundQueue:
     manifest: PrivateArtifact
     jobs: tuple[BoundJob, ...]
 
-    def require_current(self, *, started: int = 0) -> None:
+    def require_current(
+        self, *, started: int = 0, started_jobs: frozenset[int] | None = None
+    ) -> None:
         """Preserve original bindings; only started jobs may occupy destinations."""
         self.manifest.require_current()
         for index, job in enumerate(self.jobs):
@@ -56,7 +59,10 @@ class BoundQueue:
                 artifact.require_current()
             if job.policy.acceptance is not None:
                 job.policy.acceptance.require_current()
-            if index >= started:
+            running = (
+                index < started if started_jobs is None else index in started_jobs
+            ) or not job.endpoints[2].missing
+            if not running:
                 for endpoint in (*job.endpoints[2:], *job.controls):
                     endpoint.require_current()
                 private_state_destination(job.declaration.state_directory)
@@ -68,14 +74,25 @@ class BoundQueue:
                 # may never replace the originally declared parent ancestry.
                 for endpoint in job.endpoints[2:]:
                     parent = observe_endpoint(endpoint.path.parent)
-                    if parent.ancestry != endpoint.ancestry:
+                    expected = (
+                        endpoint.ancestry if endpoint.missing else endpoint.ancestry[1:]
+                    )
+                    if parent.ancestry != expected:
                         raise QueuePlanningError("a destination parent changed")
+                    if not endpoint.missing:
+                        endpoint.require_current()
 
 
-def _declared_endpoints(job: QueueJob) -> tuple[Endpoint, ...]:
+def _declared_endpoints(
+    job: QueueJob, *, recovery: bool = False
+) -> tuple[Endpoint, ...]:
     baseline = observe_endpoint(job.baseline)
     working = observe_endpoint(job.working)
-    state = private_state_destination(job.state_directory)
+    if recovery and job.state_directory.exists():
+        state = observe_endpoint(job.state_directory)
+        require_private_unattended_log_directory(job.state_directory)
+    else:
+        state = private_state_destination(job.state_directory)
     if (
         baseline.identity != job.baseline_identity
         or working.identity != job.working_identity
@@ -83,7 +100,10 @@ def _declared_endpoints(job: QueueJob) -> tuple[Endpoint, ...]:
         raise QueuePlanningError("a collection identity differs from its declaration")
     endpoints: tuple[Endpoint, ...] = (baseline, working, state)
     if job.quarantine_destination is not None:
-        endpoints += (observe_endpoint(job.quarantine_destination, missing=True),)
+        present = recovery and not state.missing and job.quarantine_destination.exists()
+        endpoints += (
+            observe_endpoint(job.quarantine_destination, missing=not present),
+        )
     return endpoints
 
 
@@ -147,7 +167,7 @@ def _bind_job(
                 planned["destination_parent_device"],
                 planned["destination_parent_inode"],
             )
-            != target.identity
+            != (target.identity if target.missing else target.ancestry[1])
         ):
             raise QueuePlanningError(
                 "quarantine target differs from the policy binding"
@@ -164,7 +184,8 @@ def _bind_job(
             review_endpoint = observe_endpoint(review)
             controls.append(review_endpoint)
             source_device = review_endpoint.identity[0]
-        if (source_device == target.identity[0]) == copy:
+        target_device = (target.identity if target.missing else target.ancestry[1])[0]
+        if (source_device == target_device) == copy:
             raise QueuePlanningError(
                 "quarantine method conflicts with current filesystem topology"
             )
@@ -227,11 +248,13 @@ def _steps(policy: MigrationPreauthorization) -> list[dict[str, Any]]:
     return steps
 
 
-def bind_queue(path: Path) -> BoundQueue:
+def bind_queue(path: Path, *, recovery: bool = False) -> BoundQueue:
     """Read control files and filesystem metadata only; never dispatch work."""
     manifest = PrivateArtifact.read(absolute_path(str(path.expanduser().absolute())))
     declarations = parse_manifest(manifest)
-    endpoint_groups = tuple(_declared_endpoints(job) for job in declarations)
+    endpoint_groups = tuple(
+        _declared_endpoints(job, recovery=recovery) for job in declarations
+    )
     endpoints = [endpoint for group in endpoint_groups for endpoint in group]
     policy_parents = tuple(observe_endpoint(job.policy.parent) for job in declarations)
     parents = [manifest.parent, *policy_parents]

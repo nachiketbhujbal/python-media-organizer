@@ -1043,3 +1043,39 @@ as research. It now distinguishes released planning/execution, promoted
 recovery/reporting/scheduling, and remaining rescue/naming/cleanup research.
 Historical release and ADR narratives remain unchanged. This correction changes
 no runtime behavior or immutable release artifact.
+
+## v0.7.4 queue recovery candidate
+
+Codex owns ADR 0118 and the implementation branch; independent GPT-6.1 Terra
+Medium review owns no implementation files. Early design review required holding
+all existing locks before lifecycle inspection and retaining them through
+execution, plus exhaustive orphan-marker refusal and committed managed-tree
+proof. These requirements are implemented with focused adversarial coverage.
+Independent review accepts corrected implementation
+`bf96be78b11c6e1057b3cb8d303ee04aaec8d039` with no remaining findings.
+The reviewer independently passed all 38 recovery tests. The owner passed 900
+tests with two existing distinct-filesystem skips at 88 percent subprocess-aware
+coverage, plus Ruff, Black, mypy and all-file hooks. Candidate source/wheel
+inspection and isolated installed interrupted two-job recovery passed, preserving
+baseline snapshots, completed jobs and zero-write previews. Hosted and tagged
+release evidence remains separate.
+
+### RECOVERY-R01 — retained evidence became stale after preflight — resolved
+
+Independent review of `5403b75` found that recovery checked managed retained
+trees and unresolved journals only during initial inspection. Directory and
+private-state identities could remain unchanged while retained bytes or the
+journal changed before a later job ran. The owner now revalidates retained tree
+and journal evidence at every recovery execution boundary and before success,
+including completed jobs. Between-job tree/journal mutation and final-boundary
+regressions cover the correction. Renewed review at `bf96be7` accepts the fix.
+
+### RECOVERY-R02 — unsigned terminal manual state reused old proof — resolved
+
+The owner identified an unsigned terminal manual-policy risk and requested an
+independent reproduction. Review at `5403b75` confirmed that adding unrepresented
+source content after final verification still allowed resumed unattended sign-off
+from historical outcome data. Recovery now refuses unsigned terminal manual
+state until fresh verification and human review; authored recovery retains fresh
+namespace rederivation. Regressions cover unchanged/manual and changed-source
+manual/authored cases. Completed historical records create no new sign-off.

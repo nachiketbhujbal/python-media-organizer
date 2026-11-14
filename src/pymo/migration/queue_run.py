@@ -7,7 +7,7 @@ import os
 import sys
 import uuid
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from pathlib import Path
 
@@ -148,8 +148,13 @@ def _execute_job(
     directory: Endpoint,
     initial: MigrationState,
     check: Callable[[], None],
+    private_io: PrivateIO | None = None,
+    initialized: Callable[[MigrationState], None] | None = None,
 ) -> int:
-    with _new_job_lock(directory) as private_io:
+    context = (
+        _new_job_lock(directory) if private_io is None else nullcontext(private_io)
+    )
+    with context as private_io:
         initial = replace(initial, private_io=private_io)
         queue_check = check
 
@@ -172,6 +177,8 @@ def _execute_job(
             (initial.baseline, initial.working),
             expected_ancestry=directory.ancestry,
         )
+        if initialized is not None:
+            initialized(initial)
         check()
         status = migrate._run_unattended(
             directory.path,
