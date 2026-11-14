@@ -11,7 +11,7 @@ evidence, check free capacity, reserve destinations or prove preservation.
 Even a stale media plan can pass this declaration check. Fresh target, policy,
 receipt, configuration and checkpoint checks remain mandatory during execution.
 Version 0.7.3 adds separate [sequential execution](QUEUE_EXECUTION.md).
-The v0.7.4 candidate adds separate [recovery](QUEUE_RECOVERY.md).
+Version 0.7.4 adds separate [recovery](QUEUE_RECOVERY.md).
 Outcome aggregation remains a later roadmap unit.
 
 ## Private manifest schema 1
