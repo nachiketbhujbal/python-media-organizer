@@ -69,3 +69,12 @@ Manual journal recovery remains a separate operation; do not erase private
 artifacts or edit state to force queue adoption. A coherent later successful
 single-collection recovery can be inspected again; ambiguous orphan artifacts
 remain a refusal. No persistent schema is added or relaxed.
+
+An unsigned terminal run under a manual policy is refused: its recorded final
+verification cannot authorize current sign-off after an interruption. Obtain
+fresh layered verification and explicit human review through the ordinary
+single-collection workflow. Authored policies additionally rederive the bound
+source and working namespaces; changed content is refused. Already signed-off
+records remain historical and are never presented as new preservation evidence.
+Retained trees and unresolved journals are rechecked at execution and final
+boundaries, including for previously completed jobs.

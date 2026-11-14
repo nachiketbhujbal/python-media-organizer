@@ -75,3 +75,12 @@ an existing run; upgrading to v0.7.4 does not make a v0.7.3 run compatible.
 No schema migration, policy rewrite, initial copying, cleanup or concurrency is
 introduced. Historical completion is not a new preservation check. Use fresh
 final verification and separate human review before any source retirement.
+
+An unsigned terminal run under a manual policy is refused: its recorded final
+verification cannot authorize current sign-off after an interruption. Obtain
+fresh layered verification and explicit human review through the ordinary
+single-collection workflow. Authored policies additionally rederive the bound
+source and working namespaces; changed content is refused. Already signed-off
+records remain historical and are never presented as new preservation evidence.
+Retained trees and unresolved journals are rechecked at execution and final
+boundaries, including for previously completed jobs.

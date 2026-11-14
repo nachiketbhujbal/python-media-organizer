@@ -370,3 +370,98 @@ def test_log_marker_sync_failure_prevents_child_launch(tmp_path, monkeypatch):
     )
     assert queue.main(["run", str(manifest), "--apply"]) == 2
     assert list(Path(entries[0]["state_directory"]).glob("*.log"))
+
+
+@pytest.mark.parametrize("mutation", ["tree", "journal"])
+def test_retained_evidence_is_rechecked_before_a_later_job_runs(
+    tmp_path, monkeypatch, mutation
+):
+    from pymo.action_log import ActionLog, ToolId
+
+    entry, manifest, destination = managed_fixture(tmp_path)
+    assert run("queue", "resume", manifest, "--apply").returncode == 0
+    second = job(tmp_path, 2)
+    manifest = save_manifest(tmp_path, [entry, second])
+
+    def intercepted(job, directory, initial, check, private_io=None, **kwargs):
+        if mutation == "tree":
+            (destination / "copy.bin").write_bytes(b"changed retained content")
+        else:
+            journal = ActionLog(Path(entry["working"]["path"]))
+            with pytest.raises(KeyboardInterrupt), journal.transaction(ToolId.ORGANIZE):
+                raise KeyboardInterrupt
+        check()
+        pytest.fail("changed retained evidence accepted at next dispatch")
+
+    monkeypatch.setattr(queue_recovery, "_execute_job", intercepted)
+    assert queue.main(["resume", str(manifest), "--apply"]) == 2
+    assert not _state_path(Path(second["state_directory"])).exists()
+
+
+def test_retained_tree_is_rechecked_before_recovery_success(tmp_path, monkeypatch):
+    _, manifest, destination = managed_fixture(tmp_path)
+    assert run("queue", "resume", manifest, "--apply").returncode == 0
+    original = queue_recovery._retained_evidence
+    calls = 0
+
+    def checked(*args):
+        nonlocal calls
+        calls += 1
+        original(*args)
+        if calls == 2:
+            (destination / "copy.bin").write_bytes(b"late changed bytes")
+
+    monkeypatch.setattr(queue_recovery, "_retained_evidence", checked)
+    assert queue.main(["resume", str(manifest), "--apply"]) == 2
+    assert calls >= 3
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_unsigned_terminal_manual_run_requires_fresh_human_review(
+    tmp_path, monkeypatch, changed
+):
+    entries, manifest = pause(
+        tmp_path, monkeypatch, stage=len(migrate._stages()), count=1
+    )
+    if changed:
+        (Path(entries[0]["baseline"]["path"]) / "new.txt").write_bytes(
+            b"not represented"
+        )
+    before = snapshot(tmp_path)
+    result = run("queue", "resume", manifest, "--apply")
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert snapshot(tmp_path) == before
+    assert (
+        _load_state(_state_path(Path(entries[0]["state_directory"])))
+        .attempts[-1]
+        .action
+        != "signoff"
+    )
+
+
+def test_unsigned_terminal_authored_run_requires_current_bound_namespace(
+    tmp_path, monkeypatch
+):
+    entries, manifest = pause(
+        tmp_path, monkeypatch, stage=len(migrate._stages()), count=1, authored=True
+    )
+    baseline = Path(entries[0]["baseline"]["path"])
+    (baseline / "new.txt").write_bytes(b"not represented")
+    before = snapshot(tmp_path)
+    assert run("queue", "resume", manifest, "--apply").returncode == 2
+    assert snapshot(tmp_path) == before
+
+
+def test_status_one_validation_keeps_exact_acknowledgement_policy(tmp_path):
+    entry = job(tmp_path, 1)
+    (Path(entry["baseline"]["path"]) / "empty.jpg").write_bytes(b"")
+    manifest = save_manifest(tmp_path, [entry])
+    result = run("queue", "run", manifest, "--apply")
+    assert result.returncode == 1, result.stdout + result.stderr
+    state = _load_state(_state_path(Path(entry["state_directory"])))
+    assert state.attempts[-1].stage == "baseline-validation"
+    assert state.attempts[-1].exit_status == 1
+    before = snapshot(tmp_path)
+    assert run("queue", "resume", manifest, "--retry-job", 1, "--apply").returncode == 2
+    assert run("queue", "resume", manifest, "--apply").returncode == 1
+    assert snapshot(tmp_path) == before

@@ -1052,3 +1052,23 @@ all existing locks before lifecycle inspection and retaining them through
 execution, plus exhaustive orphan-marker refusal and committed managed-tree
 proof. These requirements are implemented with focused adversarial coverage.
 Exact implementation review and complete release gates remain pending.
+
+### RECOVERY-R01 — retained evidence became stale after preflight — resolved
+
+Independent review of `5403b75` found that recovery checked managed retained
+trees and unresolved journals only during initial inspection. Directory and
+private-state identities could remain unchanged while retained bytes or the
+journal changed before a later job ran. The owner now revalidates retained tree
+and journal evidence at every recovery execution boundary and before success,
+including completed jobs. Between-job tree/journal mutation and final-boundary
+regressions cover the correction. Renewed exact-head review remains required.
+
+### RECOVERY-R02 — unsigned terminal manual state reused old proof — resolved
+
+The owner identified an unsigned terminal manual-policy risk and requested an
+independent reproduction. Review at `5403b75` confirmed that adding unrepresented
+source content after final verification still allowed resumed unattended sign-off
+from historical outcome data. Recovery now refuses unsigned terminal manual
+state until fresh verification and human review; authored recovery retains fresh
+namespace rederivation. Regressions cover unchanged/manual and changed-source
+manual/authored cases. Completed historical records create no new sign-off.

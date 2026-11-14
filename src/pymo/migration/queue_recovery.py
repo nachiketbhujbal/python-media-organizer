@@ -36,6 +36,7 @@ from pymo.migration.unattended_binding import (
     require_unattended_policy_binding,
     unattended_policy_binding_path,
 )
+from pymo.migration.workflow import _stages
 from pymo.quarantine_copy import verify_copy
 
 
@@ -185,6 +186,14 @@ def _inspect_job(job: BoundJob, binding: PrivateIO) -> RecoveryJob:
         _require_completed(
             job, Endpoint(binding.directory, binding.ancestry, False), state
         )
+    if (
+        not completed
+        and state.next_stage == len(_stages())
+        and job.policy.plan_binding is None
+    ):
+        raise QueuePlanningError(
+            "unsigned terminal manual run requires fresh verification and human review"
+        )
     retry = False
     if state.attempts:
         latest = state.attempts[-1]
@@ -258,8 +267,18 @@ def resume_queue(
                         validate_synopsis_history(binding.directory, current)
                         if _storage(binding) != files:
                             raise QueuePlanningError("active job evidence changed")
-                    elif files != recovered[index].files:
-                        raise QueuePlanningError("another job changed during recovery")
+                    else:
+                        if files != recovered[index].files:
+                            raise QueuePlanningError(
+                                "another job changed during recovery"
+                            )
+                        current = recovered[index].state
+                    _retained_evidence(queue.jobs[index], current)
+                    if _storage(binding) != files:
+                        raise QueuePlanningError(
+                            "job artifacts changed during evidence checks"
+                        )
+                queue.require_current(started_jobs=frozenset(started))
 
             check()
             for index in range(count):
@@ -312,12 +331,32 @@ def resume_queue(
                         created.append(directory)
                         started.add(index)
                         private_io = locks.enter_context(_new_job_lock(directory))
+
+                        def initialized(
+                            state: MigrationState,
+                            *,
+                            job_index: int = index,
+                            bound_job: BoundJob = job,
+                        ) -> None:
+                            nonlocal active
+                            assert state.private_io is not None
+                            bindings[job_index] = state.private_io
+                            recovered[job_index] = _inspect_job(
+                                bound_job, state.private_io
+                            )
+                            active = job_index
+
                         status = _execute_job(
-                            job, directory, initial, check, private_io
+                            job,
+                            directory,
+                            initial,
+                            check,
+                            private_io,
+                            initialized=initialized,
                         )
                         if status == 0:
                             recovered[index] = _inspect_job(job, private_io)
-                            bindings[index] = private_io
+                        active = None
                 else:
                     active = index
                     check()
@@ -341,6 +380,7 @@ def resume_queue(
                     )
                     return status
                 check()
+            check()
             print(
                 "Selected job finished; other jobs were not advanced."
                 if selected

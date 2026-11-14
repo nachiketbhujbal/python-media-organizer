@@ -149,6 +149,7 @@ def _execute_job(
     initial: MigrationState,
     check: Callable[[], None],
     private_io: PrivateIO | None = None,
+    initialized: Callable[[MigrationState], None] | None = None,
 ) -> int:
     context = (
         _new_job_lock(directory) if private_io is None else nullcontext(private_io)
@@ -176,6 +177,8 @@ def _execute_job(
             (initial.baseline, initial.working),
             expected_ancestry=directory.ancestry,
         )
+        if initialized is not None:
+            initialized(initial)
         check()
         status = migrate._run_unattended(
             directory.path,
