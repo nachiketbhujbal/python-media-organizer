@@ -41,6 +41,34 @@ class BoundJob:
     controls: tuple[Endpoint, ...]
 
 
+@dataclass(frozen=True)
+class BoundQueue:
+    manifest: PrivateArtifact
+    jobs: tuple[BoundJob, ...]
+
+    def require_current(self, *, started: int = 0) -> None:
+        """Preserve original bindings; only started jobs may occupy destinations."""
+        self.manifest.require_current()
+        for index, job in enumerate(self.jobs):
+            for endpoint in job.endpoints[:2]:
+                endpoint.require_current()
+            for artifact in job.artifacts:
+                artifact.require_current()
+            if job.policy.acceptance is not None:
+                job.policy.acceptance.require_current()
+            if index >= started:
+                for endpoint in (*job.endpoints[2:], *job.controls):
+                    endpoint.require_current()
+                private_state_destination(job.declaration.state_directory)
+            else:
+                # Started jobs may create their own state/quarantine leaves, but
+                # may never replace the originally declared parent ancestry.
+                for endpoint in job.endpoints[2:]:
+                    parent = observe_endpoint(endpoint.path.parent)
+                    if parent.ancestry != endpoint.ancestry:
+                        raise QueuePlanningError("a destination parent changed")
+
+
 def _declared_endpoints(job: QueueJob) -> tuple[Endpoint, ...]:
     baseline = observe_endpoint(job.baseline)
     working = observe_endpoint(job.working)
@@ -196,7 +224,7 @@ def _steps(policy: MigrationPreauthorization) -> list[dict[str, Any]]:
     return steps
 
 
-def build_queue_plan(path: Path) -> dict[str, Any]:
+def bind_queue(path: Path) -> BoundQueue:
     """Read control files and filesystem metadata only; never dispatch work."""
     manifest = PrivateArtifact.read(absolute_path(str(path.expanduser().absolute())))
     declarations = parse_manifest(manifest)
@@ -218,6 +246,14 @@ def build_queue_plan(path: Path) -> dict[str, Any]:
             if value is not None:
                 parents.append(observe_endpoint(absolute_path(value).parent))
     _require_separation(endpoints, parents)
+    queue = BoundQueue(manifest, jobs)
+    queue.require_current()
+    return queue
+
+
+def build_queue_plan(path: Path) -> dict[str, Any]:
+    queue = bind_queue(path)
+    jobs = queue.jobs
     result: dict[str, Any] = {
         "schema_version": QUEUE_PLAN_SCHEMA_VERSION,
         "kind": "queue-plan",
@@ -240,14 +276,5 @@ def build_queue_plan(path: Path) -> dict[str, Any]:
             for index, job in enumerate(jobs, 1)
         ],
     }
-    # No successful output until every declaration and dependency is rechecked.
-    for job in jobs:
-        for endpoint in (*job.endpoints, *job.controls):
-            endpoint.require_current()
-        private_state_destination(job.declaration.state_directory)
-        for artifact in job.artifacts:
-            artifact.require_current()
-        if job.policy.acceptance is not None:
-            job.policy.acceptance.require_current()
-    manifest.require_current()
+    queue.require_current()
     return result

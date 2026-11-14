@@ -3,14 +3,15 @@
 Version 0.7.2 adds `pymo queue plan MANIFEST [--json]`. It checks an
 entire ordered declaration and prints the stages that each job would follow.
 It starts no job and writes no media, logs, cache, lock, action history, private
-state or output artifact. There is no `--apply` or execution selector.
+state or output artifact. The `plan` action has no `--apply` selector.
 
 Planning reads only explicitly named private control artifacts and filesystem
 metadata. It does not scan or decode media, rederive authored namespace
 evidence, check free capacity, reserve destinations or prove preservation.
 Even a stale media plan can pass this declaration check. Fresh target, policy,
 receipt, configuration and checkpoint checks remain mandatory during execution.
-Queue execution, recovery and outcome aggregation are later roadmap units.
+The v0.7.3 candidate adds separate [sequential execution](QUEUE_EXECUTION.md).
+Queue recovery and outcome aggregation remain later roadmap units.
 
 ## Private manifest schema 1
 

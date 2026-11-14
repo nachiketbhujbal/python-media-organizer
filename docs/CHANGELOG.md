@@ -4,7 +4,17 @@ All notable changes to `python-media-organizer` will be recorded here.
 
 ## Unreleased
 
-No unreleased changes.
+### 0.7.3 candidate
+
+- Add `queue run MANIFEST`, preview-only unless `--apply` is supplied, to run
+  complete approved policies sequentially through the existing migration engine.
+- Validate the whole queue before writes, preserve exact artifact/ancestor/root
+  bindings, exclusively publish private job directories, and stop on the first
+  unhandled status or interruption while retaining partial state.
+- Require strict terminal lifecycle and typed outcome verification before the
+  next job starts. Existing state is never adopted; retry/resume remain separate.
+- Preserve zero-write `queue plan` and its schema-1 projection. No copying,
+  cleanup, concurrency, queue outcome schema or extra authority is introduced.
 
 ## 0.7.2 - 2026-11-07
 

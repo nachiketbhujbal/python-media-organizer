@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -1000,11 +1000,15 @@ def _run_unattended(
     state_path: Path,
     state: MigrationState,
     policy: MigrationPreauthorization,
+    *,
+    boundary_check: Callable[[], None] | None = None,
 ) -> int:
     binding = state
     identities = _collection_identities(state)
     try:
         while True:
+            if boundary_check is not None:
+                boundary_check()
             validate_synopsis_history(log_dir, state)
             _require_operator_binding(state, binding)
             _require_collection_identities(state, identities)

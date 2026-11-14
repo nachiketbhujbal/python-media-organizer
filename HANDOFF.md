@@ -37,6 +37,22 @@ must answer an unresolved question. Ordinary development needs no production
 source access. No collection cleanup, baseline mutation, or release is implied
 by this documentation change.
 
+## Version 0.7.3 candidate
+
+The maintainer lifted the post-v0.7.2 pause. ADR 0116 reserves sequential queue
+execution. `queue run MANIFEST` is a zero-write preview; `--apply` runs new
+jobs using the exact bound policies through the existing unattended engine.
+`migration/queue_run.py` owns exclusive private directory publication, per-job
+initialization, sequential dispatch and strict completion checks. `queue_plan`
+now retains a typed `BoundQueue` shared by planning and execution. The engine
+accepts a boundary callback to recheck original queue bindings between stages.
+
+Every started job retains separate state, logs and outcomes. Failure or
+interruption stops the queue; existing state is never adopted. Queue recovery
+and synopsis remain versions 0.7.4 and 0.7.5. This candidate is not yet released;
+review, complete gates and publication evidence remain required. See
+`docs/QUEUE_EXECUTION.md`. Real collections and the workbook remain untouched.
+
 ## Version 0.7.2 release
 
 ADR 0114 adds read-only queue manifest planning. `queue.py` coordinates the CLI,

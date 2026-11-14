@@ -204,7 +204,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.log_file is not None or args.config is not None or args.show_ignored
     ):
         parser.error(
-            "queue planning is zero-write and uses only manifest-bound options"
+            "queue uses only manifest-bound options; global persistent logs are unsupported"
         )
     started_at = time.monotonic()
     structured_json = (

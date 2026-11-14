@@ -70,3 +70,7 @@ installation evidence. Version 0.7.2 implements
 
 [ADR 0115](adrs/0115-v0.7.2-release-truth.md) records its verified publication
 and installation.
+
+The v0.7.3 candidate adds [sequential queue execution](QUEUE_EXECUTION.md)
+under [ADR 0116](adrs/0116-sequential-queue-execution.md), with explicit apply,
+isolated new job state and first-unhandled-outcome stopping.
