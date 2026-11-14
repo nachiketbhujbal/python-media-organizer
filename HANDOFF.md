@@ -56,7 +56,13 @@ are rechecked throughout recovery. Unresolved journals stop recovery; occupied
 managed destinations require committed journal/tree and approved-preview proof.
 State/version/policy compatibility remains exact, so upgrading does not adopt
 an older-version run. No persistent schema changes. Queue synopsis remains
-v0.7.5; publication and independent acceptance are still pending.
+v0.7.5. Independent Terra-medium review accepts corrected implementation
+`bf96be78b11c6e1057b3cb8d303ee04aaec8d039` after RECOVERY-R01 and R02.
+The complete owner gate passed 900 tests with two existing distinct-filesystem
+skips at 88 percent subprocess-aware coverage. Ruff, Black, mypy, all-file hooks,
+source/wheel inspection and installed synthetic interrupted two-job recovery
+passed. The reviewer independently passed all 38 recovery tests. Hosted gates,
+tag publication and tagged installation remain pending.
 
 ## Version 0.7.3 release
 

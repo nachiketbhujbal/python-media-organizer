@@ -78,3 +78,12 @@ source and working namespaces; changed content is refused. Already signed-off
 records remain historical and are never presented as new preservation evidence.
 Retained trees and unresolved journals are rechecked at execution and final
 boundaries, including for previously completed jobs.
+
+## Candidate evidence
+
+Independent Terra-medium review accepts corrected implementation `bf96be7` after
+RECOVERY-R01 and R02, with 38 independently executed recovery tests. The complete
+owner gate passes 900 tests and two existing distinct-filesystem skips at
+88 percent subprocess-aware coverage; static checks, hooks, built artifact
+inspection and installed synthetic interrupted recovery pass. Publication and
+tagged artifact evidence are separate release steps.

@@ -1051,7 +1051,14 @@ Medium review owns no implementation files. Early design review required holding
 all existing locks before lifecycle inspection and retaining them through
 execution, plus exhaustive orphan-marker refusal and committed managed-tree
 proof. These requirements are implemented with focused adversarial coverage.
-Exact implementation review and complete release gates remain pending.
+Independent review accepts corrected implementation
+`bf96be78b11c6e1057b3cb8d303ee04aaec8d039` with no remaining findings.
+The reviewer independently passed all 38 recovery tests. The owner passed 900
+tests with two existing distinct-filesystem skips at 88 percent subprocess-aware
+coverage, plus Ruff, Black, mypy and all-file hooks. Candidate source/wheel
+inspection and isolated installed interrupted two-job recovery passed, preserving
+baseline snapshots, completed jobs and zero-write previews. Hosted and tagged
+release evidence remains separate.
 
 ### RECOVERY-R01 — retained evidence became stale after preflight — resolved
 
@@ -1061,7 +1068,7 @@ private-state identities could remain unchanged while retained bytes or the
 journal changed before a later job ran. The owner now revalidates retained tree
 and journal evidence at every recovery execution boundary and before success,
 including completed jobs. Between-job tree/journal mutation and final-boundary
-regressions cover the correction. Renewed exact-head review remains required.
+regressions cover the correction. Renewed review at `bf96be7` accepts the fix.
 
 ### RECOVERY-R02 — unsigned terminal manual state reused old proof — resolved
 
