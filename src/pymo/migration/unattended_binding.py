@@ -19,6 +19,7 @@ from pymo.migration.preauthorization import (
     MigrationPreauthorization,
     MigrationPreauthorizationError,
 )
+from pymo.migration.private_io import PrivateIO
 
 # This identifies the private create-once policy-binding compatibility contract.
 UNATTENDED_POLICY_BINDING_SCHEMA_VERSION = 1
@@ -327,12 +328,18 @@ def _read_unattended_policy_binding(log_dir: Path) -> bytes:
         os.close(directory)
 
 
-def load_unattended_policy_binding(log_dir: Path) -> UnattendedPolicyBinding:
+def load_unattended_policy_binding(
+    log_dir: Path, *, private_io: PrivateIO | None = None
+) -> UnattendedPolicyBinding:
     """Load one strict private create-once policy binding."""
 
     try:
         value = json.loads(
-            _read_unattended_policy_binding(log_dir),
+            (
+                private_io.read(unattended_policy_binding_path(log_dir))
+                if private_io
+                else _read_unattended_policy_binding(log_dir)
+            ),
             object_pairs_hook=_object_without_duplicate_keys,
         )
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -384,6 +391,6 @@ def require_unattended_policy_binding(
 ) -> UnattendedPolicyBinding:
     """Require the independent record, restart state, and policy to agree."""
 
-    binding = load_unattended_policy_binding(log_dir)
+    binding = load_unattended_policy_binding(log_dir, private_io=state.private_io)
     binding.require(state, policy)
     return binding

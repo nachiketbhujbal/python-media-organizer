@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
+from pymo.migration.private_io import PrivateIO
 from pymo.migration.workflow import CoordinatorOptions, _stages
 
 # This identifies the private restart-state compatibility contract. Version 6
@@ -70,6 +71,7 @@ class MigrationState:
     created_at: str
     updated_at: str
     unattended_policy_sha256: str | None = None
+    private_io: PrivateIO | None = None
 
     def as_json(self) -> dict[str, Any]:
         return {
@@ -180,6 +182,9 @@ def _write_state(path: Path, state: MigrationState) -> None:
         )
         + b"\n"
     )
+    if state.private_io is not None:
+        state.private_io.replace_state(path, payload)
+        return
     temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     descriptor: int | None = None
@@ -534,9 +539,11 @@ def _validate_attempt_order(attempts: tuple[Attempt, ...], next_stage: int) -> N
         )
 
 
-def _load_state(path: Path) -> MigrationState:
+def _load_state(path: Path, *, private_io: PrivateIO | None = None) -> MigrationState:
     try:
-        value = json.loads(_read_regular_file(path))
+        value = json.loads(
+            private_io.read(path) if private_io else _read_regular_file(path)
+        )
     except (UnicodeError, json.JSONDecodeError) as error:
         raise MigrationCoordinatorError(
             "migration restart state is malformed"
@@ -587,6 +594,7 @@ def _load_state(path: Path) -> MigrationState:
         created_at=created_at,
         updated_at=updated_at,
         unattended_policy_sha256=unattended_policy_sha256,
+        private_io=private_io,
     )
 
 
@@ -603,4 +611,5 @@ def _updated_state(
         created_at=state.created_at,
         updated_at=_now(),
         unattended_policy_sha256=state.unattended_policy_sha256,
+        private_io=state.private_io,
     )

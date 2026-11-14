@@ -981,3 +981,48 @@ published. Tagged run `42393170285` passed. ADR 0115 records exact
 artifact identities and the installed `pymo 0.7.2` command. The maintainer
 requested a pause before further evaluation or engineering. No production
 collection, workbook, cleanup or PyPI publication was involved.
+
+## Version 0.7.3 sequential queue execution
+
+Independent GPT-6.1 Terra Medium review rejected initial implementation
+`54262276aad786c006056f46b730d9d7c70f9565` with two reproduced findings.
+The owner and reviewer each passed 853 tests with two existing filesystem
+skips and 88 percent subprocess coverage on that candidate. Passing tests did
+not discharge the findings. The reviewer also passed 103 focused queue tests
+and static checks; its isolated hook setup lacked DNS, while the owner hook
+gate passed. The subsequent review rounds and final acceptance are recorded below.
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| QUEUE-EXEC-R01 | High | A replaced lock could admit another coordinator while the first queue noticed replacement only after the job finished. | 0.7.3 | Resolved: original takeover probe independently refused at 00a72dd; original lock is checked at engine transitions and bound private I/O. |
+| QUEUE-EXEC-R02 | High | A replaced private state directory could receive stage logs, outcomes and state after exclusive queue allocation. | 0.7.3 | Resolved: original replacement probe independently refused at 00a72dd; stage state, logs and outcomes retain the directory binding through child setup. |
+
+Synthetic regressions replace and acquire the lock, replace the state directory
+before log allocation, at actual child launch and during state replacement,
+and assert refusal without writes into the replacement or later-job starts.
+Existing state/outcome/policy schemas and the single-collection default remain
+unchanged; private child binding is a constraint, never media authority.
+
+Renewed review of `00a72dda0b641be8c6cd90ed4fb7725b39906a0f` independently
+closed the original probes and passed 127 focused queue/outcome tests, but
+reported two further blocking defects. The owner full run exposed three stale
+lifecycle attack injectors that lacked the newly optional `private_io` keyword;
+the injectors now forward that argument while retaining their original attacks.
+The run was not treated as a passing gate.
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| QUEUE-EXEC-R03 | Medium | A changed private output binding could escape the child outcome error boundary with a traceback. | 0.7.3 | Resolved and independently closed at c0409fd: binding failures use the existing path-private outcome error; real child lock/directory substitution tests passed. |
+| QUEUE-EXEC-R04 | Medium | A replacement owner-private regular file could receive appended stage logs after the original log was allocated. | 0.7.3 | Resolved and independently closed at c0409fd: original log identity reaches child startup and post-child checks; replacement sentinels remain unchanged. |
+
+Independent Terra-medium review accepts implementation
+`c0409fd85e31a9672c9538930bf05620904f5dbc` without new findings and closes
+QUEUE-EXEC-R01 through R04. The reviewer independently replayed all four
+attacks, passed 131 queue/outcome tests and the three updated lifecycle attack
+tests. The owner passed 140 focused tests and the static/all-file hook gates.
+A rebuilt isolated installed wheel completed a two-job synthetic workflow,
+preserved baseline bytes, kept preview zero-write and refused existing state;
+wheel and source archive members, packaged source bytes and license were checked.
+The complete owner gate passed 862 tests with two existing distinct-filesystem
+skips at 88 percent subprocess-aware coverage. Protected hosted gates remain
+separate release evidence.

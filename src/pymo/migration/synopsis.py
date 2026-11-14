@@ -59,6 +59,7 @@ def _outcomes(
                     "quarantine-dups" if managed_quarantine else stage.command or ""
                 ),
                 expected_status=attempt.exit_status,
+                private_io=state.private_io,
                 expected_result_kind=(
                     "observed"
                     if attempt.action == "quarantine-apply"

@@ -480,6 +480,19 @@ remain unchecked; a valid declaration is not production sign-off. See the
 [ADR 0115](docs/adrs/0115-v0.7.2-release-truth.md) records verified publication
 and installation evidence.
 
+### Execute approved queue jobs
+
+The v0.7.3 candidate adds sequential execution over complete reviewed policies:
+
+```bash
+pymo queue run "/private-plans/queue.json"          # zero-write preview
+pymo queue run "/private-plans/queue.json" --apply  # execute new jobs
+```
+
+Each job receives separate private state. The queue stops at the first unhandled
+outcome and preserves partial work. Existing state is refused; queue recovery
+and aggregate outcomes remain later work. See [execution boundaries](docs/QUEUE_EXECUTION.md).
+
 ### Verify a migration by exact bytes and media content
 
 ```bash

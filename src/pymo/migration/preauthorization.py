@@ -586,6 +586,7 @@ class MigrationPreauthorization:
     authorizations: dict[str, tuple[str, dict[str, Any]]]
     plan_binding: dict[str, Any] | None = None
     acceptance: PolicyAcceptance | None = None
+    expected_ancestry: tuple[tuple[int, int], ...] | None = None
 
     def require_target(self, state: MigrationState) -> None:
         if self.plan_binding is not None:
@@ -596,7 +597,14 @@ class MigrationPreauthorization:
     def require_current(self) -> None:
         if self.acceptance is not None:
             self.acceptance.require_current()
-        payload, identity = _read_private_policy(self.path)
+        if self.expected_ancestry is None:
+            payload, identity = _read_private_policy(self.path)
+        else:
+            from pymo.migration.policy_files import read_private_identity
+
+            payload, identity = read_private_identity(
+                self.path, expected_ancestry=self.expected_ancestry
+            )
         if (
             identity != self.file_identity
             or hashlib.sha256(payload).hexdigest() != self.payload_sha256
@@ -813,6 +821,7 @@ def parse_preauthorization(
         authorizations=dict(parsed),
         plan_binding=plan_binding,
         acceptance=acceptance,
+        expected_ancestry=expected_ancestry,
     )
 
 

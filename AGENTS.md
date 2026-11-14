@@ -241,6 +241,13 @@ never duplicate the version in source or static project metadata.
   recheck every declaration before emitting a whole path-private plan. Keep
   media evidence, capacity and future destination availability explicitly
   unchecked; execution and recovery are separate roadmap units.
+- `queue run` defaults to the zero-write declaration preview. Only explicit
+  `--apply` executes complete bound policies sequentially through the existing
+  unattended engine. Recheck original manifest/policy/receipt/root bindings,
+  exclusively publish each new private state directory, never adopt occupied
+  state, and verify terminal lifecycle/outcomes before advancing. Stop on the
+  first unhandled status or interruption and retain partial state. Queue
+  bookkeeping grants no checkpoint authority, retry, cleanup or concurrency.
 - `migrate --json` is an explicit read-only projection of one existing strict
   coordinator run. Require its existing private state and lock, validate the
   complete lifecycle and typed outcome history, recheck state, outcomes, and

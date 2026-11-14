@@ -29,6 +29,7 @@ from pymo.logging_config import (
     configure_logging,
     log_level_choices,
 )
+from pymo.migration.private_io import parse_private_io
 from pymo.progress import format_duration
 
 
@@ -85,6 +86,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pymo",
         description="Safe, local-first tools for organizing media collections.",
+    )
+    parser.add_argument(
+        "--migration-private-binding", type=parse_private_io, help=argparse.SUPPRESS
     )
     parser.add_argument("--version", action="version", version=f"pymo {__version__}")
     output = parser.add_mutually_exclusive_group()
@@ -204,7 +208,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.log_file is not None or args.config is not None or args.show_ignored
     ):
         parser.error(
-            "queue planning is zero-write and uses only manifest-bound options"
+            "queue uses only manifest-bound options; global persistent logs are unsupported"
         )
     started_at = time.monotonic()
     structured_json = (
@@ -229,6 +233,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else profile_console_level or args.console_log_level
             ),
             file_level=args.file_log_level if args.log_file is not None else None,
+            private_io=args.migration_private_binding,
         )
     except LoggingConfigurationError as error:
         parser.error(str(error))
@@ -247,6 +252,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     ):
         parser.error("--config and --show-ignored are not used by quarantine-dups")
     forwarded_options: list[str] = []
+    if args.migration_private_binding is not None:
+        if args.log_file is None:
+            parser.error("private migration binding requires an explicit stage log")
+        forwarded_options.extend(
+            (
+                "--migration-private-binding",
+                args.migration_private_binding.as_argument(),
+            )
+        )
     if (args.show_ignored or show_full_details) and _supports_show_ignored(
         args.command, cache_action
     ):

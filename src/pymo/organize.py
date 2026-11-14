@@ -52,6 +52,7 @@ from pymo.migration.outcome import (
     outcome_record,
     write_outcome,
 )
+from pymo.migration.private_io import PrivateIO
 from pymo.planning import PlanningView
 from pymo.progress import ProgressMeter
 
@@ -476,6 +477,7 @@ def _write_migration_outcome(
     directories_created: int,
     directories_removed: int,
     status: int,
+    private_io: PrivateIO | None = None,
 ) -> int:
     if path is None:
         return status
@@ -499,6 +501,7 @@ def _write_migration_outcome(
                 },
             ),
             root,
+            private_io=private_io,
         )
     except MigrationOutcomeError:
         print("Migration outcome could not be recorded safely.", file=sys.stderr)
@@ -698,6 +701,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         directories_created=len(missing_destinations),
         directories_removed=(removed_count if args.apply else len(source_directories)),
         status=status,
+        private_io=args.migration_private_binding,
     )
 
 

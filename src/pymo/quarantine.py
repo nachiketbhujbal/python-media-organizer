@@ -29,6 +29,7 @@ from pymo.migration.outcome import (
     outcome_record,
     write_outcome,
 )
+from pymo.migration.private_io import PrivateIO
 from pymo.quarantine_copy import (
     CopyPlan,
     NoRetainedCopy,
@@ -89,6 +90,7 @@ def _write_outcome(
     *,
     result_kind: ResultKind,
     collection: Path,
+    private_io: PrivateIO | None = None,
 ) -> None:
     write_outcome(
         path,
@@ -96,6 +98,7 @@ def _write_outcome(
             "quarantine-dups", "quarantine", result_kind, int(data["status"]), data
         ),
         collection,
+        private_io=private_io,
     )
 
 
@@ -201,6 +204,7 @@ def _copy_main(args: argparse.Namespace) -> int:
         data,
         result_kind="observed" if args.apply else "preview",
         collection=plan.collection_root,
+        private_io=args.migration_private_binding,
     )
     return 0
 
@@ -269,6 +273,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     data,
                     result_kind="observed",
                     collection=observed.collection_root,
+                    private_io=args.migration_private_binding,
                 )
             return 0
         plan = (
@@ -315,6 +320,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             data,
             result_kind=result_kind,
             collection=plan.collection_root,
+            private_io=args.migration_private_binding,
         )
         return 0
     except (ActionLogError, ManagedQuarantineError, MigrationOutcomeError, OSError):

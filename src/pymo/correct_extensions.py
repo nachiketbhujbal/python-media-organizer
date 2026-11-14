@@ -45,6 +45,7 @@ from pymo.migration.outcome import (
     outcome_record,
     write_outcome,
 )
+from pymo.migration.private_io import PrivateIO
 from pymo.organize import available_target, discover_files, path_key
 from pymo.progress import ProgressMeter
 
@@ -319,6 +320,7 @@ def _write_migration_outcome(
     plan: Sequence[CorrectionRecord],
     files: int,
     status: int,
+    private_io: PrivateIO | None = None,
 ) -> int:
     if path is None:
         return status
@@ -339,6 +341,7 @@ def _write_migration_outcome(
                 },
             ),
             root,
+            private_io=private_io,
         )
     except MigrationOutcomeError:
         print("Migration outcome could not be recorded safely.", file=sys.stderr)
@@ -414,6 +417,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             plan=analysis.plan,
             files=len(analysis.plan),
             status=0,
+            private_io=args.migration_private_binding,
         )
 
     if not decision_digest_matches(
@@ -435,6 +439,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             plan=analysis.plan,
             files=0,
             status=0,
+            private_io=args.migration_private_binding,
         )
 
     try:
@@ -463,6 +468,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             plan=analysis.plan,
             files=len(analysis.plan),
             status=1,
+            private_io=args.migration_private_binding,
         )
     print("Verification passed: every planned extension correction was completed.")
     return _write_migration_outcome(
@@ -472,6 +478,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         plan=analysis.plan,
         files=len(analysis.plan),
         status=0,
+        private_io=args.migration_private_binding,
     )
 
 

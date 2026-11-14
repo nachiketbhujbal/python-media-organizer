@@ -10,7 +10,7 @@ import subprocess
 import sys
 import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -38,6 +38,7 @@ from pymo.migration.preauthorization import (
     apply_preview_stage,
     load_preauthorization,
 )
+from pymo.migration.private_io import PrivateIO
 from pymo.migration.roots import (
     DirectoryIdentityError,
     directory_identity,
@@ -221,18 +222,36 @@ def _require_matching_options(
             )
 
 
-def _new_log_file(log_dir: Path, state: MigrationState, stage: Stage) -> Path:
+def _new_log_file(
+    log_dir: Path, state: MigrationState, stage: Stage
+) -> tuple[Path, PrivateIO | None]:
     number = len(state.attempts) + 1
     path = log_dir / f"{number:03d}-{stage.identifier}-{uuid.uuid4().hex[:8]}.log"
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     try:
-        descriptor = os.open(path, flags, 0o600)
+        descriptor = (
+            state.private_io.open_log(path, create=True)
+            if state.private_io
+            else os.open(path, flags, 0o600)
+        )
     except OSError as error:
         raise MigrationCoordinatorError(
             "private stage log could not be created"
         ) from error
-    os.close(descriptor)
-    return path
+    try:
+        allocated = os.fstat(descriptor)
+        child_io = (
+            replace(
+                state.private_io,
+                log_name=path.name,
+                log_identity=(allocated.st_dev, allocated.st_ino),
+            )
+            if state.private_io
+            else None
+        )
+    finally:
+        os.close(descriptor)
+    return path, child_io
 
 
 def _stage_result_kind(stage: Stage) -> ResultKind:
@@ -320,7 +339,7 @@ def _run_next(
         print("--apply is valid only at a pending apply checkpoint.", file=sys.stderr)
         return 2
 
-    log_file = _new_log_file(log_dir, state, stage)
+    log_file, child_io = _new_log_file(log_dir, state, stage)
     outcome_file = log_file.with_suffix(".outcome.json")
     expected_decision_digest: str | None = None
     if stage.mode == "apply":
@@ -346,7 +365,12 @@ def _run_next(
     print(f"Private stage log: {log_file}")
     started_at = time.monotonic()
     try:
+        if child_io is not None:
+            child_io.require_current()
+            command[3:3] = ["--migration-private-binding", child_io.as_argument()]
         completed = subprocess.run(command, check=False)
+        if child_io is not None:
+            child_io.require_current()
         status = completed.returncode
         if status < 0:
             status = 128 + abs(status)
@@ -361,6 +385,7 @@ def _run_next(
                 expected_command=stage.command or "",
                 expected_status=status,
                 expected_result_kind=_stage_result_kind(stage),
+                private_io=state.private_io,
             )
         except MigrationOutcomeError as error:
             raise MigrationCoordinatorError(
@@ -421,9 +446,11 @@ def _run_until_checkpoint(
         previous_state = state
         status = _run_next(log_dir, state_path, state, apply=False)
         if status != 0:
-            print_synopsis(log_dir, _load_state(state_path))
+            print_synopsis(
+                log_dir, _load_state(state_path, private_io=state.private_io)
+            )
             return status
-        state = _load_state(state_path)
+        state = _load_state(state_path, private_io=state.private_io)
         _require_successful_transition(previous_state, state, stage)
         _require_operator_binding(state, binding)
         _require_collection_identities(state, identities)
@@ -696,6 +723,7 @@ def _latest_quarantine_preview(
             expected_command="quarantine-dups",
             expected_status=0,
             expected_result_kind="preview",
+            private_io=state.private_io,
         )
     except MigrationOutcomeError as error:
         raise MigrationCoordinatorError(
@@ -749,7 +777,7 @@ def _run_managed_quarantine(
             )
         )
 
-    log_file = _new_log_file(log_dir, state, stage)
+    log_file, child_io = _new_log_file(log_dir, state, stage)
     outcome_file = log_file.with_suffix(".outcome.json")
     command = [sys.executable, "-m", "pymo"]
     if state.options.verbose:
@@ -802,7 +830,12 @@ def _run_managed_quarantine(
     print(f"Private stage log: {log_file}")
     started_at = time.monotonic()
     try:
+        if child_io is not None:
+            child_io.require_current()
+            command[3:3] = ["--migration-private-binding", child_io.as_argument()]
         completed = subprocess.run(command, check=False)
+        if child_io is not None:
+            child_io.require_current()
         status = completed.returncode
         if status < 0:
             status = 128 + abs(status)
@@ -817,6 +850,7 @@ def _run_managed_quarantine(
                 expected_command="quarantine-dups",
                 expected_status=status,
                 expected_result_kind="observed" if apply else "preview",
+                private_io=state.private_io,
             )
         except MigrationOutcomeError as error:
             raise MigrationCoordinatorError(
@@ -934,6 +968,7 @@ def _recorded_outcome(
             expected_command=stage.command,
             expected_status=attempt.exit_status,
             expected_result_kind=_stage_result_kind(stage),
+            private_io=state.private_io,
         )
     except MigrationOutcomeError as error:
         raise MigrationCoordinatorError(
@@ -948,9 +983,12 @@ def _reload_unattended(
     binding: MigrationState,
     identities: tuple[tuple[int, int], tuple[int, int]],
     policy: MigrationPreauthorization,
+    boundary_check: Callable[[], None] | None = None,
 ) -> MigrationState:
+    if boundary_check is not None:
+        boundary_check()
     policy.require_current()
-    state = _load_state(state_path)
+    state = _load_state(state_path, private_io=expected_state.private_io)
     if state != expected_state:
         raise MigrationCoordinatorError(
             "migration restart lifecycle changed during unattended execution"
@@ -986,7 +1024,7 @@ def _bind_unattended_policy(
             updated_at=_now(),
         )
         _write_state(state_path, state)
-        state = _load_state(state_path)
+        state = _load_state(state_path, private_io=state.private_io)
     if state.unattended_policy_sha256 != policy.payload_sha256:
         raise MigrationCoordinatorError(
             "pre-authorization policy differs from the policy bound to this migration"
@@ -1000,11 +1038,15 @@ def _run_unattended(
     state_path: Path,
     state: MigrationState,
     policy: MigrationPreauthorization,
+    *,
+    boundary_check: Callable[[], None] | None = None,
 ) -> int:
     binding = state
     identities = _collection_identities(state)
     try:
         while True:
+            if boundary_check is not None:
+                boundary_check()
             validate_synopsis_history(log_dir, state)
             _require_operator_binding(state, binding)
             _require_collection_identities(state, identities)
@@ -1020,11 +1062,17 @@ def _run_unattended(
                 )
                 policy.require_checkpoint(successful_review.identifier, outcome)
                 state = _reload_unattended(
-                    log_dir, state_path, state, binding, identities, policy
+                    log_dir,
+                    state_path,
+                    state,
+                    binding,
+                    identities,
+                    policy,
+                    boundary_check,
                 )
                 previous_state = state
                 _acknowledge_review(state_path, state, successful_review)
-                state = _load_state(state_path)
+                state = _load_state(state_path, private_io=state.private_io)
                 _require_bookkeeping_transition(
                     previous_state,
                     state,
@@ -1042,13 +1090,19 @@ def _run_unattended(
                 )
                 policy.require_checkpoint(status_one_review.identifier, outcome)
                 state = _reload_unattended(
-                    log_dir, state_path, state, binding, identities, policy
+                    log_dir,
+                    state_path,
+                    state,
+                    binding,
+                    identities,
+                    policy,
+                    boundary_check,
                 )
                 previous_state = state
                 status = _accept_status(state_path, state)
                 if status != 0:  # pragma: no cover - guarded by state inspection.
                     return status
-                state = _load_state(state_path)
+                state = _load_state(state_path, private_io=state.private_io)
                 _require_bookkeeping_transition(
                     previous_state,
                     state,
@@ -1069,11 +1123,17 @@ def _run_unattended(
                 outcome = _recorded_outcome(log_dir, state, final_stage.identifier)
                 policy.require_checkpoint("final-signoff", outcome)
                 state = _reload_unattended(
-                    log_dir, state_path, state, binding, identities, policy
+                    log_dir,
+                    state_path,
+                    state,
+                    binding,
+                    identities,
+                    policy,
+                    boundary_check,
                 )
                 previous_state = state
                 _record_signoff(state_path, state)
-                state = _load_state(state_path)
+                state = _load_state(state_path, private_io=state.private_io)
                 _require_bookkeeping_transition(
                     previous_state,
                     state,
@@ -1098,11 +1158,17 @@ def _run_unattended(
                 outcome = _recorded_outcome(log_dir, state, preview_stage)
                 policy.require_checkpoint(stage.identifier, outcome)
                 state = _reload_unattended(
-                    log_dir, state_path, state, binding, identities, policy
+                    log_dir,
+                    state_path,
+                    state,
+                    binding,
+                    identities,
+                    policy,
+                    boundary_check,
                 )
                 previous_state = state
                 status = _run_next(log_dir, state_path, state, apply=True)
-                state = _load_state(state_path)
+                state = _load_state(state_path, private_io=state.private_io)
                 _require_run_transition(
                     previous_state, state, stage, status=status, apply=True
                 )
@@ -1120,7 +1186,13 @@ def _run_unattended(
                 outcome = _recorded_outcome(log_dir, state, "without-dups-simulation")
                 decision = policy.require_checkpoint("duplicate-disposition", outcome)
                 state = _reload_unattended(
-                    log_dir, state_path, state, binding, identities, policy
+                    log_dir,
+                    state_path,
+                    state,
+                    binding,
+                    identities,
+                    policy,
+                    boundary_check,
                 )
                 if decision == "quarantine-dups":
                     managed_preview = _latest_quarantine_preview(log_dir, state)
@@ -1129,7 +1201,7 @@ def _run_unattended(
                         status = _run_managed_quarantine(
                             log_dir, state_path, state, apply=False
                         )
-                        state = _load_state(state_path)
+                        state = _load_state(state_path, private_io=state.private_io)
                         _require_bookkeeping_transition(
                             previous_state,
                             state,
@@ -1153,13 +1225,19 @@ def _run_unattended(
                         )
                     policy.require_quarantine_plan(managed_preview)
                     state = _reload_unattended(
-                        log_dir, state_path, state, binding, identities, policy
+                        log_dir,
+                        state_path,
+                        state,
+                        binding,
+                        identities,
+                        policy,
+                        boundary_check,
                     )
                     previous_state = state
                     status = _run_managed_quarantine(
                         log_dir, state_path, state, apply=True
                     )
-                    state = _load_state(state_path)
+                    state = _load_state(state_path, private_io=state.private_io)
                     _require_bookkeeping_transition(
                         previous_state,
                         state,
@@ -1183,7 +1261,7 @@ def _run_unattended(
                     print_synopsis(log_dir, state)
                     return status
                 if decision != "quarantine-dups":
-                    state = _load_state(state_path)
+                    state = _load_state(state_path, private_io=state.private_io)
                     _require_bookkeeping_transition(
                         previous_state,
                         state,
@@ -1196,7 +1274,7 @@ def _run_unattended(
 
             previous_state = state
             status = _run_next(log_dir, state_path, state, apply=False)
-            state = _load_state(state_path)
+            state = _load_state(state_path, private_io=state.private_io)
             _require_run_transition(
                 previous_state, state, stage, status=status, apply=False
             )
@@ -1220,7 +1298,7 @@ def _reload_after_prompt(
     binding: MigrationState,
     identities: tuple[tuple[int, int], tuple[int, int]],
 ) -> MigrationState:
-    state = _load_state(state_path)
+    state = _load_state(state_path, private_io=expected_state.private_io)
     if state != expected_state:
         raise MigrationCoordinatorError(
             "migration restart lifecycle changed while awaiting interactive input"
@@ -1248,7 +1326,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
             state = _reload_after_prompt(state_path, state, binding, identities)
             previous_state = state
             _acknowledge_review(state_path, state, successful_review)
-            state = _load_state(state_path)
+            state = _load_state(state_path, private_io=state.private_io)
             _require_bookkeeping_transition(
                 previous_state,
                 state,
@@ -1272,7 +1350,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
             status = _accept_status(state_path, state)
             if status != 0:
                 return status
-            state = _load_state(state_path)
+            state = _load_state(state_path, private_io=state.private_io)
             _require_bookkeeping_transition(
                 previous_state,
                 state,
@@ -1299,7 +1377,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
             previous_state = state
             final_stage = _stages()[-1]
             _record_signoff(state_path, state)
-            state = _load_state(state_path)
+            state = _load_state(state_path, private_io=state.private_io)
             _require_bookkeeping_transition(
                 previous_state,
                 state,
@@ -1326,7 +1404,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
             state = _reload_after_prompt(state_path, state, binding, identities)
             previous_state = state
             status = _run_next(log_dir, state_path, state, apply=True)
-            state = _load_state(state_path)
+            state = _load_state(state_path, private_io=state.private_io)
             _require_run_transition(
                 previous_state, state, stage, status=status, apply=True
             )
@@ -1364,7 +1442,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
                 status = _run_managed_quarantine(
                     log_dir, state_path, state, apply=preview is not None
                 )
-                state = _load_state(state_path)
+                state = _load_state(state_path, private_io=state.private_io)
                 _require_bookkeeping_transition(
                     previous_state,
                     state,
@@ -1406,7 +1484,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
                 _require_collection_identities(state, identities)
                 print_synopsis(log_dir, state)
                 return status
-            state = _load_state(state_path)
+            state = _load_state(state_path, private_io=state.private_io)
             _require_bookkeeping_transition(
                 previous_state,
                 state,
@@ -1419,7 +1497,7 @@ def _run_interactive(log_dir: Path, state_path: Path, state: MigrationState) -> 
 
         previous_state = state
         status = _run_next(log_dir, state_path, state, apply=False)
-        state = _load_state(state_path)
+        state = _load_state(state_path, private_io=state.private_io)
         _require_run_transition(
             previous_state, state, stage, status=status, apply=False
         )
@@ -1459,7 +1537,7 @@ def _dispatch_existing_state(
     if args.json:
         identities = _collection_identities(state)
         report = build_report(log_dir, state)
-        current = _load_state(state_path)
+        current = _load_state(state_path, private_io=state.private_io)
         if current != state:
             raise MigrationCoordinatorError(
                 "migration restart lifecycle changed during report generation"
@@ -1473,7 +1551,7 @@ def _dispatch_existing_state(
         return 0
     if args.run_next:
         status = _run_next(log_dir, state_path, state, args.apply)
-        updated = _load_state(state_path)
+        updated = _load_state(state_path, private_io=state.private_io)
         print_synopsis(log_dir, updated)
         return status
     if args.run:
@@ -1490,19 +1568,19 @@ def _dispatch_existing_state(
         return _run_unattended(log_dir, state_path, state, policy)
     if args.accept_status:
         status = _accept_status(state_path, state)
-        print_synopsis(log_dir, _load_state(state_path))
+        print_synopsis(log_dir, _load_state(state_path, private_io=state.private_io))
         return status
     if args.confirm_quarantine:
         status = _confirm_quarantine(state_path, state)
-        print_synopsis(log_dir, _load_state(state_path))
+        print_synopsis(log_dir, _load_state(state_path, private_io=state.private_io))
         return status
     if args.quarantine_dups:
         status = _run_managed_quarantine(log_dir, state_path, state, apply=args.apply)
-        print_synopsis(log_dir, _load_state(state_path))
+        print_synopsis(log_dir, _load_state(state_path, private_io=state.private_io))
         return status
     if args.retain_dups:
         status = _retain_dups(log_dir, state_path, state)
-        print_synopsis(log_dir, _load_state(state_path))
+        print_synopsis(log_dir, _load_state(state_path, private_io=state.private_io))
         return status
     _print_status(state)
     _print_plan(state.next_stage)

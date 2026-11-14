@@ -1,4 +1,4 @@
-"""Validate a complete local queue and print its plan without executing it."""
+"""Plan or explicitly execute a sequential queue of approved migrations."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pymo.logging_config import emit as print
 from pymo.migration.queue_plan import build_queue_plan
+from pymo.migration.queue_run import run_queue
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -22,7 +23,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     plan.add_argument(
         "--json", action="store_true", help="emit path-private planning schema 1"
     )
+    run = actions.add_parser("run", help="preview, or execute new jobs with --apply")
+    run.add_argument("manifest", type=Path)
+    run.add_argument(
+        "--apply", action="store_true", help="execute approved jobs in order"
+    )
     args = parser.parse_args(argv)
+    if args.action == "run" and args.apply:
+        return run_queue(args.manifest)
+
     try:
         result = build_queue_plan(args.manifest)
     except (OSError, ValueError, RuntimeError, RecursionError):
@@ -31,7 +40,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    if args.json:
+    if getattr(args, "json", False):
         sys.stdout.write(json.dumps(result, sort_keys=True, indent=2) + "\n")
     else:
         print(

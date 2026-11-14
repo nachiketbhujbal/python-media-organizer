@@ -127,12 +127,14 @@ def publish_private(
     path: Path,
     payload: bytes | Callable[[tuple[int, int]], bytes],
     roots: tuple[Path, Path],
+    *,
+    expected_ancestry: tuple[tuple[int, int], ...] | None = None,
 ) -> None:
     if not callable(payload) and len(payload) > 64 * 1024 * 1024:
         raise PolicyPlanningError("private artifact exceeds the supported size")
     path = _require_external_private_parent(path, roots)
     require_private_unattended_log_directory(path.parent)
-    with _pinned_private_parent(path) as (parent_fd, name, parent):
+    with _pinned_private_parent(path, expected_ancestry) as (parent_fd, name, parent):
         _require_parent_outside_roots(parent, parent_fd, roots)
         # An interrupted write leaves a private scratch artifact, never a
         # partially published policy. No recovery path adopts that scratch.
