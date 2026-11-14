@@ -38,6 +38,7 @@ from pymo.migration.preauthorization import (
     apply_preview_stage,
     load_preauthorization,
 )
+from pymo.migration.private_io import PrivateIO
 from pymo.migration.roots import (
     DirectoryIdentityError,
     directory_identity,
@@ -221,7 +222,9 @@ def _require_matching_options(
             )
 
 
-def _new_log_file(log_dir: Path, state: MigrationState, stage: Stage) -> Path:
+def _new_log_file(
+    log_dir: Path, state: MigrationState, stage: Stage
+) -> tuple[Path, PrivateIO | None]:
     number = len(state.attempts) + 1
     path = log_dir / f"{number:03d}-{stage.identifier}-{uuid.uuid4().hex[:8]}.log"
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
@@ -235,8 +238,20 @@ def _new_log_file(log_dir: Path, state: MigrationState, stage: Stage) -> Path:
         raise MigrationCoordinatorError(
             "private stage log could not be created"
         ) from error
-    os.close(descriptor)
-    return path
+    try:
+        allocated = os.fstat(descriptor)
+        child_io = (
+            replace(
+                state.private_io,
+                log_name=path.name,
+                log_identity=(allocated.st_dev, allocated.st_ino),
+            )
+            if state.private_io
+            else None
+        )
+    finally:
+        os.close(descriptor)
+    return path, child_io
 
 
 def _stage_result_kind(stage: Stage) -> ResultKind:
@@ -324,7 +339,7 @@ def _run_next(
         print("--apply is valid only at a pending apply checkpoint.", file=sys.stderr)
         return 2
 
-    log_file = _new_log_file(log_dir, state, stage)
+    log_file, child_io = _new_log_file(log_dir, state, stage)
     outcome_file = log_file.with_suffix(".outcome.json")
     expected_decision_digest: str | None = None
     if stage.mode == "apply":
@@ -350,13 +365,12 @@ def _run_next(
     print(f"Private stage log: {log_file}")
     started_at = time.monotonic()
     try:
-        if state.private_io is not None:
-            state.private_io.require_current()
-            command[3:3] = [
-                "--migration-private-binding",
-                state.private_io.as_argument(),
-            ]
+        if child_io is not None:
+            child_io.require_current()
+            command[3:3] = ["--migration-private-binding", child_io.as_argument()]
         completed = subprocess.run(command, check=False)
+        if child_io is not None:
+            child_io.require_current()
         status = completed.returncode
         if status < 0:
             status = 128 + abs(status)
@@ -763,7 +777,7 @@ def _run_managed_quarantine(
             )
         )
 
-    log_file = _new_log_file(log_dir, state, stage)
+    log_file, child_io = _new_log_file(log_dir, state, stage)
     outcome_file = log_file.with_suffix(".outcome.json")
     command = [sys.executable, "-m", "pymo"]
     if state.options.verbose:
@@ -816,13 +830,12 @@ def _run_managed_quarantine(
     print(f"Private stage log: {log_file}")
     started_at = time.monotonic()
     try:
-        if state.private_io is not None:
-            state.private_io.require_current()
-            command[3:3] = [
-                "--migration-private-binding",
-                state.private_io.as_argument(),
-            ]
+        if child_io is not None:
+            child_io.require_current()
+            command[3:3] = ["--migration-private-binding", child_io.as_argument()]
         completed = subprocess.run(command, check=False)
+        if child_io is not None:
+            child_io.require_current()
         status = completed.returncode
         if status < 0:
             status = 128 + abs(status)

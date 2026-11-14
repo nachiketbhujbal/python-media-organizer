@@ -43,7 +43,9 @@ owner-private parent. Execution allocates a private staging directory, publishes
 it with one descriptor-relative atomic no-replace rename, and holds a dedicated
 job lock. Its original ancestry and lock inode are carried into descriptor-
 relative state/log/outcome I/O and child setup; replacing either cannot redirect
-stage output to a new directory. It creates separate ordinary migration state, policy binding, logs
+stage output to a new directory. Each child also binds the exclusively allocated
+log inode, so a replacement regular file cannot receive appended diagnostics.
+It creates separate ordinary migration state, policy binding, logs
 and typed outcomes there. An occupied destination is never overwritten or
 adopted, even if empty. Staging and partial job state are retained on failure.
 

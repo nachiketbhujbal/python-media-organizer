@@ -714,8 +714,13 @@ def _pinned_outcome_parent(
     path: Path, private_io: PrivateIO | None = None
 ) -> Iterator[tuple[int, str, Path]]:
     if private_io is not None:
-        with private_io.pinned(path) as bound_parent:
-            yield bound_parent
+        try:
+            with private_io.pinned(path) as bound_parent:
+                yield bound_parent
+        except (OSError, RuntimeError) as error:
+            raise MigrationOutcomeError(
+                "private migration output binding changed"
+            ) from error
         return
     if path.name in {"", ".", ".."}:
         raise MigrationOutcomeError("migration outcome destination is unsafe")

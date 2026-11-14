@@ -388,3 +388,87 @@ def test_external_quarantine_does_not_advance_with_present_dups(tmp_path: Path) 
     assert result.returncode == 1, result.stdout + result.stderr
     assert (Path(entry["working"]["path"]) / "dups").is_dir()
     assert not Path(second["state_directory"]).exists()
+
+
+@pytest.mark.parametrize("phase", ["before-child", "after-child"])
+def test_allocated_log_cannot_be_replaced_by_an_existing_file(
+    tmp_path: Path, monkeypatch, phase: str
+) -> None:
+    entries = [job(tmp_path, 1), job(tmp_path, 2)]
+    manifest = save_manifest(tmp_path, entries)
+    original = migrate.subprocess.run
+    sentinel = tmp_path / "private" / "sentinel"
+    sentinel.write_bytes(b"unchanged sentinel")
+    sentinel.chmod(0o600)
+    replacement = None
+    children = []
+
+    def child(command, *, check):
+        nonlocal replacement
+        replacement = Path(command[command.index("--log-file") + 1])
+
+        def swap():
+            replacement.rename(replacement.with_suffix(".retained"))
+            sentinel.rename(replacement)
+
+        if phase == "before-child":
+            swap()
+        result = original(command, check=check, capture_output=True, text=True)
+        children.append(result)
+        if phase == "after-child":
+            swap()
+        return result
+
+    monkeypatch.setattr(migrate.subprocess, "run", child)
+    assert queue.main(["run", str(manifest), "--apply"]) == 2
+    assert len(children) == 1
+    assert children[0].returncode == (2 if phase == "before-child" else 0)
+    assert replacement.read_bytes() == b"unchanged sentinel"
+    assert not Path(entries[1]["state_directory"]).exists()
+
+
+@pytest.mark.parametrize("mutation", ["lock", "directory"])
+def test_real_child_outcome_binding_failure_has_controlled_error(
+    tmp_path: Path, monkeypatch, mutation: str
+) -> None:
+    entries = [job(tmp_path, 1), job(tmp_path, 2)]
+    manifest = save_manifest(tmp_path, entries)
+    original = migrate.subprocess.run
+    children = []
+    script = """
+import sys
+from pymo import cli, scan
+original = scan.write_outcome
+def altered(path, *args, **kwargs):
+    if sys.argv[1] == 'lock':
+        lock = path.parent / 'pymo-migration-state.lock'
+        lock.rename(path.parent / 'retained-lock')
+    else:
+        directory = path.parent
+        directory.rename(directory.with_name('retained-state'))
+        directory.mkdir(mode=0o700)
+    return original(path, *args, **kwargs)
+scan.write_outcome = altered
+raise SystemExit(cli.main(sys.argv[2:]))
+"""
+
+    def child(command, *, check):
+        result = original(
+            [command[0], "-c", script, mutation, *command[3:]],
+            check=check,
+            capture_output=True,
+            text=True,
+        )
+        children.append(result)
+        return result
+
+    monkeypatch.setattr(migrate.subprocess, "run", child)
+    assert queue.main(["run", str(manifest), "--apply"]) == 2
+    assert len(children) == 1 and children[0].returncode == 1
+    assert "Migration outcome could not be recorded safely" in children[0].stderr
+    assert "Traceback" not in children[0].stderr
+    assert str(tmp_path) not in children[0].stderr
+    assert all(line.startswith("20") for line in children[0].stderr.splitlines())
+    assert not Path(entries[1]["state_directory"]).exists()
+    if mutation == "directory":
+        assert list(Path(entries[0]["state_directory"]).iterdir()) == []

@@ -40,8 +40,12 @@ the complete release gates. No production collections are required.
 Independent review reproduced a replaced-lock window and a replaced-directory
 write path in the initial candidate. The queue now carries an ephemeral private
 I/O binding through the existing engine and children. It binds full no-follow
-ancestry and the allocated lock inode, constrains log/outcome creation and
+ancestry, the allocated lock inode and each exclusively allocated stage-log
+inode, constrains log/outcome creation and
 restart reads/replacement to the original directory, and rechecks the lock at
 engine transitions. Private child arguments carry only that constraint, never
 checkpoint authority. No persistent schema or standalone migration default
 changes. Partial state and staging artifacts remain retained for inspection.
+
+Binding failures in child outcome I/O use the existing controlled, path-private
+error boundary. A changed binding must not emit raw exceptions or tracebacks.

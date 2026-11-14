@@ -1628,10 +1628,10 @@ def test_stable_report_rejects_lifecycle_or_outcome_change_before_emitting(
     real_load_state = migrate._load_state
     load_calls = 0
 
-    def changed_lifecycle(path: Path) -> migrate.MigrationState:
+    def changed_lifecycle(path: Path, *, private_io=None) -> migrate.MigrationState:
         nonlocal load_calls
         load_calls += 1
-        state = real_load_state(path)
+        state = real_load_state(path, private_io=private_io)
         if load_calls == 2:
             return migrate.MigrationState(
                 state.tool_version,
@@ -3279,10 +3279,10 @@ def test_safe_operator_loop_stops_if_restart_binding_is_substituted(
     real_load_state = migrate._load_state
     load_count = 0
 
-    def substituted_binding(path: Path) -> migrate.MigrationState:
+    def substituted_binding(path: Path, *, private_io=None) -> migrate.MigrationState:
         nonlocal load_count
         load_count += 1
-        state = real_load_state(path)
+        state = real_load_state(path, private_io=private_io)
         if load_count == 2:
             return migrate.MigrationState(
                 "substituted-version",
@@ -3322,10 +3322,10 @@ def test_safe_operator_loop_rejects_same_binding_lifecycle_jump(
     real_load_state = migrate._load_state
     load_count = 0
 
-    def substituted_lifecycle(path: Path) -> migrate.MigrationState:
+    def substituted_lifecycle(path: Path, *, private_io=None) -> migrate.MigrationState:
         nonlocal load_count
         load_count += 1
-        state = real_load_state(path)
+        state = real_load_state(path, private_io=private_io)
         if load_count != 2:
             return state
         now = "2026-08-29T12:00:01-04:00"

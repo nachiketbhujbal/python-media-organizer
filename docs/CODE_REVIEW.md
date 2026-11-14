@@ -994,11 +994,23 @@ gate passed. Corrected implementation requires renewed exact-SHA review.
 
 | ID | Severity | Finding | Resolution target | Status |
 | --- | --- | --- | --- | --- |
-| QUEUE-EXEC-R01 | High | A replaced lock could admit another coordinator while the first queue noticed replacement only after the job finished. | 0.7.3 | Owner correction: check the original lock at engine transitions and every bound private I/O operation; independent re-review pending. |
-| QUEUE-EXEC-R02 | High | A replaced private state directory could receive stage logs, outcomes and state after exclusive queue allocation. | 0.7.3 | Owner correction: propagate an ephemeral directory/lock binding into descriptor-relative state, log and outcome I/O and child setup; independent re-review pending. |
+| QUEUE-EXEC-R01 | High | A replaced lock could admit another coordinator while the first queue noticed replacement only after the job finished. | 0.7.3 | Resolved: original takeover probe independently refused at 00a72dd; original lock is checked at engine transitions and bound private I/O. |
+| QUEUE-EXEC-R02 | High | A replaced private state directory could receive stage logs, outcomes and state after exclusive queue allocation. | 0.7.3 | Resolved: original replacement probe independently refused at 00a72dd; stage state, logs and outcomes retain the directory binding through child setup. |
 
 Synthetic regressions replace and acquire the lock, replace the state directory
 before log allocation, at actual child launch and during state replacement,
 and assert refusal without writes into the replacement or later-job starts.
 Existing state/outcome/policy schemas and the single-collection default remain
 unchanged; private child binding is a constraint, never media authority.
+
+Renewed review of `00a72dda0b641be8c6cd90ed4fb7725b39906a0f` independently
+closed the original probes and passed 127 focused queue/outcome tests, but
+reported two further blocking defects. The owner full run exposed three stale
+lifecycle attack injectors that lacked the newly optional `private_io` keyword;
+the injectors now forward that argument while retaining their original attacks.
+The run was not treated as a passing gate.
+
+| ID | Severity | Finding | Resolution target | Status |
+| --- | --- | --- | --- | --- |
+| QUEUE-EXEC-R03 | Medium | A changed private output binding could escape the child outcome error boundary with a traceback. | 0.7.3 | Owner correction: translate binding failures to the existing path-private outcome error; real child lock/directory substitution tests added; independent re-review pending. |
+| QUEUE-EXEC-R04 | Medium | A replacement owner-private regular file could receive appended stage logs after the original log was allocated. | 0.7.3 | Owner correction: carry the originally allocated log inode into child startup and verify it again after child execution; replacement sentinels remain unchanged; independent re-review pending. |
